@@ -1,0 +1,17 @@
+{
+  "name": "Gusty beat against a flood tide",
+  "description": "Beat in a moderate, shifty 12 kn south-westerly (seeded gusts) with a manual tide (HW 14:00) driving a provisional uniform tidal stream. Tack at 90 s.",
+  "durationS": 240,
+  "sampleEveryS": 0.5,
+  "conditions": {
+    "startTime": "2026-07-15T11:00:00Z",
+    "weather": { "source": "manual", "twsKn": 12, "twdDeg": 225 },
+    "gusts": { "preset": "moderate", "seed": 42 },
+    "current": { "mode": "tidal", "stream": { "floodSetDeg": 330, "peakFloodKn": 1.5, "peakEbbKn": 2.0, "riverEbbKn": 0 } },
+    "tide": { "mode": "manual", "hwTime": "2026-07-15T14:00:00Z", "hwHeightM": 4.6, "lwHeightM": 1.2 }
+  },
+  "initial": { "headingDeg": 185, "speedKn": 4 },
+  "input": { "autoMain": true, "autoJib": true },
+  "autopilot": { "mode": "twa", "targetDeg": 40 },
+  "events": [{ "t": 90, "autopilot": { "mode": "twa", "targetDeg": -40 } }]
+}

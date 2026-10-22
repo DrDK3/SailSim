@@ -14,7 +14,7 @@ for (const twa of twaList) {
   const stw: number[] = [];
   const heel: number[] = [];
   for (const tws of twsList) {
-    const sim = runScenario({ name: 'polar', durationS: 150, conditions: { twsKn: tws, twdDeg: 0 }, initial: { headingDeg: twa, speedKn: 4 }, autopilot: { mode: 'twa', targetDeg: twa }, optimiseTrim: true });
+    const sim = runScenario({ name: 'polar', durationS: 150, conditions: { twsKn: tws, twdDeg: 0 }, initial: { headingDeg: -twa, speedKn: 4 }, autopilot: { mode: 'twa', targetDeg: twa }, optimiseTrim: true });
     const s = sim.snapshot();
     stw.push(msToKn(s.stw));
     heel.push(Math.abs(s.heel) / DEG);

@@ -1,0 +1,20 @@
+{
+  "_comment": "SYNTHETIC test fixture for the tide-snapshot format only. These numbers are NOT real Dartmouth predictions or gauge readings.",
+  "kind": "replay",
+  "generated": "2026-07-15T12:00:00Z",
+  "predictions": {
+    "source": "SYNTHETIC test values",
+    "events": [
+      { "time": "2026-07-15T08:00:00Z", "type": "LW", "heightCD": 1.0 },
+      { "time": "2026-07-15T14:12:38Z", "type": "HW", "heightCD": 5.0 },
+      { "time": "2026-07-15T20:25:15Z", "type": "LW", "heightCD": 1.0 },
+      { "time": "2026-07-16T02:37:53Z", "type": "HW", "heightCD": 5.0 }
+    ]
+  },
+  "gauge": {
+    "source": "SYNTHETIC",
+    "station": "TEST",
+    "cdOffsetM": 2.62,
+    "readings": [{ "time": "2026-07-15T11:06:19Z", "mAOD": 0.48 }]
+  }
+}

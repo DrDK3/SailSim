@@ -329,27 +329,28 @@
       "unit": "deg",
       "tag": "E",
       "source": "estimate",
-      "note": "Phase 1 kinematic gybe trigger; replaced by hinged-boom dynamics in Phase 2"
+      "note": "How far by the lee the apparent wind must be before the twisted mainsail inverts and the boom is driven across (gybe onset). A rigid-sail model cannot produce this leech flip itself; the swing across is then dynamic."
     },
     "byTheLeeJibDeg": {
       "value": 5,
       "unit": "deg",
       "tag": "E",
-      "source": "estimate"
+      "source": "estimate",
+      "note": "Jib changes side this far by the lee (kinematic jib)"
     },
     "boomGain": {
       "value": 6,
       "unit": "1/s",
       "tag": "E",
       "source": "estimate",
-      "note": "First-order response of the boom to its target angle"
+      "note": "Jib only: first-order response of the jib to its target angle (the main boom is a dynamic body)"
     },
     "boomMaxRateDegS": {
       "value": 150,
       "unit": "deg/s",
       "tag": "E",
       "source": "estimate",
-      "note": "Limits the boom swing in a gybe"
+      "note": "Jib only: maximum swing rate"
     },
     "jibDownwashOnMainDeg": {
       "value": 6,
@@ -364,6 +365,34 @@
       "tag": "E",
       "source": "estimate",
       "note": "Main upwash increases the jib's incidence; magnitude estimated"
+    },
+    "boomInertia": {
+      "value": 22,
+      "unit": "kg m2",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Boom, mainsail and fittings about the mast axis"
+    },
+    "boomMassMoment": {
+      "value": 18,
+      "unit": "kg m",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Mass x distance of the boom and sail centre of mass from the mast (gravity swings the boom to leeward when heeled)"
+    },
+    "boomDamping": {
+      "value": 8,
+      "unit": "N m s",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Mechanical damping at the gooseneck and sheet blocks (aerodynamic damping emerges from the sail forces)"
+    },
+    "boomRestitution": {
+      "value": 0.15,
+      "unit": "-",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Bounce when the boom fetches up against the sheet or shrouds"
     }
   },
   "hydro": {
@@ -597,20 +626,94 @@
       "unit": "m",
       "tag": "E",
       "source": "estimate",
-      "note": "Metacentric height; righting moment = m g GM sin(phi)"
+      "note": "Metacentric height: initial slope of the GZ curve (righting arm = GM sin(phi) at small angles)"
     },
-    "heelTau": {
-      "value": 0.8,
-      "unit": "s",
+    "gzTable": {
+      "value": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0.139
+        ],
+        [
+          20,
+          0.268
+        ],
+        [
+          30,
+          0.37
+        ],
+        [
+          40,
+          0.43
+        ],
+        [
+          50,
+          0.46
+        ],
+        [
+          60,
+          0.46
+        ],
+        [
+          70,
+          0.43
+        ],
+        [
+          80,
+          0.37
+        ],
+        [
+          90,
+          0.29
+        ],
+        [
+          100,
+          0.19
+        ],
+        [
+          110,
+          0.08
+        ],
+        [
+          120,
+          -0.03
+        ]
+      ],
+      "unit": "deg -> m",
       "tag": "E",
       "source": "estimate",
-      "note": "Lag of the quasi-static heel model"
+      "note": "Righting arm GZ versus heel. Initial slope matches GM; shape typical of a ballasted fin-keel dayboat (maximum near 50-60 deg, vanishing stability near 117 deg). Not from a Squib stability test."
     },
-    "maxHeelDeg": {
-      "value": 75,
-      "unit": "deg",
+    "rollRadiusOfGyration": {
+      "value": 0.85,
+      "unit": "m",
+      "tag": "E",
+      "source": "estimate",
+      "note": "k_xx including mast and rig high up and the keel low down"
+    },
+    "addedRollInertiaFrac": {
+      "value": 0.2,
+      "unit": "-",
       "tag": "E",
       "source": "estimate"
+    },
+    "rollLinearDamping": {
+      "value": 220,
+      "unit": "N m s",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Hull and appendage roll damping not already produced by the keel and sail forces (those emerge from the roll motion itself); about 5% of critical"
+    },
+    "rudderDepth": {
+      "value": 0.35,
+      "unit": "m",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Centre of rudder force below the waterline (roll arm)"
     }
   }
 }

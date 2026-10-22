@@ -3,6 +3,7 @@ import { msToKn } from './units';
 import { autopilotHelm, type AutopilotSettings } from './control/autopilot';
 import { optimalSheets } from './control/trim';
 import { uniformEnvironment, type UniformConditions } from './env/environment';
+import { buildConditions, type ConditionsSettings } from './env/conditions';
 import { squibParams } from './boat/squib';
 import { Simulation, type BoatSnapshot, type ControlInput, type InitialConditions } from './simulation';
 
@@ -12,7 +13,8 @@ export interface Scenario {
   description?: string;
   durationS: number;
   sampleEveryS?: number;
-  conditions: UniformConditions;
+  /** Either simple uniform steady conditions, or a full ConditionsSettings (gusts, tide, live data…). */
+  conditions: UniformConditions | ConditionsSettings;
   initial: InitialConditions;
   input?: Partial<ControlInput>;
   /** Time-tagged input changes. */
@@ -52,7 +54,7 @@ export function runScenario(scn: Scenario, onSample?: (s: BoatSnapshot) => void)
   let next = 0;
   const sim = new Simulation({
     params: squibParams(),
-    env: uniformEnvironment(scn.conditions),
+    env: 'weather' in scn.conditions ? buildConditions(scn.conditions).env : uniformEnvironment(scn.conditions),
     initial: scn.initial,
     input: scn.input,
     controller: (s) => {

@@ -5,11 +5,13 @@ import { bodyToWorld, effectiveApparent, windFrom, worldToBody, type NE } from '
 import {
   aeroHeelMoment,
   autoTrimSheet,
+  byTheLeeAngle,
   computeForces,
   derivatives,
   heelEquilibrium,
   sailTarget,
   sheetLimit,
+  stepBoom,
   updateSide,
   type Actuators,
   type ForceBreakdown,
@@ -17,7 +19,7 @@ import {
   type RigidState,
 } from './boat/dynamics';
 import type { BoatParams } from './boat/params';
-import type { Environment } from './env/environment';
+import type { Environment, EnvironmentInfo } from './env/environment';
 
 /** Fixed physics timestep (s). */
 export const DT = 0.01;
@@ -71,6 +73,18 @@ export interface SimulationOptions {
   lockHeading?: boolean;
   /** Test rig only: constant forward (surge) force in newtons, e.g. to tow the boat at a set speed. */
   testThrust?: number;
+  /**
+   * Whether this simulation advances the environment's own state (gusts, shifts) each step. Set false when
+   * several boats share one environment and a race manager steps it once per tick.
+   */
+  ownsEnvironment?: boolean;
+}
+
+/** A boom fetching up hard against the sheet or shrouds (e.g. a crash gybe). */
+export interface BoomEvent {
+  t: number;
+  /** Swing rate just before impact (rad/s). */
+  rate: number;
 }
 
 export interface InputLogEntry {
@@ -105,8 +119,17 @@ export interface BoatSnapshot {
   vmg: number;
   current: NE;
   heel: number;
+  rollRate: number;
   heelEquilibrium: number;
+  /**
+   * Rudder angle that would give zero yaw moment at this instant (rad), expressed as helm balance:
+   * > 0 = weather helm (rudder needed to bear away), < 0 = lee helm.
+   */
+  helmBalance: number;
   rudder: number;
+  boomRate: number;
+  mainInverted: boolean;
+  lastBoomEvent: BoomEvent | null;
   boomMain: number;
   boomJib: number;
   mainSide: 1 | -1;
@@ -116,6 +139,8 @@ export interface BoatSnapshot {
   crewY: number;
   input: ControlInput;
   forces: ForceBreakdown;
+  /** Conditions here: sources, tide, flags (when the environment can describe itself). */
+  env?: EnvironmentInfo;
 }
 
 export class Simulation {
@@ -135,7 +160,8 @@ export class Simulation {
   private jibLimit = 0;
   /** Sheet positions chosen by the auto-trim assist (used only when autoMain/autoJib are on). */
   private autoSheet = { main: 0.3, jib: 0.3 };
-  private heelEq = 0;
+  readonly ownsEnvironment: boolean;
+  lastBoomEvent: BoomEvent | null = null;
 
   constructor(opts: SimulationOptions) {
     this.params = opts.params;
@@ -144,6 +170,7 @@ export class Simulation {
     this.controller = opts.controller;
     this.lockHeading = opts.lockHeading ?? false;
     this.testThrust = opts.testThrust ?? 0;
+    this.ownsEnvironment = opts.ownsEnvironment ?? true;
     this.input = { ...DEFAULT_INPUT, ...opts.input };
     this.state = {
       n: opts.initial.n ?? 0,
@@ -152,8 +179,10 @@ export class Simulation {
       u: knToMs(opts.initial.speedKn ?? 0),
       v: 0,
       r: 0,
+      phi: 0,
+      p: 0,
     };
-    this.act = { rudder: 0, boomMain: 0, boomJib: 0, mainSide: 1, jibSide: 1, heel: 0, crewY: 0 };
+    this.act = { rudder: 0, boomMain: 0, boomRate: 0, mainInverted: false, mainSide: 1, boomJib: 0, jibSide: 1, crewY: 0 };
     this.settleActuators();
     this.inputLog.push({ step: 0, input: { ...this.input } });
   }
@@ -174,11 +203,10 @@ export class Simulation {
     this.computeSheetLimits(awa);
     this.act.boomMain = sailTarget(side, awa, this.mainLimit);
     this.act.boomJib = sailTarget(side, awa, this.jibLimit);
-    this.act.crewY = this.input.autoCrew ? this.autoCrewTarget() : side * this.crewOffset();
     for (let i = 0; i < 3; i++) {
-      this.act.heel = heelEquilibrium(this.params, this.state, this.act, this.windHere(), this.currentHere(), this.fluids);
+      this.act.crewY = this.input.autoCrew ? this.autoCrewTarget() : side * this.crewOffset();
+      this.state.phi = heelEquilibrium(this.params, this.state, this.act, this.windHere(), this.currentHere(), this.fluids);
     }
-    this.heelEq = this.act.heel;
   }
 
   private windHere(): NE {
@@ -191,8 +219,8 @@ export class Simulation {
 
   private autoCrewTarget(): number {
     const p = this.params;
-    const m = aeroHeelMoment(p, this.state, this.act, this.windHere(), this.currentHere(), this.fluids, this.act.heel);
-    return clamp(-m / (p.crewMass * G * Math.cos(this.act.heel)), -p.crewOut, p.crewOut);
+    const m = aeroHeelMoment(p, this.state, this.act, this.windHere(), this.currentHere(), this.fluids, this.state.phi);
+    return clamp(-m / (p.crewMass * G * Math.cos(this.state.phi)), -p.crewOut, p.crewOut);
   }
 
   private crewOffset(): number {
@@ -207,7 +235,7 @@ export class Simulation {
     const cur = this.currentHere();
     const wind = this.windHere();
     const rel = worldToBody(wind.n - through.n - cur.n, wind.e - through.e - cur.e, s.psi);
-    return effectiveApparent({ ax: rel.x, ay: rel.y, aws: Math.hypot(rel.x, rel.y), awa: 0 }, this.act.heel).awa;
+    return effectiveApparent({ ax: rel.x, ay: rel.y, aws: Math.hypot(rel.x, rel.y), awa: 0 }, this.state.phi).awa;
   }
 
   private computeSheetLimits(_awa: number): void {
@@ -259,8 +287,12 @@ export class Simulation {
     else this.inputLog.push({ step: this.step, input: { ...next } });
   }
 
-  /** Advance one fixed step: controller → actuators (explicit) → RK4 on the rigid state. */
+  /**
+   * Advance one fixed step: environment → controller → actuators and sails (explicit, from the state at the
+   * start of the step) → RK4 on the 4-DOF rigid state with actuators held.
+   */
   stepOnce(): void {
+    if (this.ownsEnvironment) this.env.step?.(this.time, DT);
     if (this.controller) {
       const change = this.controller(this);
       if (change) this.setInput(change);
@@ -273,24 +305,35 @@ export class Simulation {
     const rudderTarget = this.input.helm * p.rudder.maxAngle;
     a.rudder += clamp(rudderTarget - a.rudder, -p.rudder.rate * dt, p.rudder.rate * dt);
 
-    // Sails: side (tack/gybe) with hysteresis, then sheet limit, then the sail swings towards its target.
     if (this.input.autoMain || this.input.autoJib) this.updateAutoTrim(dt);
     const awa = this.effectiveAwa();
-    a.mainSide = updateSide(a.mainSide, awa, p.main.byTheLee);
-    a.jibSide = updateSide(a.jibSide, awa, p.jib.byTheLee);
     this.computeSheetLimits(awa);
+
+    // Main: a hinged body. By the lee beyond the threshold, a rigid flat sail would still be pressed further
+    // out (forward) by wind from astern; the real twisted sail flips and drives the boom across. Model that
+    // by reversing the chord-normal force only in that case (when the plain force pushes the boom outwards).
+    a.mainInverted = false;
+    let f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids);
+    if (byTheLeeAngle(a.boomMain, awa) > p.main.byTheLee && f.main.boomTorque * a.boomMain > 0) {
+      a.mainInverted = true;
+      f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids);
+    }
+    const boom = stepBoom(p, a.boomMain, a.boomRate, f.main.boomTorque, this.state.phi, this.mainLimit, dt);
+    if (boom.fetchedUp && Math.abs(a.boomRate) > 1.0) this.lastBoomEvent = { t: this.time, rate: a.boomRate };
+    a.boomMain = boom.boom;
+    a.boomRate = boom.rate;
+    if (a.boomMain > 0.5 * DEG) a.mainSide = 1;
+    else if (a.boomMain < -0.5 * DEG) a.mainSide = -1;
+
+    // Jib: kinematic (it changes side quickly through the foretriangle), sheet-limited.
+    a.jibSide = updateSide(a.jibSide, awa, p.jib.byTheLee);
     const maxStep = p.boomMaxRate * dt;
-    a.boomMain += clamp(p.boomGain * (sailTarget(a.mainSide, awa, this.mainLimit) - a.boomMain) * dt, -maxStep, maxStep);
     a.boomJib += clamp(p.boomGain * 2 * (sailTarget(a.jibSide, awa, this.jibLimit) - a.boomJib) * dt, -maxStep, maxStep);
 
     // Crew: manual = sit to windward (opposite the main) at the chosen hike; auto = move to cancel the
     // heeling moment. Either way they move across at a finite speed.
     const crewTarget = this.input.autoCrew ? this.autoCrewTarget() : a.mainSide * this.crewOffset();
     a.crewY += clamp(crewTarget - a.crewY, -p.crewSpeed * dt, p.crewSpeed * dt);
-
-    // Quasi-static heel with a first-order lag.
-    this.heelEq = heelEquilibrium(p, this.state, a, this.windHere(), this.currentHere(), this.fluids);
-    a.heel += ((this.heelEq - a.heel) * dt) / p.heelTau;
 
     this.integrate(dt);
     this.time = (this.step + 1) * dt;
@@ -319,6 +362,8 @@ export class Simulation {
       u: s.u + k.u * h,
       v: s.v + k.v * h,
       r: s.r + k.r * h,
+      phi: s.phi + k.phi * h,
+      p: s.p + k.p * h,
     });
     const k1 = deriv(s0, t0);
     const k2 = deriv(add(s0, k1, dt / 2), t0 + dt / 2);
@@ -332,6 +377,8 @@ export class Simulation {
       u: s0.u + w * (k1.u + 2 * k2.u + 2 * k3.u + k4.u),
       v: s0.v + w * (k1.v + 2 * k2.v + 2 * k3.v + k4.v),
       r: s0.r + w * (k1.r + 2 * k2.r + 2 * k3.r + k4.r),
+      phi: s0.phi + w * (k1.phi + 2 * k2.phi + 2 * k3.phi + k4.phi),
+      p: s0.p + w * (k1.p + 2 * k2.p + 2 * k3.p + k4.p),
     };
   }
 
@@ -378,9 +425,14 @@ export class Simulation {
       awaEffective: forces.main.aws > 0 ? forces.main.awa : forces.aw.awa,
       vmg,
       current: cur,
-      heel: a.heel,
-      heelEquilibrium: this.heelEq,
+      heel: s.phi,
+      rollRate: s.p,
+      heelEquilibrium: heelEquilibrium(this.params, s, a, wind, cur, this.fluids),
+      helmBalance: this.helmBalance(forces.aw.awa),
       rudder: a.rudder,
+      boomRate: a.boomRate,
+      mainInverted: a.mainInverted,
+      lastBoomEvent: this.lastBoomEvent,
       boomMain: a.boomMain,
       boomJib: a.boomJib,
       mainSide: a.mainSide,
@@ -390,7 +442,31 @@ export class Simulation {
       crewY: a.crewY,
       input: { ...this.input },
       forces,
+      env: this.env.describe?.(this.time, s.n, s.e),
     };
+  }
+
+  /**
+   * Rudder angle giving zero yaw moment at the current state (bisection), as helm balance: > 0 weather helm.
+   * Returns NaN when no balancing angle exists within the rudder's travel.
+   */
+  private helmBalance(awa: number): number {
+    const p = this.params;
+    const wind = this.windHere();
+    const cur = this.currentHere();
+    const yaw = (d: number) => computeForces(p, this.state, { ...this.act, rudder: d }, wind, cur, this.fluids).total.n;
+    let lo = -p.rudder.maxAngle;
+    let hi = p.rudder.maxAngle;
+    const flo = yaw(lo);
+    const fhi = yaw(hi);
+    if (Math.sign(flo) === Math.sign(fhi)) return NaN;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (Math.sign(yaw(mid)) === Math.sign(flo)) lo = mid;
+      else hi = mid;
+    }
+    const delta = (lo + hi) / 2;
+    return awa >= 0 ? -delta : delta;
   }
 
   /** Bit-exact hash of the full simulation state, for reproducibility checks. */
@@ -398,8 +474,8 @@ export class Simulation {
     const s = this.state;
     const a = this.act;
     return hashNumbers([
-      this.time, this.step, s.n, s.e, s.psi, s.u, s.v, s.r,
-      a.rudder, a.boomMain, a.boomJib, a.mainSide, a.jibSide, a.heel, a.crewY,
+      this.time, this.step, s.n, s.e, s.psi, s.u, s.v, s.r, s.phi, s.p,
+      a.rudder, a.boomMain, a.boomRate, a.mainInverted ? 1 : 0, a.mainSide, a.boomJib, a.jibSide, a.crewY,
     ]);
   }
 }

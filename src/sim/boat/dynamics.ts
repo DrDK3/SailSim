@@ -1,4 +1,5 @@
 import { clamp } from '../math/angles';
+import { interpTable } from '../math/interp';
 import { G } from '../units';
 import {
   apparentWind,
@@ -18,7 +19,10 @@ import {
 } from './forces';
 import type { BoatParams, SailParams } from './params';
 
-/** Continuous state integrated by RK4. Velocities are through the water, in the body frame. */
+/**
+ * Continuous state integrated by RK4 (4-DOF: surge, sway, yaw, roll). Velocities are through the water, in
+ * the body frame. phi = heel (> 0 to starboard), p = roll rate.
+ */
 export interface RigidState {
   n: number;
   e: number;
@@ -26,17 +30,24 @@ export interface RigidState {
   u: number;
   v: number;
   r: number;
+  phi: number;
+  p: number;
 }
 
-/** Actuator and quasi-static states, updated once per fixed step (held constant within the step). */
+/**
+ * Actuator and sail states, updated once per fixed step (held constant within the step).
+ * The main boom is a dynamic body (angle + rate); the jib is kinematic.
+ */
 export interface Actuators {
   rudder: number;
   boomMain: number;
-  boomJib: number;
-  /** +1: sail set to port (starboard tack), -1: set to starboard (port tack). */
+  boomRate: number;
+  /** The mainsail has inverted by the lee and is driving the boom across. */
+  mainInverted: boolean;
+  /** Side the main is set on, derived from the boom angle (+1 = to port, starboard tack). */
   mainSide: 1 | -1;
+  boomJib: number;
   jibSide: 1 | -1;
-  heel: number;
   crewY: number;
 }
 
@@ -57,7 +68,14 @@ export interface ForceBreakdown {
   hull: HullResistance;
   crossFlow: BodyForce;
   yawDamping: number;
+  /** Roll moments (N m, > 0 heels to starboard). */
+  roll: { sails: number; hydro: number; crew: number; righting: number; damping: number; total: number };
   total: BodyForce;
+}
+
+/** Righting arm GZ(φ) (m), odd in φ, from the calibration table. */
+export function rightingArm(p: BoatParams, phi: number): number {
+  return Math.sign(phi) * interpTable(p.gz, Math.abs(phi));
 }
 
 export function computeForces(
@@ -71,13 +89,18 @@ export function computeForces(
   const through = bodyToWorld(s.u, s.v, s.psi);
   const groundVelocity = { n: through.n + current.n, e: through.e + current.e };
   const aw = apparentWind(wind, groundVelocity, s.psi);
-  const { main, jib, jibEffectiveness: jEff } = sailPairForces(p, a.boomMain, a.boomJib, aw, a.heel, fluids.rhoAir);
-  const windage = windageForce(p, aw, a.heel, fluids.rhoAir);
-  const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x, 0, a.heel, fluids.rhoWater);
+  const motion = { rollRate: s.p, yawRate: s.r };
+  const { main, jib, jibEffectiveness: jEff } = sailPairForces(
+    p, a.boomMain, a.boomJib, aw, s.phi, fluids.rhoAir,
+    { ...motion, boomRate: a.boomRate }, { ...motion, boomRate: 0 }, a.mainInverted,
+  );
+  const windage = windageForce(p, aw, s.phi, fluids.rhoAir);
+  // Local sway at each foil: yaw (r·x) and roll (the keel swings opposite to the mast: −p·depth).
+  const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x - s.p * p.clrDepth, 0, s.phi, fluids.rhoWater);
   // The keel's downwash straightens the flow reaching the rudder: only part of the hull's leeway remains.
-  const rudderSway = s.v * (1 - p.rudder.flowStraightening) + s.r * p.rudder.x;
-  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, a.heel, fluids.rhoWater);
-  const hull = hullResistance(p, s.u, a.heel, fluids.rhoWater);
+  const rudderSway = s.v * (1 - p.rudder.flowStraightening) + s.r * p.rudder.x - s.p * p.rudderDepth;
+  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, s.phi, fluids.rhoWater);
+  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater);
   const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater);
   const yawDamping = -p.yawLinearDamping * s.r;
   const total = {
@@ -85,10 +108,17 @@ export function computeForces(
     y: main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y,
     n: main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping,
   };
-  return { aw, groundVelocity, main, jib, jibEffectiveness: jEff, windage, lateral, rudder, hull, crossFlow, yawDamping, total };
+  // Roll about the waterline: sail-plane side forces act above it, keel and rudder forces below it.
+  const sails = main.yPlane * p.main.ceHeight + jib.yPlane * p.jib.ceHeight + windage.y * p.windageHeight;
+  const hydro = -lateral.yPlane * p.clrDepth - rudder.yPlane * p.rudderDepth;
+  const crew = p.crewMass * G * a.crewY * Math.cos(s.phi);
+  const righting = -p.weight * rightingArm(p, s.phi);
+  const damping = -p.rollLinearDamping * s.p;
+  const roll = { sails, hydro, crew, righting, damping, total: sails + hydro + crew + righting + damping };
+  return { aw, groundVelocity, main, jib, jibEffectiveness: jEff, windage, lateral, rudder, hull, crossFlow, yawDamping, roll, total };
 }
 
-/** Time derivative of the rigid state (3-DOF surge-sway-yaw with added mass and Coriolis terms). */
+/** Time derivative of the rigid state (4-DOF with added mass and Coriolis terms in surge/sway/yaw). */
 export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, current: NE): RigidState {
   const t = f.total;
   const through = bodyToWorld(s.u, s.v, s.psi);
@@ -99,22 +129,28 @@ export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, cur
     u: (t.x + p.m22 * s.v * s.r) / p.m11,
     v: (t.y - p.m11 * s.u * s.r) / p.m22,
     r: t.n / p.i66,
+    phi: s.p,
+    p: f.roll.total / p.i44,
   };
 }
 
 /**
- * Quasi-static heel: the angle at which the heeling moment of the sail-plane side force (arm = CE height +
- * CLR depth) plus the crew moment balances the righting moment m g GM sin φ. Solved by fixed-point
- * iteration because the sail force itself depends on φ.
+ * Static heel equilibrium (diagnostic): the angle at which the heeling moment of the sails (arm = CE height
+ * + CLR depth) and the crew balances the righting moment m g GZ(φ). Found by bisection; the dynamic roll
+ * state oscillates about and settles to this angle.
  */
 export function heelEquilibrium(p: BoatParams, s: RigidState, a: Actuators, wind: NE, current: NE, fluids: Fluids): number {
-  const maxSin = Math.sin(p.maxHeel);
-  let phi = a.heel;
-  for (let i = 0; i < 4; i++) {
-    const moment = aeroHeelMoment(p, s, a, wind, current, fluids, phi) + p.crewMass * G * a.crewY * Math.cos(phi);
-    phi = Math.asin(clamp(moment / (p.weight * p.gm), -maxSin, maxSin));
+  const f = (phi: number) => aeroHeelMoment(p, s, a, wind, current, fluids, phi) + p.crewMass * G * a.crewY * Math.cos(phi) - p.weight * rightingArm(p, phi);
+  let lo = -Math.PI / 2;
+  let hi = Math.PI / 2;
+  if (f(lo) < 0 && f(hi) < 0) return lo;
+  if (f(lo) > 0 && f(hi) > 0) return hi;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) > 0) lo = mid;
+    else hi = mid;
   }
-  return phi;
+  return (lo + hi) / 2;
 }
 
 /**
@@ -132,7 +168,7 @@ export function aeroHeelMoment(
 ): number {
   const through = bodyToWorld(s.u, s.v, s.psi);
   const aw = apparentWind(wind, { n: through.n + current.n, e: through.e + current.e }, s.psi);
-  const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, phi, fluids.rhoAir);
+  const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, phi, fluids.rhoAir, undefined, undefined, a.mainInverted);
   const windage = windageForce(p, aw, phi, fluids.rhoAir);
   return (
     main.yPlane * (p.main.ceHeight + p.clrDepth) +
@@ -177,6 +213,52 @@ export function sailTarget(side: 1 | -1, awaEff: number, limit: number): number 
 /** Sheet setting that gives the auto-trim target incidence at this apparent wind angle. */
 export function autoTrimSheet(sp: SailParams, awaEff: number): number {
   return sheetForLimit(sp, clamp(Math.abs(awaEff) - sp.autoTrimAlpha, sp.sheetMin, sp.sheetMax));
+}
+
+/**
+ * How far by the lee the apparent wind is relative to the main boom: > 0 when the wind comes from the
+ * boom's side and from abaft the beam (0 at dead astern), else ≤ 0.
+ */
+export function byTheLeeAngle(boom: number, awa: number): number {
+  const boomSide = boom >= 0 ? 1 : -1;
+  if (boomSide * awa >= 0 || Math.abs(awa) < Math.PI / 2) return -1;
+  return Math.PI - Math.abs(awa);
+}
+
+/**
+ * Hinged main boom, one fixed step (semi-implicit Euler in sub-steps). Torques: the sail's aerodynamic
+ * torque (computed at the step start, which already includes aerodynamic damping through the swing rate),
+ * gravity when heeled (swings it to leeward), and gooseneck damping. Constraints: |β| ≤ sheet limit
+ * (one-sided: the sheet only stops the boom going further out) with a small bounce.
+ */
+export function stepBoom(
+  p: BoatParams,
+  boom: number,
+  rate: number,
+  aeroTorque: number,
+  heel: number,
+  limit: number,
+  dt: number,
+): { boom: number; rate: number; fetchedUp: boolean } {
+  const sub = 4;
+  const h = dt / sub;
+  let b = boom;
+  let w = rate;
+  let fetchedUp = false;
+  for (let i = 0; i < sub; i++) {
+    const gravity = -p.boomMassMoment * G * Math.sin(heel) * Math.cos(b);
+    const acc = (aeroTorque + gravity - p.boomDamping * w) / p.boomInertia;
+    w += acc * h;
+    b += w * h;
+    if (Math.abs(b) > limit) {
+      b = Math.sign(b) * limit;
+      if (Math.sign(w) === Math.sign(b)) {
+        w = -p.boomRestitution * w;
+        fetchedUp = true;
+      }
+    }
+  }
+  return { boom: b, rate: w, fetchedUp };
 }
 
 export { effectiveApparent };

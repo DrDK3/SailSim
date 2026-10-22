@@ -74,13 +74,15 @@ export interface SailForce {
   stall: number;
   ceX: number;
   ceY: number;
-  /** Effective apparent wind seen by the heeled sail plane. */
+  /** Effective apparent wind seen by the heeled sail plane (local, at the CE). */
   aws: number;
   awa: number;
+  /** Aerodynamic torque about the mast/forestay axis, > 0 swings the sail towards port (N m). */
+  boomTorque: number;
 }
 
 const ZERO_SAIL: SailForce = {
-  x: 0, y: 0, yPlane: 0, n: 0, incidence: 0, cl: 0, cd: 0, luff: 0, stall: 0, ceX: 0, ceY: 0, aws: 0, awa: 0,
+  x: 0, y: 0, yPlane: 0, n: 0, incidence: 0, cl: 0, cd: 0, luff: 0, stall: 0, ceX: 0, ceY: 0, aws: 0, awa: 0, boomTorque: 0,
 };
 
 /** Effective apparent wind in the heeled sail plane: the athwartships component is reduced by cos φ. */
@@ -89,11 +91,27 @@ export function effectiveApparent(aw: ApparentWind, heel: number): { ax: number;
   return { ax: aw.ax, ay, aws: Math.hypot(aw.ax, ay), awa: Math.atan2(-ay, -aw.ax) };
 }
 
+/** Rates that move a sail's centre of effort relative to the air (rad/s). */
+export interface SailMotion {
+  /** Sail (boom) swing rate about the mast, > 0 towards port. */
+  boomRate: number;
+  /** Roll rate, > 0 heeling further to starboard. */
+  rollRate: number;
+  /** Yaw rate, > 0 turning to starboard. */
+  yawRate: number;
+}
+
+const NO_MOTION: SailMotion = { boomRate: 0, rollRate: 0, yawRate: 0 };
+
 /**
- * Aerodynamic force of one sail.
- * `incidenceShift` (rad) models the other sail's influence: negative = downwash (main behind the jib),
- * positive = upwash (jib ahead of the main). Lift ⟂ to the (effective) apparent wind, drag along it, from the
- * incidence between the airflow and the sail chord (mast → clew at angle β).
+ * Aerodynamic force of one sail. Lift ⟂ to the local airflow, drag along it, from the incidence between the
+ * airflow and the sail chord (pivot → clew at angle β).
+ * - The airflow is the apparent wind in the heeled sail plane, minus the velocity of the centre of effort
+ *   caused by yaw, roll and the sail's own swing (this is what damps roll, yaw and boom motion).
+ * - `incidenceShift` (rad) models the other sail: negative = downwash (main behind the jib), positive =
+ *   upwash (jib ahead of the main).
+ * - `inverted`: the sail has flipped by the lee; the force component normal to the chord is reversed,
+ *   driving the boom across (gybe).
  */
 export function sailForce(
   p: SailParams,
@@ -103,13 +121,25 @@ export function sailForce(
   rhoAir: number,
   effectiveness = 1,
   incidenceShift = 0,
+  motion: SailMotion = NO_MOTION,
+  inverted = false,
 ): SailForce {
-  const eff = effectiveApparent(aw, heel);
-  if (eff.aws < 1e-9) return { ...ZERO_SAIL };
-  const dx = eff.ax / eff.aws;
-  const dy = eff.ay / eff.aws;
+  const cosH = Math.cos(heel);
   const cx = -Math.cos(boom);
   const cy = -Math.sin(boom);
+  const arm = p.ceChordFrac * p.foot;
+  const ceX = p.pivotX + arm * cx;
+  const ceYPlane = arm * cy;
+  const ceY = ceYPlane * cosH + p.ceHeight * Math.sin(heel);
+  // Velocity of the CE in the sail plane: yaw (r × position), roll (p·h sideways), swing (ω·arm ⟂ chord).
+  const vx = -motion.yawRate * ceY + motion.boomRate * arm * Math.sin(boom);
+  const vy = motion.yawRate * ceX * cosH + motion.rollRate * p.ceHeight - motion.boomRate * arm * Math.cos(boom);
+  const ax = aw.ax - vx;
+  const ay = aw.ay * cosH - vy;
+  const aws = Math.hypot(ax, ay);
+  if (aws < 1e-9) return { ...ZERO_SAIL, ceX, ceY };
+  const dx = ax / aws;
+  const dy = ay / aws;
   const geometric = wrapPi(Math.atan2(dy, dx) - Math.atan2(cy, cx));
   // Interaction with the other sail (up/downwash) shifts the incidence magnitude for luff-first flow.
   const incidence =
@@ -117,19 +147,25 @@ export function sailForce(
       ? Math.sign(geometric) * Math.max(0, Math.abs(geometric) + incidenceShift)
       : geometric;
   const k = sailCoefficients(incidence, p.coeff);
-  const q = 0.5 * rhoAir * eff.aws * eff.aws * p.area * effectiveness;
+  const q = 0.5 * rhoAir * aws * aws * p.area * effectiveness;
   const sgn = incidence >= 0 ? 1 : -1;
   const lx = -sgn * dy;
   const ly = sgn * dx;
-  const fx = q * (k.cl * lx + k.cd * dx);
-  const fyPlane = q * (k.cl * ly + k.cd * dy);
-  const cosH = Math.cos(heel);
+  let fx = q * (k.cl * lx + k.cd * dx);
+  let fyPlane = q * (k.cl * ly + k.cd * dy);
+  if (inverted) {
+    // Reflect the chord-normal component: n = (sin β, -cos β).
+    const nx = Math.sin(boom);
+    const ny = -Math.cos(boom);
+    const fn = fx * nx + fyPlane * ny;
+    fx -= 2 * fn * nx;
+    fyPlane -= 2 * fn * ny;
+  }
   const fy = fyPlane * cosH;
-  const ceX = p.pivotX + p.ceChordFrac * p.foot * cx;
-  const ceY = p.ceChordFrac * p.foot * cy * cosH + p.ceHeight * Math.sin(heel);
   return {
     x: fx, y: fy, yPlane: fyPlane, n: ceX * fy - ceY * fx, incidence, cl: k.cl, cd: k.cd, luff: k.luff,
-    stall: k.stall, ceX, ceY, aws: eff.aws, awa: eff.awa,
+    stall: k.stall, ceX, ceY, aws, awa: Math.atan2(-ay, -ax),
+    boomTorque: arm * (fx * Math.sin(boom) - fyPlane * Math.cos(boom)),
   };
 }
 
@@ -153,12 +189,15 @@ export function sailPairForces(
   aw: ApparentWind,
   heel: number,
   rhoAir: number,
+  mainMotion: SailMotion = NO_MOTION,
+  jibMotion: SailMotion = NO_MOTION,
+  mainInverted = false,
 ): { main: SailForce; jib: SailForce; jibEffectiveness: number } {
   const jEff = jibEffectiveness(params, aw.awa);
   const w = Math.max(0, Math.cos(aw.awa));
-  const mainAlone = sailForce(params.main, boomMain, aw, heel, rhoAir);
-  const jib = sailForce(params.jib, boomJib, aw, heel, rhoAir, jEff, w * params.mainUpwashOnJib * Math.max(0, mainAlone.cl));
-  const main = sailForce(params.main, boomMain, aw, heel, rhoAir, 1, -w * params.jibDownwashOnMain * Math.max(0, jib.cl));
+  const mainAlone = sailForce(params.main, boomMain, aw, heel, rhoAir, 1, 0, mainMotion, mainInverted);
+  const jib = sailForce(params.jib, boomJib, aw, heel, rhoAir, jEff, w * params.mainUpwashOnJib * Math.max(0, mainAlone.cl), jibMotion);
+  const main = sailForce(params.main, boomMain, aw, heel, rhoAir, 1, -w * params.jibDownwashOnMain * Math.max(0, jib.cl), mainMotion, mainInverted);
   return { main, jib, jibEffectiveness: jEff };
 }
 
@@ -178,6 +217,8 @@ export function windageForce(params: BoatParams, aw: ApparentWind, heel: number,
 }
 
 export interface FoilForce extends BodyForce {
+  /** Side force in the heeled plane of the foil (N), for the roll moment. */
+  yPlane: number;
   alpha: number;
   cl: number;
   cd: number;
@@ -187,7 +228,8 @@ export interface FoilForce extends BodyForce {
 /**
  * Underwater lifting surface at body x = p.x moving with local velocity (u, vLocal) through the water,
  * deflected by `deflection` (rudder angle; > 0 = trailing edge to starboard, turning the boat to starboard).
- * Horizontal force is reduced by cos φ (heeled foil).
+ * Horizontal force is reduced by cos φ (heeled foil). vLocal must include the sway caused by yaw (r·x) and
+ * roll (−p·depth) at the foil.
  */
 export function foilForce(
   p: FoilParams,
@@ -198,7 +240,7 @@ export function foilForce(
   rhoWater: number,
 ): FoilForce {
   const v2 = u * u + vLocal * vLocal;
-  if (v2 < 1e-12) return { x: 0, y: 0, n: 0, alpha: 0, cl: 0, cd: 0, speed: 0 };
+  if (v2 < 1e-12) return { x: 0, y: 0, yPlane: 0, n: 0, alpha: 0, cl: 0, cd: 0, speed: 0 };
   const speed = Math.sqrt(v2);
   const ca = Math.cos(deflection);
   const sa = Math.sin(deflection);
@@ -206,10 +248,12 @@ export function foilForce(
   const k = foilCoefficients(alpha, p);
   const dx = -u / speed;
   const dy = -vLocal / speed;
-  const q = 0.5 * rhoWater * v2 * p.area * Math.cos(heel);
-  const fx = q * (k.cl * -dy + k.cd * dx);
-  const fy = q * (k.cl * dx + k.cd * dy);
-  return { x: fx, y: fy, n: p.x * fy, alpha, cl: k.cl, cd: k.cd, speed };
+  const qPlane = 0.5 * rhoWater * v2 * p.area;
+  const cosH = Math.cos(heel);
+  const yPlane = qPlane * (k.cl * dx + k.cd * dy);
+  const fx = qPlane * cosH * (k.cl * -dy + k.cd * dx);
+  const fy = yPlane * cosH;
+  return { x: fx, y: fy, yPlane, n: p.x * fy, alpha, cl: k.cl, cd: k.cd, speed };
 }
 
 export interface HullResistance {

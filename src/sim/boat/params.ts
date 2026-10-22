@@ -120,9 +120,17 @@ export interface BoatParams {
   hullDraft: number;
   yawLinearDamping: number;
   gm: number;
-  heelTau: number;
-  maxHeel: number;
+  /** Righting arm table [heel rad, GZ m], symmetric about zero. */
+  gz: [number, number][];
+  /** Roll inertia including added inertia (kg m²). */
+  i44: number;
+  rollLinearDamping: number;
   clrDepth: number;
+  rudderDepth: number;
+  boomInertia: number;
+  boomMassMoment: number;
+  boomDamping: number;
+  boomRestitution: number;
   crewX: number;
   crewIn: number;
   crewOut: number;
@@ -246,9 +254,15 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
     hullDraft: num(cal, 'hydro.hullDraft'),
     yawLinearDamping: num(cal, 'hydro.yawLinearDamping'),
     gm: num(cal, 'stability.gm'),
-    heelTau: num(cal, 'stability.heelTau'),
-    maxHeel: num(cal, 'stability.maxHeelDeg') * DEG,
+    gz: table(cal, 'stability.gzTable').map(([d, v]) => [d * DEG, v] as [number, number]),
+    i44: mass * num(cal, 'stability.rollRadiusOfGyration') ** 2 * (1 + num(cal, 'stability.addedRollInertiaFrac')),
+    rollLinearDamping: num(cal, 'stability.rollLinearDamping'),
     clrDepth: num(cal, 'geometry.clrDepth'),
+    rudderDepth: num(cal, 'stability.rudderDepth'),
+    boomInertia: num(cal, 'sails.boomInertia'),
+    boomMassMoment: num(cal, 'sails.boomMassMoment'),
+    boomDamping: num(cal, 'sails.boomDamping'),
+    boomRestitution: num(cal, 'sails.boomRestitution'),
     crewX: num(cal, 'geometry.crewX'),
     crewIn: num(cal, 'geometry.crewLateralIn'),
     crewOut: num(cal, 'geometry.crewLateralOut'),

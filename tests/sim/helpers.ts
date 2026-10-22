@@ -31,7 +31,8 @@ export function sailingSim(o: SailOpts): Simulation {
   return new Simulation({
     params: squibParams(),
     env,
-    initial: { headingDeg: o.twaDeg, speedKn: o.startKn ?? 4 },
+    // Wind from 000°: heading = -TWA puts the boat on the requested tack from the start.
+    initial: { headingDeg: -o.twaDeg, speedKn: o.startKn ?? 4 },
     input: { autoMain: false, autoJib: false, ...o.input },
     lockHeading: o.lockHeading,
     controller: (s) => {
