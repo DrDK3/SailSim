@@ -10,6 +10,9 @@ import { Water } from './water';
 import { Wake } from './wake';
 import { ForceArrows } from './arrows';
 import type { DartScene, DartUpdate } from './dart';
+import { CourseScene } from './course';
+import type { ResolvedCourse } from '../sim/course/course';
+import type { Course } from '../sim/course/types';
 
 export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top' | 'free';
 
@@ -19,6 +22,7 @@ export interface SceneEnvironment {
   windAgainstTide: boolean;
   /** River Dart state (when the geodata is loaded). */
   dart?: Omit<DartUpdate, 'camera' | 'time'>;
+  course?: { nextLeg: number; phase: string; showLabels: boolean };
 }
 export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
 
@@ -48,6 +52,7 @@ export class SceneView {
   private lastWind = { tws: -1, twd: -1, wat: false };
   private crewSide = 1;
   private dart?: DartScene;
+  private course?: CourseScene;
   private depthAt?: (n: number, e: number) => number;
   showForces = false;
 
@@ -128,6 +133,13 @@ export class SceneView {
     this.water.setFog(density);
   }
 
+  /** Show a course (marks, lines), replacing any previous one; undefined removes it. */
+  setCourse(r: ResolvedCourse | undefined, course: Course | undefined): void {
+    if (this.course) this.scene.remove(this.course.group);
+    this.course = r && course ? new CourseScene(r, course) : undefined;
+    if (this.course) this.scene.add(this.course.group);
+  }
+
   setCameraMode(mode: CameraMode): void {
     this.mode = mode;
     this.controls.enabled = mode === 'orbit';
@@ -203,6 +215,7 @@ export class SceneView {
     this.sun.position.copy(this.boatRoot.position).add(new THREE.Vector3().setFromSphericalCoords(60, Math.PI / 2 - SUN_ELEVATION, SUN_AZIMUTH));
     this.water.update(time, this.camera);
     if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
+    if (this.course && env?.course) this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
     this.renderer.render(this.scene, this.camera);
   }
 

@@ -124,6 +124,14 @@ Differences from this list:
 - **Acceptance:** criteria 9 and 10. The validator rejects courses that cross land or restrictions.
 - Optional: spinnaker (decision D2).
 
+**Status: done, 22 Oct 2026** ([PHASE4_REPORT.md](PHASE4_REPORT.md)), except the club courses, which need documents:
+- **Criteria:** 9 and 10 pass.
+- **Validator:** rejects land and the ferry and mooring restrictions.
+- **Practice courses:** five kinds, plus a simulated river course.
+- **Editor:** with import and export.
+- **Club courses:** the format, the status workflow (pending-check → verified) and the editor support are ready, but **no club course has been entered** (no documents).
+- **Not done:** spinnaker (D2, optional) and starting-area rules (Phase 5).
+
 ## Phase 5: Race management and AI competitors (M5)
 
 - Start sequence per the SIs (default 5-4-1-0), OCS detection, individual and general recall.

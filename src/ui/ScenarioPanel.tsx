@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { START_LOCATIONS, type AppScenario, type SimController, type StartLocationId, type UiState } from '../app/controller';
 import type { ConditionsSettings } from '../sim/env/conditions';
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
+import { allCourses, PRACTICE_KINDS } from '../app/courseLibrary';
 import { dataAgeMinutes } from '../sim/env/weather';
 
 function Num({ label, value, min, max, step, onChange, unit, disabled }: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void; disabled?: boolean }) {
@@ -199,6 +200,55 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <Num label="Peak ebb" value={cur.stream.peakEbbKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, peakEbbKn: v } } })} />
           <Num label="River outflow" value={cur.stream.riverEbbKn} min={0} max={2} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, riverEbbKn: v } } })} />
           <p className="fine">Provisional model: slack at HW and LW, strongest at mid-tide. Not measured current data.</p>
+        </>
+      )}
+
+      <h4>Course and start</h4>
+      <label className="field select-field">
+        <span>Course</span>
+        <select
+          aria-label="Course"
+          value={draft.course ? (draft.course.source === 'practice' ? `practice:${draft.course.kind}` : draft.course.source === 'library' ? `library:${draft.course.id}` : 'inline') : 'none'}
+          onChange={(e) => {
+            const v = e.target.value;
+            const race = draft.race ?? { sequence: 'one-minute' as const, startInS: 90 };
+            if (v === 'none') setDraft({ ...draft, course: undefined });
+            else if (v.startsWith('practice:')) setDraft({ ...draft, course: { source: 'practice', kind: v.slice(9) as (typeof PRACTICE_KINDS)[number]['kind'] }, race, startLocation: 'start-bay-practice' });
+            else if (v.startsWith('library:')) setDraft({ ...draft, course: { source: 'library', id: v.slice(8) }, race });
+          }}
+        >
+          <option value="none">None (free sailing)</option>
+          <optgroup label="Practice courses (simulated, laid at the start position)">
+            {PRACTICE_KINDS.map((k) => <option key={k.kind} value={`practice:${k.kind}`}>{k.label}</option>)}
+          </optgroup>
+          <optgroup label="Course library">
+            {allCourses().map((c) => <option key={`${c.group}-${c.id}`} value={`library:${c.id}`}>{c.group === 'user' ? 'Mine: ' : ''}{c.name}</option>)}
+          </optgroup>
+          <option value="club" disabled>Club courses: none entered yet (RDYC documents needed)</option>
+          {draft.course?.source === 'inline' && <option value="inline">From the editor</option>}
+        </select>
+      </label>
+      {draft.course?.source === 'practice' && (
+        <>
+          <p className="fine">{PRACTICE_KINDS.find((k) => k.kind === (draft.course as { kind: string }).kind)?.description} Laid at the start position, relative to the wind there. Simulated: not an RDYC course.</p>
+          <Num label="Leg length" value={draft.course.legM ?? PRACTICE_KINDS.find((k) => k.kind === (draft.course as { kind: string }).kind)!.legM} min={80} max={1500} step={20} unit="m" onChange={(v) => setDraft({ ...draft, course: { ...(draft.course as Extract<typeof draft.course, { source: 'practice' }>), legM: v } })} />
+        </>
+      )}
+      {draft.course && draft.course.source !== 'inline' && (
+        <Num label="Laps" value={draft.course.laps ?? 2} min={1} max={10} step={1} unit="" onChange={(v) => setDraft({ ...draft, course: { ...draft.course!, laps: Math.round(v) } as typeof draft.course })} />
+      )}
+      {draft.course && (
+        <>
+          <label className="field select-field">
+            <span>Start sequence</span>
+            <select value={draft.race?.sequence ?? 'one-minute'} onChange={(e) => setDraft({ ...draft, race: { startInS: draft.race?.startInS ?? 90, sequence: e.target.value as NonNullable<AppScenario['race']>['sequence'] } })}>
+              <option value="one-minute">1 minute</option>
+              <option value="three-minute">3 minutes</option>
+              <option value="five-minute">5 minutes (warning, preparatory, one-minute)</option>
+            </select>
+          </label>
+          <Num label="Start signal after" value={draft.race?.startInS ?? 90} min={20} max={600} step={10} unit="s" onChange={(v) => setDraft({ ...draft, race: { sequence: draft.race?.sequence ?? 'one-minute', startInS: Math.round(v) } })} />
+          <p className="fine">With a course, the boat starts 100 m behind the middle of the start line. Use "Start Bay practice area" for practice courses: there is room for them in most winds.</p>
         </>
       )}
 

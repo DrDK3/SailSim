@@ -1,10 +1,10 @@
 # Outstanding issues and risks
 
-Updated: 22 Oct 2026 (end of Phase 3)
+Updated: 22 Oct 2026 (end of Phase 4)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
-| 1 | No RDYC course documents have been inspected first-hand | No verified club courses are possible yet | Request A1–A3 |
+| 1 | No RDYC course documents have been inspected first-hand | No club courses are possible yet (the format, validator and verification workflow are ready) | Request A1–A3, then enter courses as described in COURSES.md |
 | 2 | Class-rule figures come only from search excerpts; there is a sail-area conflict (16.5 vs 15.8 m²) | Boat parameters are uncertain by a few percent | Request B1 |
 | 3 | No Squib hull lines, rig drawings or performance data | Hydrodynamic and aerodynamic coefficients are estimates; speeds cannot be validated | Request B2–B5. The calibration workflow is ready ([CALIBRATION.md](CALIBRATION.md)); it needs observations |
 | 4 | No legally usable bathymetry in the river | Mid-channel depths and groundings there are provisional (LIDAR covers the drying areas near the shore) | Request C2 (UKHO INSPIRE survey data or a DHNA survey) |
@@ -34,5 +34,8 @@ Updated: 22 Oct 2026 (end of Phase 3)
 | 28 | The LIDAR survey date and tide are unknown | The lower edge of the drying areas is approximate | Look up the EA survey metadata (host blocked) |
 | 29 | The 8 m elevation grid turns quay walls into ramps | Boats ground a few metres off walls | Finer near-shore grid if it matters for racing |
 | 30 | River Dart data is 5.1 MB uncompressed; main JS bundle 943 kB | Slower first load on mobile | Quantise and compress the grids, code-split (Phase 6) |
+| 32 | The racing-rules behaviour follows secondary summaries; the 2025–2028 rulebook text was not inspected | Edge cases of rounding, starting and finishing may differ from the current rules | Check COURSES.md against the World Sailing rulebook (host reachable only via excerpts) |
+| 33 | No starting-area rules, I/Z/U/black flags, general recalls or penalty turns | Starts are judged only for OCS | Phase 5 |
+| 34 | Ferry-corridor widths and the land and mid-tide levels used by the validator are estimates | A real club course near a ferry track may be flagged more or less strictly than DHNA would | Ask DHNA; adjust `FERRY_HALF_WIDTH` |
 | 31 | Tilezen tiles are a 2015-era LIDAR composite | Recent changes to the shore (new quays, slips) may be missing | Newer EA LIDAR from the EA Defra portal (host blocked) |
 

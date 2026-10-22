@@ -13,9 +13,9 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | 0: research and feasibility | Done ([research report](docs/RESEARCH_REPORT.md)) |
 | 1: a working boat in simple water | Done, 22 Oct 2026 ([phase report](docs/PHASE1_REPORT.md)) |
 | 2: tested physics (dynamic roll, hinged boom, gusts, tide and stream, Met Office wind, dashboard, calibration workflow) | Done, 22 Oct 2026 ([phase report](docs/PHASE2_REPORT.md)) |
-| **3: the River Dart from open data (terrain, buildings, piers, moorings, ferries, grounding, channel stream, minimap)** | **Done, 22 Oct 2026** ([phase report](docs/PHASE3_REPORT.md)) |
-| 4: courses and editor | Next: needs the RDYC course documents for verified courses |
-| 5: racing and AI · 6: polish and deployment | Planned ([plan](docs/DEVELOPMENT_PLAN.md)) |
+| 3: the River Dart from open data (terrain, buildings, piers, moorings, ferries, grounding, channel stream, minimap) | Done, 22 Oct 2026 ([phase report](docs/PHASE3_REPORT.md)) |
+| **4: courses, course judge and editor (practice courses, validation, starts, roundings, finishes)** | **Done, 22 Oct 2026** ([phase report](docs/PHASE4_REPORT.md)). No RDYC club courses yet: the documents are needed |
+| 5: race management and AI competitors · 6: polish and deployment | Planned ([plan](docs/DEVELOPMENT_PLAN.md)) |
 
 Physics coefficients are **estimates** awaiting Squib performance data ([calibration workflow](docs/CALIBRATION.md)). Mid-channel depths, individual moorings, ferry timetables and the tidal stream are provisional estimates (the in-app **Layers** panel lists them), and Met Office wind is forecast-model output. This is not for navigation or performance prediction.
 
@@ -64,7 +64,11 @@ npm run dev          # open the printed URL; press H in the app for help
 | L / N | Place labels / minimap |
 | H | Help |
 
-On-screen buttons provide the same controls. The toolbar also opens the **Polar** panel (model polar computed in a Web Worker), the **Scenario** panel (start position, start time, wind source, gusts, tide, current) and the **Layers** panel (what is data and what is provisional, with sources and licences).
+On-screen buttons provide the same controls. The toolbar also opens:
+- the **Polar** panel: the model polar, computed in a Web Worker;
+- the **Scenario** panel: start position and time, wind source, gusts, tide, current, course and start sequence;
+- the **Layers** panel: what is data and what is provisional, with sources and licences;
+- the **Courses** editor: draw, check, import and export courses ([docs/COURSES.md](docs/COURSES.md)).
 
 ## Real-time conditions
 
@@ -88,6 +92,7 @@ public/live/  weather files the app discovers (dated Met Office replay; live fil
 public/geo/   River Dart data (elevation, stream pattern, drape, minimap, features, manifest with provenance)
 data/boats/   class data and calibration coefficients, each with source and confidence tag
 data/observations/  template for observed sailing points (calibration); no data yet
+data/courses/ simulated practice courses; club/ for RDYC courses entered from official documents (none yet)
 scenarios/    repeatable headless scenarios (JSON)
 tests/        Vitest (sim) and Playwright (browser) suites, golden traces, fixtures (synthetic ones labelled)
 tools/        scenario runner, polar, parameter table, golden traces, calibration, performance; geodata/ (Python pipeline)
@@ -99,7 +104,9 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 
 | Document | Contents |
 |---|---|
-| [docs/PHASE3_REPORT.md](docs/PHASE3_REPORT.md) | Phase 3: what works, test results, criteria, changes, known defects, manual test steps |
+| [docs/PHASE4_REPORT.md](docs/PHASE4_REPORT.md) | Phase 4: what works, test results, criteria, decisions, known defects, manual test steps |
+| [docs/COURSES.md](docs/COURSES.md) | Course format, validation rules, how the judge works, entering and verifying club courses |
+| [docs/PHASE3_REPORT.md](docs/PHASE3_REPORT.md) | Phase 3 report |
 | [docs/GEODATA.md](docs/GEODATA.md) | River Dart data: frame, datums, every layer with source and method, rebuild steps, checks |
 | [docs/PHASE2_REPORT.md](docs/PHASE2_REPORT.md) | Phase 2 report |
 | [docs/PHASE1_REPORT.md](docs/PHASE1_REPORT.md) | Phase 1 report |

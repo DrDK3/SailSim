@@ -67,6 +67,52 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         ctx.stroke();
       }
     }
+    // Course: legs (lap 1), lines and marks; the next mark ringed.
+    const race = ctl.race;
+    if (race) {
+      const r = race.resolved;
+      ctx.strokeStyle = 'rgba(255,170,90,0.75)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      const sm = { n: (r.start[0].n + r.start[1].n) / 2, e: (r.start[0].e + r.start[1].e) / 2 };
+      let [px, py] = toPx(sm.n, sm.e);
+      ctx.moveTo(px, py);
+      for (const l of r.legs.filter((x) => x.lap === 1)) {
+        [px, py] = toPx(l.target.n, l.target.e);
+        ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (const [a, b] of [r.start, r.finish]) {
+        const [x0, y0] = toPx(a.n, a.e);
+        const [x1, y1] = toPx(b.n, b.e);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 1;
+      for (const p of r.pos.values()) {
+        const [x, y] = toPx(p.n, p.e);
+        ctx.fillStyle = '#ff7a1a';
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const next = r.legs[race.judge.legIndex];
+      if (next && race.judge.phase === 'racing') {
+        const [x, y] = toPx(next.target.n, next.target.e);
+        ctx.strokeStyle = '#5fe08a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
     // Course over ground (60 s ahead) and the boat.
     const [bx, by] = toPx(s.n, s.e);
     const ahead = s.sog * 60 * k;

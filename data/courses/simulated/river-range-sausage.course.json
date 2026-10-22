@@ -1,0 +1,24 @@
+{
+  "schema": "squib-course/1",
+  "id": "sim-river-range",
+  "name": "River: the Range sausage (simulated)",
+  "description": "Up and down the wide reach north of the Higher Ferry, between Dart Marina and Noss. Two laps; legs along the river, so a beat or a run when the wind blows up or down the river.",
+  "status": "simulated",
+  "provenance": {
+    "kind": "simulated",
+    "notes": "Invented practice course placed by the developer in deep water clear of the mooring areas and ferry tracks in the geodata. Not an RDYC course; marks are not real."
+  },
+  "marks": [
+    { "id": "S1", "name": "Start pin (west)", "kind": "pin", "position": { "n": 1380, "e": -400 }, "source": "placed on the River Dart data (simulated)" },
+    { "id": "S2", "name": "Start boat (east)", "kind": "committee-boat", "position": { "n": 1380, "e": -310 }, "source": "placed on the River Dart data (simulated)" },
+    { "id": "T", "name": "Top mark", "kind": "inflatable", "position": { "n": 1850, "e": -440 }, "source": "placed on the River Dart data (simulated)" },
+    { "id": "B", "name": "Bottom mark", "kind": "inflatable", "position": { "n": 1470, "e": -400 }, "source": "placed on the River Dart data (simulated)" }
+  ],
+  "start": { "ends": ["S1", "S2"] },
+  "legs": [
+    { "type": "mark", "mark": "T", "rounding": "port" },
+    { "type": "mark", "mark": "B", "rounding": "port" }
+  ],
+  "laps": 2,
+  "finish": { "ends": ["S1", "S2"] }
+}

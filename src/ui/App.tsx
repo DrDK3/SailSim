@@ -9,6 +9,8 @@ import { Dashboard } from './Dashboard';
 import { PolarPanel } from './PolarPanel';
 import { Minimap } from './Minimap';
 import { LayersPanel } from './LayersPanel';
+import { RacePanel } from './RacePanel';
+import { CourseEditor } from './CourseEditor';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
 
@@ -17,7 +19,8 @@ function conditionsText(sc: AppScenario): string {
   const wind = c.weather.source === 'manual' ? `wind ${c.weather.twsKn} kn from ${c.weather.twdDeg}°` : `Met Office UKV model wind${c.weather.replay ? ' (replay)' : ''}`;
   const tide = c.tide ? `tide ${c.tide.mode}` : 'no tide';
   const cur = c.current.mode === 'tidal' ? 'modelled tidal stream' : c.current.mode === 'uniform' ? `current ${c.current.rateKn} kn` : 'no current';
-  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}`;
+  const course = sc.course ? (sc.course.source === 'practice' ? ` · practice course (simulated)` : ' · course set') : '';
+  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}${course}`;
 }
 
 export function App({ ctl }: { ctl: SimController }) {
@@ -61,6 +64,7 @@ export function App({ ctl }: { ctl: SimController }) {
         <button aria-pressed={ui.showLabels} onClick={() => ctl.toggleLabels()} title="Place labels (L)">Labels</button>
         <button aria-pressed={ui.showMinimap} onClick={() => ctl.toggleMinimap()} title="Minimap (N)">Map</button>
         <button aria-pressed={ui.showLayers} onClick={() => ctl.toggleLayers()} title="Layers, provisional elements and sources">Layers</button>
+        <button aria-pressed={ui.showEditor} onClick={() => ctl.toggleEditor()} title="Course editor">Courses</button>
         <button onClick={() => ctl.toggleHelp()} title="Help (H)">Help</button>
       </nav>
       <div className="side">
@@ -79,8 +83,10 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}
+      {ui.race && <RacePanel race={ui.race} />}
+      {ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}
       <footer className="badge">
-        Phase 3 prototype · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
+        Phase 4 prototype · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
       </footer>
       {ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}
     </div>

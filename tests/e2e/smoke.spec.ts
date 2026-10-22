@@ -257,3 +257,79 @@ test('Phase 3: without the River Dart data the app falls back to open water and 
   const t0 = (await snap(page)).t;
   await expect.poll(async () => (await snap(page)).t, { timeout: 20_000 }).toBeGreaterThan(t0);
 });
+
+test('Phase 4: a practice course from the scenario panel: countdown, start signal, and a start when the boat crosses', async ({ page }) => {
+  const errors = await open(page);
+  await page.getByRole('button', { name: 'Scenario' }).click();
+  const panel = page.getByRole('region', { name: 'Scenario settings' });
+  const course = panel.getByRole('combobox', { name: 'Course' });
+  await expect(course.locator('option[value="club"]')).toHaveAttribute('disabled', '');
+  await expect(course.locator('option[value="club"]')).toContainText('none entered yet');
+  await course.selectOption('practice:windward-leeward');
+  await expect(panel).toContainText('Simulated: not an RDYC course');
+  await panel.locator('.field', { hasText: 'Start signal after' }).locator('input[type="number"]').fill('20');
+  await panel.getByRole('button', { name: 'Apply and restart' }).click();
+  const race = page.getByTestId('race-panel');
+  await expect(race).toContainText('Windward–leeward (simulated)');
+  await expect(race).toContainText('Simulated course');
+  await expect(page.getByTestId('countdown')).toBeVisible();
+  const names = await page.evaluate(() => {
+    const set = new Set<string>();
+    (window.__squib!.controller as unknown as { view: { scene: { traverse: (f: (o: { name: string }) => void) => void } } }).view.scene.traverse((o) => set.add(o.name));
+    return [...set];
+  });
+  expect(names).toContain('course-mark');
+  expect(names).toContain('course-line');
+  // The boat starts 100 m behind the line, reaching along it. Turn up towards the line, let the helm centre,
+  // and sail across after the start signal.
+  await page.keyboard.down('KeyD');
+  await page.evaluate(() => window.__squib!.advance(1.2));
+  await page.keyboard.up('KeyD');
+  await page.evaluate(() => window.__squib!.advance(25));
+  await expect(race).toContainText('Start signal');
+  await page.evaluate(() => {
+    for (let i = 0; i < 12 && window.__squib!.controller.getState().race!.phase === 'pre-start'; i++) window.__squib!.advance(10);
+  });
+  await expect(race).toContainText('Started');
+  await expect(page.getByTestId('next-mark')).toContainText('Windward to port');
+  expect(errors).toEqual([]);
+});
+
+test('Phase 4: course editor: add a mark, live check, import, export', async ({ page }) => {
+  const errors = await open(page);
+  await page.getByRole('button', { name: 'Courses' }).click();
+  const ed = page.getByRole('dialog', { name: 'Course editor' });
+  await expect(ed).toBeVisible();
+  // Add a mark by clicking the map.
+  const before = await ed.locator('[data-mark]').count();
+  await ed.getByRole('button', { name: 'Add mark', exact: true }).click();
+  const map = ed.getByTestId('editor-map');
+  const box = (await map.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.3);
+  await expect(ed.locator('[data-mark]')).toHaveCount(before + 1);
+  // Import a course with a mark on land: the check reports it and sailing is refused.
+  const bad = {
+    schema: 'squib-course/1', id: 'bad', name: 'Bad course', status: 'simulated', provenance: { kind: 'user' },
+    marks: [
+      { id: 'A', name: 'Pin', kind: 'pin', position: { n: 1380, e: -400 } },
+      { id: 'B', name: 'Boat', kind: 'committee-boat', position: { n: 1380, e: -310 } },
+      { id: 'C', name: 'Clubhouse', kind: 'inflatable', position: { lat: 50.34801, lon: -3.57339 } },
+    ],
+    start: { ends: ['A', 'B'] }, legs: [{ type: 'mark', mark: 'C', rounding: 'port' }], laps: 1, finish: { ends: ['A', 'B'] },
+  };
+  await ed.getByRole('textbox', { name: 'Paste course JSON' }).fill(JSON.stringify(bad));
+  await ed.getByRole('button', { name: 'Import', exact: true }).click();
+  await expect(ed.getByTestId('editor-issues')).toContainText('Mark Clubhouse is on land');
+  await expect(ed.getByRole('button', { name: 'Save and sail' })).toBeDisabled();
+  // Load the simulated river course: no problems; export gives the JSON file.
+  await ed.getByRole('combobox', { name: 'Load a course' }).selectOption('sim-river-range');
+  await expect(ed.getByTestId('editor-issues')).toContainText('No problems found');
+  const [download] = await Promise.all([page.waitForEvent('download'), ed.getByRole('button', { name: 'Export JSON' }).click()]);
+  const json = JSON.parse(readFileSync((await download.path())!, 'utf8')) as { schema: string; id: string; status: string };
+  expect(json).toMatchObject({ schema: 'squib-course/1', id: 'sim-river-range', status: 'simulated' });
+  // Sail it.
+  await ed.getByRole('button', { name: 'Save and sail' }).click();
+  await expect(ed).toBeHidden();
+  await expect(page.getByTestId('race-panel')).toContainText('River: the Range sausage (simulated)');
+  expect(errors).toEqual([]);
+});
