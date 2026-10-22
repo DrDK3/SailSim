@@ -1,0 +1,14 @@
+{
+  "name": "Beat in 10 kn with two tacks",
+  "description": "Close-hauled on starboard, tack at 60 s and 150 s. Auto-trim assist on. Uniform steady wind from 225°.",
+  "durationS": 240,
+  "sampleEveryS": 0.5,
+  "conditions": { "twsKn": 10, "twdDeg": 225 },
+  "initial": { "headingDeg": 185, "speedKn": 4 },
+  "input": { "autoMain": true, "autoJib": true },
+  "autopilot": { "mode": "twa", "targetDeg": 40 },
+  "events": [
+    { "t": 60, "autopilot": { "mode": "twa", "targetDeg": -40 } },
+    { "t": 150, "autopilot": { "mode": "twa", "targetDeg": 40 } }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Broad reach and gybe in 12 kn with a tidal current",
+  "description": "Broad reach on starboard, bear away through a gybe onto port at 90 s. 1 kn current setting 090°.",
+  "durationS": 180,
+  "sampleEveryS": 0.5,
+  "conditions": { "twsKn": 12, "twdDeg": 270, "currentSetDeg": 90, "currentRateKn": 1 },
+  "initial": { "headingDeg": 140, "speedKn": 5 },
+  "input": { "autoMain": true, "autoJib": true },
+  "autopilot": { "mode": "twa", "targetDeg": 130 },
+  "events": [{ "t": 90, "autopilot": { "mode": "twa", "targetDeg": -150 } }]
+}

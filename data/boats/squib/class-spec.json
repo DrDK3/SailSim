@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "description": "National Squib principal particulars used by the simulator. Every value carries a source id (see docs/SOURCES.md) and a confidence tag: V verified from primary, S(p) primary document seen only via search excerpt, S secondary, E estimated, N not established.",
+    "updated": "2026-10-22",
+    "toVerify": "All S(p) values must be re-checked against NSOA Class Rules 2025 (docs/MISSING_INFORMATION.md B1)."
+  },
+  "loa": { "value": 5.79, "unit": "m", "tag": "S", "source": "C6, C7", "note": "19 ft" },
+  "lwl": { "value": 5.18, "unit": "m", "tag": "S", "source": "C7", "note": "17.0 ft" },
+  "beam": { "value": 1.867, "unit": "m", "tag": "S", "source": "C6", "note": "6 ft 1.5 in" },
+  "draft": { "value": 0.99, "unit": "m", "tag": "S", "source": "C7", "note": "3.25 ft maximum" },
+  "minBoatMass": { "value": 680, "unit": "kg", "tag": "S(p)", "source": "C1, C6", "note": "Minimum weight including sails and mandatory items" },
+  "ballastMass": { "value": 375, "unit": "kg", "tag": "S", "source": "C7", "note": "Cast iron fin keel" },
+  "mainArea": { "value": 10.5, "unit": "m2", "tag": "S(p)", "source": "C4, C8", "note": "Main + jib = 16.5 m2 conflicts with 15.8 m2 upwind total (C6)" },
+  "jibArea": { "value": 6.0, "unit": "m2", "tag": "S(p)", "source": "C4, C8" },
+  "spinnakerArea": { "value": 13.5, "unit": "m2", "tag": "S(p)", "source": "C4", "note": "Not modelled in Phase 1" },
+  "mastLength": { "value": 7.695, "unit": "m", "tag": "S(p)", "source": "C1", "note": "Datum (overall or above deck) not established" },
+  "boomOuterPoint": { "value": 2.743, "unit": "m", "tag": "S(p)", "source": "C2", "note": "Used as mainsail foot length; whether min or max is unclear" },
+  "spinnakerPoleLength": { "value": 2.14, "unit": "m", "tag": "S(p)", "source": "C1" },
+  "crewCount": { "value": 2, "unit": "-", "tag": "S", "source": "C8", "note": "NSOA says two or three" }
+}

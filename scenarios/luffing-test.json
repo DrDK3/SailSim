@@ -1,0 +1,12 @@
+{
+  "name": "Luffing: ease both sheets on a close reach",
+  "description": "Max-drive trim at TWA 60° for 90 s, then both sheets fully eased (sails luff) and the boat slows.",
+  "durationS": 180,
+  "sampleEveryS": 0.25,
+  "conditions": { "twsKn": 10, "twdDeg": 0 },
+  "initial": { "headingDeg": 60, "speedKn": 4 },
+  "input": { "autoMain": false, "autoJib": false },
+  "autopilot": { "mode": "twa", "targetDeg": 60 },
+  "optimiseTrim": true,
+  "events": [{ "t": 90, "optimiseTrim": false, "input": { "mainSheet": 1, "jibSheet": 1 } }]
+}

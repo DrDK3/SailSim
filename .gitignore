@@ -1,6 +1,10 @@
 .venv/
 node_modules/
 dist/
+out/
+test-results/
+playwright-report/
 *.parquet
 __pycache__/
 .DS_Store
+*.tsbuildinfo

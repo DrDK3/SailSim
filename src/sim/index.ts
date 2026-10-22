@@ -1,0 +1,11 @@
+export * from './simulation';
+export * from './scenario';
+export * from './units';
+export * from './math/angles';
+export * from './env/environment';
+export * from './control/autopilot';
+export * from './control/trim';
+export { squibParams, squibProvenance } from './boat/squib';
+export type { BoatParams, Tag, ProvenanceRecord } from './boat/params';
+export type { ForceBreakdown } from './boat/dynamics';
+export { apparentWind, windVelocity, windFrom, bodyToWorld, worldToBody } from './boat/forces';
