@@ -18,6 +18,7 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Proposed technical architecture and trade-offs |
 | [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | Phases 1–6, acceptance criteria, first milestone |
 | [docs/LIVE_WEATHER.md](docs/LIVE_WEATHER.md) | Real-time weather: sources tested, snapshot, proposed integration |
+| [docs/LIVE_TIDES.md](docs/LIVE_TIDES.md) | Real tidal conditions: gauge, predictions, stream model, integration |
 | [docs/OUTSTANDING_ISSUES.md](docs/OUTSTANDING_ISSUES.md) | Open issues and known risks |
 
 ## Reproducing the geodata feasibility spike
@@ -50,6 +51,7 @@ Outputs:
 |---|---|
 | Map data | © OpenStreetMap contributors, ODbL 1.0, via Overture Maps Foundation |
 | Weather | British Crown copyright, the Met Office, CC BY-SA 4.0 (UKV model and land observations, via AWS Open Data) |
+| Tide gauges (planned) | Contains Environment Agency data, Open Government Licence v3; UKHO predictions © Crown copyright (terms to confirm) |
 | Terrain | © Environment Agency copyright and/or database right 2015. All rights reserved. Open Government Licence v3, via Tilezen terrain tiles |
 
 The feasibility map is **not for navigation**.

@@ -16,3 +16,6 @@ Updated: 22 Oct 2026 (end of Phase 0)
 | 10 | The terrain DEM has a flattened water surface, and some entrance tiles blend in lower-resolution DEMs | The waterline needs the OSM shoreline as authority; cliffs near the castles may be smoothed | Handle in the Phase 3 pipeline |
 | 11 | Met Office observation wind units not documented here (inferred knots from a 120-station comparison with UKV) | Live observed wind could be mis-scaled | Confirm from the Met Office ASDI documentation (host blocked) |
 | 12 | No public anemometer on the Dart; nearest measured stations are 39–45 km away; the UKV run is 3–6 h old when published | "Live" wind is regional, or a short-range forecast, not a local measurement | Ask for an RDYC/DHNA station feed (C6); label the source and age in the UI |
+| 13 | Tide hosts (EA, UKHO, NTSLF) blocked here; EA Dartmouth station details are from third-party listings | Live tide not yet tested | Allowlist the hosts (C3), then build and test the ingest |
+| 14 | Chart-datum offset at Dartmouth (2.62 m below ODN) is from a secondary source | Depth over chart datum could be offset | Confirm (C8) |
+| 15 | UKHO licence terms for publicly displaying API predictions unconfirmed | May restrict a public deployment | Check the UKHO terms before Phase 6; EA-derived predictions are the fallback |

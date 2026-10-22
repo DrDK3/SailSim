@@ -69,6 +69,16 @@
 | W4 | Met Office DataHub site-specific pricing | https://datahub.metoffice.gov.uk/pricing/site-specific | Excerpt | Met Office terms | Free tier of 360 calls/day (needs a key and a proxy) |
 | W5 | Met Office Dartmouth (Devon) observation page | https://www.metoffice.gov.uk/weather/observations/gbvqqw6ce | Excerpt | — | Public web page (not an API) |
 
+## Tides (see `LIVE_TIDES.md`)
+
+| # | Source | URL | Access | Licence | Used for |
+|---|---|---|---|---|---|
+| T1 | EA real-time flood-monitoring API, station 46154 "Dartmouth" (tidal level, 15 min, mAOD) | https://environment.data.gov.uk/flood-monitoring/id/stations/46154 ; listing https://riverlevels.uk/south-devon-coast-dartmouth-dartmouth-tidal-tidal ; https://www.floodradar.co.uk/station/46154 | Blocked; excerpt | OGL v3 | Measured tide height at Dartmouth |
+| T2 | EA tide-gauge / flood-monitoring API reference | https://api.gov.uk/ea/tide-gauge/ , https://environment.data.gov.uk/flood-monitoring/doc/reference | Excerpt | OGL v3 | API usage, polling guidance |
+| T3 | UKHO Admiralty UK Tidal API (Discovery, Foundation, Premium) | https://api.gov.uk/ukho/uk-tidal-api-discovery/ , https://api.gov.uk/ukho/tidal-api-foundation , https://api.gov.uk/ukho/tidal-api-premium/ | Excerpt | UKHO terms (display terms unconfirmed) | Official HW/LW predictions |
+| T5 | EA station 3216, River Dart at Austins Bridge | https://check-for-flooding.service.gov.uk/station/3216 ; https://riverlevels.uk/river-dart-buckfastleigh-austins-bridge | Excerpt | OGL v3 | River level / flow for the ebb river term |
+| T6 | Dartmouth chart datum, 2.62 m below ODN | https://www.mdlmarinas.co.uk/marinas/mdl-dartside-quay/weather-and-tides/ ; NTSLF datum differences https://ntslf.org/node/36 | Excerpt | — | mAOD to chart-datum conversion (to confirm) |
+
 ## Racing rules
 
 | # | Source | URL | Date | Access |

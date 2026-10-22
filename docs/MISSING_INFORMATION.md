@@ -30,7 +30,8 @@ Ordered by what it blocks. Uploads can go into this conversation or into `refere
 |---|---|---|
 | C1 | **Network allowlist** for: `overpass-api.de` (OSM seamarks and buoys), `environment.data.gov.uk` (EA aerial imagery, LIDAR), `royaldart.co.uk`, `squibs.co.uk`, `dartharbour.org`, `en.wikipedia.org`, `admiralty.co.uk`. Set this in the cloud environment's settings, under Network access | I can then read primary documents myself instead of relying on search excerpts |
 | C2 | A **legally usable bathymetry source**. Options: UKHO INSPIRE / Admiralty Marine Data Portal surveys (OGL), or a licence if you want chart-derived depths | Grounding and depth-dependent current. Admiralty chart data **cannot** go into a public app without a licence |
-| C3 | Choice of **tidal height source**: manual HW time and height entry (free, no keys), or the Admiralty UK Tidal API (needs a key and a small server proxy) | Tide-height scenarios |
+| C3 | **Real tides** (see `LIVE_TIDES.md`): allowlist `environment.data.gov.uk` and `admiraltyapi.azure-api.net`; obtain a free UKHO Discovery API key (kept server-side only); choose official UKHO, EA-derived, or both for predictions | Live measured tide height, official HW/LW, river-flow term |
+| C8 | **Confirm the Dartmouth chart datum** (2.62 m below ODN?) from the Admiralty Tide Tables or Reeds | Converting the EA gauge (mAOD) to depths over chart datum |
 | C4 | **Local knowledge of the stream**: where it runs hardest, eddies (e.g. off Kingswear or the castles), slack-water timing relative to HW, wind-against-tide spots | To shape the provisional current model honestly |
 | C5 | **Local wind knowledge**: typical sea-breeze direction, valley funnelling, wind shadows under the Kingswear and Dartmouth hills | Spatially varying wind model |
 | C6 | Does **RDYC or DHNA run a weather station** (anemometer) with an accessible feed? Vendor and API? | The only route to truly real-time, measured, *local* wind |

@@ -57,6 +57,7 @@ Every phase ends with a **phase gate**:
 - Weather and lee helm from CE and CLR geometry, shown on the HUD.
 - Boom as a hinged body, so gybes (including crash gybes) emerge.
 - Seeded gust and shift model; spatially varying wind.
+- `TideSource` interface (Manual, Replay, Live) and a phase-driven uniform current (see `LIVE_TIDES.md`).
 - `WeatherSource` interface: Manual, Replay, and **Live point mode** from the Met Office ingest (see `LIVE_WEATHER.md`).
 - Current: uniform, analytic test fields, flood and ebb scenario curves.
 - Wind-against-current wave flag.
@@ -82,6 +83,7 @@ Every phase ends with a **phase gate**:
 - Provisional bathymetry and grounding; provisional channel-following current field; tide-height input.
 - Minimap.
 - **Live spatial wind field** from the UKV 2 km grid over the Dart area.
+- Live tide height (EA Dartmouth gauge) for depth and grounding; spatial current pattern driven by real tidal phase, range and river flow (provisional pattern).
 - In-app **Provisional Elements** panel and attribution panel.
 - **Acceptance:**
   - Projected distances between eight reference landmarks match the source data to within 2 m.
@@ -115,7 +117,7 @@ Every phase ends with a **phase gate**:
 - Deterministic replays from input logs; scenario library.
 - Performance profiling; asset compression; lazy loading.
 - Production build, hosting setup (GitHub Pages or Cloudflare Pages), deployment documentation, cost statement.
-- Scheduled live-weather ingest job, stale-data handling, visual weather (cloud, visibility, rain).
+- Scheduled live-weather and tide ingest job (EA, UKHO), harmonic-constant derivation and validation, stale-data handling, visual weather (cloud, visibility, rain).
 - **Acceptance:**
   - The production build is served and passes the end-to-end tests.
   - Controls work.

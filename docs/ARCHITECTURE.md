@@ -85,8 +85,8 @@ Phenomena that **emerge** rather than being scripted:
 | Model | Phase | Description | Status |
 |---|---|---|---|
 | Wind | 1–2 | Base TWS/TWD from a pluggable `WeatherSource` (Manual, **Live Met Office**, optional Open-Meteo or local station, Replay; see `LIVE_WEATHER.md`). Seeded gusts (puffs with spatial footprint, advected downwind). Oscillating and persistent shifts (Ornstein–Uhlenbeck processes). Gust and shift parameters can be derived from live data. An optional terrain-shadow and funnelling layer in Phase 3 | Model (E) or live data, labelled |
-| Tide height | 3 | User enters HW and LW times and heights (from EasyTide or the tide tables); cosine or rule-of-twelfths interpolation | User-provided data |
-| Current | 2–3 | Phase 2: uniform or analytic test fields. Phase 3: channel-following field C = s(t)·f(x,y). f follows the channel axis, scaled by cross-section; s(t) is the tidal-phase curve with ebb/flood asymmetry and a river-flow bias. Peaks are scenario parameters (default about 2 kn at the entrance, per the DHNA statement) | **Provisional, not measured** |
+| Tide height | 2–3 | Pluggable `TideSource`: Manual (HW and LW entry), **Live** (EA Dartmouth gauge plus UKHO HW/LW events), Derived (harmonic constants from EA gauge history), Replay. See `LIVE_TIDES.md` | Measured or official data where live, labelled |
+| Current | 2–3 | Phase 2: uniform or analytic test fields. Phase 3: channel-following field C = s(t)·f(x,y), with phase and spring/neap strength taken from the real tide and an ebb river term from EA Austins Bridge flow. f follows the channel axis, scaled by cross-section; s(t) is the tidal-phase curve with ebb/flood asymmetry and a river-flow bias. Peaks are scenario parameters (default about 2 kn at the entrance, per the DHNA statement) | **Provisional, not measured** |
 | Depth | 3 | A provisional raster (deep channel tapering to the banks, constrained by the OSM shoreline) plus tide height. Grounding below the draft | **Provisional** |
 | Waves | 2/6 | Wind-sea visual parameterised by wind and fetch. A wind-against-current flag raises wave steepness | Visual (E) |
 
@@ -170,6 +170,6 @@ A **course validator** runs in both CI and the editor. It checks that:
 |---|---|
 | Build | `npm run build` produces static `dist/`. Geodata assets load lazily with progress and error states |
 | Hosting | GitHub Pages or Cloudflare Pages (free). Optional custom domain, about £10 per year |
-| Live weather | A scheduled job (GitHub Actions cron, every 15–30 min) runs the Met Office ingest and publishes a ~10 KB `live/latest.json` beside the static site. No keys needed. The browser falls back to the cached snapshot, then to manual |
+| Live weather and tide | A scheduled job (GitHub Actions cron, every 15–30 min) runs the Met Office ingest and publishes small `live/latest.json` (weather) and `live/tide.json` (EA gauge, UKHO events) files beside the static site. The UKHO key, if used, is a CI secret only. The browser falls back to the cached snapshot, then to manual |
 | Secrets | **No secrets in the client.** If the Admiralty Tidal API is adopted, it goes behind a serverless proxy (e.g. a Cloudflare Worker, free tier) holding the key. This is the only feature that would need an external service |
 | Licence obligations | An in-app attribution panel: "© OpenStreetMap contributors (ODbL)", "Overture Maps Foundation", "© Environment Agency copyright and/or database right 2015 (OGL v3)", "Contains modified Copernicus Sentinel data". The derived coastline and building database must be offered under ODbL (share-alike). No Admiralty chart data without a licence |
