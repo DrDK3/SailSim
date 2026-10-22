@@ -1,0 +1,6 @@
+pyarrow
+shapely
+pyproj
+numpy
+pillow
+matplotlib

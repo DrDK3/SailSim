@@ -1,0 +1,941 @@
+{
+ "source": "Overture Maps Foundation release 2026-10-21.0 (OSM-derived layers, ODbL 1.0)",
+ "status": "Extracted directly; positional accuracy of OSM not independently verified",
+ "features": [
+  {
+   "name": "Ferry Cottage",
+   "layer": "building",
+   "class": "retail",
+   "lat": 50.382259,
+   "lon": -3.591021,
+   "overture_id": "894b551d-37e4-4aa2-ac2b-8aaddcec76a3"
+  },
+  {
+   "name": "St Saviour's",
+   "layer": "building",
+   "class": "church",
+   "lat": 50.351122,
+   "lon": -3.578972,
+   "overture_id": "4153ad41-62f4-4299-bae4-eea34e51d2b8"
+  },
+  {
+   "name": "Royal Castle Hotel",
+   "layer": "building",
+   "class": null,
+   "lat": 50.351517,
+   "lon": -3.578661,
+   "overture_id": "cecfa403-a0f8-42c0-b083-6a9ab7fe3e24"
+  },
+  {
+   "name": "Dart Lifeboat Station",
+   "layer": "building",
+   "class": "commercial",
+   "lat": 50.354738,
+   "lon": -3.578038,
+   "overture_id": "a538a61d-5792-4cdc-85cf-02cf56679046"
+  },
+  {
+   "name": "Dartmouth Yacht Club",
+   "layer": "building",
+   "class": null,
+   "lat": 50.349255,
+   "lon": -3.577974,
+   "overture_id": "5442238b-3c23-4c06-9b05-06664137e455"
+  },
+  {
+   "name": "Dartmouth Yacht Club",
+   "layer": "building",
+   "class": null,
+   "lat": 50.349312,
+   "lon": -3.577597,
+   "overture_id": "bd10c3e5-5a9d-4a69-bbdf-7f673329f9db"
+  },
+  {
+   "name": "Ferry Office",
+   "layer": "building",
+   "class": null,
+   "lat": 50.357632,
+   "lon": -3.576789,
+   "overture_id": "22a2b778-e75c-4776-a588-2985df18e548"
+  },
+  {
+   "name": "Kingswear Railway Station",
+   "layer": "building",
+   "class": "train_station",
+   "lat": 50.348634,
+   "lon": -3.572913,
+   "overture_id": "e704c063-9771-4327-b8d4-8e3036ba07f1"
+  },
+  {
+   "name": "Royal Dart Yacht Club",
+   "layer": "building",
+   "class": null,
+   "lat": 50.348007,
+   "lon": -3.573394,
+   "overture_id": "3bacb734-91ac-4a67-b454-b2bdd2b7339e"
+  },
+  {
+   "name": "Marina View Apartments",
+   "layer": "building",
+   "class": "apartments",
+   "lat": 50.349425,
+   "lon": -3.570496,
+   "overture_id": "8804d65a-1d25-453b-ba93-8b9aecaff3d3"
+  },
+  {
+   "name": "Dartmouth Castle",
+   "layer": "building",
+   "class": null,
+   "lat": 50.342281,
+   "lon": -3.565951,
+   "overture_id": "e09126a4-db8d-4984-9e68-4b87ae048aa2"
+  },
+  {
+   "name": "Castle Tea Room",
+   "layer": "building",
+   "class": null,
+   "lat": 50.341885,
+   "lon": -3.565871,
+   "overture_id": "958cfc70-18a7-42f2-9fd5-962d2792587c"
+  },
+  {
+   "name": "Dartmouth Castle",
+   "layer": "building",
+   "class": null,
+   "lat": 50.341796,
+   "lon": -3.565719,
+   "overture_id": "ca5e09a7-65d2-465f-8d7c-f7931ae84bf0"
+  },
+  {
+   "name": "St. Petrox",
+   "layer": "building",
+   "class": "church",
+   "lat": 50.342194,
+   "lon": -3.566178,
+   "overture_id": "0d77df40-4b21-44b7-aca3-5a1ac82eac95"
+  },
+  {
+   "name": "Castle Lodge",
+   "layer": "building",
+   "class": null,
+   "lat": 50.342666,
+   "lon": -3.558326,
+   "overture_id": "a04c28cd-5fa3-4408-9da6-a62c32b3ecce"
+  },
+  {
+   "name": "Kingswear Castle",
+   "layer": "building",
+   "class": null,
+   "lat": 50.342018,
+   "lon": -3.559862,
+   "overture_id": "f7b80f7a-1483-45c7-9d3f-1979ce7ee2ab"
+  },
+  {
+   "name": "Dart Haven Marina",
+   "layer": "land_use",
+   "class": "marina",
+   "lat": 50.350432,
+   "lon": -3.572042,
+   "overture_id": "2efd4f52-379f-30fe-b6fa-506a2b34d017"
+  },
+  {
+   "name": "Dart Marina",
+   "layer": "land_use",
+   "class": "marina",
+   "lat": 50.35836,
+   "lon": -3.576911,
+   "overture_id": "6d8b735a-f188-3794-9f37-cd0cc877f22d"
+  },
+  {
+   "name": "Britannia Royal Naval College",
+   "layer": "land_use",
+   "class": "base",
+   "lat": 50.357083,
+   "lon": -3.583963,
+   "overture_id": "13981753-627e-366f-92a4-ac85a9eaceda"
+  },
+  {
+   "name": "Dartmouth Mewstone",
+   "layer": "land",
+   "class": "reef",
+   "lat": 50.333649,
+   "lon": -3.533915,
+   "overture_id": "e9598ed8-f624-33a1-a1dd-d96de7718386"
+  },
+  {
+   "name": "Dittisham Jetty",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.382627,
+   "lon": -3.594737,
+   "overture_id": "7f4f2e65-5f28-3690-ba67-32a3ba298baa"
+  },
+  {
+   "name": "Dittisham Jetty",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.382449,
+   "lon": -3.595181,
+   "overture_id": "c3af2a39-8f07-3112-94e3-cc0633501f08"
+  },
+  {
+   "name": "Dartmouth Castle Parking",
+   "layer": "infrastructure",
+   "class": "parking",
+   "lat": 50.341888,
+   "lon": -3.566148,
+   "overture_id": "6ed98b63-3344-3a2b-87d2-82870da1fe8d"
+  },
+  {
+   "name": "Stumpy Steps Ferry Landing",
+   "layer": "infrastructure",
+   "class": "ferry_terminal",
+   "lat": 50.34269,
+   "lon": -3.56717,
+   "overture_id": "aab13df9-5582-38e4-8b1d-28a2a294d26a"
+  },
+  {
+   "name": "Marina car park",
+   "layer": "infrastructure",
+   "class": "recycling",
+   "lat": 50.349858,
+   "lon": -3.570456,
+   "overture_id": "5bb261ba-3aa6-333a-8b3c-2d914caecccc"
+  },
+  {
+   "name": "Higher Ferry",
+   "layer": "infrastructure",
+   "class": "ferry_terminal",
+   "lat": 50.359628,
+   "lon": -3.573483,
+   "overture_id": "a05a1dfc-f60d-3c85-aebb-88d5afa33b29"
+  },
+  {
+   "name": "Castle Road",
+   "layer": "infrastructure",
+   "class": "bridge",
+   "lat": 50.342423,
+   "lon": -3.573659,
+   "overture_id": "a1f895cb-fbcf-3357-ae31-82e4744e8f8b"
+  },
+  {
+   "name": "Kingswear Dartmouth Ferry Terminal",
+   "layer": "infrastructure",
+   "class": "toilets",
+   "lat": 50.348328,
+   "lon": -3.573003,
+   "overture_id": "318b9510-98b7-300d-93dc-938ea62b6db1"
+  },
+  {
+   "name": "St Saviours Substation",
+   "layer": "infrastructure",
+   "class": "substation",
+   "lat": 50.35053,
+   "lon": -3.579089,
+   "overture_id": "d71900c9-c474-3629-abe7-8e047ced566f"
+  },
+  {
+   "name": "Castle Ferry Steps",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.350415,
+   "lon": -3.577252,
+   "overture_id": "c414b9af-955d-351d-97eb-da6c2f465040"
+  },
+  {
+   "name": "Town Jetty",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.351059,
+   "lon": -3.576886,
+   "overture_id": "5aeff268-2344-3aaf-9b73-b73ff797bbf6"
+  },
+  {
+   "name": "Dartmouth Town Jetty",
+   "layer": "infrastructure",
+   "class": "ferry_terminal",
+   "lat": 50.351146,
+   "lon": -3.576808,
+   "overture_id": "12671094-e873-3335-a4d5-5aa3f183c214"
+  },
+  {
+   "name": "Dartmouth Yacht Club Pontoon (Summer only)",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.3494,
+   "lon": -3.577122,
+   "overture_id": "6c7939ae-c7fc-3390-9099-58b65d3c3a10"
+  },
+  {
+   "name": "Dartmouth Yacht Club Pontoon (Summer only)",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.349406,
+   "lon": -3.577059,
+   "overture_id": "b1090ec6-b803-32f1-a9f4-4bad7772e9f3"
+  },
+  {
+   "name": "Dartmouth Yacht Club Steps",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.349324,
+   "lon": -3.577219,
+   "overture_id": "b54b5032-abac-3e2e-95a8-e740b4d22be0"
+  },
+  {
+   "name": "Dart Marina Car Park",
+   "layer": "infrastructure",
+   "class": "parking",
+   "lat": 50.357251,
+   "lon": -3.577013,
+   "overture_id": "44a61674-c650-3415-8d2d-eabed9aa30c4"
+  },
+  {
+   "name": "Dart RNLI B Class Lifeboat Pontoon",
+   "layer": "infrastructure",
+   "class": "pier",
+   "lat": 50.354679,
+   "lon": -3.575722,
+   "overture_id": "c684038d-b1ce-3180-9df2-749870929d8b"
+  },
+  {
+   "name": "Dart Marina Substation",
+   "layer": "infrastructure",
+   "class": "substation",
+   "lat": 50.358108,
+   "lon": -3.578058,
+   "overture_id": "1742efbb-c342-38c6-94ea-c4abc36a4936"
+  },
+  {
+   "name": "Distins Trots",
+   "layer": "water",
+   "class": "water",
+   "lat": 50.367471,
+   "lon": -3.581202,
+   "overture_id": "55e0c76b-8d66-31f2-b601-f38c36b73fbc"
+  },
+  {
+   "name": "Noss Trots",
+   "layer": "water",
+   "class": "water",
+   "lat": 50.368567,
+   "lon": -3.580011,
+   "overture_id": "4e526ce6-4617-3439-8ee6-7e5f3e5fddaa"
+  },
+  {
+   "name": "Kingswear Trots",
+   "layer": "water",
+   "class": "water",
+   "lat": 50.355819,
+   "lon": -3.572439,
+   "overture_id": "a0e44678-0c6f-3f13-bcf8-207149a7e157"
+  },
+  {
+   "name": "Castle Cove",
+   "layer": "water",
+   "class": "bay",
+   "lat": 50.341186,
+   "lon": -3.565615,
+   "overture_id": "6df12a83-61c4-3b7d-b319-c30e161d2eab"
+  },
+  {
+   "name": "Totnes to Dartmouth Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.59134231420683,
+      50.385
+     ],
+     [
+      -3.5916682,
+      50.3845513
+     ],
+     [
+      -3.5928376,
+      50.3828367
+     ],
+     [
+      -3.5926081,
+      50.3818756
+     ],
+     [
+      -3.59154,
+      50.3809312
+     ],
+     [
+      -3.588345,
+      50.3802133
+     ],
+     [
+      -3.5852765,
+      50.378236
+     ],
+     [
+      -3.5813981,
+      50.3759062
+     ],
+     [
+      -3.5801911,
+      50.3747039
+     ],
+     [
+      -3.5790968,
+      50.3734414
+     ],
+     [
+      -3.5785174,
+      50.3721258
+     ],
+     [
+      -3.5785604,
+      50.3685144
+     ],
+     [
+      -3.5790539,
+      50.3655717
+     ],
+     [
+      -3.5787373,
+      50.3637152
+     ],
+     [
+      -3.577112,
+      50.3613352
+     ],
+     [
+      -3.5755938,
+      50.3588693
+     ],
+     [
+      -3.5746119,
+      50.3563814
+     ],
+     [
+      -3.5747598,
+      50.3542215
+     ],
+     [
+      -3.5754557,
+      50.3516514
+     ],
+     [
+      -3.5756528,
+      50.3514509
+     ],
+     [
+      -3.5768082,
+      50.3511457
+     ]
+    ]
+   },
+   "overture_id": "4002d369-29ed-44e4-ac2d-d7ceb9235207"
+  },
+  {
+   "name": "Dittisham Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5915347,
+      50.3823894
+     ],
+     [
+      -3.5925189,
+      50.3824799
+     ],
+     [
+      -3.5931785,
+      50.382559
+     ],
+     [
+      -3.5939722,
+      50.3826596
+     ],
+     [
+      -3.5946817,
+      50.382664
+     ]
+    ]
+   },
+   "overture_id": "32107647-3a65-432d-bbda-57ff35b8fcd2"
+  },
+  {
+   "name": "Dartmouth / Dittisham Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5946817,
+      50.382664
+     ],
+     [
+      -3.5932354,
+      50.382051
+     ],
+     [
+      -3.5922806,
+      50.3814192
+     ],
+     [
+      -3.5916422,
+      50.3808927
+     ],
+     [
+      -3.5904164,
+      50.3805349
+     ],
+     [
+      -3.58955,
+      50.3803659
+     ],
+     [
+      -3.5885292,
+      50.3800977
+     ],
+     [
+      -3.5873533,
+      50.3794757
+     ],
+     [
+      -3.585459,
+      50.3781558
+     ],
+     [
+      -3.5823839,
+      50.3760246
+     ],
+     [
+      -3.5818078,
+      50.375579
+     ],
+     [
+      -3.5810609,
+      50.3748432
+     ],
+     [
+      -3.5800483,
+      50.3735542
+     ],
+     [
+      -3.5796232,
+      50.3728453
+     ],
+     [
+      -3.5793509,
+      50.3719206
+     ],
+     [
+      -3.5792986,
+      50.3704861
+     ],
+     [
+      -3.5793603,
+      50.3688377
+     ],
+     [
+      -3.5793121,
+      50.3683857
+     ],
+     [
+      -3.5793458,
+      50.3667001
+     ],
+     [
+      -3.5793261,
+      50.3655667
+     ],
+     [
+      -3.5792467,
+      50.3648258
+     ],
+     [
+      -3.5789937,
+      50.3636661
+     ],
+     [
+      -3.5785396,
+      50.3626125
+     ],
+     [
+      -3.5779106,
+      50.3615647
+     ],
+     [
+      -3.5774533,
+      50.3609384
+     ],
+     [
+      -3.5764589,
+      50.3593736
+     ],
+     [
+      -3.5760062,
+      50.3583587
+     ],
+     [
+      -3.5755925,
+      50.3573026
+     ],
+     [
+      -3.5752203,
+      50.3561725
+     ],
+     [
+      -3.5751372,
+      50.3553275
+     ],
+     [
+      -3.5752123,
+      50.3542243
+     ],
+     [
+      -3.575396,
+      50.3532111
+     ],
+     [
+      -3.5756991,
+      50.3521988
+     ],
+     [
+      -3.5758649,
+      50.3519589
+     ],
+     [
+      -3.5760733,
+      50.3517994
+     ],
+     [
+      -3.576485,
+      50.3517795
+     ],
+     [
+      -3.5768203,
+      50.3518471
+     ],
+     [
+      -3.5770454,
+      50.3519571
+     ]
+    ]
+   },
+   "overture_id": "36516468-b292-4e6c-affd-afd34e7cb200"
+  },
+  {
+   "name": "Greenway Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5916347,
+      50.3822433
+     ],
+     [
+      -3.5922611,
+      50.3820418
+     ],
+     [
+      -3.592322,
+      50.381812
+     ],
+     [
+      -3.5914335,
+      50.3809931
+     ],
+     [
+      -3.5882547,
+      50.3803004
+     ],
+     [
+      -3.5850495,
+      50.3782986
+     ],
+     [
+      -3.5812372,
+      50.3759792
+     ],
+     [
+      -3.5800463,
+      50.3747791
+     ],
+     [
+      -3.5789251,
+      50.3735167
+     ],
+     [
+      -3.5783335,
+      50.3721676
+     ],
+     [
+      -3.5783323,
+      50.3685009
+     ],
+     [
+      -3.5788285,
+      50.3655667
+     ],
+     [
+      -3.5785364,
+      50.3637375
+     ],
+     [
+      -3.5769101,
+      50.3613715
+     ],
+     [
+      -3.5753692,
+      50.3589235
+     ],
+     [
+      -3.5744179,
+      50.3563973
+     ],
+     [
+      -3.5745317,
+      50.3541991
+     ],
+     [
+      -3.5752581,
+      50.351624
+     ],
+     [
+      -3.5755858,
+      50.3514063
+     ],
+     [
+      -3.5768082,
+      50.3511457
+     ]
+    ]
+   },
+   "overture_id": "2ef8a2c9-0bf3-45f6-b589-96137b266fe8"
+  },
+  {
+   "name": "Noss on Dart / Dartmouth Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5775229,
+      50.3666153
+     ],
+     [
+      -3.5782196,
+      50.3664752
+     ],
+     [
+      -3.5784734,
+      50.3662385
+     ],
+     [
+      -3.5786202,
+      50.3654944
+     ],
+     [
+      -3.5783325,
+      50.3637815
+     ],
+     [
+      -3.5781603,
+      50.3634318
+     ],
+     [
+      -3.5751838,
+      50.3589255
+     ],
+     [
+      -3.5746329,
+      50.3576047
+     ],
+     [
+      -3.5741619,
+      50.3562385
+     ],
+     [
+      -3.5740731,
+      50.355133
+     ],
+     [
+      -3.5746506,
+      50.3525195
+     ],
+     [
+      -3.5748372,
+      50.3518052
+     ],
+     [
+      -3.5755214,
+      50.3512495
+     ],
+     [
+      -3.5768082,
+      50.3511457
+     ]
+    ]
+   },
+   "overture_id": "1b6755ef-39e2-4792-90a9-a3102bcdc7b5"
+  },
+  {
+   "name": "Dartmouth Higher Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5765341,
+      50.3567749
+     ],
+     [
+      -3.5734827,
+      50.359628
+     ]
+    ]
+   },
+   "overture_id": "01587e8b-881d-4be2-9bd4-a53eb0d75da2"
+  },
+  {
+   "name": "Dartmouth Pedestrian Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5737216,
+      50.3487292
+     ],
+     [
+      -3.5768082,
+      50.3511457
+     ]
+    ]
+   },
+   "overture_id": "0a4e2c69-5a6a-4e3d-a424-ccd8e5cadc01"
+  },
+  {
+   "name": "Dartmouth Lower Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5775312,
+      50.3489364
+     ],
+     [
+      -3.5731719,
+      50.3483754
+     ]
+    ]
+   },
+   "overture_id": "6d6503b7-3b38-41db-bccf-72432f30e44b"
+  },
+  {
+   "name": "Dartmouth Castle Ferry",
+   "layer": "segment",
+   "class": "ferry_route",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -3.5772342,
+      50.3504109
+     ],
+     [
+      -3.5770935,
+      50.3503898
+     ],
+     [
+      -3.576677,
+      50.3501499
+     ],
+     [
+      -3.5765299,
+      50.3500285
+     ],
+     [
+      -3.5764027,
+      50.3498857
+     ],
+     [
+      -3.5763176,
+      50.3497115
+     ],
+     [
+      -3.5762751,
+      50.349426
+     ],
+     [
+      -3.5762111,
+      50.3485379
+     ],
+     [
+      -3.5760564,
+      50.3470271
+     ],
+     [
+      -3.5758155,
+      50.3464717
+     ],
+     [
+      -3.5751912,
+      50.3459281
+     ],
+     [
+      -3.5744416,
+      50.3455589
+     ],
+     [
+      -3.5734511,
+      50.3451404
+     ],
+     [
+      -3.5724763,
+      50.3447961
+     ],
+     [
+      -3.5703929,
+      50.3444182
+     ],
+     [
+      -3.5683654,
+      50.3439316
+     ],
+     [
+      -3.5672255,
+      50.3432351
+     ],
+     [
+      -3.5668573,
+      50.3431028
+     ],
+     [
+      -3.56669,
+      50.3429179
+     ],
+     [
+      -3.5667978,
+      50.3427555
+     ],
+     [
+      -3.56717,
+      50.34269
+     ]
+    ]
+   },
+   "overture_id": "e065a9e3-bf95-4851-8e8d-d826af6aacbe"
+  }
+ ]
+}

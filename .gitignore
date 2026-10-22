@@ -1,0 +1,6 @@
+.venv/
+node_modules/
+dist/
+*.parquet
+__pycache__/
+.DS_Store
