@@ -88,11 +88,11 @@
       "source": "estimate"
     },
     "lateralX": {
-      "value": 0.0,
+      "value": 0.9,
       "unit": "m",
       "tag": "E",
       "source": "estimate",
-      "note": "Centre of lateral resistance of keel + hull, relative to CG"
+      "note": "Effective centre of the combined keel + canoe-body lift, forward of the CG. The canoe body produces its side force well forward, so the hydrodynamic centre lies ahead of the geometric centre of lateral resistance. Chosen so the boat carries slight weather helm that grows with wind (about 1 deg at 10 kn and 3 deg at 15 kn close-hauled) and rounds up slowly with the helm centred, which is the usual design intent; not measured."
     },
     "clrDepth": {
       "value": 0.45,
@@ -582,6 +582,13 @@
       "unit": "N m s",
       "tag": "E",
       "source": "estimate"
+    },
+    "rudderFlowStraightening": {
+      "value": 0.5,
+      "unit": "-",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Fraction of the hull's leeway removed from the rudder inflow by the keel's downwash (0 = none, 1 = rudder sees no leeway). Typical manoeuvring-model values are of order 0.3-0.6."
     }
   },
   "stability": {

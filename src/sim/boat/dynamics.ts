@@ -74,7 +74,9 @@ export function computeForces(
   const { main, jib, jibEffectiveness: jEff } = sailPairForces(p, a.boomMain, a.boomJib, aw, a.heel, fluids.rhoAir);
   const windage = windageForce(p, aw, a.heel, fluids.rhoAir);
   const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x, 0, a.heel, fluids.rhoWater);
-  const rudder = foilForce(p.rudder, s.u, s.v + s.r * p.rudder.x, a.rudder, a.heel, fluids.rhoWater);
+  // The keel's downwash straightens the flow reaching the rudder: only part of the hull's leeway remains.
+  const rudderSway = s.v * (1 - p.rudder.flowStraightening) + s.r * p.rudder.x;
+  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, a.heel, fluids.rhoWater);
   const hull = hullResistance(p, s.u, a.heel, fluids.rhoWater);
   const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater);
   const yawDamping = -p.yawLinearDamping * s.r;

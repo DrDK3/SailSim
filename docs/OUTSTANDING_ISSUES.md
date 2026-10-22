@@ -1,6 +1,6 @@
 # Outstanding issues and risks
 
-Updated: 22 Oct 2026 (end of Phase 0)
+Updated: 22 Oct 2026 (end of Phase 1)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
@@ -19,3 +19,9 @@ Updated: 22 Oct 2026 (end of Phase 0)
 | 13 | Tide hosts (EA, UKHO, NTSLF) blocked here; EA Dartmouth station details are from third-party listings | Live tide not yet tested | Allowlist the hosts (C3), then build and test the ingest |
 | 14 | Chart-datum offset at Dartmouth (2.62 m below ODN) is from a secondary source | Depth over chart datum could be offset | Confirm (C8) |
 | 15 | UKHO licence terms for publicly displaying API predictions unconfirmed | May restrict a public deployment | Check the UKHO terms before Phase 6; EA-derived predictions are the fallback |
+| 16 | Model pointing probably a few degrees optimistic (minimum heading-TWA 21° from rest, best VMG around 35–40°) | Upwind tactics slightly favour pinching | Calibrate against Squib tacking angles and GPS tracks (B5) |
+| 17 | Cross-engine determinism is within tolerance (~1e-13), not bit-exact | Replays recorded in one browser may differ by about 1e-13 in another | Port a deterministic maths library (sin, cos, pow) if bit-exact cross-browser replays are needed |
+| 18 | Gybe uses a by-the-lee threshold; heel is quasi-static | Crash gybes and roll dynamics are not physical yet | Phase 2: hinged boom, dynamic roll |
+| 19 | Residuary resistance is a parametric curve, not the Delft series | Speed near hull speed is estimated | Source DSYHS coefficients and Squib hull parameters |
+| 20 | Single 857 kB JS bundle | Slower first load on mobile | Code-split in Phase 6 |
+

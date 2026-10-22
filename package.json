@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "scenario": "tsx tools/scenario-runner.ts"
+    "scenario": "tsx tools/scenario-runner.ts",
+    "polar": "tsx tools/model-polar.ts",
+    "params": "tsx tools/param-table.ts"
   },
   "dependencies": {
     "react": "19.2.9",

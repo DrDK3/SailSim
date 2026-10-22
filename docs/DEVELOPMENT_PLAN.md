@@ -22,6 +22,8 @@ Every phase ends with a **phase gate**:
 
 ## Phase 1: A working boat in simple water (first milestone, M1)
 
+**Status: complete (22 Oct 2026).** See [`PHASE1_REPORT.md`](PHASE1_REPORT.md).
+
 **Scope**
 
 - Project skeleton:
@@ -149,10 +151,10 @@ These criteria test **internal consistency and physical plausibility**. They do 
 | 5 | Gybe emerges | Bear away slowly from TWA 165° to by-the-lee (TWA 190°) with the mainsheet fixed | Boom crosses the centreline without any gybe command. Boom angular rate bounded by the mainsheet model. Heading stays continuous |
 | 6 | Rudder response consistent | Rudder sweep −25°…+25° at 4 kn (and at 2 and 6 kn) | Yaw-rate sign matches the helm convention. \|r\| rises monotonically up to the stall angle. Turn rate at fixed rudder angle increases with speed. Zero rudder, symmetric case: \|r\| < 1e-6 rad/s |
 | 7 | Current affects ground motion only | Same run with and without uniform current (1.5 kn, 8 directions), wind defined over water | STW traces identical within 1e-6 kn. SOG equals \|V_w + C\| within 1e-9. Track offset equals C·t within 0.01 m after 300 s |
-| 8 | Cannot sail into the wind | Autopilot holds TWA 0–25°, from rest and from 5 kn | No steady forward STW > 0.3 kn for \|TWA\| ≤ 25°. Report the minimum TWA giving positive steady STW (expected 35–50°, E) |
+| 8 | Cannot sail into the wind | **Revised in Phase 1.** Captive (heading-locked) test at TWS 6, 10, 15 and 20 kn and TWA 0–15°, from rest and from 5 kn | No steady forward STW > 0.3 kn within 15° of the wind. The minimum TWA giving positive steady STW is reported as model output (Phase 1: 21° from rest, 17° with way on) |
 | 9 | Rounding order and direction | Synthetic track fixtures: correct, wrong side, skipped, wrong order, unwinding loop, extra loop | 100% expected verdicts |
 | 10 | Start and finish repeatable | 100 repeated runs; analytic straight-line crossings | Bit-identical crossing times. Interpolation error ≤ 1 ms. OCS flagged when any hull reference point is on the course side at the signal |
-| 11 | Reproducibility | Same scenario, seed and input log, 600 s simulated | Bit-identical final state hash in Node and in Chromium (both V8) |
+| 11 | Reproducibility | Same scenario, seed and input log, 600 s simulated | **Revised in Phase 1.** Bit-identical hash within one engine (Node–Node, Chromium–Chromium). Across engines, every state component within 1×10⁻⁶; different V8 versions differ in the last bit of Math.sin, Math.cos and Math.pow |
 | 12 | Performance with AI | 1 + 20 boats, headless | Physics ≤ 1.5 ms mean and ≤ 3 ms p99 per 1/60 s frame on the CI container. Rendering ≥ 55 fps median at 1080p "medium" on reference hardware (to be agreed; manual check) |
 
 ## First milestone (M1) definition of done

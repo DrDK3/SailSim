@@ -1,5 +1,5 @@
-import classSpec from '../../../data/boats/squib/class-spec.json';
-import calibration from '../../../data/boats/squib/calibration.json';
+import classSpec from '../../../data/boats/squib/class-spec.json' with { type: 'json' };
+import calibration from '../../../data/boats/squib/calibration.json' with { type: 'json' };
 import { buildBoatParams, validateProvenance, type BoatParams, type ProvenanceRecord } from './params';
 
 export const SQUIB_CLASS_SPEC = classSpec as Record<string, unknown>;

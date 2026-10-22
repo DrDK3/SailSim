@@ -18,6 +18,7 @@ import {
 } from '../../src/sim/index';
 import { createRng } from '../../src/sim/math/rng';
 import { hullResistance } from '../../src/sim/boat/forces';
+import { determinismSim } from '../../src/sim/testing/determinism';
 import { KN, sailingSim, toKn } from './helpers';
 
 const LONG = 120_000;
@@ -254,26 +255,7 @@ describe('Criterion 8: the boat cannot sail into the wind', () => {
 });
 
 describe('Criterion 11: same inputs give the same result', () => {
-  function scripted(): Simulation {
-    let phase = 0;
-    return new Simulation({
-      params: squibParams(),
-      env: uniformEnvironment({ twsKn: 12, twdDeg: 225, currentSetDeg: 40, currentRateKn: 0.8 }),
-      initial: { headingDeg: 180, speedKn: 3 },
-      input: { autoMain: true, autoJib: true },
-      controller: (s) => {
-        const t = s.time;
-        if (t > 100 && phase === 0) phase = 1;
-        if (t > 250 && phase === 1) phase = 2;
-        if (t > 400 && phase === 2) phase = 3;
-        const targets = [45, -45, 150, -120];
-        const change: Record<string, number | boolean> = { helm: autopilotHelm(s, { mode: 'twa', target: targets[phase]! * DEG }) };
-        if (t > 500) change.autoMain = false;
-        if (t > 500) change.mainSheet = 0.4;
-        return change;
-      },
-    });
-  }
+  const scripted = determinismSim;
 
   it('600 s scripted run with tacks, gybe, current and sheet changes is bit-identical', () => {
     const a = scripted();

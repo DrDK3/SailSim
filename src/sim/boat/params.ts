@@ -93,6 +93,7 @@ export interface BoatParams {
   lwl: number;
   beam: number;
   draft: number;
+  mastLength: number;
   mass: number;
   crewMass: number;
   weight: number;
@@ -114,7 +115,7 @@ export interface BoatParams {
   residuary: [number, number][];
   heelResistance: number;
   lateral: FoilParams;
-  rudder: FoilParams & { maxAngle: number; rate: number };
+  rudder: FoilParams & { maxAngle: number; rate: number; flowStraightening: number };
   hullCrossFlowCd: number;
   hullDraft: number;
   yawLinearDamping: number;
@@ -175,6 +176,7 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
     lwl: num(spec, 'lwl'),
     beam: num(spec, 'beam'),
     draft: num(spec, 'draft'),
+    mastLength: num(spec, 'mastLength'),
     mass,
     crewMass,
     weight: mass * G,
@@ -238,6 +240,7 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
       cn90: num(cal, 'hydro.rudderCn90'),
       maxAngle: num(cal, 'hydro.rudderMaxDeg') * DEG,
       rate: num(cal, 'hydro.rudderRateDegS') * DEG,
+      flowStraightening: num(cal, 'hydro.rudderFlowStraightening'),
     },
     hullCrossFlowCd: num(cal, 'hydro.hullCrossFlowCd'),
     hullDraft: num(cal, 'hydro.hullDraft'),
