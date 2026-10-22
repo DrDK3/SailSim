@@ -1,0 +1,222 @@
+{
+ "generated": "2026-10-22T12:23:58Z",
+ "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+ "origin": {
+  "lat": 50.34801,
+  "lon": -3.57339,
+  "name": "RDYC clubhouse footprint centroid"
+ },
+ "verticalDatum": {
+  "heights": "metres above Ordnance Datum Newlyn (ODN)",
+  "chartDatumBelowOdn": 2.62,
+  "chartDatumTag": "S",
+  "chartDatumSource": "Secondary source (issue 14); confirm against UKHO (C8)"
+ },
+ "domain": {
+  "eMin": -3200.0,
+  "eMax": 3600.0,
+  "nMin": -5200.0,
+  "nMax": 4560.0
+ },
+ "elevation": {
+  "file": "elevation.bin",
+  "type": "int16le",
+  "scale": 0.01,
+  "cell": 8.0,
+  "nx": 850,
+  "ny": 1220,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "row-major, rows south to north, cell centres at e0 + (i + 0.5)\u00b7cell"
+ },
+ "current": {
+  "file": "current.bin",
+  "type": "int16le",
+  "scale": 0.001,
+  "components": [
+   "tidal_ve",
+   "tidal_vn",
+   "river_ve",
+   "river_vn"
+  ],
+  "cell": 16.0,
+  "nx": 425,
+  "ny": 610,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "meaning": "Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)"
+ },
+ "drape": {
+  "file": "drape.jpg",
+  "nx": 680,
+  "ny": 976,
+  "cell": 10.0,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "image rows north to south"
+ },
+ "minimap": {
+  "file": "minimap.png",
+  "cell": 32.0,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "image rows north to south"
+ },
+ "features": "features.json",
+ "entrance": {
+  "a": [
+   546.0,
+   -690.7
+  ],
+  "b": [
+   963.1,
+   -666.2
+  ]
+ },
+ "layers": [
+  {
+   "id": "terrain",
+   "label": "Terrain (land)",
+   "status": "data",
+   "tag": "V",
+   "source": "Environment Agency LIDAR Composite DTM 2 m via Tilezen terrain tiles (AWS Open Data), z15, resampled to 8 m",
+   "licence": "Open Government Licence v3 (\u00a9 Environment Agency copyright and/or database right 2015. All rights reserved.)",
+   "notes": [
+    "Tile sources (tile counts): {'uk_lidar': 150, 'eudem': 56, 'srtm': 39, 'gmted': 45, 'etopo1': 43}. Where LIDAR coverage ends (offshore), tiles blend EU-DEM, SRTM, GMTED and ETOPO1."
+   ]
+  },
+  {
+   "id": "intertidal",
+   "label": "Drying areas (mud, sand, rock)",
+   "status": "data",
+   "tag": "V",
+   "source": "Same LIDAR DTM: ground above the water surface at the time of the survey, inside the tidal water mask",
+   "licence": "Open Government Licence v3",
+   "notes": [
+    "17943 cells of 8 m. Survey date and tide not known: the lower limit is the survey water level, about +0.4 m above chart datum."
+   ]
+  },
+  {
+   "id": "bathymetry",
+   "label": "Water depth below the low-water line",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Estimate: depth grows with distance from the low-water edge (9 m cap in the harbour, rising seaward)",
+   "licence": "\u2014",
+   "notes": [
+    "No legally usable survey is available (Admiralty charts are UKHO copyright). Do not use for navigation.",
+    "Grounding in the app uses this depth: it is right near the shore (LIDAR) and only indicative mid-channel."
+   ]
+  },
+  {
+   "id": "shoreline",
+   "label": "Shoreline and tidal water",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap coastline and riverbank polygons via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "OSM positional accuracy not independently verified; the visible shoreline comes from the LIDAR terrain at the current tide."
+   ]
+  },
+  {
+   "id": "drape",
+   "label": "Terrain colour",
+   "status": "data",
+   "tag": "V",
+   "source": "Copernicus Sentinel-2 L2A true colour, scene S2C_30UVA_20250712_0_L2A (12 Jul 2025), 10 m",
+   "licence": "Contains modified Copernicus Sentinel data 2025 (free and open)",
+   "notes": [
+    "10 m pixels: fields, woods and towns are recognisable; individual buildings are not."
+   ]
+  },
+  {
+   "id": "buildings",
+   "label": "Buildings",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap and Microsoft ML building footprints via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation); Microsoft ML Buildings ODbL",
+   "notes": [
+    "5404 footprints. Heights: 2041 from the data (Microsoft ML estimates or OSM), 392 from floor counts, 2971 estimated by building type (E). Flat roofs."
+   ]
+  },
+  {
+   "id": "landmarks",
+   "label": "Landmarks",
+   "status": "data",
+   "tag": "S",
+   "source": "OSM names and footprints via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "Shown as their real footprints with labels; no invented detail (towers, battlements)."
+   ]
+  },
+  {
+   "id": "piers",
+   "label": "Piers, jetties and pontoons",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap (man_made=pier) via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "92 features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'."
+   ]
+  },
+  {
+   "id": "mooring-areas",
+   "label": "Mooring areas (trots)",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap water polygons (Kingswear, Noss and Distins Trots; DHNA anchorage) via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "4 areas."
+   ]
+  },
+  {
+   "id": "moorings",
+   "label": "Individual moorings and moored boats",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Generated: rows 22 m apart, buoys 16 m apart inside the mooring areas; boat types random (seeded)",
+   "licence": "\u2014",
+   "notes": [
+    "443 moorings. Positions are illustrative: individual buoy positions are not established (N). They are not obstacles in the physics yet."
+   ]
+  },
+  {
+   "id": "ferries",
+   "label": "Ferries",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Routes: OpenStreetMap ferry routes via Overture Maps 2026-10-21.0 (S). Timetables and vessel sizes: estimates (E)",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "9 route segments. Animation only: not obstacles in the physics yet. Lower and Higher Ferries are shown as restricted in their ability to manoeuvre (DHNA sailing directions, S(p))."
+   ]
+  },
+  {
+   "id": "marks",
+   "label": "Navigation marks",
+   "status": "partial",
+   "tag": "S",
+   "source": "Only marks with a stated position are placed (Castle Ledge buoy, visitmyharbour)",
+   "licence": "\u2014",
+   "notes": [
+    "Not placed (position not established): Checkstone and Homestone buoys, Kingswear light, RDYC racing marks."
+   ]
+  },
+  {
+   "id": "current",
+   "label": "Tidal stream pattern",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Tidal-prism continuity on the provisional depths (potential flow), scaled to the entrance stream from the tide timing",
+   "licence": "\u2014",
+   "notes": [
+    "Not measured current data. The pattern depends on the provisional depths. Offshore (Start Bay) streams are not modelled."
+   ]
+  }
+ ]
+}

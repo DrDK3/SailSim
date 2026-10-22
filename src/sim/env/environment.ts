@@ -40,6 +40,8 @@ export interface Environment {
   /** Advance internal state (gusts, shifts) by one fixed step. Called once per step by the owner. */
   step?(t: number, dt: number): void;
   describe?(t: number, n: number, e: number): EnvironmentInfo;
+  /** Water level (m above Ordnance Datum Newlyn) from the tide, when a vertical datum is known. */
+  waterLevel?(t: number): number;
   readonly windField?: WindField;
   readonly startEpochMs?: number;
 }
@@ -66,6 +68,11 @@ export interface ComposedOptions {
   current?: CurrentModel;
   tide?: TideSource;
   startEpochMs: number;
+  /**
+   * Vertical datum for water levels: chart datum below ODN, and the level (m above CD) used when there is
+   * no tide. Needed only with a seabed (the River Dart data).
+   */
+  datum?: { cdBelowOdn: number; meanLevelCd: number };
 }
 
 /** Combine a wind field, a current model and an optional tide source into an Environment. */
@@ -79,6 +86,7 @@ export function composeEnvironment(o: ComposedOptions): Environment {
     wind: (_t, n, e) => o.wind.wind(n, e),
     current: (t, n, e) => current.at(epoch(t), n, e),
     step: (t, dt) => o.wind.step(t, dt),
+    waterLevel: o.datum ? (t) => (o.tide ? o.tide.at(epoch(t)).height : o.datum!.meanLevelCd) - o.datum!.cdBelowOdn : undefined,
     describe(t, n, e) {
       const w = o.wind.sample(n, e);
       const c = current.at(epoch(t), n, e);

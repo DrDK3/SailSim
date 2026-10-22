@@ -19,7 +19,12 @@ import {
   type RigidState,
 } from './boat/dynamics';
 import type { BoatParams } from './boat/params';
+import type { ContactPointState, GroundContext } from './boat/contact';
+import type { Seabed } from './geo/dart';
 import type { Environment, EnvironmentInfo } from './env/environment';
+
+/** Water level used with a seabed when the environment has no tide (m ODN): about mean sea level (E). */
+export const DEFAULT_WATER_LEVEL_ODN = 0.1;
 
 /** Fixed physics timestep (s). */
 export const DT = 0.01;
@@ -78,6 +83,8 @@ export interface SimulationOptions {
    * several boats share one environment and a race manager steps it once per tick.
    */
   ownsEnvironment?: boolean;
+  /** Bottom elevation for grounding (the River Dart data). Without it the water is bottomless. */
+  seabed?: Seabed;
 }
 
 /** A boom fetching up hard against the sheet or shrouds (e.g. a crash gybe). */
@@ -141,6 +148,11 @@ export interface BoatSnapshot {
   forces: ForceBreakdown;
   /** Conditions here: sources, tide, flags (when the environment can describe itself). */
   env?: EnvironmentInfo;
+  /** Water level (m ODN) and, with a seabed, the water depth at the keel and the bottom contact state. */
+  waterLevel: number;
+  depthAtKeel: number;
+  grounded: boolean;
+  contactPoints: ContactPointState[];
 }
 
 export class Simulation {
@@ -161,6 +173,7 @@ export class Simulation {
   /** Sheet positions chosen by the auto-trim assist (used only when autoMain/autoJib are on). */
   private autoSheet = { main: 0.3, jib: 0.3 };
   readonly ownsEnvironment: boolean;
+  readonly seabed?: Seabed;
   lastBoomEvent: BoomEvent | null = null;
 
   constructor(opts: SimulationOptions) {
@@ -171,6 +184,7 @@ export class Simulation {
     this.lockHeading = opts.lockHeading ?? false;
     this.testThrust = opts.testThrust ?? 0;
     this.ownsEnvironment = opts.ownsEnvironment ?? true;
+    this.seabed = opts.seabed;
     this.input = { ...DEFAULT_INPUT, ...opts.input };
     this.state = {
       n: opts.initial.n ?? 0,
@@ -207,6 +221,15 @@ export class Simulation {
       this.act.crewY = this.input.autoCrew ? this.autoCrewTarget() : side * this.crewOffset();
       this.state.phi = heelEquilibrium(this.params, this.state, this.act, this.windHere(), this.currentHere(), this.fluids);
     }
+  }
+
+  /** Water level (m ODN) at time t: from the environment's tide, else about mean sea level. */
+  waterLevel(t = this.time): number {
+    return this.env.waterLevel?.(t) ?? DEFAULT_WATER_LEVEL_ODN;
+  }
+
+  private groundAt(t: number): GroundContext | undefined {
+    return this.seabed ? { waterLevel: this.waterLevel(t), seabed: this.seabed } : undefined;
   }
 
   private windHere(): NE {
@@ -259,7 +282,7 @@ export class Simulation {
     const p = this.params;
     const wind = this.windHere();
     const cur = this.currentHere();
-    const f = computeForces(p, this.state, this.act, wind, cur, this.fluids);
+    const f = computeForces(p, this.state, this.act, wind, cur, this.fluids, this.groundAt(this.time));
     const step = (sail: 'main' | 'jib'): void => {
       const sf = sail === 'main' ? f.main : f.jib;
       const target = p[sail].autoTrimAlpha;
@@ -313,10 +336,10 @@ export class Simulation {
     // out (forward) by wind from astern; the real twisted sail flips and drives the boom across. Model that
     // by reversing the chord-normal force only in that case (when the plain force pushes the boom outwards).
     a.mainInverted = false;
-    let f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids);
+    let f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids, this.groundAt(this.time));
     if (byTheLeeAngle(a.boomMain, awa) > p.main.byTheLee && f.main.boomTorque * a.boomMain > 0) {
       a.mainInverted = true;
-      f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids);
+      f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids, this.groundAt(this.time));
     }
     const boom = stepBoom(p, a.boomMain, a.boomRate, f.main.boomTorque, this.state.phi, this.mainLimit, dt);
     if (boom.fetchedUp && Math.abs(a.boomRate) > 1.0) this.lastBoomEvent = { t: this.time, rate: a.boomRate };
@@ -346,7 +369,7 @@ export class Simulation {
     const deriv = (s: RigidState, t: number): RigidState => {
       const wind = this.env.wind(t, s.n, s.e);
       const cur = this.env.current(t, s.n, s.e);
-      const f = computeForces(this.params, s, this.act, wind, cur, this.fluids);
+      const f = computeForces(this.params, s, this.act, wind, cur, this.fluids, this.groundAt(t));
       if (this.testThrust !== 0) f.total.x += this.testThrust;
       const d = derivatives(this.params, s, f, cur);
       if (this.lockHeading) {
@@ -398,7 +421,7 @@ export class Simulation {
     const a = this.act;
     const wind = this.windHere();
     const cur = this.currentHere();
-    const forces = computeForces(this.params, s, a, wind, cur, this.fluids);
+    const forces = computeForces(this.params, s, a, wind, cur, this.fluids, this.groundAt(this.time));
     const ground = forces.groundVelocity;
     const windOverWater = { n: wind.n - cur.n, e: wind.e - cur.e };
     const ww = windFrom(windOverWater);
@@ -448,6 +471,10 @@ export class Simulation {
       input: { ...this.input },
       forces,
       env: detailed ? this.env.describe?.(this.time, s.n, s.e) : undefined,
+      waterLevel: this.waterLevel(),
+      depthAtKeel: forces.contact.depthAtKeel,
+      grounded: forces.contact.grounded,
+      contactPoints: forces.contact.points,
     };
   }
 
@@ -459,7 +486,7 @@ export class Simulation {
     const p = this.params;
     const wind = this.windHere();
     const cur = this.currentHere();
-    const yaw = (d: number) => computeForces(p, this.state, { ...this.act, rudder: d }, wind, cur, this.fluids).total.n;
+    const yaw = (d: number) => computeForces(p, this.state, { ...this.act, rudder: d }, wind, cur, this.fluids, this.groundAt(this.time)).total.n;
     let lo = -p.rudder.maxAngle;
     let hi = p.rudder.maxAngle;
     const flo = yaw(lo);

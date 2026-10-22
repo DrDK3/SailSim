@@ -18,6 +18,7 @@ import {
   type SailForce,
 } from './forces';
 import type { BoatParams, SailParams } from './params';
+import { groundContact, NO_CONTACT, type ContactForce, type GroundContext } from './contact';
 
 /**
  * Continuous state integrated by RK4 (4-DOF: surge, sway, yaw, roll). Velocities are through the water, in
@@ -68,8 +69,10 @@ export interface ForceBreakdown {
   hull: HullResistance;
   crossFlow: BodyForce;
   yawDamping: number;
+  /** Bottom contact (grounding); NO_CONTACT without a seabed. */
+  contact: ContactForce;
   /** Roll moments (N m, > 0 heels to starboard). */
-  roll: { sails: number; hydro: number; crew: number; righting: number; damping: number; total: number };
+  roll: { sails: number; hydro: number; crew: number; righting: number; damping: number; ground: number; total: number };
   total: BodyForce;
 }
 
@@ -85,6 +88,7 @@ export function computeForces(
   wind: NE,
   current: NE,
   fluids: Fluids,
+  ground?: GroundContext,
 ): ForceBreakdown {
   const through = bodyToWorld(s.u, s.v, s.psi);
   const groundVelocity = { n: through.n + current.n, e: through.e + current.e };
@@ -103,10 +107,11 @@ export function computeForces(
   const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater);
   const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater);
   const yawDamping = -p.yawLinearDamping * s.r;
+  const contact = ground ? groundContact(p, s, current, ground) : NO_CONTACT;
   const total = {
-    x: main.x + jib.x + windage.x + lateral.x + rudder.x + hull.x,
-    y: main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y,
-    n: main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping,
+    x: main.x + jib.x + windage.x + lateral.x + rudder.x + hull.x + contact.x,
+    y: main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y + contact.y,
+    n: main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping + contact.n,
   };
   // Roll about the waterline: sail-plane side forces act above it, keel and rudder forces below it.
   const sails = main.yPlane * p.main.ceHeight + jib.yPlane * p.jib.ceHeight + windage.y * p.windageHeight;
@@ -114,8 +119,8 @@ export function computeForces(
   const crew = p.crewMass * G * a.crewY * Math.cos(s.phi);
   const righting = -p.weight * rightingArm(p, s.phi);
   const damping = -p.rollLinearDamping * s.p;
-  const roll = { sails, hydro, crew, righting, damping, total: sails + hydro + crew + righting + damping };
-  return { aw, groundVelocity, main, jib, jibEffectiveness: jEff, windage, lateral, rudder, hull, crossFlow, yawDamping, roll, total };
+  const roll = { sails, hydro, crew, righting, damping, ground: contact.roll, total: sails + hydro + crew + righting + damping + contact.roll };
+  return { aw, groundVelocity, main, jib, jibEffectiveness: jEff, windage, lateral, rudder, hull, crossFlow, yawDamping, contact, roll, total };
 }
 
 /** Time derivative of the rigid state (4-DOF with added mass and Coriolis terms in surge/sway/yaw). */

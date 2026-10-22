@@ -69,3 +69,35 @@ export function tidalStream(tide: TideSource, s: TidalStreamSettings): CurrentMo
 export function shearCurrent(k: number): CurrentModel {
   return { kind: 'test-field', label: `Test shear current k=${k}`, notes: ['Analytic test field.'], at: (_t, n) => ({ n: 0, e: k * n }) };
 }
+
+/** Stream patterns over the River Dart (unit mean speed across the entrance, ebb direction). */
+export interface StreamPattern {
+  streamPattern(n: number, e: number): { tidal: NE; river: NE };
+}
+
+/**
+ * PROVISIONAL channel-following tidal stream over the River Dart: the precomputed tidal-prism pattern
+ * (tools/geodata/current.py) scaled by the entrance stream from the tide timing, as in `tidalStream`
+ * (peak rates = mean speed across the entrance at mid-tide), plus river outflow along its own pattern.
+ * Faster in the narrows, slack in the creeks; not measured current data.
+ */
+export function dartStream(tide: TideSource, geo: StreamPattern, s: TidalStreamSettings): CurrentModel {
+  return {
+    kind: 'tidal',
+    label: `Tidal stream (modelled, channel-following): entrance flood ${s.peakFloodKn} kn, ebb ${s.peakEbbKn} kn`,
+    notes: [
+      'Provisional model: pattern from tidal-prism continuity on estimated depths, scaled to the entrance stream; not measured current data.',
+      'Rates are the mean across the entrance (castle to castle) at mid-tide; the narrows run faster, creeks and bays slower.',
+      `Tide timing from: ${tide.label}.`,
+      ...(s.riverEbbKn > 0 ? [`Includes ${s.riverEbbKn} kn river outflow at the entrance.`] : []),
+    ],
+    at(t: number, n: number, e: number) {
+      const ph = tide.at(t).phase;
+      // Positive = flood (up-river), i.e. against the ebb-direction pattern.
+      const flood = knToMs(ph >= 0 ? ph * s.peakFloodKn : ph * s.peakEbbKn);
+      const river = knToMs(s.riverEbbKn);
+      const f = geo.streamPattern(n, e);
+      return { n: -flood * f.tidal.n + river * f.river.n, e: -flood * f.tidal.e + river * f.river.e };
+    },
+  };
+}

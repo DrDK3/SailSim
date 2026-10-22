@@ -1,7 +1,7 @@
 import { DEG } from '../math/angles';
 import { knToMs } from '../units';
 import { composeEnvironment, type Environment, type WeatherInfo } from './environment';
-import { DEFAULT_TIDAL_STREAM, NO_CURRENT, tidalStream, uniformCurrent, type CurrentModel, type TidalStreamSettings } from './current';
+import { DEFAULT_TIDAL_STREAM, NO_CURRENT, dartStream, tidalStream, uniformCurrent, type CurrentModel, type StreamPattern, type TidalStreamSettings } from './current';
 import { manualTide, parseTideSnapshot, snapshotTide, type TideSource } from './tide';
 import { GUST_PRESETS, WindField, uniformBase, type GustSettings } from './wind';
 import { gustsFromSnapshot, metOfficeBase, metOfficeInfo, parseMetOfficeSnapshot } from './weather';
@@ -21,7 +21,9 @@ export interface ConditionsSettings {
   current:
     | { mode: 'none' }
     | { mode: 'uniform'; setDeg: number; rateKn: number }
-    | { mode: 'tidal'; stream: TidalStreamSettings };
+    | { mode: 'tidal'; stream: TidalStreamSettings }
+    /** Channel-following pattern over the River Dart (needs the geodata); floodSetDeg is not used. */
+    | { mode: 'dart'; stream: TidalStreamSettings };
   tide?:
     | { mode: 'manual'; hwTime: string; hwHeightM: number; lwHeightM: number }
     | { mode: 'snapshot'; snapshot: unknown };
@@ -34,6 +36,14 @@ export const DEFAULT_CONDITIONS: ConditionsSettings = {
   current: { mode: 'none' },
 };
 
+/** Mean water level (m above chart datum) used with the River Dart data when no tide is set (E). */
+export const MEAN_LEVEL_CD = 2.7;
+
+/** What the River Dart data contributes to the conditions (DartGeo implements it). */
+export interface ConditionsGeo extends StreamPattern {
+  cdBelowOdn: number;
+}
+
 export interface BuiltConditions {
   env: Environment;
   weather: WeatherInfo;
@@ -42,7 +52,7 @@ export interface BuiltConditions {
   gusts: GustSettings;
 }
 
-export function buildConditions(c: ConditionsSettings): BuiltConditions {
+export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): BuiltConditions {
   const startEpochMs = Date.parse(c.startTime);
   if (Number.isNaN(startEpochMs)) throw new Error(`conditions: bad start time "${c.startTime}"`);
 
@@ -76,8 +86,13 @@ export function buildConditions(c: ConditionsSettings): BuiltConditions {
   else if (c.current.mode === 'tidal') {
     if (!tide) throw new Error('conditions: a tidal stream needs a tide source');
     current = tidalStream(tide, { ...DEFAULT_TIDAL_STREAM, ...c.current.stream });
+  } else if (c.current.mode === 'dart') {
+    if (!tide) throw new Error('conditions: a tidal stream needs a tide source');
+    if (!geo) throw new Error('conditions: the channel-following stream needs the River Dart data');
+    current = dartStream(tide, geo, { ...DEFAULT_TIDAL_STREAM, ...c.current.stream });
   }
 
-  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs });
+  const datum = geo ? { cdBelowOdn: geo.cdBelowOdn, meanLevelCd: MEAN_LEVEL_CD } : undefined;
+  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum });
   return { env, weather, tide, current, gusts };
 }

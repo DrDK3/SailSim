@@ -1,0 +1,187 @@
+{
+ "source": "Overture Maps 2026-10-21.0 feature centroids (OSM, ODbL); geodesic distances on WGS84 by pyproj Geod",
+ "landmarks": [
+  {
+   "name": "Royal Dart Yacht Club",
+   "lat": 50.3480065,
+   "lon": -3.5733937
+  },
+  {
+   "name": "Dartmouth Castle",
+   "lat": 50.3417958,
+   "lon": -3.5657192
+  },
+  {
+   "name": "Kingswear Castle",
+   "lat": 50.3420183,
+   "lon": -3.5598621
+  },
+  {
+   "name": "St Petrox Church",
+   "lat": 50.3421938,
+   "lon": -3.5661784
+  },
+  {
+   "name": "St Saviour's Church",
+   "lat": 50.3511225,
+   "lon": -3.5789722
+  },
+  {
+   "name": "Kingswear Railway Station",
+   "lat": 50.3486342,
+   "lon": -3.5729131
+  },
+  {
+   "name": "Britannia Royal Naval College",
+   "lat": 50.3570826,
+   "lon": -3.5839633
+  },
+  {
+   "name": "Dartmouth Mewstone",
+   "lat": 50.3336488,
+   "lon": -3.5339153
+  }
+ ],
+ "pairs": [
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "Dartmouth Castle",
+   "geodesic_m": 880.739
+  },
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "Kingswear Castle",
+   "geodesic_m": 1171.086
+  },
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "St Petrox Church",
+   "geodesic_m": 825.739
+  },
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "St Saviour's Church",
+   "geodesic_m": 527.054
+  },
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "Kingswear Railway Station",
+   "geodesic_m": 77.752
+  },
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "Britannia Royal Naval College",
+   "geodesic_m": 1259.02
+  },
+  {
+   "a": "Royal Dart Yacht Club",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 3232.474
+  },
+  {
+   "a": "Dartmouth Castle",
+   "b": "Kingswear Castle",
+   "geodesic_m": 417.678
+  },
+  {
+   "a": "Dartmouth Castle",
+   "b": "St Petrox Church",
+   "geodesic_m": 55.032
+  },
+  {
+   "a": "Dartmouth Castle",
+   "b": "St Saviour's Church",
+   "geodesic_m": 1402.218
+  },
+  {
+   "a": "Dartmouth Castle",
+   "b": "Kingswear Railway Station",
+   "geodesic_m": 916.974
+  },
+  {
+   "a": "Dartmouth Castle",
+   "b": "Britannia Royal Naval College",
+   "geodesic_m": 2139.543
+  },
+  {
+   "a": "Dartmouth Castle",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 2438.817
+  },
+  {
+   "a": "Kingswear Castle",
+   "b": "St Petrox Church",
+   "geodesic_m": 450.054
+  },
+  {
+   "a": "Kingswear Castle",
+   "b": "St Saviour's Church",
+   "geodesic_m": 1695.829
+  },
+  {
+   "a": "Kingswear Castle",
+   "b": "Kingswear Railway Station",
+   "geodesic_m": 1185.155
+  },
+  {
+   "a": "Kingswear Castle",
+   "b": "Britannia Royal Naval College",
+   "geodesic_m": 2398.022
+  },
+  {
+   "a": "Kingswear Castle",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 2068.552
+  },
+  {
+   "a": "St Petrox Church",
+   "b": "St Saviour's Church",
+   "geodesic_m": 1347.482
+  },
+  {
+   "a": "St Petrox Church",
+   "b": "Kingswear Railway Station",
+   "geodesic_m": 861.997
+  },
+  {
+   "a": "St Petrox Church",
+   "b": "Britannia Royal Naval College",
+   "geodesic_m": 2084.519
+  },
+  {
+   "a": "St Petrox Church",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 2485.778
+  },
+  {
+   "a": "St Saviour's Church",
+   "b": "Kingswear Railway Station",
+   "geodesic_m": 512.434
+  },
+  {
+   "a": "St Saviour's Church",
+   "b": "Britannia Royal Naval College",
+   "geodesic_m": 752.137
+  },
+  {
+   "a": "St Saviour's Church",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 3750.374
+  },
+  {
+   "a": "Kingswear Railway Station",
+   "b": "Britannia Royal Naval College",
+   "geodesic_m": 1225.416
+  },
+  {
+   "a": "Kingswear Railway Station",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 3238.141
+  },
+  {
+   "a": "Britannia Royal Naval College",
+   "b": "Dartmouth Mewstone",
+   "geodesic_m": 4414.28
+  }
+ ]
+}

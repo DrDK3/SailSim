@@ -135,6 +135,12 @@ export interface BoatParams {
   boomMassMoment: number;
   boomDamping: number;
   boomRestitution: number;
+  /** Points that can touch the bottom: body x (m) and depth below the waterline when upright (m). */
+  contactPoints: { name: 'keel' | 'bow' | 'stern'; x: number; depth: number }[];
+  waterplaneArea: number;
+  contactFriction: number;
+  contactDamping: number;
+  contactSlopeLimit: number;
   crewX: number;
   crewIn: number;
   crewOut: number;
@@ -267,6 +273,15 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
     boomMassMoment: num(cal, 'sails.boomMassMoment'),
     boomDamping: num(cal, 'sails.boomDamping'),
     boomRestitution: num(cal, 'sails.boomRestitution'),
+    contactPoints: [
+      { name: 'keel', x: num(cal, 'contact.keelContactX'), depth: num(spec, 'draft') },
+      { name: 'bow', x: num(cal, 'contact.bowContactX'), depth: num(cal, 'contact.bowContactDepth') },
+      { name: 'stern', x: num(cal, 'contact.sternContactX'), depth: num(cal, 'contact.sternContactDepth') },
+    ],
+    waterplaneArea: num(cal, 'contact.waterplaneArea'),
+    contactFriction: num(cal, 'contact.friction'),
+    contactDamping: num(cal, 'contact.damping'),
+    contactSlopeLimit: num(cal, 'contact.slopeLimit'),
     crewX: num(cal, 'geometry.crewX'),
     crewIn: num(cal, 'geometry.crewLateralIn'),
     crewOut: num(cal, 'geometry.crewLateralOut'),

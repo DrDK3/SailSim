@@ -16,3 +16,6 @@ export * from './env/current';
 export * from './env/weather';
 export * from './geo/projection';
 export * from './calibration/calibrate';
+export * from './geo/grid';
+export * from './geo/dart';
+export * from './boat/contact';

@@ -1,719 +1,784 @@
 {
-  "_meta": {
-    "description": "Estimated (tag E) coefficients for the Squib physics model. None of these is Squib-specific measured data. They are prototype values chosen from general naval-architecture practice and are meant to be recalibrated when performance evidence arrives (docs/MISSING_INFORMATION.md B2-B5). See docs/PHYSICS.md for how each is used.",
-    "updated": "2026-10-22"
+ "_meta": {
+  "description": "Estimated (tag E) coefficients for the Squib physics model. None of these is Squib-specific measured data. They are prototype values chosen from general naval-architecture practice and are meant to be recalibrated when performance evidence arrives (docs/MISSING_INFORMATION.md B2-B5). See docs/PHYSICS.md for how each is used.",
+  "updated": "2026-10-22"
+ },
+ "mass": {
+  "crewMassEach": {
+   "value": 80,
+   "unit": "kg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Per person; crew count from class-spec"
   },
-  "mass": {
-    "crewMassEach": {
-      "value": 80,
-      "unit": "kg",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Per person; crew count from class-spec"
-    },
-    "yawRadiusOfGyrationFrac": {
-      "value": 0.27,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "k_zz / LOA, typical small keelboat range 0.24-0.30"
-    },
-    "addedMassSurgeFrac": {
-      "value": 0.05,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Fraction of total mass"
-    },
-    "addedMassSwayFrac": {
-      "value": 0.7,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Fin keel + canoe body, slender-body order of magnitude"
-    },
-    "addedInertiaYawFrac": {
-      "value": 0.6,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    }
+  "yawRadiusOfGyrationFrac": {
+   "value": 0.27,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "k_zz / LOA, typical small keelboat range 0.24-0.30"
   },
-  "geometry": {
-    "mastX": {
-      "value": 0.55,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Mast position forward of the centre of gravity"
-    },
-    "mainCEHeight": {
-      "value": 3.1,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Mainsail centre of effort above waterline"
-    },
-    "mainCEChordFrac": {
-      "value": 0.38,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "CE position along the boom from the mast"
-    },
-    "jibTackX": {
-      "value": 2.45,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib tack forward of CG"
-    },
-    "jibFoot": {
-      "value": 2.1,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Derived from area 6.0 m2 and an assumed luff of about 5.7 m"
-    },
-    "jibCEHeight": {
-      "value": 2.3,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "jibCEChordFrac": {
-      "value": 0.35,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "lateralX": {
-      "value": 0.9,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Effective centre of the combined keel + canoe-body lift, forward of the CG. The canoe body produces its side force well forward, so the hydrodynamic centre lies ahead of the geometric centre of lateral resistance. Chosen so the boat carries slight weather helm that grows with wind (about 1 deg at 10 kn and 3 deg at 15 kn close-hauled) and rounds up slowly with the helm centred, which is the usual design intent; not measured."
-    },
-    "clrDepth": {
-      "value": 0.45,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "CLR depth below waterline (heeling arm)"
-    },
-    "rudderX": {
-      "value": -2.75,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Transom-hung rudder assumed; arrangement not established"
-    },
-    "crewX": {
-      "value": -1.3,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "crewLateralIn": {
-      "value": 0.15,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Crew lateral position, sitting inboard"
-    },
-    "crewLateralOut": {
-      "value": 0.8,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Sitting out on the windward side deck"
-    },
-    "crewMoveSpeed": {
-      "value": 0.6,
-      "unit": "m/s",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "windageHeight": {
-      "value": 1.6,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate"
-    }
+  "addedMassSurgeFrac": {
+   "value": 0.05,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Fraction of total mass"
   },
-  "sails": {
-    "main": {
-      "clMax": {
-        "value": 1.45,
-        "unit": "-",
-        "tag": "E",
-        "source": "generic soft-sail range",
-        "note": "Typical published peak lift coefficients for mainsails are of order 1.3-1.6"
-      },
-      "alphaPeakDeg": {
-        "value": 22,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "stallWidthDeg": {
-        "value": 25,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Blend width from attached to flat-plate behaviour"
-      },
-      "cd0": {
-        "value": 0.03,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "effectiveAR": {
-        "value": 2.2,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Includes deck end-plate effect, reduced for twist"
-      },
-      "cn90": {
-        "value": 1.25,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Normal force coefficient at 90 deg"
-      },
-      "alphaLuffStartDeg": {
-        "value": 6,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Below this chord incidence the sail is fully luffing. Soft cambered sails luff at a larger chord angle than a flat foil because the luff entry angle is several degrees above the chord line"
-      },
-      "alphaFullDeg": {
-        "value": 13,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Above this chord incidence the sail is fully drawing"
-      },
-      "cdFlap": {
-        "value": 0.1,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Drag of a flogging sail"
-      },
-      "sheetMinDeg": {
-        "value": 2,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Boom angle with the sheet hard in"
-      },
-      "sheetMaxDeg": {
-        "value": 85,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Boom against the shrouds"
-      },
-      "autoTrimAlphaDeg": {
-        "value": 20,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Target incidence used by the auto-trim assist"
-      }
-    },
-    "jib": {
-      "clMax": {
-        "value": 1.35,
-        "unit": "-",
-        "tag": "E",
-        "source": "generic soft-sail range"
-      },
-      "alphaPeakDeg": {
-        "value": 18,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "stallWidthDeg": {
-        "value": 22,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "cd0": {
-        "value": 0.03,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "effectiveAR": {
-        "value": 2.4,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Reduced for twist"
-      },
-      "cn90": {
-        "value": 1.2,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "alphaLuffStartDeg": {
-        "value": 5,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "See main"
-      },
-      "alphaFullDeg": {
-        "value": 11,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "cdFlap": {
-        "value": 0.1,
-        "unit": "-",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "sheetMinDeg": {
-        "value": 10,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate",
-        "note": "Jib lead angle"
-      },
-      "sheetMaxDeg": {
-        "value": 60,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate"
-      },
-      "autoTrimAlphaDeg": {
-        "value": 16,
-        "unit": "deg",
-        "tag": "E",
-        "source": "estimate"
-      }
-    },
-    "jibBlanketStartAwaDeg": {
-      "value": 140,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib starts to be blanketed by the main when running"
-    },
-    "jibBlanketMin": {
-      "value": 0.3,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib effectiveness dead downwind"
-    },
-    "windageCdA": {
-      "value": 0.55,
-      "unit": "m2",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Hull, rig, crew windage"
-    },
-    "byTheLeeMainDeg": {
-      "value": 15,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate",
-      "note": "How far by the lee the apparent wind must be before the twisted mainsail inverts and the boom is driven across (gybe onset). A rigid-sail model cannot produce this leech flip itself; the swing across is then dynamic."
-    },
-    "byTheLeeJibDeg": {
-      "value": 5,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib changes side this far by the lee (kinematic jib)"
-    },
-    "boomGain": {
-      "value": 6,
-      "unit": "1/s",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib only: first-order response of the jib to its target angle (the main boom is a dynamic body)"
-    },
-    "boomMaxRateDegS": {
-      "value": 150,
-      "unit": "deg/s",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib only: maximum swing rate"
-    },
-    "jibDownwashOnMainDeg": {
-      "value": 6,
-      "unit": "deg per unit jib CL",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Jib downwash reduces the main's incidence (main backwinds when pinching). Qualitative effect documented in sail-interaction literature (e.g. Gentry 1971); magnitude estimated. Fades out by a beam reach."
-    },
-    "mainUpwashOnJibDeg": {
-      "value": 3,
-      "unit": "deg per unit main CL",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Main upwash increases the jib's incidence; magnitude estimated"
-    },
-    "boomInertia": {
-      "value": 22,
-      "unit": "kg m2",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Boom, mainsail and fittings about the mast axis"
-    },
-    "boomMassMoment": {
-      "value": 18,
-      "unit": "kg m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Mass x distance of the boom and sail centre of mass from the mast (gravity swings the boom to leeward when heeled)"
-    },
-    "boomDamping": {
-      "value": 8,
-      "unit": "N m s",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Mechanical damping at the gooseneck and sheet blocks (aerodynamic damping emerges from the sail forces)"
-    },
-    "boomRestitution": {
-      "value": 0.15,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Bounce when the boom fetches up against the sheet or shrouds"
-    }
+  "addedMassSwayFrac": {
+   "value": 0.7,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Fin keel + canoe body, slender-body order of magnitude"
   },
-  "hydro": {
-    "hullWettedArea": {
-      "value": 6.2,
-      "unit": "m2",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Canoe body"
-    },
-    "keelWettedArea": {
-      "value": 1.1,
-      "unit": "m2",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderWettedArea": {
-      "value": 0.45,
-      "unit": "m2",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "formFactor": {
-      "value": 1.12,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "1 + k applied to ITTC-57 friction"
-    },
-    "residuaryTable": {
-      "value": [
-        [
-          0,
-          0
-        ],
-        [
-          0.1,
-          0.0002
-        ],
-        [
-          0.15,
-          0.0005
-        ],
-        [
-          0.2,
-          0.0012
-        ],
-        [
-          0.25,
-          0.0025
-        ],
-        [
-          0.3,
-          0.0055
-        ],
-        [
-          0.35,
-          0.0125
-        ],
-        [
-          0.4,
-          0.03
-        ],
-        [
-          0.45,
-          0.062
-        ],
-        [
-          0.5,
-          0.095
-        ],
-        [
-          0.55,
-          0.125
-        ],
-        [
-          0.6,
-          0.145
-        ],
-        [
-          0.7,
-          0.17
-        ],
-        [
-          0.8,
-          0.185
-        ]
-      ],
-      "unit": "Fn -> R_R/(m g)",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Parametric curve shaped like moderate-displacement hull data (L/vol^(1/3) about 5.5). Placeholder for a Delft-series (DSYHS) regression once hull parameters and coefficient tables are sourced."
-    },
-    "heelResistanceFactor": {
-      "value": 0.5,
-      "unit": "1/rad2",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Resistance x (1 + k phi^2)"
-    },
-    "lateralArea": {
-      "value": 1.0,
-      "unit": "m2",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Keel plus equivalent hull lifting area"
-    },
-    "lateralAR": {
-      "value": 1.6,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Effective aspect ratio including hull mirror effect"
-    },
-    "lateralEfficiency": {
-      "value": 0.9,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "lateralClMax": {
-      "value": 0.8,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "lateralStallDeg": {
-      "value": 15,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "lateralStallWidthDeg": {
-      "value": 12,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "lateralCn90": {
-      "value": 1.1,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderArea": {
-      "value": 0.225,
-      "unit": "m2",
-      "tag": "E",
-      "source": "estimate",
-      "note": "About 0.75 m span x 0.30 m chord"
-    },
-    "rudderAR": {
-      "value": 2.5,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderEfficiency": {
-      "value": 0.9,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderClMax": {
-      "value": 1.1,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderStallDeg": {
-      "value": 18,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderStallWidthDeg": {
-      "value": 10,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderCn90": {
-      "value": 1.2,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderMaxDeg": {
-      "value": 35,
-      "unit": "deg",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderRateDegS": {
-      "value": 70,
-      "unit": "deg/s",
-      "tag": "E",
-      "source": "estimate",
-      "note": "How fast the helm can move the tiller"
-    },
-    "hullCrossFlowCd": {
-      "value": 0.8,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "hullDraft": {
-      "value": 0.3,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Canoe body draft for cross-flow drag strips"
-    },
-    "yawLinearDamping": {
-      "value": 200,
-      "unit": "N m s",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rudderFlowStraightening": {
-      "value": 0.5,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Fraction of the hull's leeway removed from the rudder inflow by the keel's downwash (0 = none, 1 = rudder sees no leeway). Typical manoeuvring-model values are of order 0.3-0.6."
-    }
-  },
-  "stability": {
-    "gm": {
-      "value": 0.8,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Metacentric height: initial slope of the GZ curve (righting arm = GM sin(phi) at small angles)"
-    },
-    "gzTable": {
-      "value": [
-        [
-          0,
-          0
-        ],
-        [
-          10,
-          0.139
-        ],
-        [
-          20,
-          0.268
-        ],
-        [
-          30,
-          0.37
-        ],
-        [
-          40,
-          0.43
-        ],
-        [
-          50,
-          0.46
-        ],
-        [
-          60,
-          0.46
-        ],
-        [
-          70,
-          0.43
-        ],
-        [
-          80,
-          0.37
-        ],
-        [
-          90,
-          0.29
-        ],
-        [
-          100,
-          0.19
-        ],
-        [
-          110,
-          0.08
-        ],
-        [
-          120,
-          -0.03
-        ]
-      ],
-      "unit": "deg -> m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Righting arm GZ versus heel. Initial slope matches GM; shape typical of a ballasted fin-keel dayboat (maximum near 50-60 deg, vanishing stability near 117 deg). Not from a Squib stability test."
-    },
-    "rollRadiusOfGyration": {
-      "value": 0.85,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "k_xx including mast and rig high up and the keel low down"
-    },
-    "addedRollInertiaFrac": {
-      "value": 0.2,
-      "unit": "-",
-      "tag": "E",
-      "source": "estimate"
-    },
-    "rollLinearDamping": {
-      "value": 220,
-      "unit": "N m s",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Hull and appendage roll damping not already produced by the keel and sail forces (those emerge from the roll motion itself); about 5% of critical"
-    },
-    "rudderDepth": {
-      "value": 0.35,
-      "unit": "m",
-      "tag": "E",
-      "source": "estimate",
-      "note": "Centre of rudder force below the waterline (roll arm)"
-    }
+  "addedInertiaYawFrac": {
+   "value": 0.6,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
   }
+ },
+ "geometry": {
+  "mastX": {
+   "value": 0.55,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Mast position forward of the centre of gravity"
+  },
+  "mainCEHeight": {
+   "value": 3.1,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Mainsail centre of effort above waterline"
+  },
+  "mainCEChordFrac": {
+   "value": 0.38,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "CE position along the boom from the mast"
+  },
+  "jibTackX": {
+   "value": 2.45,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib tack forward of CG"
+  },
+  "jibFoot": {
+   "value": 2.1,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Derived from area 6.0 m2 and an assumed luff of about 5.7 m"
+  },
+  "jibCEHeight": {
+   "value": 2.3,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "jibCEChordFrac": {
+   "value": 0.35,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "lateralX": {
+   "value": 0.9,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Effective centre of the combined keel + canoe-body lift, forward of the CG. The canoe body produces its side force well forward, so the hydrodynamic centre lies ahead of the geometric centre of lateral resistance. Chosen so the boat carries slight weather helm that grows with wind (about 1 deg at 10 kn and 3 deg at 15 kn close-hauled) and rounds up slowly with the helm centred, which is the usual design intent; not measured."
+  },
+  "clrDepth": {
+   "value": 0.45,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "CLR depth below waterline (heeling arm)"
+  },
+  "rudderX": {
+   "value": -2.75,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Transom-hung rudder assumed; arrangement not established"
+  },
+  "crewX": {
+   "value": -1.3,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "crewLateralIn": {
+   "value": 0.15,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Crew lateral position, sitting inboard"
+  },
+  "crewLateralOut": {
+   "value": 0.8,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Sitting out on the windward side deck"
+  },
+  "crewMoveSpeed": {
+   "value": 0.6,
+   "unit": "m/s",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "windageHeight": {
+   "value": 1.6,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate"
+  }
+ },
+ "sails": {
+  "main": {
+   "clMax": {
+    "value": 1.45,
+    "unit": "-",
+    "tag": "E",
+    "source": "generic soft-sail range",
+    "note": "Typical published peak lift coefficients for mainsails are of order 1.3-1.6"
+   },
+   "alphaPeakDeg": {
+    "value": 22,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "stallWidthDeg": {
+    "value": 25,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Blend width from attached to flat-plate behaviour"
+   },
+   "cd0": {
+    "value": 0.03,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "effectiveAR": {
+    "value": 2.2,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Includes deck end-plate effect, reduced for twist"
+   },
+   "cn90": {
+    "value": 1.25,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Normal force coefficient at 90 deg"
+   },
+   "alphaLuffStartDeg": {
+    "value": 6,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Below this chord incidence the sail is fully luffing. Soft cambered sails luff at a larger chord angle than a flat foil because the luff entry angle is several degrees above the chord line"
+   },
+   "alphaFullDeg": {
+    "value": 13,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Above this chord incidence the sail is fully drawing"
+   },
+   "cdFlap": {
+    "value": 0.1,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Drag of a flogging sail"
+   },
+   "sheetMinDeg": {
+    "value": 2,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Boom angle with the sheet hard in"
+   },
+   "sheetMaxDeg": {
+    "value": 85,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Boom against the shrouds"
+   },
+   "autoTrimAlphaDeg": {
+    "value": 20,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Target incidence used by the auto-trim assist"
+   }
+  },
+  "jib": {
+   "clMax": {
+    "value": 1.35,
+    "unit": "-",
+    "tag": "E",
+    "source": "generic soft-sail range"
+   },
+   "alphaPeakDeg": {
+    "value": 18,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "stallWidthDeg": {
+    "value": 22,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "cd0": {
+    "value": 0.03,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "effectiveAR": {
+    "value": 2.4,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Reduced for twist"
+   },
+   "cn90": {
+    "value": 1.2,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "alphaLuffStartDeg": {
+    "value": 5,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "See main"
+   },
+   "alphaFullDeg": {
+    "value": 11,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "cdFlap": {
+    "value": 0.1,
+    "unit": "-",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "sheetMinDeg": {
+    "value": 10,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate",
+    "note": "Jib lead angle"
+   },
+   "sheetMaxDeg": {
+    "value": 60,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate"
+   },
+   "autoTrimAlphaDeg": {
+    "value": 16,
+    "unit": "deg",
+    "tag": "E",
+    "source": "estimate"
+   }
+  },
+  "jibBlanketStartAwaDeg": {
+   "value": 140,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib starts to be blanketed by the main when running"
+  },
+  "jibBlanketMin": {
+   "value": 0.3,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib effectiveness dead downwind"
+  },
+  "windageCdA": {
+   "value": 0.55,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Hull, rig, crew windage"
+  },
+  "byTheLeeMainDeg": {
+   "value": 15,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "How far by the lee the apparent wind must be before the twisted mainsail inverts and the boom is driven across (gybe onset). A rigid-sail model cannot produce this leech flip itself; the swing across is then dynamic."
+  },
+  "byTheLeeJibDeg": {
+   "value": 5,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib changes side this far by the lee (kinematic jib)"
+  },
+  "boomGain": {
+   "value": 6,
+   "unit": "1/s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib only: first-order response of the jib to its target angle (the main boom is a dynamic body)"
+  },
+  "boomMaxRateDegS": {
+   "value": 150,
+   "unit": "deg/s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib only: maximum swing rate"
+  },
+  "jibDownwashOnMainDeg": {
+   "value": 6,
+   "unit": "deg per unit jib CL",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Jib downwash reduces the main's incidence (main backwinds when pinching). Qualitative effect documented in sail-interaction literature (e.g. Gentry 1971); magnitude estimated. Fades out by a beam reach."
+  },
+  "mainUpwashOnJibDeg": {
+   "value": 3,
+   "unit": "deg per unit main CL",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Main upwash increases the jib's incidence; magnitude estimated"
+  },
+  "boomInertia": {
+   "value": 22,
+   "unit": "kg m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Boom, mainsail and fittings about the mast axis"
+  },
+  "boomMassMoment": {
+   "value": 18,
+   "unit": "kg m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Mass x distance of the boom and sail centre of mass from the mast (gravity swings the boom to leeward when heeled)"
+  },
+  "boomDamping": {
+   "value": 8,
+   "unit": "N m s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Mechanical damping at the gooseneck and sheet blocks (aerodynamic damping emerges from the sail forces)"
+  },
+  "boomRestitution": {
+   "value": 0.15,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Bounce when the boom fetches up against the sheet or shrouds"
+  }
+ },
+ "hydro": {
+  "hullWettedArea": {
+   "value": 6.2,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Canoe body"
+  },
+  "keelWettedArea": {
+   "value": 1.1,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderWettedArea": {
+   "value": 0.45,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "formFactor": {
+   "value": 1.12,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "1 + k applied to ITTC-57 friction"
+  },
+  "residuaryTable": {
+   "value": [
+    [
+     0,
+     0
+    ],
+    [
+     0.1,
+     0.0002
+    ],
+    [
+     0.15,
+     0.0005
+    ],
+    [
+     0.2,
+     0.0012
+    ],
+    [
+     0.25,
+     0.0025
+    ],
+    [
+     0.3,
+     0.0055
+    ],
+    [
+     0.35,
+     0.0125
+    ],
+    [
+     0.4,
+     0.03
+    ],
+    [
+     0.45,
+     0.062
+    ],
+    [
+     0.5,
+     0.095
+    ],
+    [
+     0.55,
+     0.125
+    ],
+    [
+     0.6,
+     0.145
+    ],
+    [
+     0.7,
+     0.17
+    ],
+    [
+     0.8,
+     0.185
+    ]
+   ],
+   "unit": "Fn -> R_R/(m g)",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Parametric curve shaped like moderate-displacement hull data (L/vol^(1/3) about 5.5). Placeholder for a Delft-series (DSYHS) regression once hull parameters and coefficient tables are sourced."
+  },
+  "heelResistanceFactor": {
+   "value": 0.5,
+   "unit": "1/rad2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Resistance x (1 + k phi^2)"
+  },
+  "lateralArea": {
+   "value": 1.0,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Keel plus equivalent hull lifting area"
+  },
+  "lateralAR": {
+   "value": 1.6,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Effective aspect ratio including hull mirror effect"
+  },
+  "lateralEfficiency": {
+   "value": 0.9,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "lateralClMax": {
+   "value": 0.8,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "lateralStallDeg": {
+   "value": 15,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "lateralStallWidthDeg": {
+   "value": 12,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "lateralCn90": {
+   "value": 1.1,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderArea": {
+   "value": 0.225,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "About 0.75 m span x 0.30 m chord"
+  },
+  "rudderAR": {
+   "value": 2.5,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderEfficiency": {
+   "value": 0.9,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderClMax": {
+   "value": 1.1,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderStallDeg": {
+   "value": 18,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderStallWidthDeg": {
+   "value": 10,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderCn90": {
+   "value": 1.2,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderMaxDeg": {
+   "value": 35,
+   "unit": "deg",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderRateDegS": {
+   "value": 70,
+   "unit": "deg/s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "How fast the helm can move the tiller"
+  },
+  "hullCrossFlowCd": {
+   "value": 0.8,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "hullDraft": {
+   "value": 0.3,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Canoe body draft for cross-flow drag strips"
+  },
+  "yawLinearDamping": {
+   "value": 200,
+   "unit": "N m s",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rudderFlowStraightening": {
+   "value": 0.5,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Fraction of the hull's leeway removed from the rudder inflow by the keel's downwash (0 = none, 1 = rudder sees no leeway). Typical manoeuvring-model values are of order 0.3-0.6."
+  }
+ },
+ "stability": {
+  "gm": {
+   "value": 0.8,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Metacentric height: initial slope of the GZ curve (righting arm = GM sin(phi) at small angles)"
+  },
+  "gzTable": {
+   "value": [
+    [
+     0,
+     0
+    ],
+    [
+     10,
+     0.139
+    ],
+    [
+     20,
+     0.268
+    ],
+    [
+     30,
+     0.37
+    ],
+    [
+     40,
+     0.43
+    ],
+    [
+     50,
+     0.46
+    ],
+    [
+     60,
+     0.46
+    ],
+    [
+     70,
+     0.43
+    ],
+    [
+     80,
+     0.37
+    ],
+    [
+     90,
+     0.29
+    ],
+    [
+     100,
+     0.19
+    ],
+    [
+     110,
+     0.08
+    ],
+    [
+     120,
+     -0.03
+    ]
+   ],
+   "unit": "deg -> m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Righting arm GZ versus heel. Initial slope matches GM; shape typical of a ballasted fin-keel dayboat (maximum near 50-60 deg, vanishing stability near 117 deg). Not from a Squib stability test."
+  },
+  "rollRadiusOfGyration": {
+   "value": 0.85,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "k_xx including mast and rig high up and the keel low down"
+  },
+  "addedRollInertiaFrac": {
+   "value": 0.2,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate"
+  },
+  "rollLinearDamping": {
+   "value": 220,
+   "unit": "N m s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Hull and appendage roll damping not already produced by the keel and sail forces (those emerge from the roll motion itself); about 5% of critical"
+  },
+  "rudderDepth": {
+   "value": 0.35,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Centre of rudder force below the waterline (roll arm)"
+  }
+ },
+ "contact": {
+  "bowContactX": {
+   "value": 2.75,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Forward contact point (stem), body x from the CG"
+  },
+  "bowContactDepth": {
+   "value": 0.15,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Depth of the forefoot below the waterline"
+  },
+  "sternContactX": {
+   "value": -2.75,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "After contact point (rudder heel)"
+  },
+  "sternContactDepth": {
+   "value": 0.8,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Depth of the rudder's lowest point below the waterline (transom-hung rudder; not established)"
+  },
+  "keelContactX": {
+   "value": 0.1,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Keel tip position along the hull; its depth is the class draft (S)"
+  },
+  "waterplaneArea": {
+   "value": 4.8,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "LWL x beam x 0.5: sets how fast weight transfers to the ground as the water falls (rho g A per metre)"
+  },
+  "friction": {
+   "value": 0.5,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Coulomb friction between keel/hull and mud or sand"
+  },
+  "damping": {
+   "value": 8000,
+   "unit": "N s/m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Viscous term at a contact point (keel ploughing into mud), reaching full value at 0.05 m penetration. Chosen so a boat that touches the bottom stops within a few seconds rather than bumping along the bank"
+  },
+  "slopeLimit": {
+   "value": 1.0,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Cap on the bed slope used for the down-slope push (8 m grid turns quay walls into ramps)"
+  }
+ }
 }
