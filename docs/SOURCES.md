@@ -59,6 +59,16 @@
 | G4 | Copernicus DEM GLO-30 | `s3://copernicus-dem-30m/` | Copernicus DEM licence (free, attribution) | Backup terrain |
 | G5 | Sentinel-2 L2A COGs, tile 30UVA | `s3://sentinel-cogs/sentinel-s2-l2a-cogs/30/U/VA/` | Copernicus open licence ("Contains modified Copernicus Sentinel data [year]") | Terrain colour texture (10 m) |
 
+## Weather
+
+| # | Source | Location | Access | Licence | Used for |
+|---|---|---|---|---|---|
+| W1 | Met Office UK Deterministic (UKV) 2 km, NetCDF, 15-min steps | `s3://met-office-atmospheric-model-data/uk-deterministic-2km/` (eu-west-2); registry: https://github.com/awslabs/open-data-registry/blob/main/datasets/met-office-uk-deterministic.yaml | Direct | British Crown copyright, the Met Office, CC BY-SA 4.0 | Live wind, gust and direction field over the Dart (model) |
+| W2 | Met Office UK Land Surface Observations, 1-min CSV in hourly batches, rolling 7 days | `s3://met-office-land-observations-data/` (eu-west-2); registry: https://github.com/awslabs/open-data-registry/blob/main/datasets/met-office-uk-land-observations.yaml | Direct | CC BY-SA 4.0 | Measured regional wind (Plymouth Mountbatten, Exeter Airport). **Speed units inferred as knots; to be confirmed** |
+| W3 | Open-Meteo UK Met Office API docs and licence | https://open-meteo.com/en/docs/ukmo-api , https://open-meteo.com/en/licence | Excerpt (host blocked) | CC BY 4.0; free for non-commercial use | Optional browser-direct source |
+| W4 | Met Office DataHub site-specific pricing | https://datahub.metoffice.gov.uk/pricing/site-specific | Excerpt | Met Office terms | Free tier of 360 calls/day (needs a key and a proxy) |
+| W5 | Met Office Dartmouth (Devon) observation page | https://www.metoffice.gov.uk/weather/observations/gbvqqw6ce | Excerpt | — | Public web page (not an API) |
+
 ## Racing rules
 
 | # | Source | URL | Date | Access |

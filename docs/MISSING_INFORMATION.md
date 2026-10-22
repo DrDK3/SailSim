@@ -33,6 +33,8 @@ Ordered by what it blocks. Uploads can go into this conversation or into `refere
 | C3 | Choice of **tidal height source**: manual HW time and height entry (free, no keys), or the Admiralty UK Tidal API (needs a key and a small server proxy) | Tide-height scenarios |
 | C4 | **Local knowledge of the stream**: where it runs hardest, eddies (e.g. off Kingswear or the castles), slack-water timing relative to HW, wind-against-tide spots | To shape the provisional current model honestly |
 | C5 | **Local wind knowledge**: typical sea-breeze direction, valley funnelling, wind shadows under the Kingswear and Dartmouth hills | Spatially varying wind model |
+| C6 | Does **RDYC or DHNA run a weather station** (anemometer) with an accessible feed? Vendor and API? | The only route to truly real-time, measured, *local* wind |
+| C7 | Allowlist `api.open-meteo.com` if you want the browser-direct option tested | Optional live source |
 
 ## D. Project decisions (please confirm)
 
@@ -42,3 +44,4 @@ Ordered by what it blocks. Uploads can go into this conversation or into `refere
 | D2 | Spinnaker | Squibs race with a symmetric spinnaker. Model main and jib first, then add the spinnaker after the course system works (end of Phase 4 or Phase 5) |
 | D3 | Source control | This repo is **local to an ephemeral cloud container**. Connect GitHub (https://claude.ai/connect-github) and create an empty repo, so I can attach it and push after every phase |
 | D4 | Hosting | Static hosting (GitHub Pages or Cloudflare Pages). No recurring cost unless you want a custom domain or a tidal-API proxy |
+| D5 | Live-weather source | Met Office open data via a scheduled ingest (free, no keys, tested). Add a local station if one exists. Open-Meteo only as a non-commercial fallback |

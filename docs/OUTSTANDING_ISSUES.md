@@ -14,3 +14,5 @@ Updated: 22 Oct 2026 (end of Phase 0)
 | 8 | The repo exists only in an ephemeral container | Work is lost if the container is reclaimed | Connect GitHub and create a remote (D3) |
 | 9 | OSM accuracy is unverified (shoreline, pontoons, ferry lines are schematic) | Possible local position errors of several metres | Spot-check against EA aerial imagery once it is accessible |
 | 10 | The terrain DEM has a flattened water surface, and some entrance tiles blend in lower-resolution DEMs | The waterline needs the OSM shoreline as authority; cliffs near the castles may be smoothed | Handle in the Phase 3 pipeline |
+| 11 | Met Office observation wind units not documented here (inferred knots from a 120-station comparison with UKV) | Live observed wind could be mis-scaled | Confirm from the Met Office ASDI documentation (host blocked) |
+| 12 | No public anemometer on the Dart; nearest measured stations are 39–45 km away; the UKV run is 3–6 h old when published | "Live" wind is regional, or a short-range forecast, not a local measurement | Ask for an RDYC/DHNA station feed (C6); label the source and age in the UI |
