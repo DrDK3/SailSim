@@ -69,8 +69,8 @@ GitHub Actions cron (every 15–30 min)              Browser (simulator)
 
 | Phase | Live-weather work |
 |---|---|
-| 2 | `WeatherSource` interface; Manual and Replay sources; Live point mode (RDYC model point plus gust and shift statistics) |
-| 3 | Spatially varying live field (UKV grid) over the Dart area |
+| 2 | **Done.** Manual and Met Office sources (`env/weather.ts`, `env/conditions.ts`). The UKV grid is interpolated spatially (brought forward from Phase 3). Gust and shift statistics come from the RDYC model point and the nearest station. The app discovers `live/latest.json` and offers a bundled, dated replay |
+| 3 | Terrain sheltering or funnelling, if a defensible method exists; forecast-step interpolation |
 | 6 | Production ingest job, caching, stale-data handling, visual weather |
 
 If you want it sooner, a "live point mode" could also go into Phase 1 as a scenario preset.

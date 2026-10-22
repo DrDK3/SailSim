@@ -1,0 +1,6 @@
+# Observed steady-state sailing points for calibration (docs/CALIBRATION.md). One row per settled condition.
+# Required: tws_kn, twa_deg, source. Optional: stw_kn, heel_deg, leeway_deg, weight.
+# tws/twa are TRUE wind relative to the water; stw is speed through the water (not SOG).
+# source must identify the log/session (e.g. "RDYC Squib 'Name' GPS+anemometer log 2027-05-14, leg 3").
+# No rows are provided: no measured Squib performance data has been found (docs/MISSING_INFORMATION.md).
+tws_kn,twa_deg,stw_kn,heel_deg,leeway_deg,weight,source

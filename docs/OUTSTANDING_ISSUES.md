@@ -1,12 +1,12 @@
 # Outstanding issues and risks
 
-Updated: 22 Oct 2026 (end of Phase 1)
+Updated: 22 Oct 2026 (end of Phase 2)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
 | 1 | No RDYC course documents have been inspected first-hand | No verified club courses are possible yet | Request A1–A3 |
 | 2 | Class-rule figures come only from search excerpts; there is a sail-area conflict (16.5 vs 15.8 m²) | Boat parameters are uncertain by a few percent | Request B1 |
-| 3 | No Squib hull lines, rig drawings or performance data | Hydrodynamic and aerodynamic coefficients are estimates; speeds cannot be validated | Request B2–B5; design the calibration workflow (Phase 2) |
+| 3 | No Squib hull lines, rig drawings or performance data | Hydrodynamic and aerodynamic coefficients are estimates; speeds cannot be validated | Request B2–B5. The calibration workflow is ready ([CALIBRATION.md](CALIBRATION.md)); it needs observations |
 | 4 | No legally usable bathymetry in the river | Depth and grounding will be provisional | Request C2 |
 | 5 | No measured current data inside the harbour; secondary sources conflict on peak rates (2–3.5 kn vs about 4 kn) | The current field is a labelled scenario model | Request C4; ask DHNA |
 | 6 | Navigation-buoy positions: only Castle Ledge has a (secondary) position | Approach marks are incomplete | Allowlist `overpass-api.de` for OSM seamarks as a cross-check; the official list of lights or DHNA list is preferred |
@@ -19,9 +19,14 @@ Updated: 22 Oct 2026 (end of Phase 1)
 | 13 | Tide hosts (EA, UKHO, NTSLF) blocked here; EA Dartmouth station details are from third-party listings | Live tide not yet tested | Allowlist the hosts (C3), then build and test the ingest |
 | 14 | Chart-datum offset at Dartmouth (2.62 m below ODN) is from a secondary source | Depth over chart datum could be offset | Confirm (C8) |
 | 15 | UKHO licence terms for publicly displaying API predictions unconfirmed | May restrict a public deployment | Check the UKHO terms before Phase 6; EA-derived predictions are the fallback |
-| 16 | Model pointing probably a few degrees optimistic (minimum heading-TWA 21° from rest, best VMG around 35–40°) | Upwind tactics slightly favour pinching | Calibrate against Squib tacking angles and GPS tracks (B5) |
+| 16 | Model pointing probably a few degrees optimistic (minimum heading-TWA 22° from rest, best VMG around 35–40°) | Upwind tactics slightly favour pinching | Calibrate against Squib tacking angles and GPS tracks (B5) |
 | 17 | Cross-engine determinism is within tolerance (~1e-13), not bit-exact | Replays recorded in one browser may differ by about 1e-13 in another | Port a deterministic maths library (sin, cos, pow) if bit-exact cross-browser replays are needed |
-| 18 | Gybe uses a by-the-lee threshold; heel is quasi-static | Crash gybes and roll dynamics are not physical yet | Phase 2: hinged boom, dynamic roll |
+| 18 | ~~Gybe uses a by-the-lee threshold; heel is quasi-static~~ | **Closed in Phase 2:** dynamic roll and a hinged main boom; gybes and crash gybes emerge | — |
 | 19 | Residuary resistance is a parametric curve, not the Delft series | Speed near hull speed is estimated | Source DSYHS coefficients and Squib hull parameters |
-| 20 | Single 857 kB JS bundle | Slower first load on mobile | Code-split in Phase 6 |
+| 20 | Single 902 kB JS bundle (the polar worker is split out) | Slower first load on mobile | Code-split in Phase 6 |
+| 21 | Upwind heel at 15 kn is high (about 28° close-hauled with auto crew) | Heavy-air upwind behaviour and speed are uncertain | Depowering (traveller, kicker, twist) needs rig information (B4) and evidence (B5, B7) |
+| 22 | Gust and shift statistics are estimates; the "from data" mapping (UKV gust ratio, a station 39 km away) is an unvalidated heuristic | Gustiness on the Dart may be badly wrong, especially near the steep valley sides | A local wind log (C6) would allow fitting the presets |
+| 23 | The tidal stream is uniform in space; its flood direction (330°) and peak rates are estimates | Tidal tactics (cheating the tide inshore) cannot be represented yet | Phase 3 channel-following field; measured data (C4) to validate |
+| 24 | The live weather ingest is not deployed; the app uses a dated replay, at a single forecast valid time | "Live" wind needs the scheduled job | Phase 6 ingest (free data; a small scheduled job) |
+| 25 | The jib is kinematic, not a hinged body | Jib behaviour in a gybe is simplified | Acceptable for now; revisit if it looks wrong in manoeuvres |
 

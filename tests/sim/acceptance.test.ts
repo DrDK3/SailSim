@@ -142,6 +142,7 @@ describe('Criterion 4 (basic): a tack slows the boat and turns it over time', ()
       }
       const fin = sim.snapshot();
       const turned = Math.atan2(Math.sin(fin.heading - entry.heading), Math.cos(fin.heading - entry.heading)) / DEG;
+      console.log(`[model output] tack at ${tws} kn: entry ${toKn(entry.stw).toFixed(2)} kn, minimum ${((100 * minStw) / entry.stw).toFixed(0)}% of entry, head to wind after ${tHeadToWind.toFixed(1)} s, 90% speed after ${t90.toFixed(1)} s, turned ${turned.toFixed(0)}°`);
       expect(turned).toBeGreaterThan(70);
       expect(turned).toBeLessThan(110);
       expect(minStw).toBeLessThanOrEqual(0.85 * entry.stw);
@@ -188,7 +189,7 @@ describe('Criterion 6: rudder force and turning response are consistent', () => 
   }, LONG);
 });
 
-describe('Criterion 7 (early): current changes ground motion only', () => {
+describe('Criterion 7: current changes ground motion only', () => {
   /** Wind defined over the water: wind over ground = wind over water + current. */
   function envWithCurrent(rateKn: number, setDeg: number): Environment {
     const c = { n: rateKn * KN * Math.cos(setDeg * DEG), e: rateKn * KN * Math.sin(setDeg * DEG) };

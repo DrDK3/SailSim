@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { runDeterminismState } from '../../src/sim/testing/determinism';
+import { msToKn, runScenario } from '../../src/sim/index';
 
 type Snap = { t: number; heading: number; stw: number; rudder: number; mainSide: number };
 
@@ -65,7 +67,7 @@ test('on-screen buttons, pause, help and scenario panel work', async ({ page }) 
   await expect(page.getByRole('dialog', { name: 'Help' })).toBeHidden();
 
   await page.getByRole('button', { name: 'Scenario' }).click();
-  const tws = page.locator('.scenario .field').first().locator('input[type="number"]');
+  const tws = page.locator('.scenario .field', { hasText: 'True wind speed' }).locator('input[type="number"]');
   await tws.fill('15');
   await page.getByRole('button', { name: 'Apply and restart' }).click();
   await expect(page.locator('footer.badge')).toContainText('wind 15 kn');
@@ -99,4 +101,72 @@ test('without WebGL the app explains the problem and keeps the instruments live'
   await expect(page.getByRole('alert')).toContainText('3D view unavailable');
   const t0 = (await snap(page)).t;
   await expect.poll(async () => (await snap(page)).t, { timeout: 15_000 }).toBeGreaterThan(t0 + 1);
+});
+
+test('validation dashboard: eight live charts, table view, CSV export', async ({ page }) => {
+  const errors = await open(page);
+  await page.evaluate(() => window.__squib!.advance(20));
+  await page.keyboard.press('KeyV');
+  const dash = page.getByRole('region', { name: 'Validation dashboard' });
+  await expect(dash).toBeVisible();
+  await expect(dash.locator('.dash-grid figure')).toHaveCount(8);
+  // Lines are drawn (each chart has at least one non-empty path).
+  const paths = await dash.locator('.dash-grid path').evaluateAll((els) => els.map((e) => (e.getAttribute('d') ?? '').length));
+  expect(paths.filter((n) => n > 50).length).toBeGreaterThanOrEqual(8);
+  // Crosshair + tooltip on hover.
+  const plot = dash.locator('.chart-plot svg').first();
+  const box = (await plot.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.5, { steps: 3 });
+  await expect(dash.locator('.tooltip').first()).toContainText('STW');
+  // Table view.
+  await dash.getByRole('button', { name: 'Table' }).click();
+  await expect(dash.locator('.dash-table tbody tr')).toHaveCount(14);
+  // CSV export.
+  const [download] = await Promise.all([page.waitForEvent('download'), dash.getByRole('button', { name: 'Export CSV' }).click()]);
+  const csv = readFileSync((await download.path())!, 'utf8').split('\n');
+  expect(csv[0]).toContain('stw_m_s');
+  expect(csv.length).toBeGreaterThan(150);
+  await page.keyboard.press('KeyV');
+  await expect(dash).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('scenario panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
+  const errors = await open(page);
+  await page.getByRole('button', { name: 'Scenario' }).click();
+  const panel = page.getByRole('region', { name: 'Scenario settings' });
+  const source = panel.locator('.field', { hasText: 'Source' }).locator('select');
+  await expect(source.locator('option', { hasText: 'Replay' })).toHaveCount(1);
+  await source.selectOption({ label: (await source.locator('option', { hasText: 'Replay' }).textContent())! });
+  await expect(panel).toContainText('Model output, not a measurement');
+  await panel.locator('.field', { hasText: /^Tide/ }).locator('select').selectOption('manual');
+  await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('tidal');
+  await panel.getByRole('button', { name: 'Apply and restart' }).click();
+  await expect(panel).toBeHidden();
+  const cond = page.getByTestId('conditions');
+  await expect(cond).toContainText('Met Office UKV (replay)');
+  await expect(page.getByTestId('tide')).toContainText('m CD');
+  await expect(cond).toContainText('Tidal stream (modelled)');
+  await expect(page.locator('footer.badge')).toContainText('Met Office UKV model wind (replay)');
+  expect(errors).toEqual([]);
+});
+
+test('polar panel sweeps the model in a worker and matches the Node model', async ({ page }) => {
+  test.setTimeout(150_000);
+  const errors = await open(page);
+  await page.getByRole('button', { name: 'Polar' }).click();
+  const polar = page.getByRole('region', { name: 'Model polar' });
+  await expect(polar).toContainText('not measured Squib performance');
+  await expect(polar.getByRole('status')).toContainText('Computing 10 kn', { timeout: 10_000 });
+  await expect(polar.getByRole('status')).toBeHidden({ timeout: 120_000 });
+  await polar.getByRole('button', { name: 'Table' }).click();
+  const row90 = polar.locator('.dash-table tbody tr', { hasText: /^90°/ });
+  const browserKn = Number(await row90.locator('td').nth(1).textContent());
+  const nodeKn = msToKn(
+    runScenario({ name: 'polar', durationS: 120, conditions: { twsKn: 10, twdDeg: 0 }, initial: { headingDeg: -90, speedKn: 4 }, autopilot: { mode: 'twa', targetDeg: 90 }, optimiseTrim: true }).snapshot().stw,
+  );
+  expect(Math.abs(browserKn - nodeKn)).toBeLessThan(0.006);
+  await page.keyboard.press('Escape');
+  await expect(polar).toBeHidden();
+  expect(errors).toEqual([]);
 });

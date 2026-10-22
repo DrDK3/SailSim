@@ -388,7 +388,12 @@ export class Simulation {
     for (let i = 0; i < steps; i++) this.stepOnce();
   }
 
-  snapshot(): BoatSnapshot {
+  /**
+   * Full state for UI, tests and logging. `detailed = false` skips the costlier diagnostics (static heel
+   * equilibrium, helm balance, environment description), which are then NaN/undefined; the renderer uses
+   * that every frame.
+   */
+  snapshot(detailed = true): BoatSnapshot {
     const s = this.state;
     const a = this.act;
     const wind = this.windHere();
@@ -427,8 +432,8 @@ export class Simulation {
       current: cur,
       heel: s.phi,
       rollRate: s.p,
-      heelEquilibrium: heelEquilibrium(this.params, s, a, wind, cur, this.fluids),
-      helmBalance: this.helmBalance(forces.aw.awa),
+      heelEquilibrium: detailed ? heelEquilibrium(this.params, s, a, wind, cur, this.fluids) : NaN,
+      helmBalance: detailed ? this.helmBalance(forces.aw.awa) : NaN,
       rudder: a.rudder,
       boomRate: a.boomRate,
       mainInverted: a.mainInverted,
@@ -442,7 +447,7 @@ export class Simulation {
       crewY: a.crewY,
       input: { ...this.input },
       forces,
-      env: this.env.describe?.(this.time, s.n, s.e),
+      env: detailed ? this.env.describe?.(this.time, s.n, s.e) : undefined,
     };
   }
 

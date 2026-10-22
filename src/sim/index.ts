@@ -15,3 +15,4 @@ export * from './env/tide';
 export * from './env/current';
 export * from './env/weather';
 export * from './geo/projection';
+export * from './calibration/calibrate';

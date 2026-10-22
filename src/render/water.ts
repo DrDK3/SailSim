@@ -41,6 +41,7 @@ uniform vec3 uHorizon;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uRipple;
+uniform vec4 uPuffs[16];     // (x, z, radius, strength) in world metres; strength 0 = unused
 varying vec3 vWorld;
 varying vec3 vNormalW;
 
@@ -58,16 +59,27 @@ vec2 rippleGrad(vec2 p) {
 
 void main() {
   vec3 n = vNormalW;
+  // Puffs: darker, rougher water ("cat's paws"), as sailors read gusts on the surface.
+  float puff = 0.0;
+  for (int i = 0; i < 16; i++) {
+    vec4 p = uPuffs[i];
+    if (p.w <= 0.0) continue;
+    vec2 d = vWorld.xz - p.xy;
+    puff += p.w * exp(-dot(d, d) / (2.0 * p.z * p.z));
+  }
+  puff = clamp(puff * 2.5, 0.0, 1.0);
   vec2 g = rippleGrad(vWorld.xz * 0.9 + vec2(uTime * 0.35, uTime * 0.2)) * 0.6
-         + rippleGrad(vWorld.xz * 2.7 - vec2(uTime * 0.6, -uTime * 0.25)) * 0.3;
-  n = normalize(n + vec3(-g.x, 0.0, -g.y) * uRipple);
+         + rippleGrad(vWorld.xz * 2.7 - vec2(uTime * 0.6, -uTime * 0.25)) * 0.3
+         + rippleGrad(vWorld.xz * 6.0 - vec2(uTime * 1.2, uTime * 0.7)) * 0.35 * puff;
+  n = normalize(n + vec3(-g.x, 0.0, -g.y) * uRipple * (1.0 + 0.8 * puff));
   vec3 viewDir = normalize(cameraPosition - vWorld);
   float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, viewDir), 0.0), 5.0);
   vec3 refl = reflect(-viewDir, n);
   vec3 skyCol = mix(uHorizon, uSky, clamp(refl.y * 2.0, 0.0, 1.0));
   float facing = max(dot(n, viewDir), 0.0);
   vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5);
-  vec3 col = mix(body, skyCol, fres);
+  vec3 col = mix(body, skyCol, fres * (1.0 - 0.45 * puff));
+  col *= 1.0 - 0.18 * puff;
   vec3 h = normalize(uSunDir + viewDir);
   col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6;
   float dist = length(cameraPosition - vWorld);
@@ -99,6 +111,7 @@ export class Water {
         uFogColor: { value: fogColor.clone() },
         uFogDensity: { value: fogDensity },
         uRipple: { value: 0.35 },
+        uPuffs: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 1, 0)) },
       },
     });
     this.mesh = new THREE.Mesh(geo, this.material);
@@ -106,16 +119,30 @@ export class Water {
     this.mesh.name = 'water';
   }
 
-  /** Waves scale with wind speed and travel downwind (wind FROM direction twd, compass radians). */
-  setWind(twsMs: number, twdFrom: number): void {
+  /** Up to 16 puffs as (x, z, radius, strength) in Three.js world coordinates. */
+  setPuffs(puffs: { x: number; z: number; radius: number; strength: number }[]): void {
+    const u = this.material.uniforms.uPuffs!.value as THREE.Vector4[];
+    for (let i = 0; i < u.length; i++) {
+      const p = puffs[i];
+      if (p) u[i]!.set(p.x, p.z, p.radius, p.strength);
+      else u[i]!.w = 0;
+    }
+  }
+
+  /**
+   * Waves scale with wind speed and travel downwind (wind FROM direction twd, compass radians). Wind
+   * against tide makes them shorter and steeper (visual only; the physics uses flat water).
+   */
+  setWind(twsMs: number, twdFrom: number, windAgainstTide = false): void {
     // Direction the waves travel, in Three.js xz (x = east, z = south).
     const to = twdFrom + Math.PI;
     const base = new THREE.Vector2(Math.sin(to), -Math.cos(to));
     const s = Math.min(1, twsMs / 10);
-    const amp = 0.02 + 0.13 * s * s;
+    const amp = (0.02 + 0.13 * s * s) * (windAgainstTide ? 1.5 : 1);
     const waves = this.material.uniforms.uWaves!.value as THREE.Vector4[];
     const spread = [0, 0.35, -0.5, 0.2];
-    const lengths = [4 + 10 * s, 3 + 5 * s, 2 + 2.5 * s, 7 + 14 * s];
+    const shorten = windAgainstTide ? 0.6 : 1;
+    const lengths = [4 + 10 * s, 3 + 5 * s, 2 + 2.5 * s, 7 + 14 * s].map((l) => l * shorten);
     const amps = [amp, amp * 0.55, amp * 0.3, amp * 0.6];
     waves.forEach((w, i) => {
       const d = base.clone().rotateAround(new THREE.Vector2(), spread[i]!);

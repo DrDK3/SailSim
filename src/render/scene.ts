@@ -3,6 +3,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { BoatParams } from '../sim/boat/params';
+import type { Puff } from '../sim/env/wind';
 import { lerpAngle, nedToThree, orientBoat } from './frames';
 import { SquibModel } from './squibModel';
 import { Water } from './water';
@@ -10,6 +11,12 @@ import { Wake } from './wake';
 import { ForceArrows } from './arrows';
 
 export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top';
+
+/** Environment state the scene shows (read-only from the simulation). */
+export interface SceneEnvironment {
+  puffs: readonly Puff[];
+  windAgainstTide: boolean;
+}
 export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
 
 const SUN_ELEVATION = 38 * (Math.PI / 180);
@@ -33,7 +40,7 @@ export class SceneView {
   private readonly sun: THREE.DirectionalLight;
   private mode: CameraMode = 'chase';
   private chaseHeading = 0;
-  private lastWind = { tws: -1, twd: -1 };
+  private lastWind = { tws: -1, twd: -1, wat: false };
   private crewSide = 1;
   showForces = false;
 
@@ -123,17 +130,19 @@ export class SceneView {
   }
 
   /** Draw one frame, interpolating between the last two physics states (alpha in [0, 1]). */
-  render(prev: BoatSnapshot, curr: BoatSnapshot, alpha: number, time: number, frameDt: number): void {
+  render(prev: BoatSnapshot, curr: BoatSnapshot, alpha: number, time: number, frameDt: number, env?: SceneEnvironment): void {
     const n = prev.n + (curr.n - prev.n) * alpha;
     const e = prev.e + (curr.e - prev.e) * alpha;
     const heading = lerpAngle(prev.heading, curr.heading, alpha);
     const heel = prev.heel + (curr.heel - prev.heel) * alpha;
     const [x, , z] = nedToThree(n, e);
 
-    if (Math.abs(curr.twsGround - this.lastWind.tws) > 0.05 || Math.abs(curr.twdGround - this.lastWind.twd) > 0.01) {
-      this.water.setWind(curr.twsGround, curr.twdGround);
-      this.lastWind = { tws: curr.twsGround, twd: curr.twdGround };
+    const wat = env?.windAgainstTide ?? false;
+    if (Math.abs(curr.twsGround - this.lastWind.tws) > 0.3 || Math.abs(curr.twdGround - this.lastWind.twd) > 0.05 || wat !== this.lastWind.wat) {
+      this.water.setWind(curr.twsGround, curr.twdGround, wat);
+      this.lastWind = { tws: curr.twsGround, twd: curr.twdGround, wat };
     }
+    if (env) this.updatePuffs(env.puffs, x, z);
 
     // Visual-only wave response: the hull rides the surface; pitch from the local slope.
     const h0 = this.water.heightAt(x, z, time);
@@ -198,6 +207,19 @@ export class SceneView {
       }
       this.controls.update();
     }
+  }
+
+  /** The 16 puffs nearest the boat, with their life envelope, as water-shader uniforms. */
+  private updatePuffs(puffs: readonly Puff[], bx: number, bz: number): void {
+    const list = puffs
+      .map((p) => {
+        const [x, , z] = nedToThree(p.n, p.e);
+        const life = Math.min(1, p.age / (0.2 * p.life)) * Math.min(1, Math.max(0, (p.life - p.age) / (0.3 * p.life)));
+        return { x, z, radius: p.radius, strength: p.strength * life, d: (x - bx) ** 2 + (z - bz) ** 2 };
+      })
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 16);
+    this.water.setPuffs(list);
   }
 
   private updateFloats(bx: number, bz: number, time: number): void {

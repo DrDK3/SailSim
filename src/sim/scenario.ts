@@ -5,6 +5,7 @@ import { optimalSheets } from './control/trim';
 import { uniformEnvironment, type UniformConditions } from './env/environment';
 import { buildConditions, type ConditionsSettings } from './env/conditions';
 import { squibParams } from './boat/squib';
+import type { BoatParams } from './boat/params';
 import { Simulation, type BoatSnapshot, type ControlInput, type InitialConditions } from './simulation';
 
 /** A repeatable, data-only description of a run (see scenarios/*.json). */
@@ -46,14 +47,17 @@ export function sampleRow(s: BoatSnapshot): number[] {
   ];
 }
 
-/** Run a scenario headlessly. Deterministic: the same scenario always produces the same samples. */
-export function runScenario(scn: Scenario, onSample?: (s: BoatSnapshot) => void): Simulation {
+/**
+ * Run a scenario headlessly. Deterministic: the same scenario always produces the same samples. `params`
+ * replaces the default Squib parameters (calibration studies); scenario files themselves never carry params.
+ */
+export function runScenario(scn: Scenario, onSample?: (s: BoatSnapshot) => void, params: BoatParams = squibParams()): Simulation {
   let ap: AutopilotSettings | null = scn.autopilot ? { mode: scn.autopilot.mode, target: scn.autopilot.targetDeg * DEG } : null;
   let optimise = scn.optimiseTrim ?? false;
   const events = [...(scn.events ?? [])].sort((a, b) => a.t - b.t);
   let next = 0;
   const sim = new Simulation({
-    params: squibParams(),
+    params,
     env: 'weather' in scn.conditions ? buildConditions(scn.conditions).env : uniformEnvironment(scn.conditions),
     initial: scn.initial,
     input: scn.input,

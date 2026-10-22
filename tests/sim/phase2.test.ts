@@ -53,6 +53,7 @@ describe('Dynamic roll (4-DOF)', () => {
     }
     const theory = 2 * Math.PI * Math.sqrt(p.i44 / (p.weight * p.gm));
     const period = (peaks[3]![0] - peaks[0]![0]) / 3;
+    console.log(`[model output] free roll from 15°: period ${period.toFixed(2)} s (small-angle theory ${theory.toFixed(2)} s), successive peaks ${peaks.slice(0, 4).map((q) => (q[1] / DEG).toFixed(1)).join(', ')}°`);
     expect(Math.abs(period - theory) / theory).toBeLessThan(0.05);
     for (let i = 1; i < peaks.length; i++) expect(peaks[i]![1]).toBeLessThan(peaks[i - 1]![1]);
   });
@@ -74,6 +75,7 @@ describe('Dynamic roll (4-DOF)', () => {
       });
       sim.advance(90);
       const s = sim.snapshot();
+      console.log(`[model output] TWS ${tws} kn, TWA 45°, auto trim + auto crew: heel ${(s.heel / DEG).toFixed(1)}° (static ${(s.heelEquilibrium / DEG).toFixed(1)}°), STW ${toKn(s.stw).toFixed(2)} kn`);
       expect(Math.abs(s.heel - s.heelEquilibrium) / DEG).toBeLessThan(1);
       expect(Math.abs(s.rollRate) / DEG).toBeLessThan(0.5);
       expect(s.heel).toBeLessThan(0); // starboard tack heels to port
@@ -91,6 +93,7 @@ describe('Dynamic roll (4-DOF)', () => {
     };
     const b10 = balance(10);
     const b15 = balance(15);
+    console.log(`[model output] helm balance at TWA 40°: ${b10.toFixed(1)}° weather (10 kn), ${b15.toFixed(1)}° weather (15 kn)`);
     expect(b10).toBeGreaterThan(0);
     expect(b15).toBeGreaterThan(b10);
     expect(b15).toBeLessThan(8);
@@ -133,6 +136,7 @@ describe('Criterion 5: the gybe emerges from the boom dynamics', () => {
     expect(eased.final.lastBoomEvent).not.toBeNull(); // the boom fetched up against the sheet/shrouds
 
     const halfSheet = bearAwayThroughGybe(10, 0.5);
+    console.log(`[model output] gybe, 10 kn, bearing away at 1°/s: boom crosses at ${eased.crossedAtByTheLee.toFixed(1)}° by the lee; peak boom rate ${(eased.maxRate / DEG).toFixed(0)}°/s sheet eased, ${(halfSheet.maxRate / DEG).toFixed(0)}°/s sheet half in (crossed at ${halfSheet.crossedAtByTheLee.toFixed(1)}°)`);
     expect(halfSheet.maxBoom).toBeLessThanOrEqual(halfSheet.limit + 1e-9);
     // A crash gybe with the sheet eased is more violent than a controlled one with the sheet half in.
     expect(eased.maxRate).toBeGreaterThan(halfSheet.maxRate);
@@ -218,8 +222,11 @@ describe('Wind field: seeded gusts, shifts and puffs', () => {
       const m = heel.reduce((a, b) => a + b) / heel.length;
       return Math.sqrt(heel.reduce((a, b) => a + (b - m) ** 2, 0) / heel.length);
     };
-    expect(run('steady')).toBeLessThan(0.05);
-    expect(run('shifty')).toBeGreaterThan(1);
+    const sdSteady = run('steady');
+    const sdShifty = run('shifty');
+    console.log(`[model output] heel SD over 120 s at 12 kn, close-hauled, fixed crew: steady ${sdSteady.toFixed(3)}°, shifty ${sdShifty.toFixed(2)}°`);
+    expect(sdSteady).toBeLessThan(0.05);
+    expect(sdShifty).toBeGreaterThan(1);
   }, LONG);
 });
 

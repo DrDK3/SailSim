@@ -72,7 +72,7 @@ Scheduled ingest (GitHub Actions, every 15–30 min)              Browser
 
 | Phase | Tide work |
 |---|---|
-| 2 | `TideSource` interface (Manual, Replay, Live). Height-plus-phase-driven **uniform** current for testing (criterion 7) |
+| 2 | **Done.** `TideSource` (manual, and the snapshot format the live ingest will write, with gauge residual) and a provisional **uniform** tidal stream driven by the tide timing. Live fetching is not yet tested (hosts blocked here) |
 | 3 | Spatial current pattern f(x, y); depth relative to chart datum; grounding at the live height; river-flow term |
 | 6 | Production ingest (EA plus UKHO), harmonic-constant derivation and validation, stale-data handling |
 

@@ -31,7 +31,10 @@ export function DebugPanel({ ui }: { ui: UiState }) {
         <dt>Rudder α / CL</dt><dd>{deg(f.rudder.alpha, 1)}° / {f.rudder.cl.toFixed(3)}</dd>
         <dt>Resistance</dt><dd>friction {N(f.hull.friction)} N, residuary {N(f.hull.residuary)} N, Fn {f.hull.froude.toFixed(3)}</dd>
         <dt>u / v / r</dt><dd>{s.u.toFixed(3)} / {s.v.toFixed(3)} m/s / {deg(s.r, 2)}°/s</dd>
-        <dt>Heel / equilibrium</dt><dd>{deg(s.heel, 1)}° / {deg(s.heelEquilibrium, 1)}°, crew y {s.crewY.toFixed(2)} m</dd>
+        <dt>Heel / equilibrium</dt><dd>{deg(s.heel, 1)}° / {deg(s.heelEquilibrium, 1)}°, roll rate {deg(s.rollRate, 1)}°/s, crew y {s.crewY.toFixed(2)} m</dd>
+        <dt>Roll moments N·m</dt><dd>sails {N(f.roll.sails)}, foils {N(f.roll.hydro)}, crew {N(f.roll.crew)}, righting {N(f.roll.righting)}, damping {N(f.roll.damping)}</dd>
+        <dt>Boom</dt><dd>{deg(s.boomMain, 1)}° at {deg(s.boomRate, 0)}°/s{s.mainInverted ? ' (by the lee, inverted)' : ''}{s.lastBoomEvent ? `; last fetched up at ${deg(Math.abs(s.lastBoomEvent.rate), 0)}°/s, t=${s.lastBoomEvent.t.toFixed(1)} s` : ''}</dd>
+        <dt>Helm balance</dt><dd>{deg(s.helmBalance, 1)}° (+ = weather helm)</dd>
         <dt>Sheet limits</dt><dd>main {deg(s.mainSheetLimit)}°, jib {deg(s.jibSheetLimit)}°</dd>
         <dt>Wind over ground</dt><dd>{kn(s.twsGround)} kn from {deg(s.twdGround)}°</dd>
         <dt>Sim time / step</dt><dd>{s.t.toFixed(2)} s / {s.step}</dd>

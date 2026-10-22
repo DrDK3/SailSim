@@ -1,6 +1,6 @@
 {
-  "name": "Gusty beat against a flood tide",
-  "description": "Beat in a moderate, shifty 12 kn south-westerly (seeded gusts) with a manual tide (HW 14:00) driving a provisional uniform tidal stream. Tack at 90 s.",
+  "name": "Gusty beat across a flood tide",
+  "description": "Beat in a moderate, shifty 12 kn south-westerly (seeded gusts) with a manual tide (HW 14:00) driving a provisional uniform tidal stream (flood setting 330°, across the beat; about 1.5 kn three hours before HW). Tack at 90 s.",
   "durationS": 240,
   "sampleEveryS": 0.5,
   "conditions": {

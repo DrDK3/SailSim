@@ -14,6 +14,8 @@ const KEYS: [string, string][] = [
   ['C', 'Cycle camera: chase, helm, orbit, top'],
   ['F', 'Show physics force arrows'],
   ['G', 'Show the physics debug panel'],
+  ['V', 'Validation dashboard (live charts, table, CSV export)'],
+  ['Esc', 'Close help and the polar panel'],
   ['H or ?', 'This help'],
 ];
 
@@ -31,8 +33,11 @@ export function Help({ onClose }: { onClose: () => void }) {
           <tbody>{KEYS.map(([k, d]) => <tr key={k}><td className="key">{k}</td><td>{d}</td></tr>)}</tbody>
         </table>
         <p className="fine">
-          Phase 1 prototype on open water. Boat dimensions are from class sources; hydrodynamic and sail coefficients
-          are estimates awaiting calibration. Not for navigation or performance prediction.
+          Phase 2 prototype on open water. The boat heels dynamically, the boom swings on its own and can gybe
+          unexpectedly by the lee, and the wind has seeded gusts and shifts (dark patches on the water are puffs).
+          Boat dimensions are from class sources; hydrodynamic and sail coefficients are estimates awaiting
+          calibration. Weather and tide sources are labelled in the instruments. Not for navigation or performance
+          prediction.
         </p>
         <button className="primary" onClick={onClose}>Close</button>
       </section>

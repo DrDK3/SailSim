@@ -1,8 +1,12 @@
 import { DEG } from '../math/angles';
 import { G } from '../units';
 
-export type Tag = 'V' | 'S(p)' | 'S' | 'E' | 'N';
-const TAGS: readonly Tag[] = ['V', 'S(p)', 'S', 'E', 'N'];
+/**
+ * Provenance: V verified, S(p) primary seen via excerpt, S secondary, E estimated, N not established,
+ * C calibrated (fitted to the observations named in `source`, see docs/CALIBRATION.md).
+ */
+export type Tag = 'V' | 'S(p)' | 'S' | 'E' | 'N' | 'C';
+const TAGS: readonly Tag[] = ['V', 'S(p)', 'S', 'E', 'N', 'C'];
 
 export interface Param<T = number> {
   value: T;

@@ -5,7 +5,18 @@ import { Controls } from './Controls';
 import { DebugPanel } from './DebugPanel';
 import { ScenarioPanel } from './ScenarioPanel';
 import { Help } from './Help';
+import { Dashboard } from './Dashboard';
+import { PolarPanel } from './PolarPanel';
 import type { CameraMode } from '../render/scene';
+import type { AppScenario } from '../app/controller';
+
+function conditionsText(sc: AppScenario): string {
+  const c = sc.conditions;
+  const wind = c.weather.source === 'manual' ? `wind ${c.weather.twsKn} kn from ${c.weather.twdDeg}°` : `Met Office UKV model wind${c.weather.replay ? ' (replay)' : ''}`;
+  const tide = c.tide ? `tide ${c.tide.mode}` : 'no tide';
+  const cur = c.current.mode === 'tidal' ? 'modelled tidal stream' : c.current.mode === 'uniform' ? `current ${c.current.rateKn} kn` : 'no current';
+  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}`;
+}
 
 export function App({ ctl }: { ctl: SimController }) {
   const host = useRef<HTMLDivElement>(null);
@@ -42,17 +53,21 @@ export function App({ ctl }: { ctl: SimController }) {
         </label>
         <button aria-pressed={ui.showForces} onClick={() => ctl.toggleForces()} title="Force arrows (F)">Forces</button>
         <button aria-pressed={ui.showDebug} onClick={() => ctl.toggleDebug()} title="Physics panel (G)">Debug</button>
+        <button aria-pressed={ui.showDashboard} onClick={() => ctl.toggleDashboard()} title="Validation dashboard (V)">Dashboard</button>
+        <button aria-pressed={ui.showPolar} onClick={() => ctl.togglePolar()} title="Model polar sweep">Polar</button>
         <button aria-pressed={scenarioOpen} onClick={() => setScenarioOpen(!scenarioOpen)}>Scenario</button>
         <button onClick={() => ctl.toggleHelp()} title="Help (H)">Help</button>
       </nav>
       <div className="side">
         {scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => setScenarioOpen(false)} />}
+        {ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}
         {ui.showDebug && <DebugPanel ui={ui} />}
       </div>
+      {ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}
       <Controls ctl={ctl} ui={ui} />
       {ui.paused && <div className="banner">Paused (P to resume)</div>}
       <footer className="badge">
-        Phase 1 prototype · open water · wind {ui.scenario.twsKn} kn from {ui.scenario.twdDeg}° · coefficients estimated · not for navigation
+        Phase 2 prototype · open water · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
       </footer>
       {ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}
     </div>

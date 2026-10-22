@@ -16,7 +16,9 @@
     "scenario": "tsx tools/scenario-runner.ts",
     "polar": "tsx tools/model-polar.ts",
     "params": "tsx tools/param-table.ts",
-    "golden:update": "tsx tools/golden.ts"
+    "golden:update": "tsx tools/golden.ts",
+    "calibrate": "tsx tools/calibrate.ts",
+    "perf": "tsx tools/perf.ts"
   },
   "dependencies": {
     "react": "19.2.9",
