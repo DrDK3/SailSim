@@ -9,13 +9,16 @@ import { SquibModel } from './squibModel';
 import { Water } from './water';
 import { Wake } from './wake';
 import { ForceArrows } from './arrows';
+import type { DartScene, DartUpdate } from './dart';
 
-export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top';
+export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top' | 'free';
 
 /** Environment state the scene shows (read-only from the simulation). */
 export interface SceneEnvironment {
   puffs: readonly Puff[];
   windAgainstTide: boolean;
+  /** River Dart state (when the geodata is loaded). */
+  dart?: Omit<DartUpdate, 'camera' | 'time'>;
 }
 export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
 
@@ -23,6 +26,8 @@ const SUN_ELEVATION = 38 * (Math.PI / 180);
 const SUN_AZIMUTH = 200 * (Math.PI / 180);
 const FOG = new THREE.Color(0xc4d6e2);
 const FOG_DENSITY = 0.0016;
+/** With the River Dart loaded the hills should stay visible across the harbour. */
+const FOG_DENSITY_DART = 0.00024;
 const MAX_FLOATS = 400;
 
 /** Owns the Three.js renderer, scene and cameras. Reads simulation snapshots; never writes to the sim. */
@@ -42,6 +47,8 @@ export class SceneView {
   private chaseHeading = 0;
   private lastWind = { tws: -1, twd: -1, wat: false };
   private crewSide = 1;
+  private dart?: DartScene;
+  private depthAt?: (n: number, e: number) => number;
   showForces = false;
 
   constructor(container: HTMLElement, params: BoatParams) {
@@ -54,7 +61,7 @@ export class SceneView {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 6000);
+    this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 25000);
     this.camera.position.set(0, 6, 16);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enabled = false;
@@ -65,7 +72,7 @@ export class SceneView {
     // Sky and lighting
     const sunDir = new THREE.Vector3().setFromSphericalCoords(1, Math.PI / 2 - SUN_ELEVATION, SUN_AZIMUTH);
     const sky = new Sky();
-    sky.scale.setScalar(5000);
+    sky.scale.setScalar(20000);
     const u = sky.material.uniforms;
     u['turbidity']!.value = 4;
     u['rayleigh']!.value = 1.2;
@@ -89,7 +96,7 @@ export class SceneView {
     this.scene.add(this.sun, this.sun.target);
 
     this.water = new Water(sunDir, FOG, FOG_DENSITY);
-    this.scene.add(this.water.mesh);
+    this.scene.add(this.water.mesh, this.water.farMesh);
 
     this.boat = new SquibModel(params);
     this.boatRoot.add(this.boat.group);
@@ -110,6 +117,17 @@ export class SceneView {
     this.scene.add(this.floats);
   }
 
+  /** Show the River Dart (or remove it with undefined). `depthAt` keeps the motion-cue floats in the water. */
+  setDart(dart: DartScene | undefined, depthAt?: (n: number, e: number) => number): void {
+    if (this.dart) this.scene.remove(this.dart.fixed, this.dart.floating, this.dart.labels);
+    this.dart = dart;
+    this.depthAt = dart ? depthAt : undefined;
+    if (dart) this.scene.add(dart.fixed, dart.floating, dart.labels);
+    const density = dart ? FOG_DENSITY_DART : FOG_DENSITY;
+    (this.scene.fog as THREE.FogExp2).density = density;
+    this.water.setFog(density);
+  }
+
   setCameraMode(mode: CameraMode): void {
     this.mode = mode;
     this.controls.enabled = mode === 'orbit';
@@ -117,6 +135,15 @@ export class SceneView {
       this.controls.target.copy(this.boatRoot.position).add(new THREE.Vector3(0, 2, 0));
       this.camera.position.copy(this.boatRoot.position).add(new THREE.Vector3(10, 7, 12));
     }
+  }
+
+  /** Debug and screenshot aid: a fixed viewpoint (three.js coordinates) that does not follow the boat. */
+  freeCamera(position: [number, number, number], target: [number, number, number]): void {
+    this.mode = 'free';
+    this.controls.enabled = true;
+    this.camera.position.set(...position);
+    this.controls.target.set(...target);
+    this.controls.update();
   }
 
   get cameraMode(): CameraMode {
@@ -175,6 +202,7 @@ export class SceneView {
     this.sun.target.position.copy(this.boatRoot.position);
     this.sun.position.copy(this.boatRoot.position).add(new THREE.Vector3().setFromSphericalCoords(60, Math.PI / 2 - SUN_ELEVATION, SUN_AZIMUTH));
     this.water.update(time, this.camera);
+    if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -198,6 +226,8 @@ export class SceneView {
       this.camera.up.set(0, 0, -1);
       this.camera.lookAt(b.x, 0, b.z);
       this.camera.up.set(0, 1, 0);
+    } else if (this.mode === 'free') {
+      this.controls.update();
     } else {
       // Orbit: keep the user's viewpoint relative to the boat while it sails.
       const delta = new THREE.Vector3().subVectors(b, this.controls.target).add(new THREE.Vector3(0, 2, 0));
@@ -239,6 +269,7 @@ export class SceneView {
         const jz = (fr * 3.1 % 1 - 0.5) * cell * 0.8;
         const x = gx * cell + jx;
         const z = gz * cell + jz;
+        if (this.depthAt && this.depthAt(-z, x) < 2) continue;
         m.makeTranslation(x, this.water.heightAt(x, z, time) + 0.05, z);
         this.floats.setMatrixAt(i++, m);
       }

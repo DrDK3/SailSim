@@ -7,6 +7,8 @@ import { ScenarioPanel } from './ScenarioPanel';
 import { Help } from './Help';
 import { Dashboard } from './Dashboard';
 import { PolarPanel } from './PolarPanel';
+import { Minimap } from './Minimap';
+import { LayersPanel } from './LayersPanel';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
 
@@ -56,6 +58,9 @@ export function App({ ctl }: { ctl: SimController }) {
         <button aria-pressed={ui.showDashboard} onClick={() => ctl.toggleDashboard()} title="Validation dashboard (V)">Dashboard</button>
         <button aria-pressed={ui.showPolar} onClick={() => ctl.togglePolar()} title="Model polar sweep">Polar</button>
         <button aria-pressed={scenarioOpen} onClick={() => setScenarioOpen(!scenarioOpen)}>Scenario</button>
+        <button aria-pressed={ui.showLabels} onClick={() => ctl.toggleLabels()} title="Place labels (L)">Labels</button>
+        <button aria-pressed={ui.showMinimap} onClick={() => ctl.toggleMinimap()} title="Minimap (N)">Map</button>
+        <button aria-pressed={ui.showLayers} onClick={() => ctl.toggleLayers()} title="Layers, provisional elements and sources">Layers</button>
         <button onClick={() => ctl.toggleHelp()} title="Help (H)">Help</button>
       </nav>
       <div className="side">
@@ -66,8 +71,16 @@ export function App({ ctl }: { ctl: SimController }) {
       {ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}
       <Controls ctl={ctl} ui={ui} />
       {ui.paused && <div className="banner">Paused (P to resume)</div>}
+      {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}
+      {(ui.dart.issues.length > 0 || ui.dart.status === 'unavailable') && (
+        <div className="banner warn-banner" role="alert" data-testid="dart-warning">
+          {ui.dart.status === 'unavailable' ? 'River Dart data could not be loaded: sailing on open water.' : `Some River Dart data failed to load (${ui.dart.issues.map((i) => i.asset).join(', ')}).`}{' '}
+          <button onClick={() => ctl.toggleLayers(true)}>Details</button>
+        </div>
+      )}
+      {ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}
       <footer className="badge">
-        Phase 2 prototype · open water · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
+        Phase 3 prototype · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
       </footer>
       {ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}
     </div>

@@ -174,3 +174,23 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 @media (max-width: 900px) {
   .dashboard { top: 12px; max-height: calc(100% - 270px); }
 }
+
+/* Phase 3: minimap, layers panel, warnings */
+.minimap { right: 12px; bottom: 34px; padding: 6px; }
+.minimap canvas { display: block; border-radius: 6px; }
+.minimap-bar { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+.minimap-bar button { padding: 2px 9px; }
+.chip.bad { background: rgba(255, 107, 94, 0.18); color: var(--bad); margin-top: 6px; }
+.chip.bad::before { content: '⚠ '; }
+.layers { position: static; width: min(900px, calc(100% - 24px)); max-height: calc(100% - 40px); overflow: auto; }
+.layers ul { margin: 4px 0 8px; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
+.layers li { margin: 3px 0; }
+.layers .status { display: inline-block; width: auto; padding: 1px 6px; font-size: 11px; }
+.status.bad { background: rgba(255, 107, 94, 0.16); color: var(--bad); }
+.layers-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.layers-table th, .layers-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+.layers-table th { color: var(--muted); font-weight: 600; }
+.warn-banner { top: 76px; left: 50%; transform: translateX(-50%); color: var(--warn); font-weight: 500; font-size: 13px; max-width: 560px; display: flex; gap: 8px; align-items: center; }
+@media (max-width: 900px) {
+  .minimap { display: none; }
+}

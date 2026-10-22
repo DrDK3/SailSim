@@ -57,7 +57,10 @@
 | G2 | Tilezen/Mapzen Terrain Tiles (terrarium) | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` | Dartmouth tiles built from **EA LIDAR Composite DTM 2 m**, OGL v3: "© Environment Agency copyright and/or database right 2015. All rights reserved." Entrance tiles also use EU-DEM, SRTM and GMTED | Terrain heights |
 | G3 | Tilezen source and attribution docs | https://github.com/tilezen/joerd/blob/master/docs/data-sources.md | — | Confirms the UK 2 m LIDAR source |
 | G4 | Copernicus DEM GLO-30 | `s3://copernicus-dem-30m/` | Copernicus DEM licence (free, attribution) | Backup terrain |
-| G5 | Sentinel-2 L2A COGs, tile 30UVA | `s3://sentinel-cogs/sentinel-s2-l2a-cogs/30/U/VA/` | Copernicus open licence ("Contains modified Copernicus Sentinel data [year]") | Terrain colour texture (10 m) |
+| G5 | Sentinel-2 L2A COGs, tile 30UVA. Phase 3 uses scene **S2C_30UVA_20250712_0_L2A** (12 Jul 2025, 0.0015% cloud), band TCI | `s3://sentinel-cogs/sentinel-s2-l2a-cogs/30/U/VA/2025/7/S2C_30UVA_20250712_0_L2A/` | Copernicus open licence ("Contains modified Copernicus Sentinel data 2025") | Terrain colour texture (10 m) |
+| G6 | Microsoft ML Building Footprints (inside the Overture buildings theme) | via G1 | ODbL 1.0 | 2,376 of the footprints and most building heights (ML estimates) |
+| G7 | PROJ 9.8.1 / pyproj 3.8.0 | https://proj.org | MIT | Reference implementation the app's Transverse Mercator is tested against (tests/fixtures/projection-pyproj.json) |
+| G8 | ETOPO1 depths inside the offshore terrain tiles (G2) | via G2 | Public domain (NOAA) | Plausibility check only for the provisional offshore depths (18–29 m in Start Bay) |
 
 ## Weather
 

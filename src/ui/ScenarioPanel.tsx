@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { AppScenario, SimController, UiState } from '../app/controller';
+import { START_LOCATIONS, type AppScenario, type SimController, type StartLocationId, type UiState } from '../app/controller';
 import type { ConditionsSettings } from '../sim/env/conditions';
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
 import { dataAgeMinutes } from '../sim/env/weather';
@@ -72,6 +72,20 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
       <div className="row tight">
         <button onClick={() => setC({ startTime: new Date().toISOString().slice(0, 16) + ':00Z' })}>Now</button>
       </div>
+      <label className="field select-field">
+        <span>Start position</span>
+        <select
+          value={draft.startLocation}
+          onChange={(e) => {
+            const loc = START_LOCATIONS.find((l) => l.id === e.target.value)!;
+            setDraft({ ...draft, startLocation: loc.id as StartLocationId, startHeadingDeg: loc.headingDeg });
+          }}
+        >
+          {START_LOCATIONS.map((l) => (
+            <option key={l.id} value={l.id}>{l.label}</option>
+          ))}
+        </select>
+      </label>
       <Num label="Start heading" value={draft.startHeadingDeg} min={0} max={359} step={1} unit="°T" onChange={(v) => setDraft({ ...draft, startHeadingDeg: v })} />
       <Num label="Start speed" value={draft.startSpeedKn} min={0} max={6} step={0.5} unit="kn" onChange={(v) => setDraft({ ...draft, startSpeedKn: v })} />
 
@@ -117,7 +131,7 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         <select
           value={tideMode}
           onChange={(e) => {
-            if (e.target.value === 'none') setC({ tide: undefined, current: cur.mode === 'tidal' ? { mode: 'none' } : cur });
+            if (e.target.value === 'none') setC({ tide: undefined, current: cur.mode === 'tidal' || cur.mode === 'dart' ? { mode: 'none' } : cur });
             else setC({ tide: { mode: 'manual', hwTime: c.startTime, hwHeightM: 4.6, lwHeightM: 1.2 } });
           }}
         >
@@ -125,12 +139,18 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <option value="manual">Manual (from tide tables)</option>
         </select>
       </label>
+      {!c.tide && ui.dart.status === 'loaded' && (
+        <p className="fine">No tide set: the water stays at about mean level ({'≈'}2.7 m above chart datum).</p>
+      )}
       {manual && (
         <>
           <TimeField label="High water" iso={manual.hwTime} onChange={(iso) => setManualTide({ hwTime: iso })} />
           <Num label="HW height" value={manual.hwHeightM} min={0} max={7} step={0.1} unit="m CD" onChange={(v) => setManualTide({ hwHeightM: v })} />
           <Num label="LW height" value={manual.lwHeightM} min={-0.5} max={4} step={0.1} unit="m CD" onChange={(v) => setManualTide({ lwHeightM: v })} />
-          <p className="fine">Enter Dartmouth HW/LW from tide tables or ADMIRALTY EasyTide. Live gauge and UKHO predictions need network access (docs/LIVE_TIDES.md).</p>
+          <p className="fine">
+            Enter Dartmouth HW/LW from tide tables or ADMIRALTY EasyTide. The water level sets the depths for grounding.
+            Live gauge and UKHO predictions need network access (docs/LIVE_TIDES.md).
+          </p>
         </>
       )}
 
@@ -143,18 +163,33 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             const m = e.target.value;
             if (m === 'none') setC({ current: { mode: 'none' } });
             else if (m === 'uniform') setC({ current: { mode: 'uniform', setDeg: 0, rateKn: 1 } });
+            else if (m === 'dart') setC({ current: { mode: 'dart', stream: { ...DEFAULT_TIDAL_STREAM } } });
             else setC({ current: { mode: 'tidal', stream: { ...DEFAULT_TIDAL_STREAM } } });
           }}
         >
           <option value="none">None</option>
           <option value="uniform">Uniform (steady)</option>
-          <option value="tidal" disabled={!c.tide}>Tidal stream from tide timing{c.tide ? '' : ' (set a tide first)'}</option>
+          <option value="dart" disabled={!c.tide || ui.dart.status !== 'loaded'}>
+            Channel-following tidal stream{!c.tide ? ' (set a tide first)' : ui.dart.status !== 'loaded' ? ' (needs the River Dart data)' : ''}
+          </option>
+          <option value="tidal" disabled={!c.tide}>Uniform tidal stream from tide timing{c.tide ? '' : ' (set a tide first)'}</option>
         </select>
       </label>
       {cur.mode === 'uniform' && (
         <>
           <Num label="Rate" value={cur.rateKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { ...cur, rateKn: v } })} />
           <Num label="Set (towards)" value={cur.setDeg} min={0} max={359} step={1} unit="°T" onChange={(v) => setC({ current: { ...cur, setDeg: v } })} />
+        </>
+      )}
+      {cur.mode === 'dart' && (
+        <>
+          <Num label="Entrance peak flood" value={cur.stream.peakFloodKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, peakFloodKn: v } } })} />
+          <Num label="Entrance peak ebb" value={cur.stream.peakEbbKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, peakEbbKn: v } } })} />
+          <Num label="River outflow" value={cur.stream.riverEbbKn} min={0} max={2} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, riverEbbKn: v } } })} />
+          <p className="fine">
+            Provisional model: follows the channel, about twice as fast in the narrows as at the entrance, slack in the creeks.
+            Rates are the mean across the entrance at mid-tide. Not measured current data.
+          </p>
         </>
       )}
       {cur.mode === 'tidal' && (

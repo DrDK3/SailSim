@@ -1,6 +1,6 @@
-# Physics model (Phase 2)
+# Physics model (Phase 3)
 
-- **Status:** a 4-DOF sailing model (surge, sway, yaw, roll) with a hinged main boom, running in a fixed 100 Hz step, in a seeded, spatially varying wind field with tide and a provisional tidal stream.
+- **Status:** a 4-DOF sailing model (surge, sway, yaw, roll) with a hinged main boom, running in a fixed 100 Hz step. It sails in a seeded, spatially varying wind field, with tide. On the River Dart it adds a bottom it can ground on and a provisional channel-following tidal stream.
 - **Code:** `src/sim/` (pure TypeScript: no DOM, Three.js or React; this is enforced by ESLint and a separate `tsconfig.sim.json`).
 - **Parameters:** every value is listed with its source and confidence tag in [`PARAMETERS.md`](PARAMETERS.md), which is generated from the data files.
 
@@ -10,7 +10,8 @@
 
 | Item | Convention |
 |---|---|
-| World | North-East-Down metres. With real-time conditions, the origin is the RDYC pontoon reference point (50.34801° N, 3.57339° W; `geo/projection.ts`), so grid wind and later the river geometry share one frame |
+| World | North-East-Down metres, origin at the RDYC clubhouse footprint centroid (50.34801° N, 3.57339° W). Horizontal coordinates are a Transverse Mercator projection about that point (`geo/projection.ts`, Krüger series; matches PROJ to < 1 mm, see `GEODATA.md`), shared by the River Dart data, the Met Office grid and everything else |
+| Heights | Metres above Ordnance Datum Newlyn (ODN). Tide heights are above chart datum (CD), 2.62 m below ODN at Dartmouth (S) |
 | Body | x forward, y to starboard |
 | Heading ψ | Compass bearing, clockwise from north |
 | Velocities u, v, r | **Through the water** (surge, sway, yaw rate) |
@@ -274,7 +275,9 @@ The values changed by at most 0.05 kn from Phase 1: in steady wind the dynamic r
 | No wind gradient (the same wind at all heights) | — |
 | Munk moment omitted (represented by the forward lateral centre) | — |
 | Wind is horizontal and the same at every height; no wind shadow from land | Phase 3 (terrain-based sheltering, if data allows) |
-| Tidal stream is uniform in space and follows the tide-height curve | Phase 3 spatial pattern from charted tidal diamonds or a model |
+| The River Dart stream pattern is a model on estimated depths; offshore alongshore streams are not modelled | Measured currents (C4) or a hydrodynamic model |
+| No heave or pitch when aground: the boat does not lift or lean on the bottom | — |
+| Moorings, pontoons and ferries are not obstacles | Phase 5 (collisions) |
 
 ## 14. Environment (Phase 2, `src/sim/env/`)
 
@@ -307,6 +310,57 @@ The values changed by at most 0.05 kn from Phase 1: in steady wind the dynamic r
 - **Labelling:** the UI labels it "modelled"; it is **not measured current data**. Real streams in the Dart vary across the channel and around the bends; that spatial pattern belongs to Phase 3.
 - **Kinematics:** the current enters only through V_ground (§2). Instrument TWS/TWA are relative to the water, so a current changes the wind the boat feels.
 
+### River Dart: channel-following stream (`current.ts`, `dartStream`): PROVISIONAL
+
+With the River Dart data, the stream can follow the channel instead of being uniform:
+
+```
+C(n, e, t) = −s_flood(t)·P_tidal(n, e) + U_river·P_river(n, e)
+s_flood(t) = peakFlood·φ(t)  (φ ≥ 0, rising)   or   peakEbb·φ(t)  (φ < 0, falling)
+```
+
+- **Patterns:** P_tidal and P_river are the precomputed ebb-direction patterns (`GEODATA.md`). Each has unit mean speed across the entrance (castle to castle).
+- **Phase:** φ(t) is the normalised rate of change of the tide height, as in the uniform model.
+- **Peak rates:** they mean "mean speed across the entrance at mid-tide": default ebb 2.0 kn and flood 1.5 kn (E, guided by DHNA's "seldom exceeds 2 knots", S(p)).
+- **Shape:** the pattern is about 1× the entrance speed off RDYC, up to about 2.2× in the narrowest reach, near zero in the creeks, and spreads out into Start Bay.
+- **Labelling:** it is labelled "modelled" in the app.
+
+### Water level
+
+With the River Dart data the environment provides the water level in metres ODN. It is the tide height above CD minus 2.62 m, or 2.7 m CD (≈ mean level, E) when no tide is set. Water depth at a point = water level − bed elevation.
+
 ### Wind against tide
 
 The environment flags it when the wind (direction it blows to) and the current are more than 120° apart, the current is over 0.5 kn and the wind over 8 kn. The flag only steepens and shortens the drawn waves and shows a chip in the instruments; there are no wave forces in the physics.
+
+## 15. Grounding: contact with the bottom (`boat/contact.ts`)
+
+With a seabed (the River Dart data), three points can touch the bottom:
+
+| Point | Body x | Depth below the waterline |
+|---|---|---|
+| Keel tip | +0.1 m | 0.99 m (class draft, S) |
+| Forefoot | +2.75 m | 0.15 m (E) |
+| Rudder heel | −2.75 m | 0.8 m (E) |
+
+**Penetration** at each point is `pen = depth·cos φ − (water level − bed)`. The keel tip also swings to windward as the boat heels. Each touching point (pen > 0) adds horizontal forces:
+
+| Force | Value | Role |
+|---|---|---|
+| Ground load | `N = ρ g A_wp·pen·share`, capped at 2 × the point's share of the weight (A_wp = 4.8 m², E; shares keel 0.5, bow and stern 0.25) | Weight transferred to the ground as the water gets shallower |
+| Friction | `μN` opposing the point's velocity over the ground, smoothed below 0.05 m/s (μ = 0.5, E) | Holds a grounded boat against the sails |
+| Ploughing | `C·min(pen/0.05 m, 1)` times the velocity (C = 8000 N·s/m, E) | Stops a keel that runs into mud within a few seconds |
+| Slope push | `N·min(slope, 1)` down the bed gradient | Pushes the boat back towards deeper water on a steep bank |
+
+**Moments:** the forces act at the points, giving yaw (x × F_y) and roll (−F_y × depth).
+
+**Consequences:**
+- A boat that sails at a bank stops with the keel in about its own draft of water.
+- Rising water floats it off; falling water grounds it.
+- It cannot reach dry land: in tests steering at eight shore landmarks, the hull centre never reached ground above the water.
+
+**Simplifications:** there is no heave or pitch, so the boat does not lift as it grounds. There is no damage model.
+
+The 8 m elevation grid turns vertical quay walls into ramps about 8 m wide, so the boat grounds a few metres off a wall. The bed mid-channel is an estimate, so groundings there are only indicative. Near the shore the bed is LIDAR (`GEODATA.md`).
+
+**Outputs:** the snapshot reports `depthAtKeel`, `grounded` and each point's clearance. The app shows the depth at the keel and an "Aground" warning.

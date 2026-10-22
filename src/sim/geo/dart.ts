@@ -27,11 +27,15 @@ export class DartGeo implements Seabed {
   readonly tidal: { e: Grid; n: Grid };
   readonly river: { e: Grid; n: Grid };
   readonly cdBelowOdn: number;
+  /** False when the stream grid was missing: the pattern is then zero everywhere. */
+  readonly hasStream: boolean;
 
-  constructor(readonly manifest: DartManifest, elevation: ArrayBuffer, current: ArrayBuffer) {
+  constructor(readonly manifest: DartManifest, elevation: ArrayBuffer, currentGrid?: ArrayBuffer) {
     const m = manifest;
     this.elevation = int16Grid(elevation, m.elevation, m.elevation.scale);
     const c = m.current;
+    this.hasStream = currentGrid !== undefined;
+    const current = currentGrid ?? new ArrayBuffer(c.nx * c.ny * 2 * c.components.length);
     const comp = (name: string) => {
       const k = c.components.indexOf(name);
       if (k < 0) throw new Error(`current.bin has no component ${name}`);

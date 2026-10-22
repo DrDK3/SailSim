@@ -23,7 +23,7 @@ Source ids refer to docs/SOURCES.md.
 | `spinnakerPoleLength` | 2.14 | m | S(p) | C1 |  |
 | `crewCount` | 2 | - | S | C8 | NSOA says two or three |
 
-## Calibration coefficients (89 parameters; 89 tag E)
+## Calibration coefficients (98 parameters; 98 tag E)
 
 | Parameter | Value | Unit | Tag | Source | Note |
 |---|---|---|---|---|---|
@@ -116,3 +116,12 @@ Source ids refer to docs/SOURCES.md.
 | `stability.addedRollInertiaFrac` | 0.2 | - | E | estimate |  |
 | `stability.rollLinearDamping` | 220 | N m s | E | estimate | Hull and appendage roll damping not already produced by the keel and sail forces (those emerge from the roll motion itself); about 5% of critical |
 | `stability.rudderDepth` | 0.35 | m | E | estimate | Centre of rudder force below the waterline (roll arm) |
+| `contact.bowContactX` | 2.75 | m | E | estimate | Forward contact point (stem), body x from the CG |
+| `contact.bowContactDepth` | 0.15 | m | E | estimate | Depth of the forefoot below the waterline |
+| `contact.sternContactX` | -2.75 | m | E | estimate | After contact point (rudder heel) |
+| `contact.sternContactDepth` | 0.8 | m | E | estimate | Depth of the rudder's lowest point below the waterline (transom-hung rudder; not established) |
+| `contact.keelContactX` | 0.1 | m | E | estimate | Keel tip position along the hull; its depth is the class draft (S) |
+| `contact.waterplaneArea` | 4.8 | m2 | E | estimate | LWL x beam x 0.5: sets how fast weight transfers to the ground as the water falls (rho g A per metre) |
+| `contact.friction` | 0.5 | - | E | estimate | Coulomb friction between keel/hull and mud or sand |
+| `contact.damping` | 8000 | N s/m | E | estimate | Viscous term at a contact point (keel ploughing into mud), reaching full value at 0.05 m penetration. Chosen so a boat that touches the bottom stops within a few seconds rather than bumping along the bank |
+| `contact.slopeLimit` | 1 | - | E | estimate | Cap on the bed slope used for the down-slope push (8 m grid turns quay walls into ramps) |

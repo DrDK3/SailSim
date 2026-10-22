@@ -15,6 +15,7 @@ const KEYS: [string, string][] = [
   ['F', 'Show physics force arrows'],
   ['G', 'Show the physics debug panel'],
   ['V', 'Validation dashboard (live charts, table, CSV export)'],
+  ['L / N', 'Place labels / minimap'],
   ['Esc', 'Close help and the polar panel'],
   ['H or ?', 'This help'],
 ];
@@ -33,7 +34,9 @@ export function Help({ onClose }: { onClose: () => void }) {
           <tbody>{KEYS.map(([k, d]) => <tr key={k}><td className="key">{k}</td><td>{d}</td></tr>)}</tbody>
         </table>
         <p className="fine">
-          Phase 2 prototype on open water. The boat heels dynamically, the boom swings on its own and can gybe
+          Phase 3 prototype on the River Dart: terrain, buildings, piers and the shoreline come from open data; water
+          depths mid-channel, individual moorings, ferry timetables and the tidal stream are provisional estimates (see
+          Layers). You can run aground: the keel stops you in shallow water. The boat heels dynamically, the boom swings on its own and can gybe
           unexpectedly by the lee, and the wind has seeded gusts and shifts (dark patches on the water are puffs).
           Boat dimensions are from class sources; hydrodynamic and sail coefficients are estimates awaiting
           calibration. Weather and tide sources are labelled in the instruments. Not for navigation or performance

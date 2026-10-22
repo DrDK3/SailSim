@@ -71,7 +71,10 @@ void main() {
   vec2 g = rippleGrad(vWorld.xz * 0.9 + vec2(uTime * 0.35, uTime * 0.2)) * 0.6
          + rippleGrad(vWorld.xz * 2.7 - vec2(uTime * 0.6, -uTime * 0.25)) * 0.3
          + rippleGrad(vWorld.xz * 6.0 - vec2(uTime * 1.2, uTime * 0.7)) * 0.35 * puff;
-  n = normalize(n + vec3(-g.x, 0.0, -g.y) * uRipple * (1.0 + 0.8 * puff));
+  // Fade the fine ripples and the glint with distance: beyond a few hundred metres they only alias.
+  float dist = length(cameraPosition - vWorld);
+  float near = exp(-dist / 450.0);
+  n = normalize(n + vec3(-g.x, 0.0, -g.y) * uRipple * (1.0 + 0.8 * puff) * near);
   vec3 viewDir = normalize(cameraPosition - vWorld);
   float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, viewDir), 0.0), 5.0);
   vec3 refl = reflect(-viewDir, n);
@@ -81,8 +84,7 @@ void main() {
   vec3 col = mix(body, skyCol, fres * (1.0 - 0.45 * puff));
   col *= 1.0 - 0.18 * puff;
   vec3 h = normalize(uSunDir + viewDir);
-  col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6;
-  float dist = length(cameraPosition - vWorld);
+  col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near);
   float fog = 1.0 - exp(-pow(uFogDensity * dist, 2.0));
   gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
   #include <colorspace_fragment>
@@ -91,6 +93,8 @@ void main() {
 
 export class Water {
   readonly mesh: THREE.Mesh;
+  /** Flat, very large plane beyond the detailed mesh (same shader), so the horizon is water, not seabed. */
+  readonly farMesh: THREE.Mesh;
   private readonly material: THREE.ShaderMaterial;
   private readonly cell = 20;
 
@@ -117,6 +121,17 @@ export class Water {
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.name = 'water';
+    const far = new THREE.PlaneGeometry(40000, 40000, 1, 1);
+    far.rotateX(-Math.PI / 2);
+    this.farMesh = new THREE.Mesh(far, this.material);
+    this.farMesh.position.y = -0.25;
+    this.farMesh.frustumCulled = false;
+    this.farMesh.renderOrder = -1;
+    this.farMesh.name = 'water-far';
+  }
+
+  setFog(density: number): void {
+    this.material.uniforms.uFogDensity!.value = density;
   }
 
   /** Up to 16 puffs as (x, z, radius, strength) in Three.js world coordinates. */
@@ -154,6 +169,8 @@ export class Water {
   update(time: number, camera: THREE.Camera): void {
     this.material.uniforms.uTime!.value = time;
     this.mesh.position.set(Math.round(camera.position.x / this.cell) * this.cell, 0, Math.round(camera.position.z / this.cell) * this.cell);
+    this.farMesh.position.x = this.mesh.position.x;
+    this.farMesh.position.z = this.mesh.position.z;
   }
 
   /** CPU copy of the vertex-shader surface height at a world point (for floating objects). */

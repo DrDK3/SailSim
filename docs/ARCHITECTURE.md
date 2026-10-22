@@ -39,7 +39,7 @@ Status: **proposal for approval**. Nothing below is implemented yet.
 | Phase | Degrees of freedom | State |
 |---|---|---|
 | 1 | 3-DOF | Position (N, E), heading ψ; velocities **through the water** u (surge), v (sway), r (yaw rate). Heel is quasi-static, from moment balance |
-| 2 | 4-DOF | Adds dynamic roll (φ, p). **Implemented**; the main boom angle and rate are actuator states updated once per step (hinged body) |
+| 2 | 4-DOF | Adds dynamic roll (φ, p). **Implemented**; the main boom angle and rate are actuator states updated once per step (hinged body). Phase 3 adds bottom contact (grounding) from the River Dart elevation grid; no new states |
 | Later | Optional | Pitch and heave as a visual or wave-response layer |
 
 ### 4.2 Kinematics: water versus ground
@@ -84,9 +84,9 @@ Phenomena that **emerge** rather than being scripted:
 
 | Model | Phase | Description | Status |
 |---|---|---|---|
-| Wind | 1–2 | Base TWS/TWD from a pluggable `WeatherSource` (Manual, **Live Met Office**, optional Open-Meteo or local station, Replay; see `LIVE_WEATHER.md`). Seeded gusts (puffs with spatial footprint, advected downwind). Oscillating and persistent shifts (Ornstein–Uhlenbeck processes). Gust and shift parameters can be derived from live data. An optional terrain-shadow and funnelling layer in Phase 3 | Model (E) or live data, labelled |
+| Wind | 1–2 | Base TWS/TWD from a pluggable `WeatherSource` (Manual, **Live Met Office**, optional Open-Meteo or local station, Replay; see `LIVE_WEATHER.md`). Seeded gusts (puffs with spatial footprint, advected downwind). Oscillating and persistent shifts (Ornstein–Uhlenbeck processes). Gust and shift parameters can be derived from live data. A terrain-shadow and funnelling layer was considered for Phase 3 but not built: there is no defensible method without local wind measurements | Model (E) or live data, labelled |
 | Tide height | 2–3 | Pluggable `TideSource`: Manual (HW and LW entry), **Live** (EA Dartmouth gauge plus UKHO HW/LW events), Derived (harmonic constants from EA gauge history), Replay. See `LIVE_TIDES.md` | Measured or official data where live, labelled |
-| Current | 2–3 | Phase 2 (implemented): uniform, analytic test fields, and a provisional uniform tidal stream driven by the tide timing. Phase 3: channel-following field C = s(t)·f(x,y), with phase and spring/neap strength taken from the real tide and an ebb river term from EA Austins Bridge flow. f follows the channel axis, scaled by cross-section; s(t) is the tidal-phase curve with ebb/flood asymmetry and a river-flow bias. Peaks are scenario parameters (default about 2 kn at the entrance, per the DHNA statement) | **Provisional, not measured** |
+| Current | 2–3 | Phase 2 (implemented): uniform, analytic test fields, and a provisional uniform tidal stream driven by the tide timing. Phase 3 (implemented): channel-following field C = s(t)·f(x,y). f comes from tidal-prism continuity (potential flow weighted by depth) on the River Dart grid, normalised at the entrance (`GEODATA.md`). s(t) follows the tide phase, with separate flood and ebb peaks. A river term has its own pattern; its rate is a scenario setting, because EA Austins Bridge flow is not reachable here. Peaks are scenario parameters (default 2 kn ebb at the entrance, per the DHNA statement) | **Provisional, not measured** |
 | Depth | 3 | A provisional raster (deep channel tapering to the banks, constrained by the OSM shoreline) plus tide height. Grounding below the draft | **Provisional** |
 | Waves | 2/6 | Wind-sea visual parameterised by wind and fetch. A wind-against-current flag raises wave steepness | Visual (E) |
 

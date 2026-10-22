@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-22T12:23:58Z",
+ "generated": "2026-10-22T12:46:28Z",
  "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
  "origin": {
   "lat": 50.34801,
@@ -57,7 +57,7 @@
  },
  "minimap": {
   "file": "minimap.png",
-  "cell": 32.0,
+  "cell": 16.0,
   "e0": -3200.0,
   "n0": -5200.0,
   "order": "image rows north to south"

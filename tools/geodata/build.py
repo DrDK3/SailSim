@@ -270,8 +270,8 @@ def marks():
 
 
 def minimap(cls, elev, blds):
-    """Small north-up overview image (4 elevation cells per pixel)."""
-    f = 4
+    """North-up overview image (2 elevation cells = 16 m per pixel)."""
+    f = 2
     c = cls[: (NY // f) * f, : (NX // f) * f]
     z = elev[: (NY // f) * f, : (NX // f) * f]
     zc = z.reshape(NY // f, f, NX // f, f).mean(axis=(1, 3))
@@ -288,7 +288,7 @@ def minimap(cls, elev, blds):
     d = ImageDraw.Draw(im)
     px = lambda e, n: ((e - E_MIN) / (CELL * f), (N_MAX - n) / (CELL * f))  # noqa: E731
     for b in blds:
-        d.polygon([px(e, n) for e, n in b["r"]], fill=(90, 80, 78))
+        d.polygon([px(e, n) for e, n in b["r"]], fill=(150, 138, 126))
     return im
 
 
@@ -354,7 +354,7 @@ def main():
         current=dict(file="current.bin", type="int16le", scale=0.001, components=["tidal_ve", "tidal_vn", "river_ve", "river_vn"], **cmeta,
                      meaning="Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)"),
         drape=dict(file="drape.jpg", **dmeta, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
-        minimap=dict(file="minimap.png", cell=CELL * 4, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
+        minimap=dict(file="minimap.png", cell=CELL * 2, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
         features="features.json",
         entrance=dict(a=[r1(a[0]), r1(a[1])], b=[r1(b[0]), r1(b[1])]),
         layers=layer_provenance(terrain_info, binfo, len(blds), len(prs), len(areas), len(moor), len(fer), cls),

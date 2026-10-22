@@ -99,6 +99,19 @@ Every phase ends with a **phase gate**:
   - All provisional layers are labelled in the UI.
   - Load errors (a missing tile or asset) degrade gracefully and are reported.
 
+**Status: done, 22 Oct 2026** ([PHASE3_REPORT.md](PHASE3_REPORT.md)). All four acceptance criteria pass:
+- landmark distances worst 8 cm;
+- no sailing through land in eight shore approaches;
+- provisional layers labelled;
+- load errors degrade gracefully.
+
+Differences from this list:
+- **Live tide height:** still manual or from a snapshot (EA and UKHO hosts blocked here).
+- **Navigation marks:** only Castle Ledge is placed (others have no established position).
+- **Collisions:** ferries and moorings are animation and scenery, not obstacles, until Phase 5.
+- **Live spatial wind:** done in Phase 2.
+- **Projection:** replaced by an exact Transverse Mercator matching PROJ.
+
 ## Phase 4: Editable courses and official RDYC courses (M4)
 
 - Course JSON schema, validator and loader.

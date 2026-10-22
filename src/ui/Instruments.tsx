@@ -40,9 +40,16 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
         <Cell label="Leeway" value={deg(Math.abs(s.leeway), 1)} unit="°" />
         <Cell label="Rudder" value={sideAngle(s.rudder)} />
         <Cell label="Helm balance" value={helmText(s.helmBalance)} title="Rudder angle that would hold the boat straight right now. Weather helm = the boat wants to round up." />
+        <Cell
+          label="Depth"
+          value={Number.isFinite(s.depthAtKeel) ? s.depthAtKeel.toFixed(1) : '—'}
+          unit={Number.isFinite(s.depthAtKeel) ? 'm' : undefined}
+          title="Water depth at the keel (draft 0.99 m). Near the shore from LIDAR; mid-channel from the PROVISIONAL depth estimate. Not for navigation."
+        />
         <Cell label="Current" value={Math.hypot(s.current.n, s.current.e) < 0.01 ? 'none' : `${kn(Math.hypot(s.current.n, s.current.e))} → ${bearing(Math.atan2(s.current.e, s.current.n))}°`} unit={Math.hypot(s.current.n, s.current.e) < 0.01 ? undefined : 'kn'} title={s.env?.currentLabel ?? 'Water velocity over the ground at the boat'} />
       </div>
-      {s.env && <Conditions env={s.env} />}
+      {s.grounded && <div className="chip bad" role="alert" data-testid="aground">Aground: the keel is on the bottom</div>}
+      {s.env && <Conditions env={s.env} waterLevel={s.waterLevel} />}
     </section>
   );
 }
@@ -56,7 +63,7 @@ function helmText(b: number): string {
 const hhmm = (ms: number) => new Date(ms).toISOString().slice(11, 16);
 
 /** Where the conditions come from, with provenance; nothing here is presented as a measurement. */
-function Conditions({ env }: { env: EnvironmentInfo }) {
+function Conditions({ env, waterLevel }: { env: EnvironmentInfo; waterLevel: number }) {
   const w = env.weather;
   const source = w.kind === 'manual' ? 'Manual' : w.kind === 'replay' ? 'Met Office UKV (replay)' : 'Met Office UKV (model)';
   const tide = env.tide;
@@ -82,6 +89,7 @@ function Conditions({ env }: { env: EnvironmentInfo }) {
             <span className="fine-inline">
               {tide.nextHW && ` · HW ${hhmm(tide.nextHW.epochMs)}Z`}
               {tide.nextLW && ` · LW ${hhmm(tide.nextLW.epochMs)}Z`}
+              {` · ${waterLevel >= 0 ? '+' : ''}${waterLevel.toFixed(2)} m ODN`}
             </span>
           </span>
         </div>

@@ -5,10 +5,25 @@ import { clamp } from '../sim/math/angles';
 import { optimalSheets } from '../sim/control/trim';
 import { CAMERA_MODES, SceneView, type CameraMode } from '../render/scene';
 import { Telemetry } from './telemetry';
+import { loadDartData, type DartData } from './geoLoader';
+import { DartScene } from '../render/dart';
+
+/**
+ * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
+ * geodata (E); the heading is only the default.
+ */
+export const START_LOCATIONS = [
+  { id: 'off-rdyc', label: 'Off RDYC, mid-river', n: 0, e: -150, headingDeg: 170 },
+  { id: 'dart-marina', label: 'Off Dart Marina, upriver', n: 1150, e: -180, headingDeg: 170 },
+  { id: 'entrance', label: 'Harbour entrance, between the castles', n: -680, e: 755, headingDeg: 150 },
+  { id: 'start-bay', label: 'Start Bay, west of Castle Ledge buoy', n: -1800, e: 1300, headingDeg: 200 },
+] as const;
+export type StartLocationId = (typeof START_LOCATIONS)[number]['id'];
 
 /** Everything needed to (re)start a run in the app. Serialisable, so runs can be shared and replayed. */
 export interface AppScenario {
   conditions: ConditionsSettings;
+  startLocation: StartLocationId;
   startHeadingDeg: number;
   startSpeedKn: number;
 }
@@ -20,7 +35,8 @@ export const DEFAULT_SCENARIO: AppScenario = {
     gusts: { preset: 'moderate', seed: 1 },
     current: { mode: 'none' },
   },
-  startHeadingDeg: 140,
+  startLocation: 'off-rdyc',
+  startHeadingDeg: 170,
   startSpeedKn: 3,
 };
 
@@ -51,6 +67,11 @@ export interface UiState {
   scenarioError?: string;
   weatherSources: DataSource[];
   telemetryVersion: number;
+  /** River Dart data: loading, loaded, or unavailable; plus anything that failed to load. */
+  dart: { status: 'loading' | 'loaded' | 'unavailable'; issues: DartData['issues'] };
+  showLabels: boolean;
+  showMinimap: boolean;
+  showLayers: boolean;
 }
 
 type Listener = () => void;
@@ -103,6 +124,12 @@ export class SimController {
   private webglError?: string;
   private scenarioError?: string;
   weatherSources: DataSource[] = [];
+  dartData?: DartData;
+  private dartStatus: UiState['dart']['status'] = 'loading';
+  private dartScene?: DartScene;
+  private showLabels = true;
+  private showMinimap = true;
+  private showLayers = false;
 
   constructor() {
     this.restart();
@@ -113,8 +140,9 @@ export class SimController {
   /** Start (or restart) a run. On invalid settings the previous run continues and the error is shown. */
   restart(scenario: AppScenario = this.scenario): boolean {
     let built: BuiltConditions;
+    const geo = this.dartData?.geo;
     try {
-      built = buildConditions(scenario.conditions);
+      built = buildConditions(scenario.conditions, geo);
     } catch (err) {
       this.scenarioError = (err as Error).message;
       this.publish(true);
@@ -124,10 +152,12 @@ export class SimController {
     this.scenario = structuredClone(scenario);
     this.built = built;
     const prevInput = this.sim?.input;
+    const loc = START_LOCATIONS.find((l) => l.id === scenario.startLocation) ?? START_LOCATIONS[0];
     this.sim = new Simulation({
       params: squibParams(),
       env: built.env,
-      initial: { headingDeg: scenario.startHeadingDeg, speedKn: scenario.startSpeedKn },
+      seabed: geo,
+      initial: { n: loc.n, e: loc.e, headingDeg: scenario.startHeadingDeg, speedKn: scenario.startSpeedKn },
       input: prevInput ? { ...prevInput, helm: 0 } : undefined,
       controller: () => this.sampleInputs(),
     });
@@ -168,12 +198,35 @@ export class SimController {
     this.publish(true);
   }
 
+  /**
+   * Load the River Dart data, then restart the current scenario with the seabed and channel stream. Any file
+   * that fails is reported in the UI; the app keeps running with what it has (open water at worst).
+   */
+  async loadDart(base?: string): Promise<void> {
+    this.dartStatus = 'loading';
+    this.publish(true);
+    const data = await loadDartData(base);
+    this.dartData = data;
+    this.dartStatus = data.geo ? 'loaded' : 'unavailable';
+    if (data.geo && data.manifest && this.view) {
+      try {
+        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape });
+        this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
+      } catch (err) {
+        data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
+      }
+    }
+    // A scenario that needed the Dart (channel stream) may not have started: rebuild either way.
+    this.restart(this.scenario);
+  }
+
   attach(container: HTMLElement): void {
     try {
       this.view = new SceneView(container, this.sim.params);
     } catch (err) {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
+    void this.loadDart();
     this.lastFrame = performance.now();
     this.fpsT0 = this.lastFrame;
     const loop = (now: number) => {
@@ -228,9 +281,19 @@ export class SimController {
     }
     const alpha = this.paused ? 1 : clamp(this.accumulator / DT, 0, 1);
     const info = this.detailSnap.env;
+    const sim = this.sim;
     this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
-      puffs: this.sim.env.windField?.puffs() ?? [],
+      puffs: sim.env.windField?.puffs() ?? [],
       windAgainstTide: info?.windAgainstTide ?? false,
+      dart: this.dartScene
+        ? {
+            waterLevel: sim.waterLevel(),
+            epochMs: (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000,
+            stream: (n, e) => sim.env.current(sim.time, n, e),
+            windFromDir: this.currSnap.twdGround,
+            showLabels: this.showLabels,
+          }
+        : undefined,
     });
     this.frames++;
     if (now - this.fpsT0 > 1000) {
@@ -338,6 +401,21 @@ export class SimController {
     this.publish(true);
   }
 
+  toggleLabels(force?: boolean): void {
+    this.showLabels = force ?? !this.showLabels;
+    this.publish(true);
+  }
+
+  toggleMinimap(force?: boolean): void {
+    this.showMinimap = force ?? !this.showMinimap;
+    this.publish(true);
+  }
+
+  toggleLayers(force?: boolean): void {
+    this.showLayers = force ?? !this.showLayers;
+    this.publish(true);
+  }
+
   toggleHelp(force?: boolean): void {
     this.showHelp = force ?? !this.showHelp;
     this.publish(true);
@@ -370,8 +448,10 @@ export class SimController {
       case 'KeyF': this.toggleForces(); break;
       case 'KeyG': this.toggleDebug(); break;
       case 'KeyV': this.toggleDashboard(); break;
+      case 'KeyL': this.toggleLabels(); break;
+      case 'KeyN': this.toggleMinimap(); break;
       case 'KeyH': case 'Slash': this.toggleHelp(); break;
-      case 'Escape': this.toggleHelp(false); this.togglePolar(false); break;
+      case 'Escape': this.toggleHelp(false); this.togglePolar(false); this.toggleLayers(false); break;
       default: return;
     }
     ev.preventDefault();
@@ -415,6 +495,10 @@ export class SimController {
       scenarioError: this.scenarioError,
       weatherSources: this.weatherSources,
       telemetryVersion: this.telemetry.version,
+      dart: { status: this.dartStatus, issues: this.dartData?.issues ?? [] },
+      showLabels: this.showLabels,
+      showMinimap: this.showMinimap,
+      showLayers: this.showLayers,
     };
     for (const l of this.listeners) l();
   }
