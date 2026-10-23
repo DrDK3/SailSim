@@ -43,7 +43,7 @@ export function Help({ onClose }: { onClose: () => void }) {
           for touching a mark, one turn. The judge is a simplified subset of the racing rules, not an authoritative one.
         </p>
         <p className="fine">
-          Phase 5 prototype on the River Dart: terrain, buildings, piers and the shoreline come from open data; water
+          Phase 6 on the River Dart: terrain, buildings, piers and the shoreline come from open data; water
           depths mid-channel, individual moorings, ferry timetables and the tidal stream are provisional estimates (see
           Layers). You can run aground: the keel stops you in shallow water, and moored boats and ferries are solid. The boat heels dynamically, the boom swings on its own and can gybe
           unexpectedly by the lee, and the wind has seeded gusts and shifts (dark patches on the water are puffs).

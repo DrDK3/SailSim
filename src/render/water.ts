@@ -41,6 +41,8 @@ uniform vec3 uHorizon;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uRipple;
+uniform float uGlint;
+uniform float uLight;
 uniform vec4 uPuffs[16];     // (x, z, radius, strength) in world metres; strength 0 = unused
 varying vec3 vWorld;
 varying vec3 vNormalW;
@@ -80,11 +82,11 @@ void main() {
   vec3 refl = reflect(-viewDir, n);
   vec3 skyCol = mix(uHorizon, uSky, clamp(refl.y * 2.0, 0.0, 1.0));
   float facing = max(dot(n, viewDir), 0.0);
-  vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5);
+  vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5) * uLight;
   vec3 col = mix(body, skyCol, fres * (1.0 - 0.45 * puff));
   col *= 1.0 - 0.18 * puff;
   vec3 h = normalize(uSunDir + viewDir);
-  col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near);
+  col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near) * uGlint;
   float fog = 1.0 - exp(-pow(uFogDensity * dist, 2.0));
   gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
   #include <colorspace_fragment>
@@ -115,6 +117,8 @@ export class Water {
         uFogColor: { value: fogColor.clone() },
         uFogDensity: { value: fogDensity },
         uRipple: { value: 0.35 },
+        uGlint: { value: 1 },
+        uLight: { value: 1 },
         uPuffs: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 1, 0)) },
       },
     });
@@ -132,6 +136,23 @@ export class Water {
 
   setFog(density: number): void {
     this.material.uniforms.uFogDensity!.value = density;
+  }
+
+  /**
+   * The sky the water reflects and the light on it: sun direction, fog, cloud cover (greys the reflected sky),
+   * daylight (0 night … 1 day) and the strength of the sun's glint (0 when the sun is hidden).
+   */
+  setSky(o: { sunDir: THREE.Vector3; fogColor: THREE.Color; fogDensity: number; cloud: number; day: number; glint: number }): void {
+    const u = this.material.uniforms;
+    (u.uSunDir!.value as THREE.Vector3).copy(o.sunDir).normalize();
+    (u.uFogColor!.value as THREE.Color).copy(o.fogColor);
+    u.uFogDensity!.value = o.fogDensity;
+    // Colours are linear here; the output's sRGB encoding lifts dark values, so night needs a low floor.
+    const light = 0.012 + 0.988 * o.day * o.day;
+    (u.uSky!.value as THREE.Color).setHex(0x6a9ccf).lerp(new THREE.Color(0x6f777c), o.cloud).multiplyScalar(light);
+    (u.uHorizon!.value as THREE.Color).setHex(0xc9dbe6).lerp(new THREE.Color(0x8e979c), o.cloud).multiplyScalar(light);
+    u.uGlint!.value = o.glint;
+    u.uLight!.value = light * (1 - 0.3 * o.cloud);
   }
 
   /** Up to 16 puffs as (x, z, radius, strength) in Three.js world coordinates. */

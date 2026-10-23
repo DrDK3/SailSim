@@ -14,6 +14,9 @@ import { CourseScene } from './course';
 import { FleetView, type FleetPose } from './fleet';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { Course } from '../sim/course/types';
+import type { SkyState } from '../sim/env/sky';
+import { daylight } from '../sim/env/sun';
+import { CloudDome, Rain } from './weather';
 
 export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top' | 'free';
 
@@ -32,6 +35,21 @@ export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
 const SUN_ELEVATION = 38 * (Math.PI / 180);
 const SUN_AZIMUTH = 200 * (Math.PI / 180);
 const FOG = new THREE.Color(0xc4d6e2);
+const FOG_OVERCAST = new THREE.Color(0x8f989e);
+const NIGHT = new THREE.Color(0x0b1016);
+
+/** Unit vector to the sun in Three.js coordinates (x east, y up, z south) from compass azimuth and elevation. */
+export function sunVector(elevationRad: number, azimuthRad: number, out = new THREE.Vector3()): THREE.Vector3 {
+  const c = Math.cos(elevationRad);
+  return out.set(Math.sin(azimuthRad) * c, Math.sin(elevationRad), -Math.cos(azimuthRad) * c);
+}
+
+/** What the scene shows of the weather and the time of day (visual only). */
+export interface SceneWeather {
+  sky: SkyState;
+  sunElevationDeg: number;
+  sunAzimuthDeg: number;
+}
 const FOG_DENSITY = 0.0016;
 /** With the River Dart loaded the hills should stay visible across the harbour. */
 const FOG_DENSITY_DART = 0.00024;
@@ -50,6 +68,16 @@ export class SceneView {
   private readonly arrows: ForceArrows;
   private readonly floats: THREE.InstancedMesh;
   private readonly sun: THREE.DirectionalLight;
+  private readonly hemi: THREE.HemisphereLight;
+  private readonly skyMesh: Sky;
+  private readonly pmrem: THREE.PMREMGenerator;
+  private envMap?: THREE.Texture;
+  private readonly sunDir = sunVector(SUN_ELEVATION, SUN_AZIMUTH);
+  private readonly clouds = new CloudDome();
+  private readonly rain = new Rain();
+  private baseFogDensity = FOG_DENSITY;
+  private weather?: SceneWeather;
+  private envFor = { el: NaN, cloud: NaN };
   private mode: CameraMode = 'chase';
   private chaseHeading = 0;
   private lastWind = { tws: -1, twd: -1, wat: false };
@@ -78,8 +106,8 @@ export class SceneView {
     this.controls.minDistance = 4;
     this.controls.maxDistance = 400;
 
-    // Sky and lighting
-    const sunDir = new THREE.Vector3().setFromSphericalCoords(1, Math.PI / 2 - SUN_ELEVATION, SUN_AZIMUTH);
+    // Sky and lighting (setWeather moves the sun and changes them with the weather)
+    const sunDir = this.sunDir;
     const sky = new Sky();
     sky.scale.setScalar(20000);
     const u = sky.material.uniforms;
@@ -89,13 +117,14 @@ export class SceneView {
     u['mieDirectionalG']!.value = 0.8;
     u['sunPosition']!.value.copy(sunDir);
     this.scene.add(sky);
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const skyScene = new THREE.Scene();
-    skyScene.add(sky.clone());
-    this.scene.environment = pmrem.fromScene(skyScene, 0.02).texture;
-    this.scene.fog = new THREE.FogExp2(FOG, FOG_DENSITY);
+    this.skyMesh = sky;
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.rebuildEnvironment();
+    this.scene.fog = new THREE.FogExp2(FOG.clone(), FOG_DENSITY);
+    this.scene.add(this.clouds.mesh, this.rain.lines);
 
-    this.scene.add(new THREE.HemisphereLight(0xcfe3f5, 0x31505a, 0.6));
+    this.hemi = new THREE.HemisphereLight(0xcfe3f5, 0x31505a, 0.6);
+    this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
     this.sun.position.copy(sunDir).multiplyScalar(60);
     this.sun.castShadow = true;
@@ -135,9 +164,66 @@ export class SceneView {
     this.dart = dart;
     this.depthAt = dart ? depthAt : undefined;
     if (dart) this.scene.add(dart.fixed, dart.floating, dart.labels);
-    const density = dart ? FOG_DENSITY_DART : FOG_DENSITY;
-    (this.scene.fog as THREE.FogExp2).density = density;
-    this.water.setFog(density);
+    this.baseFogDensity = dart ? FOG_DENSITY_DART : FOG_DENSITY;
+    this.applyWeather();
+  }
+
+  /** Sky, light, fog and rain for the weather and the time of day (visual only; call about once a second). */
+  setWeather(w: SceneWeather): void {
+    this.weather = w;
+    this.applyWeather();
+  }
+
+  private rebuildEnvironment(): void {
+    const skyScene = new THREE.Scene();
+    skyScene.add(this.skyMesh.clone());
+    const old = this.envMap;
+    this.envMap = this.pmrem.fromScene(skyScene, 0.02).texture;
+    this.scene.environment = this.envMap;
+    old?.dispose();
+  }
+
+  private applyWeather(): void {
+    const fog = this.scene.fog as THREE.FogExp2;
+    const w = this.weather;
+    if (!w) {
+      fog.density = this.baseFogDensity;
+      this.water.setFog(this.baseFogDensity);
+      return;
+    }
+    const DEG = Math.PI / 180;
+    const { cloud, lowCloud, visibilityM, rainMmH } = w.sky;
+    const day = daylight(w.sunElevationDeg);
+    sunVector(w.sunElevationDeg * DEG, w.sunAzimuthDeg * DEG, this.sunDir);
+    const u = this.skyMesh.material.uniforms;
+    u['sunPosition']!.value.copy(this.sunDir);
+    // Haze thickens the sky's scattering; cloud is drawn by the dome.
+    u['turbidity']!.value = 3 + 7 * Math.min(1, 6000 / Math.max(visibilityM, 500)) + 4 * cloud;
+    u['rayleigh']!.value = 1.2 - 0.6 * cloud;
+    // Direct sun: dimmed by cloud (low cloud most), warmer near the horizon; diffuse sky light grows under cloud.
+    const sunVis = day * (1 - 0.75 * cloud - 0.2 * lowCloud) * Math.min(1, Math.max(0, w.sunElevationDeg / 4));
+    this.sun.intensity = 2.4 * Math.max(0, sunVis);
+    this.sun.castShadow = this.sun.intensity > 0.3;
+    const warm = Math.min(1, Math.max(0, (12 - w.sunElevationDeg) / 12));
+    this.sun.color.setRGB(1, 0.95 - 0.25 * warm, 0.88 - 0.45 * warm);
+    this.hemi.intensity = (0.04 + 0.66 * day) * (1 + 0.4 * cloud);
+    this.hemi.color.setRGB(0.81 - 0.25 * cloud, 0.89 - 0.3 * cloud, 0.96 - 0.32 * cloud);
+    this.scene.environmentIntensity = (0.04 + 0.96 * day) * (1 - 0.55 * cloud);
+    // Fog: the visibility (σ = 3.912 / V; exp² fog reaches 98% at V when d = 1.978 / V), never thinner than
+    // the scene's own haze; grey under cloud, dark at night.
+    const density = Math.max(this.baseFogDensity, 1.978 / Math.max(visibilityM, 50));
+    fog.density = density;
+    fog.color.copy(FOG).lerp(FOG_OVERCAST, Math.min(1, cloud * 0.9 + (visibilityM < 3000 ? 0.3 : 0))).lerp(NIGHT, 1 - (0.03 + 0.97 * day));
+    this.water.setSky({ sunDir: this.sunDir, fogColor: fog.color, fogDensity: density, cloud, day, glint: Math.max(0, sunVis) });
+    this.clouds.set(cloud, lowCloud, day, this.sunDir, fog.color, Math.min(1, Math.max(0, (6000 - visibilityM) / 5000)));
+    this.rain.setRate(rainMmH);
+    this.renderer.toneMappingExposure = 0.9 * (0.75 + 0.25 * day);
+    // The environment (reflections, image lighting) follows the sky; rebuilding it costs a few ms, so only
+    // when the sun has moved or the cloud changed noticeably.
+    if (!(Math.abs(w.sunElevationDeg - this.envFor.el) < 3) || !(Math.abs(cloud - this.envFor.cloud) < 0.15)) {
+      this.rebuildEnvironment();
+      this.envFor = { el: w.sunElevationDeg, cloud };
+    }
   }
 
   /** Show a course (marks, lines), replacing any previous one; undefined removes it. */
@@ -224,8 +310,14 @@ export class SceneView {
     this.updateCamera(heading, frameDt, moved);
 
     this.sun.target.position.copy(this.boatRoot.position);
-    this.sun.position.copy(this.boatRoot.position).add(new THREE.Vector3().setFromSphericalCoords(60, Math.PI / 2 - SUN_ELEVATION, SUN_AZIMUTH));
+    this.sun.position.copy(this.boatRoot.position).addScaledVector(this.sunDir, 60);
     this.water.update(time, this.camera);
+    // Clouds and rain drift with the wind (Three.js xz direction the air moves to).
+    const windTo = curr.twdGround + Math.PI;
+    const wx = Math.sin(windTo) * curr.twsGround;
+    const wz = -Math.cos(windTo) * curr.twsGround;
+    this.clouds.update(this.camera, frameDt, wx, wz);
+    this.rain.update(this.camera, frameDt, wx, wz);
     if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
     if (this.course && env?.course) this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);

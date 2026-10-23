@@ -1,5 +1,6 @@
 import type { BoatSnapshot } from '../sim/simulation';
 import type { EnvironmentInfo } from '../sim/env/environment';
+import { describeSky } from '../sim/env/sky';
 import { Compass } from './Compass';
 import { bearing, deg, kn, sideAngle } from './format';
 
@@ -98,6 +99,15 @@ function Conditions({ env, waterLevel }: { env: EnvironmentInfo; waterLevel: num
         <span className="cell-label">Stream</span>
         <span className="cond-value">{env.currentLabel}</span>
       </div>
+      {env.sky && (
+        <div className="cond-row" title={`${env.sky.label}. Visual only: does not change the wind or the boat.`}>
+          <span className="cell-label">Sky</span>
+          <span className="cond-value" data-testid="sky">
+            {describeSky(env.sky)}
+            <span className="fine-inline"> · {env.sky.kind === 'model' ? 'forecast' : 'preset'}</span>
+          </span>
+        </div>
+      )}
       {env.windAgainstTide && <div className="chip warn" role="status">Wind against tide: short, steep chop</div>}
     </div>
   );

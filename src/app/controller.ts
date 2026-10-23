@@ -3,7 +3,7 @@ import { squibParams } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clamp } from '../sim/math/angles';
 import { optimalSheets } from '../sim/control/trim';
-import { CAMERA_MODES, SceneView, type CameraMode } from '../render/scene';
+import { CAMERA_MODES, SceneView, type CameraMode, type SceneWeather } from '../render/scene';
 import { Telemetry } from './telemetry';
 import { loadDartData, type DartData } from './geoLoader';
 import { DartScene } from '../render/dart';
@@ -19,7 +19,9 @@ import type { AiLevel } from '../sim/ai/skipper';
 import type { FleetPose } from '../render/fleet';
 import { buildRestrictions } from '../sim/course/restrictions';
 import type { Course } from '../sim/course/types';
-import { DART_PROJECTION } from '../sim/geo/projection';
+import { DART_PROJECTION, RDYC_ORIGIN } from '../sim/geo/projection';
+import { sunPosition } from '../sim/env/sun';
+import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
 
@@ -203,6 +205,8 @@ export class SimController {
   private listeners = new Set<Listener>();
   private ui!: UiState;
   private lastPublish = 0;
+  /** Real time (ms) of the last weather/sun update sent to the scene; -Infinity forces one. */
+  private lastWeather = -Infinity;
   private lastRecordT = -Infinity;
   private frames = 0;
   private fpsT0 = 0;
@@ -321,6 +325,7 @@ export class SimController {
     this.resultsShown = false;
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
+    this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
     this.accumulator = 0;
     this.telemetry.clear();
     this.lastRecordT = -Infinity;
@@ -478,6 +483,7 @@ export class SimController {
     }
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
+    this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
     void this.loadDart();
     this.lastFrame = performance.now();
     this.fpsT0 = this.lastFrame;
@@ -504,6 +510,14 @@ export class SimController {
 
   resize(w: number, h: number): void {
     this.view?.resize(w, h);
+  }
+
+  /** The sky (cloud, visibility, rain) and the sun for the current moment of the run, for the scene. */
+  sceneWeather(): SceneWeather {
+    const sim = this.sim;
+    const epochMs = (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000;
+    const sun = sunPosition(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+    return { sky: (sim.env.sky ?? presetSky('clear')).at(sim.time), sunElevationDeg: sun.elevationDeg, sunAzimuthDeg: sun.azimuthDeg };
   }
 
   private frame(now: number): void {
@@ -542,6 +556,10 @@ export class SimController {
     const alpha = this.paused ? 1 : clamp(this.accumulator / DT, 0, 1);
     const info = this.detailSnap.env;
     const sim = this.sim;
+    if (now - this.lastWeather > 1000) {
+      this.lastWeather = now;
+      this.view?.setWeather(this.sceneWeather());
+    }
     this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
       puffs: sim.env.windField?.puffs() ?? [],
       windAgainstTide: info?.windAgainstTide ?? false,

@@ -10,6 +10,7 @@ import { PolarPanel } from './PolarPanel';
 import { Minimap } from './Minimap';
 import { LayersPanel } from './LayersPanel';
 import { RacePanel } from './RacePanel';
+import { SKY_PRESETS } from '../sim/env/sky';
 import { ResultsPanel } from './ResultsPanel';
 import { CourseEditor } from './CourseEditor';
 import type { CameraMode } from '../render/scene';
@@ -22,7 +23,8 @@ function conditionsText(sc: AppScenario): string {
   const cur = c.current.mode === 'tidal' ? 'modelled tidal stream' : c.current.mode === 'uniform' ? `current ${c.current.rateKn} kn` : 'no current';
   const course = sc.course ? (sc.course.source === 'practice' ? ` · practice course (simulated)` : ' · course set') : '';
   const fleet = sc.course && sc.fleet?.aiCount ? ` · ${sc.fleet.aiCount} AI boat${sc.fleet.aiCount === 1 ? '' : 's'}` : '';
-  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}${course}${fleet}`;
+  const sky = c.sky?.source === 'preset' && c.sky.preset !== 'clear' ? ` · ${SKY_PRESETS[c.sky.preset].label.toLowerCase()}` : '';
+  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}${sky}${course}${fleet}`;
 }
 
 export function App({ ctl }: { ctl: SimController }) {
@@ -90,7 +92,7 @@ export function App({ ctl }: { ctl: SimController }) {
       {ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}
       {ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}
       <footer className="badge">
-        Phase 5 prototype · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
+        Phase 6 · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
       </footer>
       {ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}
     </div>
