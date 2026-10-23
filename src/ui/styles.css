@@ -247,3 +247,21 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .editor-side .field.select-field { grid-template-columns: 110px 1fr; }
 .editor-side .pair select, .editor-side .coords input { flex: 1; min-width: 0; }
 .editor-side select { min-width: 0; }
+
+/* Phase 5: race flags, fleet position, results */
+.race-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0 4px; }
+.flag { display: inline-block; min-width: 22px; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 700; text-align: center; border: 1px solid rgba(255, 255, 255, 0.35); }
+.flag-class { background: #e8eef2; color: #0b1a24; }
+.flag-p { background: #1d4f91; color: #fff; outline: 2px solid #fff; outline-offset: -5px; }
+.flag-u { background: repeating-conic-gradient(#c0392b 0 25%, #fff 0 50%) 50% / 12px 12px; color: #0b1a24; text-shadow: 0 0 2px #fff; }
+.flag-black { background: #111; color: #fff; }
+.flag-x { background: #fff; color: #1d4f91; }
+.flag-fs { background: #f1c40f; color: #1d4f91; }
+.race-pos { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.race-log { max-height: 80px; border-top: 1px solid var(--line, rgba(255, 255, 255, 0.12)); padding-top: 4px; }
+.results { position: absolute; left: 50%; top: 80px; transform: translateX(-50%); width: min(620px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; font-size: 12px; padding: 10px 12px; z-index: 20; }
+.results table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.results th, .results td { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.results tr.you td { font-weight: 700; background: rgba(95, 224, 138, 0.1); }
+.results .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; border: 1px solid rgba(0, 0, 0, 0.4); }
+.contact-banner { top: 120px; }

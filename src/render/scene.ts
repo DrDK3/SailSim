@@ -11,6 +11,7 @@ import { Wake } from './wake';
 import { ForceArrows } from './arrows';
 import type { DartScene, DartUpdate } from './dart';
 import { CourseScene } from './course';
+import { FleetView, type FleetPose } from './fleet';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { Course } from '../sim/course/types';
 
@@ -23,6 +24,8 @@ export interface SceneEnvironment {
   /** River Dart state (when the geodata is loaded). */
   dart?: Omit<DartUpdate, 'camera' | 'time'>;
   course?: { nextLeg: number; phase: string; showLabels: boolean };
+  /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
+  fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
 }
 export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
 
@@ -54,6 +57,7 @@ export class SceneView {
   private dart?: DartScene;
   private course?: CourseScene;
   private depthAt?: (n: number, e: number) => number;
+  private readonly fleet: FleetView;
   showForces = false;
 
   constructor(container: HTMLElement, params: BoatParams) {
@@ -110,6 +114,9 @@ export class SceneView {
     this.wake = new Wake();
     this.scene.add(this.wake.mesh);
 
+    this.fleet = new FleetView(params);
+    this.scene.add(this.fleet.group);
+
     this.arrows = new ForceArrows();
     this.boat.group.add(this.arrows.bodyGroup);
     this.scene.add(this.arrows.worldGroup);
@@ -138,6 +145,11 @@ export class SceneView {
     if (this.course) this.scene.remove(this.course.group);
     this.course = r && course ? new CourseScene(r, course) : undefined;
     if (this.course) this.scene.add(this.course.group);
+  }
+
+  /** The other boats to draw (id, sail-number label, hull colour); an empty list removes them. */
+  setFleet(list: { id: string; label: string; colour: number }[]): void {
+    this.fleet.setBoats(list);
   }
 
   setCameraMode(mode: CameraMode): void {
@@ -216,6 +228,7 @@ export class SceneView {
     this.water.update(time, this.camera);
     if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
     if (this.course && env?.course) this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+    if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.renderer.render(this.scene, this.camera);
   }
 

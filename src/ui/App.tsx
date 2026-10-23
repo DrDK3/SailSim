@@ -10,6 +10,7 @@ import { PolarPanel } from './PolarPanel';
 import { Minimap } from './Minimap';
 import { LayersPanel } from './LayersPanel';
 import { RacePanel } from './RacePanel';
+import { ResultsPanel } from './ResultsPanel';
 import { CourseEditor } from './CourseEditor';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
@@ -20,7 +21,8 @@ function conditionsText(sc: AppScenario): string {
   const tide = c.tide ? `tide ${c.tide.mode}` : 'no tide';
   const cur = c.current.mode === 'tidal' ? 'modelled tidal stream' : c.current.mode === 'uniform' ? `current ${c.current.rateKn} kn` : 'no current';
   const course = sc.course ? (sc.course.source === 'practice' ? ` · practice course (simulated)` : ' · course set') : '';
-  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}${course}`;
+  const fleet = sc.course && sc.fleet?.aiCount ? ` · ${sc.fleet.aiCount} AI boat${sc.fleet.aiCount === 1 ? '' : 's'}` : '';
+  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}${course}${fleet}`;
 }
 
 export function App({ ctl }: { ctl: SimController }) {
@@ -75,6 +77,7 @@ export function App({ ctl }: { ctl: SimController }) {
       {ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}
       <Controls ctl={ctl} ui={ui} />
       {ui.paused && <div className="banner">Paused (P to resume)</div>}
+      {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
       {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}
       {(ui.dart.issues.length > 0 || ui.dart.status === 'unavailable') && (
         <div className="banner warn-banner" role="alert" data-testid="dart-warning">
@@ -83,10 +86,11 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}
-      {ui.race && <RacePanel race={ui.race} />}
+      {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
+      {ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}
       {ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}
       <footer className="badge">
-        Phase 4 prototype · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
+        Phase 5 prototype · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
       </footer>
       {ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}
     </div>

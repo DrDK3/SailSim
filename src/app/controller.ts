@@ -9,8 +9,14 @@ import { loadDartData, type DartData } from './geoLoader';
 import { DartScene } from '../render/dart';
 import { courseFor, type CourseChoice } from './courseLibrary';
 import type { ResolvedCourse } from '../sim/course/course';
-import { CourseJudge, hullReferencePoints, startSequence, type RaceEvent } from '../sim/course/judge';
-import { validateCourse, DART_LEVELS, type CourseIssue } from '../sim/course/validate';
+import type { RaceEvent } from '../sim/course/judge';
+import { DART_LEVELS, type CourseIssue } from '../sim/course/validate';
+import { createRace, practiceLineLength } from '../sim/race/setup';
+import { Fleet } from '../sim/race/fleet';
+import type { RaceSession, LogEntry } from '../sim/race/session';
+import type { Flag, PrepFlag, ResultRow } from '../sim/race/committee';
+import type { AiLevel } from '../sim/ai/skipper';
+import type { FleetPose } from '../render/fleet';
 import { buildRestrictions } from '../sim/course/restrictions';
 import type { Course } from '../sim/course/types';
 import { DART_PROJECTION } from '../sim/geo/projection';
@@ -39,6 +45,24 @@ export interface AppScenario {
   course?: CourseChoice;
   /** Start sequence: kind, and when the start signal is (seconds after the run begins). */
   race?: { sequence: 'one-minute' | 'three-minute' | 'five-minute'; startInS: number };
+  /** AI boats racing against the user (0 = sail the course alone), their level and the preparatory flag. */
+  fleet?: { aiCount: number; level: AiLevel; prepFlag: PrepFlag };
+}
+
+/** One row of the live fleet ranking or the results. */
+export interface FleetRow {
+  id: string;
+  name: string;
+  sailNumber: string;
+  colour: number;
+  you: boolean;
+  /** Live: legs completed; results: place. */
+  place: number | null;
+  code?: ResultRow['code'];
+  elapsed?: number;
+  points?: number;
+  penalties?: string;
+  status: string;
 }
 
 export interface RaceUi {
@@ -61,6 +85,22 @@ export interface RaceUi {
   finishTime?: number;
   events: RaceEvent[];
   warnings: CourseIssue[];
+  /** Flags the race committee is showing, and the signal log. */
+  flags: Flag[];
+  signals: LogEntry[];
+  /** Race-wide log: signals, other boats' starts and roundings, incidents, penalties. */
+  log: LogEntry[];
+  attempt: number;
+  prepFlag: PrepFlag;
+  /** The user's place in the fleet now (by progress round the course), and the fleet size. */
+  position?: number;
+  fleetSize: number;
+  /** Penalty turns the user still owes (0 = none). */
+  penaltyOwed: number;
+  /** Results (low points), once the race is over or the user has finished. */
+  results?: FleetRow[];
+  raceOver: boolean;
+  disqualified?: string;
 }
 
 export const DEFAULT_SCENARIO: AppScenario = {
@@ -109,6 +149,11 @@ export interface UiState {
   showMinimap: boolean;
   showLayers: boolean;
   showEditor: boolean;
+  showResults: boolean;
+  /** Other boats of the fleet (for the minimap), 10 Hz. */
+  fleet: { id: string; n: number; e: number; heading: number; colour: number; label: string }[];
+  /** The user's latest contact with a boat, mark, moored boat or ferry, for 8 s after it happened. */
+  contact?: string;
 }
 
 type Listener = () => void;
@@ -165,8 +210,14 @@ export class SimController {
   private dartStatus: UiState['dart']['status'] = 'loading';
   private dartScene?: DartScene;
   private showLabels = true;
-  /** The course being sailed, its judge and the validator's warnings. */
-  race?: { course: Course; resolved: ResolvedCourse; judge: CourseJudge; warnings: CourseIssue[] };
+  /** The course being sailed, the race (fleet, committee, judges, rules) and the validator's warnings. */
+  race?: { course: Course; resolved: ResolvedCourse; session: RaceSession; warnings: CourseIssue[] };
+  private fleetPrev = new Map<string, FleetPose>();
+  private fleetCurr = new Map<string, FleetPose>();
+  private showResults = false;
+  /** Free sailing: the user's boat in a one-boat fleet (contact with moored boats and ferries). */
+  private soloFleet?: Fleet;
+  private resultsShown = false;
   private showMinimap = true;
   private showLayers = false;
   private showEditor = false;
@@ -189,46 +240,74 @@ export class SimController {
       return false;
     }
     const loc = START_LOCATIONS.find((l) => l.id === scenario.startLocation) ?? START_LOCATIONS[0];
+    const prevInput = this.sim?.input;
     let race: SimController['race'];
-    let initial: { n: number; e: number; headingDeg: number; speedKn: number } = { n: loc.n, e: loc.e, headingDeg: scenario.startHeadingDeg, speedKn: scenario.startSpeedKn };
+    let sim: Simulation;
     if (scenario.course) {
       try {
         const w = windFrom(built.env.wind(0, loc.n, loc.e));
-        const course = courseFor(scenario.course, { n: loc.n, e: loc.e }, (w.fromDir * 180) / Math.PI);
-        const v = validateCourse(course, this.validationContext());
-        const errors = v.issues.filter((i) => i.severity === 'error');
-        if (!v.ok || !v.resolved) throw new Error(`course "${course.name}" is not valid: ${errors.map((e) => e.message).join(' ')}`);
+        const fleet = scenario.fleet ?? { aiCount: 0, level: 'good' as AiLevel, prepFlag: 'P' as PrepFlag };
+        const course = courseFor(scenario.course, { n: loc.n, e: loc.e }, (w.fromDir * 180) / Math.PI, practiceLineLength(fleet.aiCount + 1));
         const seq = scenario.race ?? { sequence: 'one-minute', startInS: 90 };
-        const params = squibParams();
-        const judge = new CourseJudge(v.resolved, hullReferencePoints(params.loa, params.beam), startSequence(Math.round(seq.startInS), seq.sequence));
-        race = { course, resolved: v.resolved, judge, warnings: v.issues.filter((i) => i.severity === 'warning') };
-        initial = { ...preStartPosition(v.resolved), speedKn: scenario.startSpeedKn };
+        const created = createRace({
+          conditions: scenario.conditions,
+          env: built.env,
+          geo,
+          features: this.dartData?.features,
+          course,
+          aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
+          level: fleet.level,
+          seed: scenario.conditions.gusts.seed,
+          human: {
+            controller: () => this.sampleInputs(),
+            input: prevInput ? { ...prevInput, helm: 0 } : undefined,
+            // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
+            initial: fleet.aiCount > 0 ? undefined : preStartPosition,
+          },
+          committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
+        });
+        const session = created.session;
+        race = { course, resolved: session.course, session, warnings: created.warnings };
+        sim = session.fleet.boat('you')!.sim;
       } catch (err) {
         this.scenarioError = (err as Error).message;
         this.publish(true);
         return false;
       }
+    } else {
+      // Free sailing: the user's boat alone in a one-boat fleet, so moored boats and ferries are solid.
+      sim = new Simulation({
+        params: squibParams(),
+        env: built.env,
+        seabed: geo,
+        ownsEnvironment: false,
+        initial: { n: loc.n, e: loc.e, headingDeg: scenario.startHeadingDeg, speedKn: scenario.startSpeedKn },
+        input: prevInput ? { ...prevInput, helm: 0 } : undefined,
+        controller: () => this.sampleInputs(),
+      });
+      const fleet = new Fleet(built.env);
+      fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
+      const f = this.dartData?.features;
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries });
+      this.soloFleet = fleet;
     }
+    if (race) this.soloFleet = undefined;
     this.scenarioError = undefined;
     this.scenario = structuredClone(scenario);
     this.built = built;
     this.race = race;
-    const prevInput = this.sim?.input;
-    this.sim = new Simulation({
-      params: squibParams(),
-      env: built.env,
-      seabed: geo,
-      initial,
-      input: prevInput ? { ...prevInput, helm: 0 } : undefined,
-      controller: () => this.sampleInputs(),
-    });
+    this.sim = sim;
     // Start with sensible manual sheet settings for the starting point of sail.
     if (!prevInput) this.sim.setInput(optimalSheets(this.sim));
     this.currSnap = this.sim.snapshot(false);
     this.prevSnap = this.currSnap;
     this.detailSnap = this.sim.snapshot();
-    this.race?.judge.update(0, { n: this.sim.state.n, e: this.sim.state.e, heading: this.sim.state.psi });
+    this.captureFleet();
+    this.fleetPrev = this.fleetCurr;
+    this.showResults = false;
+    this.resultsShown = false;
     this.view?.setCourse(this.race?.resolved, this.race?.course);
+    this.view?.setFleet(this.fleetList());
     this.accumulator = 0;
     this.telemetry.clear();
     this.lastRecordT = -Infinity;
@@ -250,10 +329,49 @@ export class SimController {
     };
   }
 
-  /** One physics step plus the course judge. */
+  /** One physics step: the whole race (fleet, committee, judges, rules, AI) or the user's boat alone. */
   private stepSim(): void {
-    this.sim.stepOnce();
-    this.race?.judge.update(this.sim.time, { n: this.sim.state.n, e: this.sim.state.e, heading: this.sim.state.psi });
+    if (this.race) this.race.session.step();
+    else if (this.soloFleet) this.soloFleet.stepOnce();
+    else this.sim.stepOnce();
+  }
+
+  private contactText(): string | undefined {
+    const events = this.race?.session.fleet.events ?? this.soloFleet?.events ?? [];
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i]!;
+      if (this.sim.time - e.t > 8) break;
+      if (e.a !== 'you' && e.b !== 'you') continue;
+      const other = e.kind === 'boat' ? this.race?.session.fleet.boat(e.a === 'you' ? e.b : e.a)?.name ?? 'another boat' : e.label;
+      return `Contact with ${other} at ${e.speed.toFixed(1)} m/s`;
+    }
+    return undefined;
+  }
+
+  /** Contacts in free sailing (moored boats, ferries), newest last. */
+  get soloContacts() {
+    return this.soloFleet?.events ?? [];
+  }
+
+  /** The other boats of the fleet (for the 3D view). */
+  private fleetList(): { id: string; label: string; colour: number }[] {
+    return (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, label: b.sailNumber, colour: b.colour }));
+  }
+
+  /** Poses of the other boats now (kept for the last two physics states, for render interpolation). */
+  private captureFleet(): void {
+    const m = new Map<string, FleetPose>();
+    for (const b of this.race?.session.fleet.boats ?? []) {
+      if (b.id === 'you') continue;
+      const sn = b.sim.snapshot(false);
+      m.set(b.id, {
+        id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
+        mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
+        mainInverted: Math.abs(sn.forces.main.incidence) > Math.PI / 2, jibInverted: Math.abs(sn.forces.jib.incidence) > Math.PI / 2,
+        rudder: sn.rudder, crewY: sn.crewY,
+      });
+    }
+    this.fleetCurr = m;
   }
 
   /** Look for live and replay weather files served with the app. Missing files are simply not offered. */
@@ -310,6 +428,7 @@ export class SimController {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
     this.view?.setCourse(this.race?.resolved, this.race?.course);
+    this.view?.setFleet(this.fleetList());
     void this.loadDart();
     this.lastFrame = performance.now();
     this.fpsT0 = this.lastFrame;
@@ -348,17 +467,25 @@ export class SimController {
       while (this.accumulator >= DT && steps < MAX_STEPS_PER_FRAME) {
         // Keep (light) snapshots of the last two physics states for render interpolation.
         const last = this.accumulator - DT < DT;
-        if (last) this.prevSnap = this.sim.snapshot(false);
+        if (last) {
+          this.prevSnap = this.sim.snapshot(false);
+          this.fleetPrev = this.fleetCurr;
+        }
         this.stepSim();
         this.accumulator -= DT;
         steps++;
-        if (last) this.currSnap = this.sim.snapshot(false);
+        if (last) {
+          this.currSnap = this.sim.snapshot(false);
+          this.captureFleet();
+        }
       }
       // Too slow to keep up: drop simulated time rather than spiral.
       if (steps > 0 && this.currSnap.step !== this.sim.step) {
         this.accumulator = 0;
         this.currSnap = this.sim.snapshot(false);
         this.prevSnap = this.currSnap;
+        this.captureFleet();
+        this.fleetPrev = this.fleetCurr;
       }
       this.physMs = this.physMs * 0.9 + (performance.now() - t0) * 0.1;
       this.renderTime += dt;
@@ -378,7 +505,8 @@ export class SimController {
             showLabels: this.showLabels,
           }
         : undefined,
-      course: this.race ? { nextLeg: this.race.judge.legIndex, phase: this.race.judge.phase, showLabels: this.showLabels } : undefined,
+      course: this.race ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels } : undefined,
+      fleet: this.race ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
     });
     this.frames++;
     if (now - this.fpsT0 > 1000) {
@@ -431,6 +559,20 @@ export class SimController {
     }
     this.currSnap = this.sim.snapshot(false);
     this.prevSnap = this.currSnap;
+    this.captureFleet();
+    this.fleetPrev = this.fleetCurr;
+    this.publish(true);
+  }
+
+  /** Retire from the race (scored RET). */
+  retire(): void {
+    if (!this.race) return;
+    this.race.session.retire('you');
+    this.publish(true);
+  }
+
+  toggleResults(force?: boolean): void {
+    this.showResults = force ?? !this.showResults;
     this.publish(true);
   }
 
@@ -565,6 +707,12 @@ export class SimController {
   private publish(force = false): void {
     if (!force && performance.now() - this.lastPublish < 100) return;
     this.lastPublish = performance.now();
+    // Show the results once when the race is over.
+    const over = !!this.race && (this.race.session.committee.finished || this.race.session.committee.abandoned);
+    if (over && !this.resultsShown) {
+      this.resultsShown = true;
+      this.showResults = true;
+    }
     // One detailed snapshot per publish (10 Hz) feeds the UI and the telemetry.
     this.detailSnap = this.sim.snapshot();
     if (!this.paused) this.recordTelemetry(this.detailSnap);
@@ -591,6 +739,9 @@ export class SimController {
       showMinimap: this.showMinimap,
       showLayers: this.showLayers,
       showEditor: this.showEditor,
+      showResults: this.showResults,
+      fleet: (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, n: b.sim.state.n, e: b.sim.state.e, heading: b.sim.state.psi, colour: b.colour, label: b.sailNumber })),
+      contact: this.contactText(),
     };
     for (const l of this.listeners) l();
   }
@@ -598,17 +749,45 @@ export class SimController {
   private raceUi(): RaceUi | undefined {
     const r = this.race;
     if (!r) return undefined;
+    const session = r.session;
     const t = this.sim.time;
-    const st = r.judge.state(t);
+    const judge = session.judgeOf('you');
+    const st = judge.state(t);
     const leg = r.resolved.legs[st.legIndex];
     const s = this.sim.state;
     const target = leg?.target ?? (st.phase === 'racing' ? { n: (r.resolved.finish[0].n + r.resolved.finish[1].n) / 2, e: (r.resolved.finish[0].e + r.resolved.finish[1].e) / 2 } : undefined);
+    const cm = session.committee;
+    const statusOf = session.status();
+    // Live ranking: finished boats by time, then legs completed, then distance to the next mark.
+    const progress = session.fleet.boats.map((b) => {
+      const j = session.judgeOf(b.id);
+      const sj = statusOf.find((x) => x.id === b.id)!;
+      const l = r.resolved.legs[j.legIndex];
+      const tgt = l?.target ?? r.resolved.finish[0];
+      const d = Math.hypot(tgt.n - b.sim.state.n, tgt.e - b.sim.state.e);
+      return { b, key: sj.finished ? -1e9 + (sj.finishTime ?? 0) : sj.started ? -j.legIndex * 1e6 + d : 1e9 + d };
+    }).sort((a, b) => a.key - b.key);
+    const position = progress.findIndex((p) => p.b.id === 'you') + 1;
+    const raceOver = cm.finished || cm.abandoned;
+    const youDone = st.phase === 'finished' || session.outOfRace('you');
+    const results: FleetRow[] | undefined = raceOver || youDone
+      ? session.results().map((row) => {
+          const b = session.fleet.boat(row.id)!;
+          const sj = statusOf.find((x) => x.id === row.id)!;
+          return {
+            id: row.id, name: row.name, sailNumber: row.sailNumber, colour: b.colour, you: row.id === 'you',
+            place: row.place, code: row.code, elapsed: row.elapsed, points: row.points, penalties: row.penalties,
+            status: row.code === 'FIN' ? 'Finished' : raceOver ? row.code : sj.started ? 'Racing' : 'Not started',
+          };
+        })
+      : undefined;
+    const dq = cm.bfd.has('you') ? 'Black flag (rule 30.4): disqualified (BFD)' : cm.ufd.has('you') ? 'U flag (rule 30.3): disqualified (UFD)' : undefined;
     return {
       courseName: r.course.name,
       courseStatus: r.course.status,
       phase: st.phase,
-      toStart: st.startSignalTime - t,
-      nextSignal: st.nextSignal?.name,
+      toStart: cm.startTime - t,
+      nextSignal: cm.nextSignal(t)?.name,
       ocs: st.ocs,
       mayStart: st.mayStart,
       legIndex: st.legIndex,
@@ -622,6 +801,17 @@ export class SimController {
       finishTime: st.finishTime,
       events: st.events.slice(-12),
       warnings: r.warnings,
+      flags: [...cm.flags],
+      signals: session.log.filter((l) => l.kind === 'signal').slice(-8),
+      log: session.log.filter((l) => l.kind !== 'signal').slice(-10),
+      attempt: cm.attempt,
+      prepFlag: cm.prepFlag,
+      position: session.fleet.boats.length > 1 ? position : undefined,
+      fleetSize: session.fleet.boats.length,
+      penaltyOwed: session.owesPenalty('you'),
+      results,
+      raceOver,
+      disqualified: dq,
     };
   }
 
@@ -634,11 +824,11 @@ export class SimController {
 }
 
 /**
- * Where to put the boat before the start: 100 m behind the start line on the pre-start side and 160 m along it
- * towards the committee-boat end (the second end), heading along the line towards the pin. From there, turning
- * up to close-hauled on starboard crosses the line near its middle.
+ * Where to put the boat before the start when sailing a course alone: 100 m behind the start line on the
+ * pre-start side and 160 m along it towards the committee-boat end (the second end), heading along the line
+ * towards the pin. From there, turning up to close-hauled on starboard crosses the line near its middle.
  */
-function preStartPosition(r: ResolvedCourse): { n: number; e: number; headingDeg: number } {
+export function preStartPosition(r: ResolvedCourse): { n: number; e: number; headingDeg: number; speedKn: number } {
   const [a, b] = r.start;
   const m = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
   const len = Math.hypot(b.n - a.n, b.e - a.e) || 1;
@@ -652,5 +842,5 @@ function preStartPosition(r: ResolvedCourse): { n: number; e: number; headingDeg
   }
   const heading = (Math.atan2(a.e - b.e, a.n - b.n) * 180) / Math.PI;
   const along = 160;
-  return { n: m.n + nn * 100 + ((b.n - a.n) / len) * along, e: m.e + ne * 100 + ((b.e - a.e) / len) * along, headingDeg: (heading + 360) % 360 };
+  return { n: m.n + nn * 100 + ((b.n - a.n) / len) * along, e: m.e + ne * 100 + ((b.e - a.e) / len) * along, headingDeg: (heading + 360) % 360, speedKn: 3 };
 }

@@ -333,3 +333,42 @@ test('Phase 4: course editor: add a mark, live check, import, export', async ({ 
   await expect(page.getByTestId('race-panel')).toContainText('River: the Range sausage (simulated)');
   expect(errors).toEqual([]);
 });
+
+test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, results', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = await open(page);
+  await page.getByRole('button', { name: 'Scenario' }).click();
+  const panel = page.getByRole('region', { name: 'Scenario settings' });
+  await panel.getByRole('combobox', { name: 'Course' }).selectOption('practice:windward-leeward');
+  const num = (label: string) => panel.locator('.field', { hasText: label }).locator('input[type="number"]');
+  await num('Leg length').fill('200');
+  await num('Laps').fill('1');
+  await num('Start signal after').fill('60');
+  await num('AI boats').fill('3');
+  await panel.getByRole('combobox', { name: 'AI level' }).selectOption('expert');
+  await panel.getByRole('button', { name: 'Apply and restart' }).click();
+  const race = page.getByTestId('race-panel');
+  await expect(race).toContainText('Windward–leeward (simulated)');
+  // One-minute sequence: the class flag is up.
+  await expect(page.getByTestId('flags')).toContainText('Class');
+  // Three AI Squibs in the scene.
+  const names = await page.evaluate(() => {
+    const set = new Set<string>();
+    (window.__squib!.controller as unknown as { view: { scene: { traverse: (f: (o: { name: string }) => void) => void } } }).view.scene.traverse((o) => set.add(o.name));
+    return [...set];
+  });
+  expect(names.filter((n) => n.startsWith('fleet-boat-'))).toHaveLength(3);
+  expect(await page.evaluate(() => window.__squib!.controller.getState().fleet.length)).toBe(3);
+  // Sail the race out (the user's boat just drifts and does not start), until the committee closes it.
+  await page.evaluate(() => {
+    for (let i = 0; i < 60 && !window.__squib!.controller.getState().race!.raceOver; i++) window.__squib!.advance(30);
+  });
+  const results = page.getByTestId('results');
+  await expect(results).toBeVisible();
+  await expect(results).toContainText('AI01');
+  const rows = await results.locator('tbody tr').allInnerTexts();
+  expect(rows).toHaveLength(4);
+  expect(rows.filter((r) => /\bFIN\b/.test(r))).toHaveLength(3);
+  expect(rows.some((r) => /You/.test(r) && /DNS/.test(r))).toBe(true);
+  expect(errors).toEqual([]);
+});

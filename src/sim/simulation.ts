@@ -94,6 +94,17 @@ export interface BoomEvent {
   rate: number;
 }
 
+/**
+ * Force from outside the boat's own model (contact with other boats, marks or moored boats), set by a fleet
+ * before each step and held constant over it: world-frame components (N) and yaw moment about the CG (N m,
+ * > 0 turns the bow to starboard). It acts in the horizontal plane only (no roll moment).
+ */
+export interface ExternalForce {
+  n: number;
+  e: number;
+  yaw: number;
+}
+
 export interface InputLogEntry {
   step: number;
   input: ControlInput;
@@ -175,6 +186,8 @@ export class Simulation {
   readonly ownsEnvironment: boolean;
   readonly seabed?: Seabed;
   lastBoomEvent: BoomEvent | null = null;
+  /** Contact force for the next step (fleet), or null. */
+  external: ExternalForce | null = null;
 
   constructor(opts: SimulationOptions) {
     this.params = opts.params;
@@ -265,6 +278,11 @@ export class Simulation {
     const p = this.params;
     this.mainLimit = sheetLimit(p.main, this.currentSheet('main'));
     this.jibLimit = sheetLimit(p.jib, this.currentSheet('jib'));
+  }
+
+  /** The auto-trim assist's current choice for a sail (kept up to date while either assist is on). */
+  autoSheetValue(sail: 'main' | 'jib'): number {
+    return this.autoSheet[sail];
   }
 
   /** Sheet actually in use for a sail: the assist's choice when auto-trim is on, otherwise the input. */
@@ -371,6 +389,14 @@ export class Simulation {
       const cur = this.env.current(t, s.n, s.e);
       const f = computeForces(this.params, s, this.act, wind, cur, this.fluids, this.groundAt(t));
       if (this.testThrust !== 0) f.total.x += this.testThrust;
+      const ext = this.external;
+      if (ext) {
+        const c = Math.cos(s.psi);
+        const sn = Math.sin(s.psi);
+        f.total.x += ext.n * c + ext.e * sn;
+        f.total.y += -ext.n * sn + ext.e * c;
+        f.total.n += ext.yaw;
+      }
       const d = derivatives(this.params, s, f, cur);
       if (this.lockHeading) {
         d.psi = 0;

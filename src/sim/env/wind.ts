@@ -65,6 +65,10 @@ export interface Puff {
   strength: number;
   radius: number;
   dirOffset: number;
+  /** Life envelope (0…1) for the current step, and 2r² and 9r²: cached once per step for sampling. */
+  env?: number;
+  r2x2?: number;
+  r2x9?: number;
 }
 
 export interface WindSample {
@@ -95,6 +99,9 @@ export class WindField {
   private speedFluct = 0;
   private t = 0;
   private readonly list: Puff[] = [];
+  /** Puffs that can reach the focus box (a fleet's bounding box), and the box; see `setFocus`. */
+  private active?: Puff[];
+  private focus?: { nMin: number; nMax: number; eMin: number; eMax: number };
 
   constructor(base: BaseWind, settings: GustSettings, area: WindArea = { n: 0, e: 0, radius: 2500 }) {
     this.base = base;
@@ -107,6 +114,7 @@ export class WindField {
     const expected = this.spawnRate() * settings.puffLifetimeS;
     const count = Math.floor(expected) + (this.rng.next() < expected - Math.floor(expected) ? 1 : 0);
     for (let i = 0; i < count; i++) this.spawn(this.rng.next() * settings.puffLifetimeS);
+    this.cache();
   }
 
   /** Puffs per second over the whole area. */
@@ -149,6 +157,37 @@ export class WindField {
       if (p.age >= p.life || far) this.list.splice(i, 1);
     }
     if (this.rng.next() < this.spawnRate() * dt) this.spawn(0);
+    this.cache();
+  }
+
+  /** Per-step constants of each puff (exactly the values sample() would compute). */
+  private cache(): void {
+    for (const p of this.list) {
+      p.env = smoothstep(0, 0.2 * p.life, p.age) * (1 - smoothstep(0.7 * p.life, p.life, p.age));
+      p.r2x2 = 2 * p.radius * p.radius;
+      p.r2x9 = 9 * p.radius * p.radius;
+    }
+    if (this.focus) this.refocus();
+  }
+
+  /**
+   * Speed-up for fleets: sample only the puffs that can reach this box (n/e bounds, metres). Points outside
+   * the box use the full list, and a puff further than 3 radii from a point contributes nothing anyway, so the
+   * results are exactly the same. Pass undefined to clear.
+   */
+  setFocus(box: { nMin: number; nMax: number; eMin: number; eMax: number } | undefined): void {
+    this.focus = box;
+    if (box) this.refocus();
+    else this.active = undefined;
+  }
+
+  private refocus(): void {
+    const b = this.focus!;
+    this.active = this.list.filter((p) => {
+      const dn = Math.max(b.nMin - p.n, 0, p.n - b.nMax);
+      const de = Math.max(b.eMin - p.e, 0, p.e - b.eMax);
+      return dn * dn + de * de <= 9 * p.radius * p.radius * 1.0001 + 1;
+    });
   }
 
   sample(n: number, e: number): WindSample {
@@ -156,11 +195,13 @@ export class WindField {
     const b = this.base.at(n, e);
     let boost = 0;
     let dirW = 0;
-    for (const p of this.list) {
+    const f = this.focus;
+    const list = this.active && f && n >= f.nMin && n <= f.nMax && e >= f.eMin && e <= f.eMax ? this.active : this.list;
+    for (const p of list) {
       const d2 = (n - p.n) ** 2 + (e - p.e) ** 2;
-      if (d2 > 9 * p.radius * p.radius) continue;
-      const env = smoothstep(0, 0.2 * p.life, p.age) * (1 - smoothstep(0.7 * p.life, p.life, p.age));
-      const w = env * Math.exp(-d2 / (2 * p.radius * p.radius));
+      if (d2 > (p.r2x9 ?? 9 * p.radius * p.radius)) continue;
+      const env = p.env ?? smoothstep(0, 0.2 * p.life, p.age) * (1 - smoothstep(0.7 * p.life, p.life, p.age));
+      const w = env * Math.exp(-d2 / (p.r2x2 ?? 2 * p.radius * p.radius));
       boost += w * p.strength;
       dirW += w * p.dirOffset;
     }

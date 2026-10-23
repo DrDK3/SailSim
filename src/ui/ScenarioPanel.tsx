@@ -4,6 +4,8 @@ import type { ConditionsSettings } from '../sim/env/conditions';
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
 import { allCourses, PRACTICE_KINDS } from '../app/courseLibrary';
 import { dataAgeMinutes } from '../sim/env/weather';
+import type { AiLevel } from '../sim/ai/skipper';
+import type { PrepFlag } from '../sim/race/committee';
 
 function Num({ label, value, min, max, step, onChange, unit, disabled }: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void; disabled?: boolean }) {
   return (
@@ -248,7 +250,30 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             </select>
           </label>
           <Num label="Start signal after" value={draft.race?.startInS ?? 90} min={20} max={600} step={10} unit="s" onChange={(v) => setDraft({ ...draft, race: { sequence: draft.race?.sequence ?? 'one-minute', startInS: Math.round(v) } })} />
-          <p className="fine">With a course, the boat starts 100 m behind the middle of the start line. Use "Start Bay practice area" for practice courses: there is room for them in most winds.</p>
+          <h4>Fleet</h4>
+          <Num label="AI boats" value={draft.fleet?.aiCount ?? 0} min={0} max={20} step={1} unit="" onChange={(v) => setDraft({ ...draft, fleet: { level: draft.fleet?.level ?? 'good', prepFlag: draft.fleet?.prepFlag ?? 'P', aiCount: Math.max(0, Math.min(20, Math.round(v))) } })} />
+          <label className="field select-field">
+            <span>AI level</span>
+            <select aria-label="AI level" value={draft.fleet?.level ?? 'good'} onChange={(e) => setDraft({ ...draft, fleet: { aiCount: draft.fleet?.aiCount ?? 0, prepFlag: draft.fleet?.prepFlag ?? 'P', level: e.target.value as AiLevel } })}>
+              <option value="club">Club</option>
+              <option value="good">Good</option>
+              <option value="expert">Expert</option>
+            </select>
+          </label>
+          <label className="field select-field">
+            <span>Preparatory flag</span>
+            <select aria-label="Preparatory flag" value={draft.fleet?.prepFlag ?? 'P'} onChange={(e) => setDraft({ ...draft, fleet: { aiCount: draft.fleet?.aiCount ?? 0, level: draft.fleet?.level ?? 'good', prepFlag: e.target.value as PrepFlag } })}>
+              <option value="P">P (no starting penalty)</option>
+              <option value="U">U (rule 30.3)</option>
+              <option value="black">Black flag (rule 30.4)</option>
+            </select>
+          </label>
+          <p className="fine">
+            AI Squibs sail with the same physics and controls as you (auto-trim, crew assist) and follow a simplified subset of the
+            racing rules. Their sail numbers are invented. Starting sequence per rule 26; individual and general recalls per rule 29;
+            the club's sailing instructions are not available, so the finishing window and recall policy are estimates.
+            With a course you start in the first slot behind the line; practice start lines are longer for bigger fleets.
+          </p>
         </>
       )}
 

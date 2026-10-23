@@ -364,3 +364,26 @@ With a seabed (the River Dart data), three points can touch the bottom:
 The 8 m elevation grid turns vertical quay walls into ramps about 8 m wide, so the boat grounds a few metres off a wall. The bed mid-channel is an estimate, so groundings there are only indicative. Near the shore the bed is LIDAR (`GEODATA.md`).
 
 **Outputs:** the snapshot reports `depthAtKeel`, `grounded` and each point's clearance. The app shows the depth at the keel and an "Aground" warning.
+
+## 16. Contact between boats, marks, moored boats and ferries (Phase 5, `race/fleet.ts`, `race/hull.ts`)
+
+Boats in a race (or the user's boat alone, in free sailing) are stepped together by a `Fleet` that shares one environment.
+
+- **Hull outline:** convex, 13 vertices. It uses the 3D model's estimated half-breadth curve: bow 2.95 m forward of the CG, beam 1.87 m at 55% of the length, transom 0.64 × half-beam.
+- **Overlap:** found by the separating-axis test (polygons) or the closest point (circles: marks).
+- **Force at the contact point:** F = max(0, k·depth − c·v_n)·n̂ − μ·F·tanh(|v_t|/0.1)·t̂, equal and opposite on the two bodies. It gives each boat a yaw moment about its CG.
+- **Coefficients:** μ = 0.3. Hard bodies (boats, committee boat, moored boats, ferries): k = 2×10⁵ N/m, c = 5×10³ N s/m. Inflatable marks: k = 3×10⁴ N/m, c = 2×10³ N s/m. All estimates (E).
+- **Timing:** forces are computed from the states at the start of the step and held over it (the `external` force of `Simulation`). The result does not depend on the order of the boats.
+- **Fixed bodies:** marks, moored boats (a box l × l/3, lying to the stream or wind, downstream of the buoy) and ferries (moving on their timetable) do not respond.
+- **Limits:** horizontal only. There is no roll, heave or damage from contact, and no rafting.
+- **Measured:** a 3.7 m/s port–starboard collision overlaps by at most 14 cm, and the boats separate.
+- **Determinism:** with no contact, `external` is null and the arithmetic is unchanged, so the golden traces are bit-identical.
+
+**Fleet speed-ups (results unchanged):**
+- the wind field samples only the puffs that can reach the fleet's bounding box (others contribute exactly zero there);
+- puff life envelopes are cached once per step;
+- tide evaluations are memoised (the tide is a pure function of time).
+
+## 17. AI sail handling (Phase 5, `ai/sheets.ts`)
+
+AI boats use the auto-trim assist. In addition, the main is eased in proportion to heel beyond 24° (full ease at 38°), at most 0.6 of the sheet travel per second, as a crew dumps the main. Without this, the model broaches when reaching in 20 kn or more (rudder saturated, 50–60° of heel). The same rule is used to compute the AI's target-speed table (`ai/polarData.ts`). That table is model output; for example it gives 10.4 kn at 105° in 25 kn of wind, because the estimated residuary-resistance table flattens above Fn 0.55 (OUTSTANDING_ISSUES 37).

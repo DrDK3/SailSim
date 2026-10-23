@@ -2,7 +2,7 @@ import { DEG } from '../math/angles';
 import { knToMs } from '../units';
 import { composeEnvironment, type Environment, type WeatherInfo } from './environment';
 import { DEFAULT_TIDAL_STREAM, NO_CURRENT, dartStream, tidalStream, uniformCurrent, type CurrentModel, type StreamPattern, type TidalStreamSettings } from './current';
-import { manualTide, parseTideSnapshot, snapshotTide, type TideSource } from './tide';
+import { manualTide, memoTide, parseTideSnapshot, snapshotTide, type TideSource } from './tide';
 import { GUST_PRESETS, WindField, uniformBase, type GustSettings } from './wind';
 import { gustsFromSnapshot, metOfficeBase, metOfficeInfo, parseMetOfficeSnapshot } from './weather';
 
@@ -81,6 +81,7 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
   if (c.tide?.mode === 'manual') tide = manualTide(Date.parse(c.tide.hwTime), c.tide.hwHeightM, c.tide.lwHeightM);
   else if (c.tide?.mode === 'snapshot') tide = snapshotTide(parseTideSnapshot(c.tide.snapshot));
 
+  if (tide) tide = memoTide(tide);
   let current: CurrentModel = NO_CURRENT;
   if (c.current.mode === 'uniform') current = uniformCurrent(c.current.setDeg, c.current.rateKn);
   else if (c.current.mode === 'tidal') {

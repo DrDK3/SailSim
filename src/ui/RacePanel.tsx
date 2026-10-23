@@ -1,5 +1,18 @@
-import type { RaceUi } from '../app/controller';
+import type { RaceUi, SimController } from '../app/controller';
 import type { RaceEvent } from '../sim/course/judge';
+import type { Flag } from '../sim/race/committee';
+
+/** Flags as text chips (never colour alone). */
+const FLAGS: Record<Flag, { label: string; title: string; cls: string }> = {
+  class: { label: 'Class', title: 'Class flag: warning signal made, the sequence is running', cls: 'flag-class' },
+  P: { label: 'P', title: 'Flag P: preparatory signal (no special starting penalty)', cls: 'flag-p' },
+  U: { label: 'U', title: 'Flag U (rule 30.3): in the triangle (line ends and first mark) during the last minute = disqualified', cls: 'flag-u' },
+  black: { label: 'Black', title: 'Black flag (rule 30.4): in the triangle during the last minute = disqualified, also from a restart', cls: 'flag-black' },
+  X: { label: 'X', title: 'Flag X (rule 29.1): individual recall, boats over early must return', cls: 'flag-x' },
+  'first-substitute': { label: '1st Sub', title: 'First Substitute (rule 29.2): general recall, new start to come', cls: 'flag-fs' },
+};
+
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
 
 const STATUS: Record<RaceUi['courseStatus'], { label: string; cls: string }> = {
   simulated: { label: 'Simulated course', cls: 'warn' },
@@ -41,7 +54,7 @@ function describe(e: RaceEvent): { text: string; tone: 'good' | 'warn' | 'bad' |
   }
 }
 
-export function RacePanel({ race }: { race: RaceUi }) {
+export function RacePanel({ race, ctl }: { race: RaceUi; ctl: SimController }) {
   const st = STATUS[race.courseStatus];
   const start = race.startTime;
   const signalTime = race.events.find((e) => e.type === 'signal' && e.name === 'start')?.t;
@@ -52,6 +65,21 @@ export function RacePanel({ race }: { race: RaceUi }) {
         <strong>{race.courseName}</strong>
         <span className={`status ${st.cls}`}>{st.label}</span>
       </div>
+      <div className="race-flags" aria-label="Flags displayed" data-testid="flags">
+        {race.flags.length === 0 ? <span className="fine-inline">No flags</span> : race.flags.map((f) => (
+          <span key={f} className={`flag ${FLAGS[f].cls}`} title={FLAGS[f].title}>{FLAGS[f].label}</span>
+        ))}
+        {race.attempt > 1 && <span className="fine-inline">start {race.attempt}</span>}
+        {race.position !== undefined && race.phase !== 'pre-start' && (
+          <span className="race-pos" data-testid="position">{ordinal(race.position)} of {race.fleetSize}</span>
+        )}
+      </div>
+      {race.disqualified && <div className="race-alert bad" role="alert">{race.disqualified}</div>}
+      {race.penaltyOwed > 0 && (
+        <div className="race-alert warn" role="alert" data-testid="penalty">
+          Penalty owed: {race.penaltyOwed} turn{race.penaltyOwed === 1 ? '' : 's'}. Get clear of other boats, then turn in one direction, each turn with a tack and a gybe (rule 44.2).
+        </div>
+      )}
       {race.phase === 'pre-start' && (
         <div className="race-main">
           {race.toStart > 0 ? (
@@ -97,8 +125,21 @@ export function RacePanel({ race }: { race: RaceUi }) {
           );
         })}
       </ol>
+      {race.fleetSize > 1 && race.log.length > 0 && (
+        <ol className="race-events race-log" aria-label="Fleet events">
+          {race.log.slice(-4).map((l, i) => (
+            <li key={`${l.t}-${i}`} className={`ev ${l.kind === 'incident' ? 'bad' : l.kind === 'penalty' ? 'warn' : 'info'}`}>
+              <span className="ev-t">{rel(l.t, t0)}</span> {l.text}
+            </li>
+          ))}
+        </ol>
+      )}
       {race.warnings.length > 0 && <p className="fine">{race.warnings.length} course warning{race.warnings.length === 1 ? '' : 's'}: {race.warnings[0]!.message}</p>}
-      <p className="fine">Simplified racing rules: not an authoritative adjudication.</p>
+      <div className="row">
+        <button onClick={() => ctl.toggleResults()} disabled={!race.results} title={race.results ? 'Results table' : 'Results once you have finished'}>Results</button>
+        <button onClick={() => ctl.retire()} disabled={race.phase === 'finished' || race.raceOver}>Retire</button>
+      </div>
+      <p className="fine">Simplified racing rules: not an authoritative adjudication. AI boats and their sail numbers are invented.</p>
     </section>
   );
 }

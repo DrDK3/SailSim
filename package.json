@@ -18,7 +18,9 @@
     "params": "tsx tools/param-table.ts",
     "golden:update": "tsx tools/golden.ts",
     "calibrate": "tsx tools/calibrate.ts",
-    "perf": "tsx tools/perf.ts"
+    "perf": "tsx tools/perf.ts",
+    "ai:polar": "tsx tools/ai-polar.ts",
+    "ai:trials": "tsx tools/ai-trials.ts"
   },
   "dependencies": {
     "react": "19.2.9",

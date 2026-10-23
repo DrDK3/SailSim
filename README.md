@@ -14,8 +14,9 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | 1: a working boat in simple water | Done, 22 Oct 2026 ([phase report](docs/PHASE1_REPORT.md)) |
 | 2: tested physics (dynamic roll, hinged boom, gusts, tide and stream, Met Office wind, dashboard, calibration workflow) | Done, 22 Oct 2026 ([phase report](docs/PHASE2_REPORT.md)) |
 | 3: the River Dart from open data (terrain, buildings, piers, moorings, ferries, grounding, channel stream, minimap) | Done, 22 Oct 2026 ([phase report](docs/PHASE3_REPORT.md)) |
-| **4: courses, course judge and editor (practice courses, validation, starts, roundings, finishes)** | **Done, 22 Oct 2026** ([phase report](docs/PHASE4_REPORT.md)). No RDYC club courses yet: the documents are needed |
-| 5: race management and AI competitors · 6: polish and deployment | Planned ([plan](docs/DEVELOPMENT_PLAN.md)) |
+| 4: courses, course judge and editor (practice courses, validation, starts, roundings, finishes) | Done, 22 Oct 2026 ([phase report](docs/PHASE4_REPORT.md)). No RDYC club courses yet: the documents are needed |
+| **5: race management and AI competitors (fleet physics and contact, race committee, rules subset, penalties, results, AI Squibs)** | **Done, 23 Oct 2026** ([phase report](docs/PHASE5_REPORT.md), [racing](docs/RACING.md)) |
+| 6: polish and deployment | Planned ([plan](docs/DEVELOPMENT_PLAN.md)) |
 
 Physics coefficients are **estimates** awaiting Squib performance data ([calibration workflow](docs/CALIBRATION.md)). Mid-channel depths, individual moorings, ferry timetables and the tidal stream are provisional estimates (the in-app **Layers** panel lists them), and Met Office wind is forecast-model output. This is not for navigation or performance prediction.
 
@@ -43,7 +44,9 @@ npm run dev          # open the printed URL; press H in the app for help
 | `npm run params` | Regenerate [docs/PARAMETERS.md](docs/PARAMETERS.md) from the boat data |
 | `npm run calibrate -- obs.csv [--fit knobs]` | Compare the model with observed sailing points; optionally fit coefficient multipliers ([how](docs/CALIBRATION.md)) |
 | `npm run golden:update` | Regenerate the golden regression traces after an intended physics change |
-| `npm run perf` | Physics cost per frame for 21 boats on the River Dart |
+| `npm run perf` | Criterion 12: cost per frame for 21 boats on the River Dart (physics only) and for a full race with 20 AI boats |
+| `npm run ai:trials [-- --runs 100 --boats 5]` | Phase 5 acceptance: seeded AI races, clean-run rate, every contact listed (`out/ai-trials.json`) |
+| `npm run ai:polar` | Regenerate the AI target-speed table from the boat parameters (model output) |
 | `.venv/bin/python -I tools/geodata/build.py EXTRACT` | Rebuild the River Dart data in `public/geo/` from open data ([how](docs/GEODATA.md)); not needed to run the app |
 
 ## Controls
@@ -66,7 +69,7 @@ npm run dev          # open the printed URL; press H in the app for help
 
 On-screen buttons provide the same controls. The toolbar also opens:
 - the **Polar** panel: the model polar, computed in a Web Worker;
-- the **Scenario** panel: start position and time, wind source, gusts, tide, current, course and start sequence;
+- the **Scenario** panel: start position and time, wind source, gusts, tide, current, course, start sequence, and the fleet (0–20 AI boats, their level, the preparatory flag: [docs/RACING.md](docs/RACING.md));
 - the **Layers** panel: what is data and what is provisional, with sources and licences;
 - the **Courses** editor: draw, check, import and export courses ([docs/COURSES.md](docs/COURSES.md)).
 
@@ -85,6 +88,8 @@ No API keys are in the client code.
 
 ```
 src/sim/      physics core: pure TypeScript, no DOM/Three/React (lint and tsconfig enforced)
+src/sim/race/ fleet and contact, race committee, rules subset, race session, trials
+src/sim/ai/   AI skippers, AI sheet handling, AI target-speed polar
 src/render/   Three.js scene, water, procedural Squib, wake, force arrows, River Dart (terrain, buildings, piers, moorings, ferries)
 src/ui/       React instruments, controls, dashboard, polar, debug, scenario and help panels
 src/app/      game loop (fixed 100 Hz step with render interpolation), input, telemetry, polar worker
@@ -104,7 +109,9 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 
 | Document | Contents |
 |---|---|
-| [docs/PHASE4_REPORT.md](docs/PHASE4_REPORT.md) | Phase 4: what works, test results, criteria, decisions, known defects, manual test steps |
+| [docs/PHASE5_REPORT.md](docs/PHASE5_REPORT.md) | Phase 5: what works, test results, criteria, decisions, known defects, manual test steps |
+| [docs/RACING.md](docs/RACING.md) | Fleet contact, race committee, the racing-rules subset, penalties, scoring and how the AI sails |
+| [docs/PHASE4_REPORT.md](docs/PHASE4_REPORT.md) | Phase 4 report |
 | [docs/COURSES.md](docs/COURSES.md) | Course format, validation rules, how the judge works, entering and verifying club courses |
 | [docs/PHASE3_REPORT.md](docs/PHASE3_REPORT.md) | Phase 3 report |
 | [docs/GEODATA.md](docs/GEODATA.md) | River Dart data: frame, datums, every layer with source and method, rebuild steps, checks |

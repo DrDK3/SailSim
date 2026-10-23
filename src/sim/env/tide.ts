@@ -163,3 +163,29 @@ export function snapshotTide(snap: TideSnapshot): TideSource & { residual: numbe
     },
   };
 }
+
+/**
+ * A tide source that remembers its last few results. The tide is a pure function of time and is evaluated
+ * many times per step (water level, stream, every boat): the values are exactly the same, just not recomputed.
+ */
+export function memoTide(src: TideSource): TideSource {
+  const keys: number[] = [];
+  const vals: TideState[] = [];
+  return {
+    kind: src.kind,
+    label: src.label,
+    notes: src.notes,
+    at(t: number): TideState {
+      const i = keys.indexOf(t);
+      if (i >= 0) return vals[i]!;
+      const v = src.at(t);
+      keys.push(t);
+      vals.push(v);
+      if (keys.length > 6) {
+        keys.shift();
+        vals.shift();
+      }
+      return v;
+    },
+  };
+}

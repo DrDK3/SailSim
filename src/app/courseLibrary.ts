@@ -74,10 +74,10 @@ export function allCourses(): LibraryEntry[] {
   return [...builtInCourses(), ...userCourses()];
 }
 
-/** Turn a scenario's course choice into a course, laid at `centre` for practice courses. */
-export function courseFor(choice: CourseChoice, centre: { n: number; e: number }, windFromDeg: number): Course {
+/** Turn a scenario's course choice into a course, laid at `centre` for practice courses (start line `startLineM`). */
+export function courseFor(choice: CourseChoice, centre: { n: number; e: number }, windFromDeg: number, startLineM?: number): Course {
   if (choice.source === 'practice') {
-    return practiceCourse({ kind: choice.kind, centre, windFromDeg, legM: choice.legM, laps: choice.laps });
+    return practiceCourse({ kind: choice.kind, centre, windFromDeg, legM: choice.legM, laps: choice.laps, startLineM });
   }
   if (choice.source === 'inline') return choice.course;
   const entry = allCourses().find((c) => c.id === choice.id);

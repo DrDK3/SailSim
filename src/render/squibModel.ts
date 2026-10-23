@@ -361,6 +361,17 @@ export class SquibModel {
     geo.computeBoundingSphere();
   }
 
+  /** Tint the hull (the vertex colours are multiplied by this colour): used to tell fleet boats apart. */
+  setHullColour(hex: number): void {
+    this.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.name === 'hull') {
+        const m = (o.material as THREE.MeshStandardMaterial).clone();
+        m.color.setHex(hex);
+        o.material = m;
+      }
+    });
+  }
+
   update(params: {
     main: SailShapeInput;
     jib: SailShapeInput;

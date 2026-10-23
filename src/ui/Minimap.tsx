@@ -8,8 +8,9 @@ const H = 250;
 const SPANS = [1200, 2500, 6800];
 
 /**
- * North-up overview drawn from the pipeline's minimap image: the boat and its course over ground, ferries
- * (amber = restricted in ability to manoeuvre) and the navigation marks that have a stated position.
+ * North-up overview drawn from the pipeline's minimap image: the boat and its course over ground, the other boats
+ * of the fleet, ferries (amber = restricted in ability to manoeuvre) and the navigation marks that have a
+ * stated position.
  */
 export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -102,8 +103,9 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         ctx.arc(x, y, 3, 0, Math.PI * 2);
         ctx.fill();
       }
-      const next = r.legs[race.judge.legIndex];
-      if (next && race.judge.phase === 'racing') {
+      const judge = race.session.judgeOf('you');
+      const next = r.legs[judge.legIndex];
+      if (next && judge.phase === 'racing') {
         const [x, y] = toPx(next.target.n, next.target.e);
         ctx.strokeStyle = '#5fe08a';
         ctx.lineWidth = 2;
@@ -112,6 +114,24 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         ctx.stroke();
         ctx.lineWidth = 1;
       }
+    }
+    // The other boats of the fleet, in their hull colours.
+    for (const b of ui.fleet) {
+      const [fx, fy] = toPx(b.n, b.e);
+      if (fx < -10 || fx > W + 10 || fy < -10 || fy > H + 10) continue;
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(b.heading);
+      ctx.fillStyle = `#${b.colour.toString(16).padStart(6, '0')}`;
+      ctx.strokeStyle = '#0b1a24';
+      ctx.beginPath();
+      ctx.moveTo(0, -6);
+      ctx.lineTo(3.5, 4);
+      ctx.lineTo(-3.5, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
     // Course over ground (60 s ahead) and the boat.
     const [bx, by] = toPx(s.n, s.e);
@@ -145,7 +165,7 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     ctx.fillRect(10, H - 12, bar * k, 2);
     ctx.font = '10px Inter, system-ui, sans-serif';
     ctx.fillText(bar >= 1000 ? `${bar / 1000} km` : `${bar} m`, 14 + bar * k, H - 9);
-  }, [ui.snapshot, zoom, img, data, ctl]);
+  }, [ui.snapshot, ui.fleet, zoom, img, data, ctl]);
 
   if (ui.dart.status !== 'loaded' || !data?.manifest) return null;
   return (

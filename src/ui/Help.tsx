@@ -33,10 +33,19 @@ export function Help({ onClose }: { onClose: () => void }) {
         <table>
           <tbody>{KEYS.map(([k, d]) => <tr key={k}><td className="key">{k}</td><td>{d}</td></tr>)}</tbody>
         </table>
+        <h3>Racing</h3>
+        <p>
+          In Scenario, choose a course and up to 20 AI boats. Watch the flags: class flag at the warning signal, P (or U,
+          black) at the preparatory signal, coming down at one minute; the start when the class flag comes down. Flag X:
+          someone was over early (return behind the line); First Substitute: general recall. Port tack keeps clear of
+          starboard, windward of leeward, clear astern of clear ahead, and a boat tacking keeps clear. If you hit a boat
+          you should have kept clear of, take a Two-Turns Penalty (two turns the same way, each with a tack and a gybe);
+          for touching a mark, one turn. The judge is a simplified subset of the racing rules, not an authoritative one.
+        </p>
         <p className="fine">
-          Phase 3 prototype on the River Dart: terrain, buildings, piers and the shoreline come from open data; water
+          Phase 5 prototype on the River Dart: terrain, buildings, piers and the shoreline come from open data; water
           depths mid-channel, individual moorings, ferry timetables and the tidal stream are provisional estimates (see
-          Layers). You can run aground: the keel stops you in shallow water. The boat heels dynamically, the boom swings on its own and can gybe
+          Layers). You can run aground: the keel stops you in shallow water, and moored boats and ferries are solid. The boat heels dynamically, the boom swings on its own and can gybe
           unexpectedly by the lee, and the wind has seeded gusts and shifts (dark patches on the water are puffs).
           Boat dimensions are from class sources; hydrodynamic and sail coefficients are estimates awaiting
           calibration. Weather and tide sources are labelled in the instruments. Not for navigation or performance

@@ -130,7 +130,13 @@ A **course validator** runs in both CI and the editor. It checks that:
 
 - **Line crossing:** segment intersection between consecutive physics positions of hull reference points (bow, stern), with sub-step time interpolation. This handles start and finish, OCS, and gates.
 - **Mark rounding:** the RRS "string" test (rule 28.2). The boat's track, joined to the previous and next marks, must enclose the mark with the correct winding sign, in sequence. Loops that unwind are handled by the winding count.
-- **Phase 5:** start sequence (5-4-1-0 or per the SIs), individual and general recall, laps, results, and an RRS Part 2 subset (rules 10–18, simplified). This is flagged *not an authoritative adjudication system*.
+- **Phase 5 (as built; details in [RACING.md](RACING.md)):**
+  - `fleet.ts`: all boats share one environment. Each 10 ms step computes hull–hull, hull–mark, hull–moored-boat and hull–ferry contact forces from the states at the step start (penalty method, convex outlines in `hull.ts`). It passes each boat its force as `Simulation.external`, then steps every boat.
+  - `committee.ts`: rule 26 sequence with P, U or black flag; X (29.1); First Substitute and restart (29.2; recall policy E); triangle rule (30.3, 30.4); finishing window and time limit (E); Appendix A low-point results.
+  - `rules.ts`: tack, overlap, leeward, rules 13, 10, 11 and 12; rule 13 state per boat; penalty-turn tracking (44.2). Incidents on contact (Part 2, rule 31); rules 14, 15 and 16 are noted, not judged.
+  - `session.ts`: one race, combining the fleet, the committee, a `CourseJudge` per boat (rebuilt after a general recall), the rules, the incidents and penalties, and the AI skippers. Deterministic.
+  - `src/sim/ai/`: `AiSkipper` (tactics 5 Hz, collision-avoidance search, 20 Hz collision reflex, PD helm per step), AI sheet handling, and the AI target-speed polar (model output, generated).
+  - Flagged *not an authoritative adjudication system*.
 
 ## 7. Rendering (`src/render`)
 
@@ -148,7 +154,8 @@ A **course validator** runs in both CI and the editor. It checks that:
 | Element | Contents |
 |---|---|
 | HUD | Heading and compass, STW, SOG, COG, AWA/AWS, TWA/TWS, main and jib trim, heel, tack, tide height, current set and drift, next mark (bearing and distance), race clock |
-| Minimap | Canvas 2D: coastline, marks, laylines, current arrows, AI boats |
+| Minimap | Canvas 2D: drape image, navigation marks, ferries, the course, the other boats of the fleet (in their colours) |
+| Race panel and results | Flags shown, countdown, leg, next mark, place in the fleet, penalty owed, fleet events; results table (low points) |
 | Scenario setup | Wind, gusts, tide times and heights, current scale, start time, course, laps, start position; seed |
 | Course editor | Map-based: add, move, inspect and sequence marks; rounding sides; gates; import and export JSON; live validator output |
 | Validation dashboard | Live plots of STW, VMG, leeway, α per sail, heel, rudder angle, forces and moments. A headless **polar sweep** tool that plots *model-predicted* polars, labelled as model output |
