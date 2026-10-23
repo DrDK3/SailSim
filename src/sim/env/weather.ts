@@ -1,14 +1,17 @@
 import { DEG, clamp } from '../math/angles';
 import { knToMs } from '../units';
 import { createLocalProjection, RDYC_ORIGIN } from '../geo/projection';
-import { GUST_PRESETS, gridBase, type BaseWind, type GustSettings } from './wind';
+import { GUST_PRESETS, gridBase, timeSteppedBase, type BaseWind, type GustSettings } from './wind';
 import type { WeatherInfo } from './environment';
+import type { SkyStep } from './sky';
 
 /**
- * Met Office snapshot as written by research/weather/live_conditions.py (and, from Phase 6, the scheduled
- * ingest). Speeds are in knots in this file.
+ * Met Office snapshot as written by research/weather/live_conditions.py (squib-weather/1) and by the scheduled
+ * ingest tools/ingest/weather.py (squib-weather/2, which adds 15-minute wind steps and hourly sky fields).
+ * Speeds are in knots in this file.
  */
 export interface MetOfficeSnapshot {
+  schema?: string;
   generated: string;
   requested_time: string;
   model: {
@@ -20,6 +23,11 @@ export interface MetOfficeSnapshot {
     valid?: string;
     points?: Record<string, { lat: number; lon: number; wind_from_deg: number; speed_kn: number; gust_kn: number }>;
     grid?: { lat: number[][]; lon: number[][]; wind_from_deg: number[][]; speed_kn: number[][]; gust_kn: number[][] };
+    /** squib-weather/2: the wind grid every 15 minutes (on grid.lat/lon), first step = `valid`. */
+    steps?: { valid: string; wind_from_deg: number[][]; speed_kn: number[][]; gust_kn: number[][] }[];
+    /** squib-weather/2: hourly sky fields at RDYC and as area means. */
+    sky?: SkyStep[];
+    horizon?: { from: string; to: string; step_min: number };
   };
   observed?: {
     stations: {
@@ -47,20 +55,46 @@ export function parseMetOfficeSnapshot(json: unknown): MetOfficeSnapshot {
     }
   }
   if (typeof j.model.valid !== 'string') throw new Error('weather snapshot: missing valid time');
+  const steps = j.model.steps;
+  if (steps !== undefined) {
+    if (!Array.isArray(steps) || steps.length === 0) throw new Error('weather snapshot: steps must be a non-empty list');
+    let prev = -Infinity;
+    for (const st of steps) {
+      const t = Date.parse(st?.valid);
+      if (Number.isNaN(t) || t <= prev) throw new Error('weather snapshot: step times missing or not increasing');
+      prev = t;
+      for (const k of ['wind_from_deg', 'speed_kn', 'gust_kn'] as const) {
+        const a = st[k];
+        if (!Array.isArray(a) || a.length !== g.lat.length || a.some((row, i) => !Array.isArray(row) || row.length !== g.lat[i]!.length || row.some((x) => typeof x !== 'number' || !Number.isFinite(x)))) {
+          throw new Error(`weather snapshot: step ${st.valid} ${k} has the wrong shape or bad values`);
+        }
+      }
+    }
+  }
+  if (j.model.sky !== undefined && (!Array.isArray(j.model.sky) || j.model.sky.some((x) => Number.isNaN(Date.parse(x?.valid)) || typeof x.rdyc !== 'object'))) {
+    throw new Error('weather snapshot: bad sky steps');
+  }
   return j;
 }
 
-/** The UKV grid as a spatially varying base wind in local coordinates about RDYC. */
-export function metOfficeBase(snap: MetOfficeSnapshot): BaseWind {
+/** End of the period the snapshot's forecast covers (ISO): the last step, or the single valid time. */
+export function snapshotCoverageEnd(snap: MetOfficeSnapshot): string {
+  return snap.model.steps?.[snap.model.steps.length - 1]?.valid ?? snap.model.valid!;
+}
+
+/**
+ * The UKV grid as a spatially varying base wind in local coordinates about RDYC. With 15-minute steps
+ * (squib-weather/2) and the run's start time, the wind also follows the forecast through time.
+ */
+export function metOfficeBase(snap: MetOfficeSnapshot, startEpochMs?: number): BaseWind {
   const g = snap.model.grid!;
   const proj = createLocalProjection(RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
-  const nodes = g.lat.map((row, i) =>
-    row.map((lat, j) => {
-      const { n, e } = proj.toLocal(lat, g.lon[i]![j]!);
-      return { n, e, speed: knToMs(g.speed_kn[i]![j]!), fromDir: g.wind_from_deg[i]![j]! * DEG };
-    }),
-  );
-  return gridBase(nodes);
+  const local = g.lat.map((row, i) => row.map((lat, j) => proj.toLocal(lat, g.lon[i]![j]!)));
+  const field = (dir: number[][], kn: number[][]): BaseWind =>
+    gridBase(local.map((row, i) => row.map((p, j) => ({ n: p.n, e: p.e, speed: knToMs(kn[i]![j]!), fromDir: dir[i]![j]! * DEG }))));
+  const steps = snap.model.steps;
+  if (!steps || steps.length < 2 || startEpochMs === undefined) return field(g.wind_from_deg, g.speed_kn);
+  return timeSteppedBase(steps.map((st) => ({ t: (Date.parse(st.valid) - startEpochMs) / 1000, base: field(st.wind_from_deg, st.speed_kn) })));
 }
 
 /**
@@ -97,7 +131,9 @@ export function metOfficeInfo(snap: MetOfficeSnapshot, kind: 'model' | 'replay',
     attribution: 'British Crown copyright, the Met Office, CC BY-SA 4.0',
     notes: [
       'Forecast model output, not a measurement. The 2 km grid cannot resolve valley funnelling or wind shadows.',
-      'Phase 2 uses a single valid time (no interpolation between forecast steps).',
+      snap.model.steps && snap.model.steps.length > 1
+        ? `The wind follows the forecast's ${snap.model.steps.length} 15-minute steps to ${snapshotCoverageEnd(snap)}, interpolated in time; after that the last step holds.`
+        : 'A single forecast time: the mean wind does not change during the run.',
       ...extraNotes,
     ],
   };

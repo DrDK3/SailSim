@@ -4,6 +4,7 @@ import { windVelocity, type NE } from '../boat/forces';
 import { NO_CURRENT, uniformCurrent, type CurrentModel } from './current';
 import type { TideSource, TideState } from './tide';
 import type { WindField } from './wind';
+import type { SkySource, SkyState } from './sky';
 
 /** Where the wind comes from, for labelling and provenance in the UI. */
 export interface WeatherInfo {
@@ -24,6 +25,8 @@ export interface EnvironmentInfo {
   windAgainstTide: boolean;
   gustFactor: number;
   epochMs: number;
+  /** Cloud, visibility and rain (visual only), with where they come from. */
+  sky?: SkyState & { label: string; kind: SkySource['kind'] };
 }
 
 /**
@@ -44,6 +47,8 @@ export interface Environment {
   waterLevel?(t: number): number;
   readonly windField?: WindField;
   readonly startEpochMs?: number;
+  /** Cloud, visibility and rain for the renderer. Visual only: never read by the physics. */
+  readonly sky?: SkySource;
 }
 
 export interface UniformConditions {
@@ -73,6 +78,7 @@ export interface ComposedOptions {
    * no tide. Needed only with a seabed (the River Dart data).
    */
   datum?: { cdBelowOdn: number; meanLevelCd: number };
+  sky?: SkySource;
 }
 
 /** Combine a wind field, a current model and an optional tide source into an Environment. */
@@ -83,6 +89,7 @@ export function composeEnvironment(o: ComposedOptions): Environment {
     label: o.weather.label,
     windField: o.wind,
     startEpochMs: o.startEpochMs,
+    sky: o.sky,
     wind: (_t, n, e) => o.wind.wind(n, e),
     current: (t, n, e) => current.at(epoch(t), n, e),
     step: (t, dt) => o.wind.step(t, dt),
@@ -102,6 +109,7 @@ export function composeEnvironment(o: ComposedOptions): Environment {
         windAgainstTide: cos < Math.cos(120 * DEG) && cRate > knToMs(0.5) && w.speed > knToMs(8),
         gustFactor: w.gustFactor,
         epochMs: epoch(t),
+        sky: o.sky ? { ...o.sky.at(t), label: o.sky.label, kind: o.sky.kind } : undefined,
       };
     },
   };

@@ -136,16 +136,19 @@ export function parseTideSnapshot(json: unknown): TideSnapshot {
 }
 
 /**
- * Tide from a snapshot: predicted events (cosine curve) plus, when gauge readings are present, the latest
- * measured-minus-predicted residual (surge, river effects) added as a constant offset.
+ * Tide from a snapshot: predicted events (cosine curve) plus, when gauge readings are present and `useGauge`
+ * is not false (the app turns it off when the reading is stale), the latest measured-minus-predicted residual
+ * (surge, river effects) added as a constant offset.
  */
-export function snapshotTide(snap: TideSnapshot): TideSource & { residual: number } {
+export function snapshotTide(snap: TideSnapshot, opts: { useGauge?: boolean } = {}): TideSource & { residual: number } {
   const events: TideEvent[] = snap.predictions.events.map((e) => ({ epochMs: Date.parse(e.time), type: e.type, height: e.heightCD }));
   const predicted = eventTide(events, snap.kind, '');
   let residual = 0;
   const notes = [`Predictions: ${snap.predictions.source}. Cosine curve between events.`];
   const last = snap.gauge?.readings[snap.gauge.readings.length - 1];
-  if (snap.gauge && last) {
+  if (snap.gauge && last && opts.useGauge === false) {
+    notes.push(`Gauge ${snap.gauge.station} reading at ${last.time} is too old: the measured surge is not applied.`);
+  } else if (snap.gauge && last) {
     const measuredCD = last.mAOD + snap.gauge.cdOffsetM;
     residual = measuredCD - predicted.at(Date.parse(last.time)).height;
     notes.push(`Gauge ${snap.gauge.station} (${snap.gauge.source}) at ${last.time}: residual ${residual.toFixed(2)} m applied.`);

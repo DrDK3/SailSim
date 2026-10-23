@@ -1,0 +1,45 @@
+{
+ "kind": "live",
+ "generated": "2026-10-23T12:00:00Z",
+ "predictions": {
+  "source": "UKHO ADMIRALTY UK Tidal API, station 0099 Dartmouth (official prediction)",
+  "events": [
+   {
+    "time": "2026-10-23T06:01:00Z",
+    "type": "LW",
+    "heightCD": 1.0
+   },
+   {
+    "time": "2026-10-23T12:40:00Z",
+    "type": "HW",
+    "heightCD": 4.6
+   },
+   {
+    "time": "2026-10-23T18:26:00Z",
+    "type": "LW",
+    "heightCD": 1.1
+   }
+  ]
+ },
+ "attribution": "Contains Environment Agency data, Open Government Licence v3.0; Tidal predictions \u00a9 Crown copyright, UK Hydrographic Office (ADMIRALTY UK Tidal API)",
+ "gauge": {
+  "source": "Environment Agency flood-monitoring API",
+  "station": "46154 Dartmouth (measure 46154-level-tidal_level-i-15_min-mAOD)",
+  "cdOffsetM": 2.62,
+  "readings": [
+   {
+    "time": "2026-10-23T11:00:00Z",
+    "mAOD": 1.801
+   },
+   {
+    "time": "2026-10-23T11:30:00Z",
+    "mAOD": 1.875
+   },
+   {
+    "time": "2026-10-23T11:45:00Z",
+    "mAOD": 1.912
+   }
+  ]
+ },
+ "_note": "SYNTHETIC example (not real data): the tide.json format, written by tools/ingest/test_ingest.py fixtures."
+}

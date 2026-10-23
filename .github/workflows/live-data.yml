@@ -1,0 +1,55 @@
+# Live weather and tide for the published site, written into live/ on the gh-pages branch.
+# Every 30 minutes from 06:07 to 20:37 UTC (sailing hours), hourly overnight; see docs/DEPLOYMENT.md for
+# the cost of this schedule. Optional secret: UKHO_API_KEY (ADMIRALTY UK Tidal API); it is used only here,
+# never sent to the browser.
+name: Live data
+on:
+  schedule:
+    - cron: '7,37 6-20 * * *'
+    - cron: '7 21-23,0-5 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+jobs:
+  ingest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Check out the gauge history (branch tide-history, created on first use)
+        run: |
+          if git ls-remote --exit-code --heads origin tide-history >/dev/null; then
+            git clone --depth 1 --branch tide-history "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" history
+          else
+            mkdir history && cd history && git init -q -b tide-history && git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/ingest/requirements.txt
+      - run: pip install -r tools/ingest/requirements.txt
+      - name: Weather (Met Office UKV via AWS Open Data; no key)
+        run: python -I tools/ingest/weather.py site/live/latest.json || [ $? -eq 3 ]
+      - name: Tide (EA gauge; UKHO predictions if a key is set, else derived predictions)
+        env:
+          UKHO_API_KEY: ${{ secrets.UKHO_API_KEY }}
+        run: python -I tools/ingest/tide.py site/live/tide.json --history history/data --predicted site/live/tide-predicted.json || [ $? -eq 3 ]
+      - run: python -I tools/ingest/index.py site/live
+      - run: bash tools/ci/push-live-data.sh site
+      - name: Save the gauge history
+        run: |
+          cd history
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data 2>/dev/null || exit 0
+          git diff --cached --quiet && exit 0
+          git commit -qm "Gauge readings to $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push origin tide-history

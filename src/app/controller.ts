@@ -21,6 +21,7 @@ import { buildRestrictions } from '../sim/course/restrictions';
 import type { Course } from '../sim/course/types';
 import { DART_PROJECTION } from '../sim/geo/projection';
 import { windFrom } from '../sim/boat/forces';
+import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
 
 /**
  * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
@@ -118,11 +119,16 @@ export const DEFAULT_SCENARIO: AppScenario = {
 /** A data file the app can offer as a weather or tide source. */
 export interface DataSource {
   id: string;
+  /** 'live' = rewritten by the scheduled job and judged by its freshness; 'replay' = a fixed recording. */
   kind: 'live' | 'replay';
   label: string;
   url: string;
   validTime?: string;
   json: unknown;
+  /** For live files: fresh, stale (usable, with a warning) or expired (shown as a recording only). */
+  freshness?: Freshness;
+  /** Tide only: whether the gauge reading is recent enough to apply the measured surge. */
+  gaugeUsable?: boolean;
 }
 
 export interface UiState {
@@ -142,6 +148,9 @@ export interface UiState {
   scenarioError?: string;
   race?: RaceUi;
   weatherSources: DataSource[];
+  tideSources: DataSource[];
+  /** Problems finding or reading the live-data files (shown in the scenario panel). */
+  liveIssues: string[];
   telemetryVersion: number;
   /** River Dart data: loading, loaded, or unavailable; plus anything that failed to load. */
   dart: { status: 'loading' | 'loaded' | 'unavailable'; issues: DartData['issues'] };
@@ -164,10 +173,12 @@ const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
 const MAX_STEPS_PER_FRAME = 12;
 
-/** Data files the app looks for next to itself (see public/live/README.md). */
-const WEATHER_FILES: { url: string; kind: 'live' | 'replay' }[] = [
-  { url: 'live/latest.json', kind: 'live' },
-  { url: 'live/metoffice-replay-2026-10-22T0715Z.json', kind: 'replay' },
+/** The list of live and replay data files served next to the app (public/live/README.md). */
+const LIVE_INDEX = 'live/index.json';
+/** Replays built into every deployment, tried when the index cannot be read. */
+const BUNDLED_REPLAYS: LiveIndexEntry[] = [
+  { path: 'metoffice-replay-2026-10-23T1400Z.json', kind: 'weather', mode: 'replay' },
+  { path: 'metoffice-replay-2026-10-22T0715Z.json', kind: 'weather', mode: 'replay' },
 ];
 
 /**
@@ -206,6 +217,8 @@ export class SimController {
   private webglError?: string;
   private scenarioError?: string;
   weatherSources: DataSource[] = [];
+  tideSources: DataSource[] = [];
+  liveIssues: string[] = [];
   dartData?: DartData;
   private dartStatus: UiState['dart']['status'] = 'loading';
   private dartScene?: DartScene;
@@ -374,28 +387,64 @@ export class SimController {
     this.fleetCurr = m;
   }
 
-  /** Look for live and replay weather files served with the app. Missing files are simply not offered. */
-  async discoverSources(): Promise<void> {
-    const found: DataSource[] = [];
-    for (const f of WEATHER_FILES) {
+  /**
+   * Find the live and replay data files served with the app: live/index.json lists them (so nothing that is
+   * absent is requested), each is fetched, checked and judged for freshness. Without an index only the
+   * bundled replays are tried. Problems are reported, never fatal: the app falls back to manual conditions.
+   */
+  async discoverSources(nowMs = Date.now()): Promise<void> {
+    const weather: DataSource[] = [];
+    const tide: DataSource[] = [];
+    const issues: string[] = [];
+    let entries: LiveIndexEntry[];
+    try {
+      const res = await fetch(LIVE_INDEX, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      entries = parseLiveIndex(await res.json()).files;
+    } catch (e) {
+      issues.push(`Live-data index (${LIVE_INDEX}) not available: ${(e as Error).message}. Only the bundled replay is offered.`);
+      entries = BUNDLED_REPLAYS;
+    }
+    for (const entry of entries) {
+      const url = `live/${entry.path}`;
       try {
-        const res = await fetch(f.url, { cache: 'no-store' });
-        if (!res.ok) continue;
-        const json = (await res.json()) as { model?: { valid?: string; available?: boolean } };
-        if (!json.model?.available) continue;
-        found.push({
-          id: f.url,
-          kind: f.kind,
-          url: f.url,
-          validTime: json.model.valid,
-          label: `${f.kind === 'live' ? 'Live' : 'Replay'}: Met Office UKV, valid ${json.model.valid ?? '?'}`,
-          json,
-        });
-      } catch {
-        // Not available (offline, not deployed yet, or malformed): skip.
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const loaded = loadLive(entry, await res.json(), nowMs);
+        const expired = loaded.freshness?.status === 'expired';
+        const kind = entry.mode === 'live' && !expired ? 'live' : 'replay';
+        if (loaded.kind === 'weather') {
+          const valid = loaded.snapshot.model.valid;
+          const stale = loaded.freshness?.status === 'stale' ? ' (stale)' : '';
+          weather.push({
+            id: url,
+            kind,
+            url,
+            validTime: valid,
+            json: loaded.snapshot,
+            freshness: loaded.freshness,
+            label: kind === 'live' ? `Live${stale}: Met Office UKV, from ${valid}` : `${expired ? 'Recorded' : 'Replay'}: Met Office UKV, valid ${valid}`,
+          });
+        } else {
+          const ev = loaded.snapshot.predictions.events;
+          tide.push({
+            id: url,
+            kind,
+            url,
+            validTime: ev[0]?.time,
+            json: loaded.snapshot,
+            freshness: loaded.freshness,
+            gaugeUsable: loaded.freshness?.gaugeUsable ?? false,
+            label: `${kind === 'live' ? 'Live' : expired ? 'Recorded' : 'Replay'} tide: ${loaded.snapshot.predictions.source}`,
+          });
+        }
+      } catch (e) {
+        issues.push(`${url}: ${(e as Error).message}. Not offered.`);
       }
     }
-    this.weatherSources = found;
+    this.weatherSources = weather;
+    this.tideSources = tide;
+    this.liveIssues = issues;
     this.publish(true);
   }
 
@@ -733,6 +782,8 @@ export class SimController {
       scenarioError: this.scenarioError,
       race: this.raceUi(),
       weatherSources: this.weatherSources,
+      tideSources: this.tideSources,
+      liveIssues: this.liveIssues,
       telemetryVersion: this.telemetry.version,
       dart: { status: this.dartStatus, issues: this.dartData?.issues ?? [] },
       showLabels: this.showLabels,

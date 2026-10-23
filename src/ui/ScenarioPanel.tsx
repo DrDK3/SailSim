@@ -6,6 +6,7 @@ import { allCourses, PRACTICE_KINDS } from '../app/courseLibrary';
 import { dataAgeMinutes } from '../sim/env/weather';
 import type { AiLevel } from '../sim/ai/skipper';
 import type { PrepFlag } from '../sim/race/committee';
+import { SKY_PRESETS, type SkyPreset } from '../sim/env/sky';
 
 function Num({ label, value, min, max, step, onChange, unit, disabled }: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void; disabled?: boolean }) {
   return (
@@ -47,7 +48,11 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
   const setC = (patch: Partial<ConditionsSettings>) => setDraft({ ...draft, conditions: { ...c, ...patch } });
   const w = c.weather;
   const sourceId = w.source === 'manual' ? 'manual' : (ui.weatherSources.find((s) => s.json === w.snapshot)?.id ?? 'manual');
-  const tideMode = c.tide?.mode ?? 'none';
+  const tideSourceId = c.tide?.mode === 'snapshot' ? (ui.tideSources.find((s) => s.json === (c.tide as { snapshot: unknown }).snapshot)?.id ?? 'none') : undefined;
+  const tideMode = c.tide?.mode === 'snapshot' ? (tideSourceId ?? 'none') : (c.tide?.mode ?? 'none');
+  const weatherSrc = ui.weatherSources.find((s) => s.id === sourceId);
+  const skyValue = c.sky ? (c.sky.source === 'data' ? 'data' : c.sky.preset) : w.source === 'metoffice' ? 'data' : 'clear';
+  const skyFromData = w.source === 'metoffice' && Array.isArray((w.snapshot as { model?: { sky?: unknown[] } })?.model?.sky);
   const manual = c.tide?.mode === 'manual' ? c.tide : undefined;
   const setManualTide = (patch: Partial<NonNullable<typeof manual>>) => manual && setC({ tide: { ...manual, ...patch } });
   const cur = c.current;
@@ -108,15 +113,42 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <Num label="Wind from" value={w.twdDeg} min={0} max={359} step={1} unit="°T" onChange={(v) => setC({ weather: { ...w, twdDeg: v } })} />
         </>
       ) : (
-        <p className="fine">
-          Met Office UKV 2 km forecast model, valid {ui.weatherSources.find((s) => s.id === sourceId)?.validTime ?? '?'}
-          {' '}({ageText(ui.weatherSources.find((s) => s.id === sourceId)?.validTime)}). Model output, not a measurement;
-          spatially varying across the area. {w.replay ? 'Replay of a past snapshot.' : ''}
-        </p>
+        <>
+          <p className="fine">
+            Met Office UKV 2 km forecast model, valid {weatherSrc?.validTime ?? '?'} ({ageText(weatherSrc?.validTime)}). Model output, not a
+            measurement; spatially varying across the area{(w.snapshot as { model?: { steps?: unknown[] } })?.model?.steps ? ' and following the forecast in time' : ''}.
+            {' '}{w.replay ? 'Replay of a past snapshot.' : ''}
+          </p>
+          {weatherSrc?.freshness && (
+            <p className={`fine ${weatherSrc.freshness.status === 'fresh' ? '' : 'warn-text'}`} role={weatherSrc.freshness.status === 'fresh' ? undefined : 'alert'} data-testid="weather-freshness">
+              {weatherSrc.freshness.message}
+            </p>
+          )}
+        </>
       )}
       {ui.weatherSources.every((s) => s.kind !== 'live') && (
-        <p className="fine">No live Met Office file is published yet (the scheduled ingest is Phase 6); a dated replay is available.</p>
+        <p className="fine" data-testid="no-live-weather">
+          No live Met Office forecast is published next to this copy of the app (the scheduled ingest job writes it: docs/DEPLOYMENT.md). Replays are available.
+        </p>
       )}
+      {ui.liveIssues.length > 0 && (
+        <ul className="fine live-issues" data-testid="live-issues">
+          {ui.liveIssues.map((x) => <li key={x}>{x}</li>)}
+        </ul>
+      )}
+      <label className="field select-field">
+        <span>Sky</span>
+        <select
+          aria-label="Sky"
+          value={skyValue}
+          onChange={(e) => setC({ sky: e.target.value === 'data' ? { source: 'data' } : { source: 'preset', preset: e.target.value as SkyPreset } })}
+        >
+          {w.source === 'metoffice' && <option value="data">{skyFromData ? 'From the forecast (cloud, visibility, rain)' : 'From data (not in this file: fair)'}</option>}
+          {(Object.keys(SKY_PRESETS) as SkyPreset[]).map((k) => (
+            <option key={k} value={k}>{SKY_PRESETS[k].label}</option>
+          ))}
+        </select>
+      </label>
       <label className="field select-field">
         <span>Gusts and shifts</span>
         <select value={c.gusts.preset} onChange={(e) => setC({ gusts: { ...c.gusts, preset: e.target.value as ConditionsSettings['gusts']['preset'] } })}>
@@ -134,14 +166,26 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         <select
           value={tideMode}
           onChange={(e) => {
-            if (e.target.value === 'none') setC({ tide: undefined, current: cur.mode === 'tidal' || cur.mode === 'dart' ? { mode: 'none' } : cur });
+            const v = e.target.value;
+            const src = ui.tideSources.find((s) => s.id === v);
+            if (v === 'none') setC({ tide: undefined, current: cur.mode === 'tidal' || cur.mode === 'dart' ? { mode: 'none' } : cur });
+            else if (src) setC({ tide: { mode: 'snapshot', snapshot: src.json, useGauge: src.gaugeUsable === true } });
             else setC({ tide: { mode: 'manual', hwTime: c.startTime, hwHeightM: 4.6, lwHeightM: 1.2 } });
           }}
         >
           <option value="none">None</option>
           <option value="manual">Manual (from tide tables)</option>
+          {ui.tideSources.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
         </select>
       </label>
+      {tideSourceId && ui.tideSources.find((s) => s.id === tideSourceId)?.freshness && (
+        <p className="fine" data-testid="tide-freshness">{ui.tideSources.find((s) => s.id === tideSourceId)!.freshness!.message}</p>
+      )}
+      {ui.tideSources.length === 0 && (
+        <p className="fine">No live tide file is published next to this copy of the app (needs the EA and UKHO hosts: docs/LIVE_TIDES.md).</p>
+      )}
       {!c.tide && ui.dart.status === 'loaded' && (
         <p className="fine">No tide set: the water stays at about mean level ({'≈'}2.7 m above chart datum).</p>
       )}

@@ -124,6 +124,8 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 .cond-row { display: grid; grid-template-columns: 86px 1fr; align-items: baseline; gap: 6px; font-size: 12.5px; }
 .cond-value { font-variant-numeric: tabular-nums; }
 .fine-inline { color: var(--muted); font-size: 11.5px; }
+.fine.warn-text { color: var(--warn); }
+.live-issues { padding-left: 16px; }
 .chip { display: inline-block; align-self: flex-start; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; margin-top: 3px; }
 .chip.warn { background: rgba(245, 185, 66, 0.16); color: var(--warn); }
 .chip.warn::before { content: '⚠ '; }

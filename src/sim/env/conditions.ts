@@ -5,6 +5,7 @@ import { DEFAULT_TIDAL_STREAM, NO_CURRENT, dartStream, tidalStream, uniformCurre
 import { manualTide, memoTide, parseTideSnapshot, snapshotTide, type TideSource } from './tide';
 import { GUST_PRESETS, WindField, uniformBase, type GustSettings } from './wind';
 import { gustsFromSnapshot, metOfficeBase, metOfficeInfo, parseMetOfficeSnapshot } from './weather';
+import { modelSky, presetSky, SKY_PRESETS, type SkyPreset, type SkySource } from './sky';
 
 /**
  * A complete, serialisable description of the conditions for a run. Scenario files, the app's scenario
@@ -26,7 +27,12 @@ export interface ConditionsSettings {
     | { mode: 'dart'; stream: TidalStreamSettings };
   tide?:
     | { mode: 'manual'; hwTime: string; hwHeightM: number; lwHeightM: number }
-    | { mode: 'snapshot'; snapshot: unknown };
+    | { mode: 'snapshot'; snapshot: unknown; useGauge?: boolean };
+  /**
+   * Cloud, visibility and rain (visual only). 'data' uses the Met Office snapshot's sky fields when it has
+   * them, else the 'fair' preset. Default: 'data' with Met Office weather, otherwise the 'clear' preset.
+   */
+  sky?: { source: 'preset'; preset: SkyPreset } | { source: 'data' };
 }
 
 export const DEFAULT_CONDITIONS: ConditionsSettings = {
@@ -50,6 +56,7 @@ export interface BuiltConditions {
   tide?: TideSource;
   current: CurrentModel;
   gusts: GustSettings;
+  sky: SkySource;
 }
 
 export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): BuiltConditions {
@@ -59,6 +66,12 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
   let base;
   let weather: WeatherInfo;
   let dataGusts: { gusts: GustSettings; notes: string[] } | undefined;
+  let sky: SkySource | undefined;
+  const skyChoice = c.sky ?? (c.weather.source === 'metoffice' ? { source: 'data' as const } : { source: 'preset' as const, preset: 'clear' as const });
+  if (skyChoice.source === 'preset') {
+    if (!(skyChoice.preset in SKY_PRESETS)) throw new Error(`conditions: unknown sky preset "${skyChoice.preset}"`);
+    sky = presetSky(skyChoice.preset);
+  }
   if (c.weather.source === 'manual') {
     base = uniformBase(knToMs(c.weather.twsKn), c.weather.twdDeg * DEG);
     weather = {
@@ -68,7 +81,8 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
     };
   } else {
     const snap = parseMetOfficeSnapshot(c.weather.snapshot);
-    base = metOfficeBase(snap);
+    base = metOfficeBase(snap, startEpochMs);
+    if (!sky && snap.model.sky?.length) sky = modelSky(snap.model.sky, startEpochMs, `Sky: Met Office UKV forecast (${c.weather.replay ? 'replay' : 'live'})`);
     dataGusts = gustsFromSnapshot(snap, c.gusts.seed);
     weather = metOfficeInfo(snap, c.weather.replay ? 'replay' : 'model', c.gusts.preset === 'from-data' ? dataGusts.notes : []);
   }
@@ -79,7 +93,7 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
 
   let tide: TideSource | undefined;
   if (c.tide?.mode === 'manual') tide = manualTide(Date.parse(c.tide.hwTime), c.tide.hwHeightM, c.tide.lwHeightM);
-  else if (c.tide?.mode === 'snapshot') tide = snapshotTide(parseTideSnapshot(c.tide.snapshot));
+  else if (c.tide?.mode === 'snapshot') tide = snapshotTide(parseTideSnapshot(c.tide.snapshot), { useGauge: c.tide.useGauge });
 
   if (tide) tide = memoTide(tide);
   let current: CurrentModel = NO_CURRENT;
@@ -93,7 +107,8 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
     current = dartStream(tide, geo, { ...DEFAULT_TIDAL_STREAM, ...c.current.stream });
   }
 
+  sky ??= presetSky('fair');
   const datum = geo ? { cdBelowOdn: geo.cdBelowOdn, meanLevelCd: MEAN_LEVEL_CD } : undefined;
-  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum });
-  return { env, weather, tide, current, gusts };
+  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum, sky });
+  return { env, weather, tide, current, gusts, sky };
 }

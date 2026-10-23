@@ -49,8 +49,11 @@ export const GUST_PRESETS: Record<'steady' | 'moderate' | 'shifty', GustSettings
 };
 
 export interface BaseWind {
-  /** Mean wind at a point: speed (m/s) and FROM direction (rad). */
-  at(n: number, e: number): { speed: number; fromDir: number };
+  /**
+   * Mean wind at a point: speed (m/s) and FROM direction (rad). `t` is the run time (s since the scenario
+   * start), for bases that follow a forecast through time; steady bases ignore it.
+   */
+  at(n: number, e: number, t?: number): { speed: number; fromDir: number };
 }
 
 export function uniformBase(speed: number, fromDir: number): BaseWind {
@@ -148,7 +151,7 @@ export class WindField {
     this.t += dt;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i]!;
-      const b = this.base.at(p.n, p.e);
+      const b = this.base.at(p.n, p.e, this.t);
       // Puffs drift downwind at ~90% of the base wind speed.
       p.n += -0.9 * b.speed * Math.cos(b.fromDir) * dt;
       p.e += -0.9 * b.speed * Math.sin(b.fromDir) * dt;
@@ -192,7 +195,7 @@ export class WindField {
 
   sample(n: number, e: number): WindSample {
     const s = this.settings;
-    const b = this.base.at(n, e);
+    const b = this.base.at(n, e, this.t);
     let boost = 0;
     let dirW = 0;
     const f = this.focus;
@@ -224,6 +227,35 @@ export class WindField {
   fluctuations(): { shift: number; speedFluct: number } {
     return { shift: this.shift, speedFluct: this.speedFluct };
   }
+}
+
+/**
+ * A base wind that follows a forecast through time: `steps` are bases valid at run times `t` (s, increasing).
+ * Between two steps the wind vectors are interpolated linearly in time; before the first and after the last
+ * step that step's field is used.
+ */
+export function timeSteppedBase(steps: { t: number; base: BaseWind }[]): BaseWind {
+  if (steps.length === 0) throw new Error('timeSteppedBase: no steps');
+  for (let k = 1; k < steps.length; k++) if (!(steps[k]!.t > steps[k - 1]!.t)) throw new Error('timeSteppedBase: step times must increase');
+  if (steps.length === 1) return steps[0]!.base;
+  const last = steps.length - 1;
+  return {
+    at(n: number, e: number, t = 0) {
+      if (t <= steps[0]!.t) return steps[0]!.base.at(n, e, t);
+      if (t >= steps[last]!.t) return steps[last]!.base.at(n, e, t);
+      let k = 0;
+      while (t >= steps[k + 1]!.t) k++;
+      const s0 = steps[k]!;
+      const s1 = steps[k + 1]!;
+      const w = (t - s0.t) / (s1.t - s0.t);
+      const a = s0.base.at(n, e, t);
+      const b = s1.base.at(n, e, t);
+      const wn = -(1 - w) * a.speed * Math.cos(a.fromDir) - w * b.speed * Math.cos(b.fromDir);
+      const we = -(1 - w) * a.speed * Math.sin(a.fromDir) - w * b.speed * Math.sin(b.fromDir);
+      const dir = Math.atan2(-we, -wn);
+      return { speed: Math.hypot(wn, we), fromDir: dir < 0 ? dir + 2 * Math.PI : dir };
+    },
+  };
 }
 
 /**

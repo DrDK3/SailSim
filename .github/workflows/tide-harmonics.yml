@@ -1,0 +1,40 @@
+# Weekly: derive Dartmouth harmonic constants from the accumulated EA gauge history (branch tide-history,
+# filled by the live-data job), validate them on held-back days, and publish a year of predicted HW/LW
+# events (live/tide-predicted.json) and the constants (live/tide-harmonics.json). Needs at least 36 days of
+# readings; until then it exits without publishing. See docs/DEPLOYMENT.md.
+name: Tide harmonics
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+jobs:
+  derive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Check out the gauge history
+        run: |
+          git ls-remote --exit-code --heads origin tide-history >/dev/null || { echo "No gauge history yet."; exit 0; }
+          git clone --depth 1 --branch tide-history "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/ingest/requirements.txt
+      - run: pip install -r tools/ingest/requirements.txt
+      - name: Derive and validate
+        run: |
+          [ -d history/data ] || { echo "No gauge history yet."; exit 0; }
+          python -I tools/ingest/harmonics.py history/data site/live/tide-harmonics.json site/live/tide-predicted.json || [ $? -eq 3 ]
+      - run: python -I tools/ingest/index.py site/live
+      - run: bash tools/ci/push-live-data.sh site

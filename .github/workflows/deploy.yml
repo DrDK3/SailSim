@@ -1,0 +1,28 @@
+# Build the site and publish it to the gh-pages branch (GitHub Pages: Settings > Pages > Deploy from a branch,
+# gh-pages, / (root)). Live-data files already on the branch are kept. See docs/DEPLOYMENT.md.
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gh-pages   # shared with the live-data jobs, so pushes to gh-pages never race
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (typecheck, Vite, secret check)
+        run: npm run build
+      - run: npm test
+      - name: Publish to gh-pages
+        run: bash tools/ci/publish-pages.sh dist

@@ -1,0 +1,6 @@
+# Live-data ingest (tools/ingest/*.py). Versions tested on 23 Oct 2026; compatible releases allowed.
+numpy~=2.5
+scipy~=1.18
+pyproj~=3.8
+netCDF4~=1.7
+utide~=0.4.0
