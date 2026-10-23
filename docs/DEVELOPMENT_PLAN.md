@@ -165,6 +165,18 @@ Differences from this list:
   - Missing data is handled gracefully.
   - No secrets in the bundle (automated grep check).
 
+**Status: done, 23 Oct 2026, except deployment itself** ([PHASE6_REPORT.md](PHASE6_REPORT.md)). All four acceptance criteria pass here:
+- the production build passes the browser tests, served at the root and under a GitHub Pages sub-path;
+- controls work;
+- missing, corrupt, stale and expired data are handled and reported;
+- the secret check runs in every build.
+
+Differences from this list:
+- **Hosting:** GitHub Pages workflows are written and rehearsed locally, but they have never run on GitHub, because no account is connected (D3). Cloudflare Pages is documented as an alternative and not set up.
+- **Tide ingest:** built and tested on synthetic fixtures only (EA and UKHO hosts blocked here).
+- **Cockpit view:** the helm view was refined (the horizon tilts with the heel). There is no separate cockpit model.
+- **Load time:** measured only under software WebGL. The download shrank from 4.92 MB to 1.43 MB ([PERFORMANCE.md](PERFORMANCE.md)).
+
 ---
 
 ## Acceptance criteria (draft numbers, open to your review)

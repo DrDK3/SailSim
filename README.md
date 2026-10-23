@@ -15,8 +15,8 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | 2: tested physics (dynamic roll, hinged boom, gusts, tide and stream, Met Office wind, dashboard, calibration workflow) | Done, 22 Oct 2026 ([phase report](docs/PHASE2_REPORT.md)) |
 | 3: the River Dart from open data (terrain, buildings, piers, moorings, ferries, grounding, channel stream, minimap) | Done, 22 Oct 2026 ([phase report](docs/PHASE3_REPORT.md)) |
 | 4: courses, course judge and editor (practice courses, validation, starts, roundings, finishes) | Done, 22 Oct 2026 ([phase report](docs/PHASE4_REPORT.md)). No RDYC club courses yet: the documents are needed |
-| **5: race management and AI competitors (fleet physics and contact, race committee, rules subset, penalties, results, AI Squibs)** | **Done, 23 Oct 2026** ([phase report](docs/PHASE5_REPORT.md), [racing](docs/RACING.md)) |
-| 6: polish and deployment | Planned ([plan](docs/DEVELOPMENT_PLAN.md)) |
+| 5: race management and AI competitors (fleet physics and contact, race committee, rules subset, penalties, results, AI Squibs) | Done, 23 Oct 2026 ([phase report](docs/PHASE5_REPORT.md), [racing](docs/RACING.md)) |
+| **6: deployment, live data, visual weather, replays, scenario library, performance** | **Done, 23 Oct 2026** ([phase report](docs/PHASE6_REPORT.md), [deployment](docs/DEPLOYMENT.md)). **Built and tested here, not yet deployed:** no GitHub account is connected |
 
 Physics coefficients are **estimates** awaiting Squib performance data ([calibration workflow](docs/CALIBRATION.md)). Mid-channel depths, individual moorings, ferry timetables and the tidal stream are provisional estimates (the in-app **Layers** panel lists them), and Met Office wind is forecast-model output. This is not for navigation or performance prediction.
 
@@ -34,10 +34,12 @@ npm run dev          # open the printed URL; press H in the app for help
 | Command | What it does |
 |---|---|
 | `npm run dev` | Development server with hot reload |
-| `npm run build` | Typecheck everything, then build static files to `dist/` |
+| `npm run build` | Typecheck everything, build static files to `dist/`, then check them for secrets (`npm run check:secrets`) |
 | `npm run preview` | Serve the production build on http://localhost:4173 |
 | `npm test` | Physics, environment, calibration and golden-trace tests (Vitest, about 35 s) |
-| `npm run test:e2e` | Build, serve and run the browser tests (Playwright). Uses `/opt/pw-browsers/chromium` or `$PW_CHROMIUM` |
+| `npm run test:e2e` | Build, serve and run the browser tests (Playwright) on the production build, at the root and under a GitHub Pages sub-path. Uses `/opt/pw-browsers/chromium` or `$PW_CHROMIUM` |
+| `.venv/bin/python -I -m unittest discover -s tools/ingest -p 'test_*.py'` | Live-data ingest tests (weather, tide, harmonics, index); `tools/ingest/requirements.txt` |
+| `node tools/load-timing.mjs URL [Mbit/s] [runs]` | Loading time and bytes over a throttled connection ([how](docs/PERFORMANCE.md)) |
 | `npm run typecheck` / `npm run lint` | TypeScript (app, DOM-free sim, tests) and ESLint |
 | `npm run scenario -- scenarios/beat-10kn.json` | Run a scenario headlessly and write a CSV trace to `out/` |
 | `npm run polar` | Model-output speed table (not validated data) |
@@ -71,18 +73,20 @@ On-screen buttons provide the same controls. The toolbar also opens:
 - the **Polar** panel: the model polar, computed in a Web Worker;
 - the **Scenario** panel: start position and time, wind source, gusts, tide, current, course, start sequence, and the fleet (0–20 AI boats, their level, the preparatory flag: [docs/RACING.md](docs/RACING.md));
 - the **Layers** panel: what is data and what is provisional, with sources and licences;
-- the **Courses** editor: draw, check, import and export courses ([docs/COURSES.md](docs/COURSES.md)).
+- the **Courses** editor: draw, check, import and export courses ([docs/COURSES.md](docs/COURSES.md));
+- the **Library**: ready-made scenarios (light air, fresh and shifty, wind against tide, fog, rain, sunset, practice and river races, a Met Office forecast replay), your own saved scenarios, scenario export and import, and **replays**. Save a replay of the run as a file; opening it plays the run again, checks it matches bit for bit, at ×1 to ×8, and lets you take over at any point.
 
 ## Real-time conditions
 
 | Input | Source | In this build |
 |---|---|---|
-| Wind | Met Office UKV 2 km model (AWS Open Data), spatially interpolated, with gust and shift statistics from the model and nearby observations | The app offers `live/latest.json` when it is published next to the app (scheduled ingest, Phase 6), and always offers a bundled, dated replay. Labelled as model output, with its age |
-| Tide height | Manual HW/LW from tide tables; UKHO predictions plus the EA Dartmouth gauge via a snapshot file | Manual entry works. Live fetching needs the EA and UKHO hosts and a UKHO key kept server-side ([LIVE_TIDES.md](docs/LIVE_TIDES.md)) |
+| Wind | Met Office UKV 2 km model (AWS Open Data), spatially interpolated, following the forecast every 15 min, with gust and shift statistics from the model and nearby observations | A scheduled job publishes `live/latest.json` every 30 min on the deployed site; the app judges it fresh, stale or expired. Two dated replays are bundled. Labelled as model output, with its age |
+| Sky | The same forecast: cloud, visibility, rain (hourly); or a preset | Visual only: cloud layer, fog, rain, and the sun for the run's time |
+| Tide height | EA Dartmouth gauge; UKHO predictions (optional key, kept in CI only) or predictions derived from the gauge's own harmonic constants; or manual HW/LW | The tide job is built but tested on fixtures only: the EA and UKHO hosts are blocked here ([LIVE_TIDES.md](docs/LIVE_TIDES.md), [DEPLOYMENT.md](docs/DEPLOYMENT.md)) |
 | Tidal stream | Provisional channel-following model on the River Dart, driven by the tide timing | Labelled "modelled": not measured current data |
 | Water depth | LIDAR near the shore; provisional estimate mid-channel; level from the tide | The boat can run aground |
 
-No API keys are in the client code.
+No API keys are in the client code; the build fails if one appears in `dist/`. **External services:** none at run time beyond static hosting. The scheduled jobs need GitHub Actions; the UKHO tide API is optional (free tier); costs are in [DEPLOYMENT.md](docs/DEPLOYMENT.md#6-costs) (£0 on a public GitHub repository).
 
 ## Project layout
 
@@ -92,15 +96,16 @@ src/sim/race/ fleet and contact, race committee, rules subset, race session, tri
 src/sim/ai/   AI skippers, AI sheet handling, AI target-speed polar
 src/render/   Three.js scene, water, procedural Squib, wake, force arrows, River Dart (terrain, buildings, piers, moorings, ferries)
 src/ui/       React instruments, controls, dashboard, polar, debug, scenario and help panels
-src/app/      game loop (fixed 100 Hz step with render interpolation), input, telemetry, polar worker
-public/live/  weather files the app discovers (dated Met Office replay; live file when deployed)
-public/geo/   River Dart data (elevation, stream pattern, drape, minimap, features, manifest with provenance)
+src/app/      game loop (fixed 100 Hz step with render interpolation), input, telemetry, polar worker, replays, scenario library
+public/live/  data files the app discovers through index.json (bundled Met Office replays; live weather and tide when deployed)
+public/geo/   River Dart data (packed elevation and stream grids, drape, minimap, features, manifest with provenance)
+.github/      CI, deploy to GitHub Pages, scheduled live data and tide harmonics
 data/boats/   class data and calibration coefficients, each with source and confidence tag
 data/observations/  template for observed sailing points (calibration); no data yet
 data/courses/ simulated practice courses; club/ for RDYC courses entered from official documents (none yet)
 scenarios/    repeatable headless scenarios (JSON)
 tests/        Vitest (sim) and Playwright (browser) suites, golden traces, fixtures (synthetic ones labelled)
-tools/        scenario runner, polar, parameter table, golden traces, calibration, performance; geodata/ (Python pipeline)
+tools/        scenario runner, polar, parameter table, golden traces, calibration, performance, secret check, Pages-like server; geodata/ and ingest/ (Python); ci/ (publish scripts)
 research/     Phase 0 geodata and live-weather feasibility scripts (Python)
 docs/         research, sources, architecture, plan, physics, parameters, reports
 ```
@@ -109,7 +114,10 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 
 | Document | Contents |
 |---|---|
-| [docs/PHASE5_REPORT.md](docs/PHASE5_REPORT.md) | Phase 5: what works, test results, criteria, decisions, known defects, manual test steps |
+| [docs/PHASE6_REPORT.md](docs/PHASE6_REPORT.md) | Phase 6: what works, test results, acceptance, decisions, known defects, manual test steps |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Publishing to GitHub Pages, the scheduled live-data jobs, freshness rules, automatic checks, first-run checklist, costs |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Simulation cost per frame, download size and load profile, how to measure |
+| [docs/PHASE5_REPORT.md](docs/PHASE5_REPORT.md) | Phase 5 report |
 | [docs/RACING.md](docs/RACING.md) | Fleet contact, race committee, the racing-rules subset, penalties, scoring and how the AI sails |
 | [docs/PHASE4_REPORT.md](docs/PHASE4_REPORT.md) | Phase 4 report |
 | [docs/COURSES.md](docs/COURSES.md) | Course format, validation rules, how the judge works, entering and verifying club courses |
@@ -145,5 +153,5 @@ python3 -m venv .venv && .venv/bin/pip install -r research/geodata/requirements.
 | Map data | © OpenStreetMap contributors, ODbL 1.0, via Overture Maps Foundation; Microsoft ML Building Footprints, ODbL |
 | Satellite colour | Contains modified Copernicus Sentinel data 2025 |
 | Weather (app replay and research) | British Crown copyright, the Met Office, CC BY-SA 4.0 (UKV model and land observations, via AWS Open Data) |
-| Tide gauges (planned) | Contains Environment Agency data, Open Government Licence v3; UKHO predictions © Crown copyright (terms to confirm) |
+| Tide (when deployed) | Contains Environment Agency data, Open Government Licence v3; UKHO predictions © Crown copyright (terms to confirm before publishing them: OUTSTANDING_ISSUES 15) |
 | Terrain | © Environment Agency copyright and/or database right 2015. All rights reserved. Open Government Licence v3, via Tilezen terrain tiles |

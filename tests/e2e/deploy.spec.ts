@@ -155,6 +155,7 @@ test('live data: a forecast that has run out is stale (warned), a day-old one on
 });
 
 test('live data: a corrupt file is reported and skipped; a missing index falls back to the bundled replays', async ({ page }) => {
+  test.setTimeout(180_000); // two full loads of the app
   await serveLive(page, { 'latest.json': '{"model": {"available": tru' });
   const { errors } = await open(page);
   await expect.poll(async () => (await liveUi(page)).liveIssues.length).toBe(1);

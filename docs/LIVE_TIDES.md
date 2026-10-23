@@ -1,7 +1,11 @@
 # Real tidal conditions: findings and proposed design
 
 - **Added:** 22 Oct 2026, at the user's request.
-- **Status:** sources identified. **No tide data could be fetched from this environment**, because every tide host is blocked by the network policy. Nothing below has been tested against live data yet.
+- **Status (23 Oct 2026, Phase 6):** built, but tested on synthetic fixtures only. **No tide data could be fetched from this environment**, because every tide host is blocked by the network policy.
+  - **Ingest:** `tools/ingest/tide.py` (EA gauge; UKHO predictions with the key as a CI secret).
+  - **Harmonics:** `tools/ingest/harmonics.py` derives constants with UTide, validates them on 7 held-back days, and predicts a year of HW/LW events.
+  - **In the app:** a live tide source, judged by freshness; the gauge's surge is applied only when the reading is recent.
+  - **Still to check:** the response shapes, the EA measure and the UKHO time zone, on the first run on GitHub ([DEPLOYMENT.md](DEPLOYMENT.md) §5).
 
 ## 1. Three different things, kept separate
 
@@ -74,7 +78,7 @@ Scheduled ingest (GitHub Actions, every 15–30 min)              Browser
 |---|---|
 | 2 | **Done.** `TideSource` (manual, and the snapshot format the live ingest will write, with gauge residual) and a provisional **uniform** tidal stream driven by the tide timing. Live fetching is not yet tested (hosts blocked here) |
 | 3 | Spatial current pattern f(x, y); depth relative to chart datum; grounding at the live height; river-flow term |
-| 6 | Production ingest (EA plus UKHO), harmonic-constant derivation and validation, stale-data handling |
+| 6 | **Built, tested on fixtures.** `tools/ingest/tide.py` (EA + UKHO), `harmonics.py` (UTide, 7-day hold-out), weekly `tide-harmonics.yml`, history kept on the `tide-history` branch, freshness rules in the app. Needs the first run on GitHub |
 
 ## 5. What I need to build and test this
 

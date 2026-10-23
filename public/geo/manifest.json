@@ -19,7 +19,7 @@
   "nMax": 4560.0
  },
  "elevation": {
-  "file": "elevation.bin",
+  "file": "elevation.i16z",
   "type": "int16le",
   "scale": 0.01,
   "cell": 8.0,
@@ -27,10 +27,11 @@
   "ny": 1220,
   "e0": -3200.0,
   "n0": -5200.0,
-  "order": "row-major, rows south to north, cell centres at e0 + (i + 0.5)\u00b7cell"
+  "order": "row-major, rows south to north, cell centres at e0 + (i + 0.5)\u00b7cell",
+  "packing": "i16-gradient-zigzag-planes-gzip/1"
  },
  "current": {
-  "file": "current.bin",
+  "file": "current.i16z",
   "type": "int16le",
   "scale": 0.001,
   "components": [
@@ -44,7 +45,8 @@
   "ny": 610,
   "e0": -3200.0,
   "n0": -5200.0,
-  "meaning": "Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)"
+  "meaning": "Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)",
+  "packing": "i16-gradient-zigzag-planes-gzip/1"
  },
  "drape": {
   "file": "drape.jpg",

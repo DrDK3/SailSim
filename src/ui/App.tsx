@@ -1,22 +1,24 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { SimController } from '../app/controller';
 import { Instruments } from './Instruments';
 import { Controls } from './Controls';
-import { DebugPanel } from './DebugPanel';
-import { ScenarioPanel } from './ScenarioPanel';
-import { Help } from './Help';
-import { Dashboard } from './Dashboard';
-import { PolarPanel } from './PolarPanel';
 import { Minimap } from './Minimap';
-import { LayersPanel } from './LayersPanel';
 import { RacePanel } from './RacePanel';
 import { SKY_PRESETS } from '../sim/env/sky';
-import { ResultsPanel } from './ResultsPanel';
-import { CourseEditor } from './CourseEditor';
-import { LibraryPanel } from './LibraryPanel';
 import { ReplayBar } from './ReplayBar';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
+
+/** Panels opened on demand load their code when first opened (docs/PERFORMANCE.md). */
+const DebugPanel = lazy(() => import('./DebugPanel').then((m) => ({ default: m.DebugPanel })));
+const ScenarioPanel = lazy(() => import('./ScenarioPanel').then((m) => ({ default: m.ScenarioPanel })));
+const Help = lazy(() => import('./Help').then((m) => ({ default: m.Help })));
+const Dashboard = lazy(() => import('./Dashboard').then((m) => ({ default: m.Dashboard })));
+const PolarPanel = lazy(() => import('./PolarPanel').then((m) => ({ default: m.PolarPanel })));
+const LayersPanel = lazy(() => import('./LayersPanel').then((m) => ({ default: m.LayersPanel })));
+const ResultsPanel = lazy(() => import('./ResultsPanel').then((m) => ({ default: m.ResultsPanel })));
+const CourseEditor = lazy(() => import('./CourseEditor').then((m) => ({ default: m.CourseEditor })));
+const LibraryPanel = lazy(() => import('./LibraryPanel').then((m) => ({ default: m.LibraryPanel })));
 
 function conditionsText(sc: AppScenario): string {
   const c = sc.conditions;
@@ -31,9 +33,30 @@ function conditionsText(sc: AppScenario): string {
 
 export function App({ ctl }: { ctl: SimController }) {
   const host = useRef<HTMLDivElement>(null);
+  const toolbar = useRef<HTMLElement>(null);
+  // Side panels open just below the toolbar, which wraps to two rows on narrower screens.
+  const [sideTop, setSideTop] = useState<number>();
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+
+  useEffect(() => {
+    const nav = toolbar.current;
+    if (!nav) return;
+    const place = () => {
+      const r = nav.getBoundingClientRect();
+      // On small screens the toolbar sits at the bottom (styles.css): keep the default position then.
+      setSideTop(r.top < window.innerHeight / 2 ? Math.round(r.bottom + 8) : undefined);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(nav);
+    window.addEventListener('resize', place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', place);
+    };
+  }, []);
 
   useEffect(() => {
     const el = host.current!;
@@ -51,7 +74,7 @@ export function App({ ctl }: { ctl: SimController }) {
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
       <Instruments s={ui.snapshot} />
-      <nav className="panel toolbar" aria-label="Simulation">
+      <nav ref={toolbar} className="panel toolbar" aria-label="Simulation">
         <button onClick={() => ctl.togglePause()} data-testid="pause">{ui.paused ? 'Resume' : 'Pause'}</button>
         <button onClick={() => ctl.restart()} title="Reset to the scenario start (R)">Reset</button>
         <label className="select">
@@ -75,13 +98,13 @@ export function App({ ctl }: { ctl: SimController }) {
         <button aria-pressed={ui.showEditor} onClick={() => ctl.toggleEditor()} title="Course editor">Courses</button>
         <button onClick={() => ctl.toggleHelp()} title="Help (H)">Help</button>
       </nav>
-      <div className="side">
-        {scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => setScenarioOpen(false)} />}
-        {libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => setLibraryOpen(false)} />}
-        {ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}
-        {ui.showDebug && <DebugPanel ui={ui} />}
+      <div className="side" style={sideTop === undefined ? undefined : { top: sideTop, maxHeight: `calc(100% - ${sideTop + 230}px)` }}>
+        <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => setScenarioOpen(false)} />}</Suspense>
+        <Suspense fallback={null}>{libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => setLibraryOpen(false)} />}</Suspense>
+        <Suspense fallback={null}>{ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}</Suspense>
+        <Suspense fallback={null}>{ui.showDebug && <DebugPanel ui={ui} />}</Suspense>
       </div>
-      {ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}
+      <Suspense fallback={null}>{ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}</Suspense>
       {ui.replay ? <ReplayBar ctl={ctl} ui={ui} /> : <Controls ctl={ctl} ui={ui} />}
       {ui.paused && <div className="banner">{ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}</div>}
       {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
@@ -92,14 +115,14 @@ export function App({ ctl }: { ctl: SimController }) {
           <button onClick={() => ctl.toggleLayers(true)}>Details</button>
         </div>
       )}
-      {ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}
+      <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
-      {ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}
-      {ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}</Suspense>
+      <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
       <footer className="badge">
         Phase 6 · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
       </footer>
-      {ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}
+      <Suspense fallback={null}>{ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}</Suspense>
     </div>
   );
 }

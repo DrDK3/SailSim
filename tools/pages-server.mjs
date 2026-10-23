@@ -3,14 +3,19 @@
  * the built site (dist/) is served under /<prefix>/ only, /<prefix> redirects to /<prefix>/, there is no
  * fallback routing (a missing file is a 404), and responses carry Pages-like cache headers.
  *   node tools/pages-server.mjs [port=4174] [prefix=squib-dart-sim] [dir=dist]
+ * With GZIP=1, text responses (HTML, JS, CSS, JSON, SVG) are gzipped when the browser accepts it, as GitHub
+ * Pages does for these types (used to measure loading: tools/load-timing.mjs).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const port = Number(process.argv[2] ?? 4174);
 const prefix = `/${process.argv[3] ?? 'squib-dart-sim'}`;
 const root = resolve(process.argv[4] ?? 'dist');
+const gzip = process.env.GZIP === '1';
+const COMPRESSIBLE = /^(text\/|application\/(json|javascript|manifest\+json)|image\/svg)/;
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -53,12 +58,15 @@ createServer(async (req, res) => {
   try {
     const s = await stat(file);
     if (!s.isFile()) throw new Error('not a file');
-    const body = await readFile(file);
-    res.writeHead(200, {
-      'Content-Type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
-      'Cache-Control': 'max-age=600',
-      'Access-Control-Allow-Origin': '*',
-    });
+    let body = await readFile(file);
+    const type = TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
+    const headers = { 'Content-Type': type, 'Cache-Control': 'max-age=600', 'Access-Control-Allow-Origin': '*' };
+    if (gzip && COMPRESSIBLE.test(type) && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
+      body = gzipSync(body, { level: 6 });
+      headers['Content-Encoding'] = 'gzip';
+      headers.Vary = 'Accept-Encoding';
+    }
+    res.writeHead(200, headers);
     res.end(req.method === 'HEAD' ? undefined : body);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/html' });

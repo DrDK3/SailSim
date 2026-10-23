@@ -46,19 +46,12 @@ export function sailingSim(o: SailOpts): Simulation {
 
 export const toKn = (ms: number): number => ms / KN;
 
-import { readFileSync } from 'node:fs';
-import { DartGeo, type DartManifest } from '../../src/sim/index';
+import type { DartGeo } from '../../src/sim/index';
+import { loadDartGeoNode } from '../../tools/lib/dartGeoNode';
 
 let geoCache: DartGeo | undefined;
-/** The River Dart data from public/geo (as the app loads it). */
+/** The River Dart data from public/geo (as the app loads it, packed grids unpacked). */
 export function loadDartGeo(): DartGeo {
-  if (geoCache) return geoCache;
-  const root = new URL('../../public/geo/', import.meta.url);
-  const buf = (f: string) => {
-    const b = readFileSync(new URL(f, root));
-    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
-  };
-  const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8')) as DartManifest;
-  geoCache = new DartGeo(manifest, buf('elevation.bin'), buf('current.bin'));
+  geoCache ??= loadDartGeoNode();
   return geoCache;
 }

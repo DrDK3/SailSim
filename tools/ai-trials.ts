@@ -9,7 +9,7 @@ import { dirname } from 'node:path';
 import { cpus } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { DartGeo, type DartManifest } from '../src/sim/geo/dart';
+import { loadDartGeoNode } from './lib/dartGeoNode';
 import { DEFAULT_TRIAL, runTrial, type TrialOptions, type TrialResult } from '../src/sim/race/trial';
 import type { Course } from '../src/sim/course/types';
 
@@ -20,11 +20,7 @@ const arg = (name: string, def: string) => {
 
 function loadGeo() {
   const dir = new URL('../public/geo/', import.meta.url);
-  const bin = (f: string) => {
-    const b = readFileSync(new URL(f, dir));
-    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
-  };
-  const geo = new DartGeo(JSON.parse(readFileSync(new URL('manifest.json', dir), 'utf8')) as DartManifest, bin('elevation.bin'), bin('current.bin'));
+  const geo = loadDartGeoNode(dir);
   const features = JSON.parse(readFileSync(new URL('features.json', dir), 'utf8'));
   return { geo, features };
 }

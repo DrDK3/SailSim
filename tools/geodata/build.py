@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import bathymetry  # noqa: E402
 import current  # noqa: E402
 import drape  # noqa: E402
+import pack  # noqa: E402
 import terrain  # noqa: E402
 import vector  # noqa: E402
 from common import (  # noqa: E402
@@ -320,11 +321,14 @@ def main():
     fer = ferries(extract)
     mk = marks()
 
-    # ---- write binary grids (little-endian Int16) ----
+    # ---- write binary grids (Int16, packed losslessly for download: pack.py) ----
     q_elev = np.clip(np.round(elev * 100), -32768, 32767).astype("<i2")
-    q_elev.tofile(os.path.join(OUT, "elevation.bin"))
+    with open(os.path.join(OUT, "elevation.i16z"), "wb") as f:
+        f.write(pack.pack_grid(q_elev, NX, NY))
     cur = np.stack([fields["tidal"][0], fields["tidal"][1], fields["river"][0], fields["river"][1]])
-    np.clip(np.round(cur * 1000), -32768, 32767).astype("<i2").tofile(os.path.join(OUT, "current.bin"))
+    q_cur = np.clip(np.round(cur * 1000), -32768, 32767).astype("<i2")
+    with open(os.path.join(OUT, "current.i16z"), "wb") as f:
+        f.write(pack.pack_grid(q_cur, cmeta["nx"], cmeta["ny"]))
     Image.fromarray(rgb).save(os.path.join(OUT, "drape.jpg"), quality=86, optimize=True)
     minimap(cls, elev, blds).save(os.path.join(OUT, "minimap.png"), optimize=True)
 
@@ -350,9 +354,10 @@ def main():
         origin=dict(lat=50.34801, lon=-3.57339, name="RDYC clubhouse footprint centroid"),
         verticalDatum=dict(heights="metres above Ordnance Datum Newlyn (ODN)", chartDatumBelowOdn=CD_BELOW_ODN, chartDatumTag="S", chartDatumSource="Secondary source (issue 14); confirm against UKHO (C8)"),
         domain=dict(eMin=E_MIN, eMax=E_MAX, nMin=N_MIN, nMax=N_MAX),
-        elevation=dict(file="elevation.bin", type="int16le", scale=0.01, cell=CELL, nx=NX, ny=NY, e0=E_MIN, n0=N_MIN, order="row-major, rows south to north, cell centres at e0 + (i + 0.5)·cell"),
-        current=dict(file="current.bin", type="int16le", scale=0.001, components=["tidal_ve", "tidal_vn", "river_ve", "river_vn"], **cmeta,
-                     meaning="Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)"),
+        elevation=dict(file="elevation.i16z", type="int16le", scale=0.01, cell=CELL, nx=NX, ny=NY, e0=E_MIN, n0=N_MIN, order="row-major, rows south to north, cell centres at e0 + (i + 0.5)·cell",
+                       packing=pack.PACKING),
+        current=dict(file="current.i16z", type="int16le", scale=0.001, components=["tidal_ve", "tidal_vn", "river_ve", "river_vn"], **cmeta,
+                     meaning="Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)", packing=pack.PACKING),
         drape=dict(file="drape.jpg", **dmeta, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
         minimap=dict(file="minimap.png", cell=CELL * 2, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
         features="features.json",

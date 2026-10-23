@@ -6,8 +6,9 @@ export interface DartManifest {
   projection: string;
   verticalDatum: { chartDatumBelowOdn: number };
   domain: { eMin: number; eMax: number; nMin: number; nMax: number };
-  elevation: { scale: number; cell: number; nx: number; ny: number; e0: number; n0: number };
-  current: { scale: number; cell: number; nx: number; ny: number; e0: number; n0: number; components: string[] };
+  /** `file` holds the grid; `packing` names its lossless packing (src/sim/geo/pack.ts), absent for raw Int16. */
+  elevation: { file: string; packing?: string; scale: number; cell: number; nx: number; ny: number; e0: number; n0: number };
+  current: { file: string; packing?: string; scale: number; cell: number; nx: number; ny: number; e0: number; n0: number; components: string[] };
   entrance: { a: [number, number]; b: [number, number] };
   layers: { id: string; label: string; status: string; tag: string; source: string; licence: string; notes: string[] }[];
 }

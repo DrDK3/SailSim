@@ -138,8 +138,9 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
   await page.getByRole('button', { name: 'Scenario' }).click();
   const panel = page.getByRole('region', { name: 'Scenario settings' });
   const source = panel.locator('.field', { hasText: 'Source' }).locator('select');
-  await expect(source.locator('option', { hasText: 'Replay' })).toHaveCount(1);
-  await source.selectOption({ label: (await source.locator('option', { hasText: 'Replay' }).textContent())! });
+  // Two bundled replays (22 Oct 07:15 and 23 Oct 14:00 UTC); no live forecast is published here.
+  await expect(source.locator('option', { hasText: 'Replay' })).toHaveCount(2);
+  await source.selectOption({ label: (await source.locator('option', { hasText: 'Replay' }).first().textContent())! });
   await expect(panel).toContainText('Model output, not a measurement');
   await panel.locator('.field', { hasText: /^Tide/ }).locator('select').selectOption('manual');
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('tidal');

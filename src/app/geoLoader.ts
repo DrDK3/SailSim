@@ -1,4 +1,5 @@
 import { DartGeo, type DartManifest } from '../sim/geo/dart';
+import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
 
 /** public/geo/features.json (written by tools/geodata/build.py); local metres, rounded to 0.1 m. */
 export interface DartFeatures {
@@ -44,6 +45,20 @@ export interface DartData {
 
 const BASE = 'geo/';
 
+/** A grid file as raw Int16 little-endian bytes: unpacked when the manifest says it is packed. */
+async function fetchGrid(base: string, spec: { file: string; packing?: string; nx: number; ny: number }): Promise<ArrayBuffer> {
+  const buf = await (await fetchOk(base + spec.file)).arrayBuffer();
+  if (!spec.packing) return buf;
+  if (spec.packing !== GRID_PACKING) throw new Error(`unknown packing ${spec.packing}`);
+  let bytes = new Uint8Array(buf);
+  // A server that sent the file with Content-Encoding: gzip has already undone the gzip layer.
+  if (isGzip(bytes)) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('this browser cannot unpack the data (no DecompressionStream)');
+    bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  }
+  return decodeGridPlanes(bytes, spec.nx, spec.ny);
+}
+
 async function fetchOk(url: string): Promise<Response> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText || 'error'}`);
@@ -76,21 +91,21 @@ export async function loadDartData(base = BASE): Promise<DartData> {
   }
   const m = out.manifest;
   const [elev, cur, feat, drape] = await Promise.allSettled([
-    fetchOk(base + 'elevation.bin').then((r) => r.arrayBuffer()),
-    fetchOk(base + 'current.bin').then((r) => r.arrayBuffer()),
+    fetchGrid(base, m.elevation),
+    fetchGrid(base, m.current),
     fetchOk(base + 'features.json').then((r) => r.json() as Promise<DartFeatures>),
     loadImage(base + m.drape.file),
   ]);
   if (elev.status === 'rejected') {
-    issue('elevation.bin', elev.reason, 'No terrain or depths: sailing on open water.');
+    issue(m.elevation.file, elev.reason, 'No terrain or depths: sailing on open water.');
   } else {
     const expected = m.elevation.nx * m.elevation.ny * 2;
     if (elev.value.byteLength !== expected) {
-      issue('elevation.bin', new Error(`size ${elev.value.byteLength} bytes, expected ${expected}`), 'No terrain or depths: sailing on open water.');
+      issue(m.elevation.file, new Error(`size ${elev.value.byteLength} bytes, expected ${expected}`), 'No terrain or depths: sailing on open water.');
     } else {
       // Without the current grid, use an all-zero pattern (no channel stream) but keep terrain and depths.
       const curBuf = cur.status === 'fulfilled' && cur.value.byteLength === m.current.nx * m.current.ny * 2 * m.current.components.length ? cur.value : undefined;
-      if (!curBuf) issue('current.bin', cur.status === 'rejected' ? cur.reason : new Error('wrong size'), 'Channel-following stream unavailable.');
+      if (!curBuf) issue(m.current.file, cur.status === 'rejected' ? cur.reason : new Error('wrong size'), 'Channel-following stream unavailable.');
       out.geo = new DartGeo(m, elev.value, curBuf);
     }
   }

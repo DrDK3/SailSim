@@ -1,7 +1,10 @@
 # Live weather conditions: findings and proposed design
 
 - **Added:** 22 Oct 2026, at the user's request for real-time weather.
-- **Status:** feasibility proven with a working script (`research/weather/live_conditions.py`). Not yet in the simulator.
+- **Status (23 Oct 2026, Phase 6):** built.
+  - **The ingest:** `tools/ingest/weather.py` writes `live/latest.json`, schema `squib-weather/2`. It holds the wind every 15 min for 2 h, plus hourly cloud, visibility, rain, fog, temperature and pressure. It was tested against the real Met Office feed on 23 Oct 2026.
+  - **The scheduled job:** `.github/workflows/live-data.yml` publishes the file every 30 min by day and hourly at night. It has **not run on GitHub yet**: no account is connected.
+  - **In the app:** the wind follows the forecast steps, and the file is judged fresh, stale or expired. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## 1. What "real-time" can honestly mean on the Dart
 
@@ -63,7 +66,7 @@ GitHub Actions cron (every 15–30 min)              Browser (simulator)
   - A stale-data warning appears above a threshold.
   - A one-click "use live conditions" option in scenario setup.
 - **Not covered by these data:** valley funnelling and wind shadows under the Dartmouth and Kingswear hills. A 2 km model can't resolve them. The optional terrain-influence layer stays labelled as an estimate.
-- **Later (Phase 6):** visual weather (cloud cover, visibility, rain) from the same feeds.
+- **Visual weather (Phase 6, done):** cloud cover, visibility and rain from the same forecast drive the sky, the fog and the rain streaks. They are visual only.
 
 ## 4. Where it fits in the plan
 
@@ -71,7 +74,7 @@ GitHub Actions cron (every 15–30 min)              Browser (simulator)
 |---|---|
 | 2 | **Done.** Manual and Met Office sources (`env/weather.ts`, `env/conditions.ts`). The UKV grid is interpolated spatially (brought forward from Phase 3). Gust and shift statistics come from the RDYC model point and the nearest station. The app discovers `live/latest.json` and offers a bundled, dated replay |
 | 3 | Terrain sheltering or funnelling, if a defensible method exists; forecast-step interpolation |
-| 6 | Production ingest job, caching, stale-data handling, visual weather |
+| 6 | **Done (not yet deployed).** Production ingest job (`tools/ingest/weather.py`, `.github/workflows/live-data.yml`), `live/index.json`, fresh/stale/expired rules, wind following the 15-min steps, visual weather. Tested against the real feed; not run on GitHub |
 
 If you want it sooner, a "live point mode" could also go into Phase 1 as a scenario preset.
 

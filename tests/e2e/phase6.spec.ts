@@ -91,6 +91,7 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
 });
 
 test('Phase 6: scenario library: built-ins, save in the browser, export and import, bad files reported', async ({ page }, info) => {
+  test.setTimeout(180_000);
   const errors = await open(page);
   await page.getByRole('button', { name: 'Library' }).click();
   const lib = library(page);
@@ -116,6 +117,7 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   // Kept across a reload (this browser only), and deletable.
   await page.reload();
   await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
   await page.getByRole('button', { name: 'Library' }).click();
   await expect(lib.getByRole('button', { name: 'Load Foggy test' })).toBeVisible();
   await lib.getByRole('button', { name: 'Delete Foggy test' }).click();

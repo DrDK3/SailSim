@@ -595,6 +595,9 @@ export class SimController {
   }
 
   attach(container: HTMLElement): void {
+    // Start downloading the River Dart data first: building the view compiles shaders for a second or more,
+    // and the download runs meanwhile (the scene is added when both are ready).
+    void this.loadDart();
     try {
       this.view = new SceneView(container, this.sim.params);
     } catch (err) {
@@ -603,7 +606,6 @@ export class SimController {
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
-    void this.loadDart();
     this.lastFrame = performance.now();
     this.fpsT0 = this.lastFrame;
     const loop = (now: number) => {

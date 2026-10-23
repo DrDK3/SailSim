@@ -55,11 +55,18 @@ The pattern is faster in the narrows, slack in the creeks and spreads out into S
 | File | Content | Size |
 |---|---|---|
 | `manifest.json` | Grids, datums, entrance line, per-layer provenance | 7 kB |
-| `elevation.bin` | Int16 little-endian, centimetres ODN, 850 × 1220 cells of 8 m, rows south to north | 2.1 MB |
-| `current.bin` | Int16 × 4 components (tidal e/n, river e/n), ×0.001, 425 × 610 cells of 16 m | 2.1 MB |
+| `elevation.i16z` | Int16, centimetres ODN, 850 × 1220 cells of 8 m, rows south to north; packed (below) | 583 kB (2.1 MB unpacked) |
+| `current.i16z` | Int16 × 4 components (tidal e/n, river e/n), ×0.001, 425 × 610 cells of 16 m; packed | 92 kB (2.1 MB unpacked) |
 | `drape.jpg` | 680 × 976 px, 10 m | 140 kB |
 | `minimap.png` | 425 × 610 px, 16 m | 110 kB |
 | `features.json` | Buildings, landmarks, piers, mooring areas, moorings, ferries, marks | 700 kB |
+
+**Packing (Phase 6).** The two grids are packed **losslessly** for download (`tools/geodata/pack.py`, unpacked by `src/sim/geo/pack.ts`; packing `i16-gradient-zigzag-planes-gzip/1`, named in the manifest):
+- each value is replaced by its difference from the prediction left + up − up-left, wrapped to 16 bits;
+- the differences are zigzag-coded and split into a plane of low bytes and a plane of high bytes;
+- the result is gzipped. The browser unpacks it with `DecompressionStream`; a browser without it gets open water and a message.
+
+The unpacked bytes are identical to the raw grids: `tests/sim/pack.test.ts` checks their SHA-256 against the grids built on 22 Oct 2026, and the race determinism hash is unchanged. `build.py` writes the packed files directly; `python -I tools/geodata/pack.py public/geo` packs raw `.bin` grids.
 
 The app loads each file independently. A missing or broken file is reported and the app keeps going:
 

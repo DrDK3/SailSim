@@ -32,6 +32,8 @@ export interface SceneEnvironment {
 }
 export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
 
+/** Helm view: how much of the boat's heel tilts the view (0 = horizon level, 1 = fixed to the boat). */
+const HELM_HEEL_FRACTION = 0.5;
 const SUN_ELEVATION = 38 * (Math.PI / 180);
 const SUN_AZIMUTH = 200 * (Math.PI / 180);
 const FOG = new THREE.Color(0xc4d6e2);
@@ -338,7 +340,12 @@ export class SceneView {
       const eye = new THREE.Vector3(side * 0.8, 1.5, 2.15).applyQuaternion(this.boatRoot.quaternion).add(b);
       this.camera.position.copy(eye);
       const ahead = new THREE.Vector3(side * 0.2, 0.9, -25).applyQuaternion(this.boatRoot.quaternion).add(b);
+      // The horizon tilts with part of the heel, as it does on board: a sailor's head stays nearer upright
+      // than the boat (the fraction is a visual choice, E).
+      const boatUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.boatRoot.quaternion);
+      this.camera.up.set(0, 1, 0).lerp(boatUp, HELM_HEEL_FRACTION).normalize();
       this.camera.lookAt(ahead);
+      this.camera.up.set(0, 1, 0);
     } else if (this.mode === 'top') {
       this.camera.position.set(b.x, 48, b.z + 0.01);
       this.camera.up.set(0, 0, -1);

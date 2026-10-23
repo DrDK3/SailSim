@@ -8,17 +8,14 @@
  *   npm run perf [-- boats seconds]
  */
 import { readFileSync } from 'node:fs';
-import { DEG, DartGeo, Simulation, autopilotHelm, buildConditions, practiceCourse, squibParams, type DartManifest } from '../src/sim/index';
+import { DEG, Simulation, autopilotHelm, buildConditions, practiceCourse, squibParams } from '../src/sim/index';
+import { loadDartGeoNode } from './lib/dartGeoNode';
 import { createRace, practiceLineLength } from '../src/sim/race/setup';
 
 const boats = Number(process.argv[2] ?? 21);
 const seconds = Number(process.argv[3] ?? 60);
 const geoDir = new URL('../public/geo/', import.meta.url);
-const bin = (f: string) => {
-  const b = readFileSync(new URL(f, geoDir));
-  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
-};
-const geo = new DartGeo(JSON.parse(readFileSync(new URL('manifest.json', geoDir), 'utf8')) as DartManifest, bin('elevation.bin'), bin('current.bin'));
+const geo = loadDartGeoNode(geoDir);
 const features = JSON.parse(readFileSync(new URL('features.json', geoDir), 'utf8'));
 
 function measure(label: string, stepOnce: () => void, frames: number, warm = 60): { mean: number; p99: number; max: number } {

@@ -7,6 +7,8 @@ export class Wake {
   private readonly points: { x: number; z: number; dx: number; dz: number; t: number; s: number }[] = [];
   private readonly geo = new THREE.BufferGeometry();
   private lastT = -1;
+  private readonly stern = new THREE.Vector3();
+  private readonly side = new THREE.Vector3();
 
   constructor() {
     this.geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(this.max * 2 * 3), 3));
@@ -31,8 +33,8 @@ export class Wake {
   update(boat: THREE.Object3D, stw: number, time: number): void {
     if (time - this.lastT >= 0.12) {
       this.lastT = time;
-      const stern = new THREE.Vector3(0, 0, 2.7).applyQuaternion(boat.quaternion).add(boat.position);
-      const side = new THREE.Vector3(1, 0, 0).applyQuaternion(boat.quaternion);
+      const stern = this.stern.set(0, 0, 2.7).applyQuaternion(boat.quaternion).add(boat.position);
+      const side = this.side.set(1, 0, 0).applyQuaternion(boat.quaternion);
       this.points.unshift({ x: stern.x, z: stern.z, dx: side.x, dz: side.z, t: time, s: stw });
       if (this.points.length > this.max) this.points.pop();
     }

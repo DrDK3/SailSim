@@ -101,6 +101,8 @@ data/
   geo/…                           ← built by tools/geodata, plus provenance.json
 ```
 
+As built: the River Dart data lives in `public/geo/` (GEODATA.md). Its two Int16 grids are packed losslessly for download (`*.i16z`, `src/sim/geo/pack.ts`), and `manifest.json` carries the provenance. Live and replay weather and tide files live in `public/live/`, listed by `live/index.json` (DEPLOYMENT.md).
+
 ### Course schema (outline)
 
 ```jsonc
@@ -153,6 +155,7 @@ A **course validator** runs in both CI and the editor. It checks that:
 - **Squib:** procedural lofted hull from parametric sections (principal dimensions from class data; shape estimated), keel, rudder, rig and rigging lines. Sails are deformable meshes driven by physics angle, camber and twist, plus a luff-flutter vertex shader. The procedural hull can later be replaced by a modelled glTF file.
 - **Cameras:** chase, helm/cockpit, free orbit, high-level course view.
 - **Debug overlays:** force vectors (sails, keel, rudder, hull, current, wind) drawn as 3D arrows.
+- **Sky and weather (Phase 6, visual only):** the sun's position for the run's time and place (`src/sim/env/sun.ts`, NOAA algorithm) lights the scene, through twilight to night. A procedural cloud dome drifts with the wind. Fog density follows the visibility (Koschmieder). Rain streaks follow the rain rate. All come from a sky preset or the forecast's hourly sky fields; the physics never reads them.
 
 ## 8. UI (`src/ui`)
 
@@ -164,6 +167,18 @@ A **course validator** runs in both CI and the editor. It checks that:
 | Scenario setup | Wind, gusts, tide times and heights, current scale, start time, course, laps, start position; seed |
 | Course editor | Map-based: add, move, inspect and sequence marks; rounding sides; gates; import and export JSON; live validator output |
 | Validation dashboard | Live plots of STW, VMG, leeway, α per sail, heel, rudder angle, forces and moments. A headless **polar sweep** tool that plots *model-predicted* polars, labelled as model output |
+| Library (Phase 6) | Built-in practice scenarios, the user's own (browser storage), scenario export and import (`squib-scenario/1`); save and open replays |
+| Replay bar (Phase 6) | Replaces the sailing controls while a replay plays: progress, verification, speed ×1–×8, Take over |
+
+Panels that open on demand (scenario, library, dashboard, polar, debug, layers, course editor, results, help) are loaded when first opened (`React.lazy`); three.js and React are separate chunks (PERFORMANCE.md).
+
+**Replays** (`src/app/replay.ts`, schema `squib-replay/1`). A recording holds:
+- the scenario, with its course inline and any live-data snapshot inside it;
+- the input the user's boat was built with;
+- the user's input log (one row per step where an input changed);
+- a state hash every 1000 steps and at the end.
+
+AI boats need no log: they are reproduced from the scenario's seed. Playback rebuilds the run and feeds the inputs through the same per-step controller hook as the keyboard. It compares every hash, so it either proves the replay matches bit for bit or names the first checkpoint where it diverged. A replay is expected to match only on the same browser engine and build (OUTSTANDING_ISSUES 17, 46).
 
 **Controls:** keyboard, plus on-screen buttons for touch.
 
@@ -181,8 +196,8 @@ A **course validator** runs in both CI and the editor. It checks that:
 
 | Topic | Plan |
 |---|---|
-| Build | `npm run build` produces static `dist/`. Geodata assets load lazily with progress and error states |
+| Build | `npm run build` produces static `dist/` (typecheck, Vite, then the secret check). Geodata assets load after the first frame, each with its own error state |
 | Hosting | GitHub Pages or Cloudflare Pages (free). Optional custom domain, about £10 per year |
-| Live weather and tide | A scheduled job (GitHub Actions cron, every 15–30 min) runs the Met Office ingest and publishes small `live/latest.json` (weather) and `live/tide.json` (EA gauge, UKHO events) files beside the static site. The UKHO key, if used, is a CI secret only. The browser falls back to the cached snapshot, then to manual |
-| Secrets | **No secrets in the client.** If the Admiralty Tidal API is adopted, it goes behind a serverless proxy (e.g. a Cloudflare Worker, free tier) holding the key. This is the only feature that would need an external service |
+| Live weather and tide | **As built (Phase 6):** a scheduled GitHub Actions job (every 30 min by day, hourly at night) runs the Met Office and tide ingest. It publishes `live/latest.json`, `live/tide.json` and `live/index.json` beside the static site, and a weekly job derives harmonic constants. The app judges each file fresh, stale or expired, and falls back to bundled replays, then to manual. See DEPLOYMENT.md |
+| Secrets | **No secrets in the client.** The UKHO key, if used, is a CI secret read only by the scheduled job, which publishes the predictions as a file, so no proxy is needed. `npm run build` fails if a secret's value or a credential pattern appears in `dist/` |
 | Licence obligations | An in-app attribution panel: "© OpenStreetMap contributors (ODbL)", "Overture Maps Foundation", "© Environment Agency copyright and/or database right 2015 (OGL v3)", "Contains modified Copernicus Sentinel data". The derived coastline and building database must be offered under ODbL (share-alike). No Admiralty chart data without a licence |
