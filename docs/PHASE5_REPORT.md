@@ -1,7 +1,7 @@
 # Phase 5 report: race management and AI competitors
 
 **Date:** 23 Oct 2026  
-**Status:** milestone M5 complete. You can race a fleet of up to 20 AI Squibs on any practice course. Behind the race are:
+**Status:** milestone M5 complete. You can race a fleet of up to 20 AI Squibs on any practice course. The AI is reliable in small fleets: it was accepted with 5 boats, and it collides more often in bigger ones (see "Larger fleets"). Behind the race are:
 - a race committee: flags, sounds, recalls and results;
 - a simplified subset of the Racing Rules of Sailing 2025–2028 Part 2, with penalty turns;
 - a contact model for boats, marks, moored boats and ferries.
@@ -129,7 +129,15 @@ Every one of these keeps the results bit-identical: the golden traces and a 7-bo
 | Median start, after the signal | 13.9 s | 13.2 s |
 
 - **How the AI was tuned:** on seeds 1–100, over five batches: 89%, 92%, 93%, 94% and 97% clean. The hold-out seeds check that the result is not tuned to those seeds.
-- **Larger fleets:** the trials use 5 boats. ⟨BIGFLEET⟩
+- **Larger fleets:** the acceptance trials use 5 boats. With more boats the AI is clearly less safe (same code, other seeds):
+
+| AI boats | Runs | Clean | Contacts | Boats finished |
+|---|---|---|---|---|
+| 5 | 200 | 97% (194) | 4 boat–boat, 4 touches of a mark or the committee boat | 100% |
+| 10 | 30 | 77% (23) | 17 boat–boat, mostly port–starboard; 12 of them before the start or within a minute after it | 98.7%: in one run two boats locked side by side before the start and never started (DNS); in another two did not finish |
+| 20 | 10 | 40% (4) | 10 boat–boat and 2 mark touches, all during the race (crossings and roundings; the AI has no mark-room logic) | 100% |
+
+  - **A fix that was tried:** after 5 s in the collision reflex, the right-of-way boat powers up and draws ahead. It freed the locked pair but caused new contacts elsewhere in the same race, so it was not adopted. Larger fleets need their own tuning round (issue 42). The Scenario panel says the AI was tested with fleets of 5.
 
 **Criterion 12** (`npm run perf`, Node 22 on this 4-core container, after a warm-up):
 
@@ -170,7 +178,7 @@ Every one of these keeps the results bit-identical: the golden traces and a 7-bo
 
 | Item | Status |
 |---|---|
-| AI boats are not perfectly safe | 3 runs in 100 have a contact: mostly near the start (port–starboard, the committee boat) or a windward-mark touch. ⟨BIGFLEET_SHORT⟩ Issue 35 |
+| AI boats are not perfectly safe | 3 runs in 100 have a contact: mostly near the start (port–starboard, the committee boat) or a windward-mark touch. With 10 AI boats 77% of races are clean, with 20 boats 40%. Issues 35 and 42 |
 | The AI's decisions push the full-race p99 to about 5 ms per frame (physics alone 2 ms) | Phase 6: AI in a worker, or a cap on candidates per step |
 | Rules subset only: no mark-room, obstructions, exoneration, protests or hearings | Issue 36; always labelled non-authoritative |
 | Flags I and Z, postponement, abandonment, shortened course, multiple classes | Issue 33 |

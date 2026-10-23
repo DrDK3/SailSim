@@ -194,6 +194,10 @@ It never changes the physics.
   - **A run is clean only if:** every boat finishes; no boat touches another boat, a mark, the committee boat, a moored boat or a ferry; no boat touches the bottom; and no boundary is crossed. **Touching a mark counts as a failure here**, a stricter reading than "collision".
   - The report (`out/ai-trials.json`) lists every contact with its time.
   - **Results (23 Oct 2026):** 97 of 100 runs clean (seeds 1–100), and 97 of 100 on seeds 101–200, which were never used for tuning (`npm run ai:trials -- --first 101`). Details in [PHASE5_REPORT.md](PHASE5_REPORT.md).
+- **Larger fleets:** same code, other seeds (`--boats 10`, `--boats 20`). 77% of 30 ten-boat races and 40% of 10 twenty-boat races are clean.
+  - With 10 boats the contacts are mostly port–starboard around the start.
+  - With 20 boats they come during the race, at crossings and roundings (no mark-room).
+  - See issue 42.
 - **Criterion 12 (performance with AI):** `npm run perf`.
   - **Physics only:** 21 boats on the River Dart, 0.80 ms mean and 1.98 ms p99 per 1/60 s frame.
   - **Full race:** 1 user + 20 AI boats, including the AI and race logic, 1.7 ms mean and about 5 ms p99.
