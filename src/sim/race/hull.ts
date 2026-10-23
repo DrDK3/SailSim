@@ -1,4 +1,5 @@
 import type { BoatParams } from '../boat/params';
+import { hypot2 } from '../math/hypot';
 
 /**
  * Hull outlines and contact geometry for the fleet.
@@ -40,7 +41,7 @@ export function squibOutline(p: Pick<BoatParams, 'loa' | 'beam'>): Outline {
     y.push(-half(t));
   }
   let radius = 0;
-  for (let i = 0; i < x.length; i++) radius = Math.max(radius, Math.hypot(x[i]!, y[i]!));
+  for (let i = 0; i < x.length; i++) radius = Math.max(radius, hypot2(x[i]!, y[i]!));
   return { x, y, radius };
 }
 
@@ -48,7 +49,7 @@ export function squibOutline(p: Pick<BoatParams, 'loa' | 'beam'>): Outline {
 export function boxOutline(length: number, beam: number): Outline {
   const a = length / 2;
   const b = beam / 2;
-  return { x: [a, -a, -a, a], y: [b, b, -b, -b], radius: Math.hypot(a, b) };
+  return { x: [a, -a, -a, a], y: [b, b, -b, -b], radius: hypot2(a, b) };
 }
 
 /** World-frame vertices of an outline at a pose (heading = compass bearing of the body x axis). */
@@ -112,7 +113,7 @@ export function polygonContact(A: Vec[], B: Vec[]): Contact | null {
       const q = poly[(i + 1) % poly.length]!;
       let an = -(q.e - p.e);
       let ae = q.n - p.n;
-      const len = Math.hypot(an, ae);
+      const len = hypot2(an, ae);
       if (len < 1e-12) continue;
       an /= len;
       ae /= len;
@@ -166,13 +167,13 @@ export function circleContact(A: Vec[], c: Vec, r: number): Contact | null {
   if (!inside && d >= r) return null;
   let nn = c.n - cp.n;
   let ne = c.e - cp.e;
-  const len = Math.hypot(nn, ne);
+  const len = hypot2(nn, ne);
   if (len > 1e-9) {
     nn /= len;
     ne /= len;
   } else {
     const g = centroid(A);
-    const l = Math.hypot(c.n - g.n, c.e - g.e) || 1;
+    const l = hypot2(c.n - g.n, c.e - g.e) || 1;
     nn = (c.n - g.n) / l;
     ne = (c.e - g.e) / l;
   }
@@ -192,7 +193,7 @@ export function polygonDistance(A: Vec[], B: Vec[]): number {
     const de = b.e - a.e;
     const l2 = dn * dn + de * de;
     const t = l2 > 0 ? Math.max(0, Math.min(1, ((p.n - a.n) * dn + (p.e - a.e) * de) / l2)) : 0;
-    return Math.hypot(p.n - a.n - t * dn, p.e - a.e - t * de);
+    return hypot2(p.n - a.n - t * dn, p.e - a.e - t * de);
   };
   for (const [P, Q] of [[A, B], [B, A]] as const) {
     for (const p of P) {

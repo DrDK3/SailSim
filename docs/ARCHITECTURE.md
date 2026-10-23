@@ -137,6 +137,11 @@ A **course validator** runs in both CI and the editor. It checks that:
   - `session.ts`: one race, combining the fleet, the committee, a `CourseJudge` per boat (rebuilt after a general recall), the rules, the incidents and penalties, and the AI skippers. Deterministic.
   - `src/sim/ai/`: `AiSkipper` (tactics 5 Hz, collision-avoidance search, 20 Hz collision reflex, PD helm per step), AI sheet handling, and the AI target-speed polar (model output, generated).
   - Flagged *not an authoritative adjudication system*.
+- **Hot-path conventions (since Phase 5):** each step must not allocate, because garbage-collection pauses set the p99 frame time.
+  - **Force functions:** they take an optional `out` record. `Simulation` passes its own reusable records (forces, RK4 stage derivatives, stage state). Callers that keep a result (the UI's snapshot) get fresh objects.
+  - **`hypot2`** (`src/sim/math/hypot.ts`) replaces `Math.hypot` in the physics and AI. It is bit-identical to V8's `Math.hypot`, which allocates.
+  - **Input log:** AI boats run with `logInputs: false`.
+  - **Rule:** any such change must keep the golden traces and the race hashes bit-identical.
 
 ## 7. Rendering (`src/render`)
 
@@ -169,7 +174,8 @@ A **course validator** runs in both CI and the editor. It checks that:
 | Unit and property | Frames, apparent wind, coefficient tables, force signs, line and rounding geometry |
 | Scenario | JSON scenario plus input script, run headless by `npm run scenario`. Produces CSV traces and is compared against golden traces with tolerances |
 | End-to-end smoke | Playwright: app loads, canvas renders, controls change state, no console errors, graceful errors when assets are missing |
-| Performance | Headless physics benchmark with 1 + 20 boats. Manual frame-rate check on reference hardware |
+| Performance | `npm run perf`: headless benchmark with 1 + 20 boats, physics only and a full AI race. Manual frame-rate check on reference hardware |
+| AI acceptance | `npm run ai:trials`: 100 seeded AI races (parallel processes), clean-run rate and every contact |
 
 ## 10. Deployment and operations
 

@@ -1,13 +1,15 @@
 import { clamp, DEG, wrap2Pi, wrapPi } from './math/angles';
 import { hashNumbers } from './hash';
+import { hypot2 } from './math/hypot';
 import { G, RHO_AIR, RHO_WATER, knToMs } from './units';
-import { bodyToWorld, effectiveApparent, windFrom, worldToBody, type NE } from './boat/forces';
+import { bodyToWorld, effectiveApparent, windFrom, worldToBody, type NE, type SailForce } from './boat/forces';
 import {
   aeroHeelMoment,
   autoTrimSheet,
   byTheLeeAngle,
   computeForces,
   derivatives,
+  newForceBreakdown,
   heelEquilibrium,
   sailTarget,
   sheetLimit,
@@ -85,6 +87,12 @@ export interface SimulationOptions {
   ownsEnvironment?: boolean;
   /** Bottom elevation for grounding (the River Dart data). Without it the water is bottomless. */
   seabed?: Seabed;
+  /**
+   * Keep the input log (default true). A controller that changes the helm every step (AI, autopilot) adds
+   * an entry per step, so turn it off for boats whose inputs need not be replayed (AI boats: a race is
+   * reproduced from its seed).
+   */
+  logInputs?: boolean;
 }
 
 /** A boom fetching up hard against the sheet or shrouds (e.g. a crash gybe). */
@@ -185,9 +193,16 @@ export class Simulation {
   private autoSheet = { main: 0.3, jib: 0.3 };
   readonly ownsEnvironment: boolean;
   readonly seabed?: Seabed;
+  readonly logInputs: boolean;
   lastBoomEvent: BoomEvent | null = null;
   /** Contact force for the next step (fleet), or null. */
   external: ExternalForce | null = null;
+  /** Reused within a step (auto-trim, boom, RK4 stages): forces, stage derivatives and the stage state. */
+  private readonly work = {
+    forces: newForceBreakdown(),
+    k: [0, 1, 2, 3].map((): RigidState => ({ n: 0, e: 0, psi: 0, u: 0, v: 0, r: 0, phi: 0, p: 0 })) as [RigidState, RigidState, RigidState, RigidState],
+    stage: { n: 0, e: 0, psi: 0, u: 0, v: 0, r: 0, phi: 0, p: 0 } as RigidState,
+  };
 
   constructor(opts: SimulationOptions) {
     this.params = opts.params;
@@ -198,6 +213,7 @@ export class Simulation {
     this.testThrust = opts.testThrust ?? 0;
     this.ownsEnvironment = opts.ownsEnvironment ?? true;
     this.seabed = opts.seabed;
+    this.logInputs = opts.logInputs ?? true;
     this.input = { ...DEFAULT_INPUT, ...opts.input };
     this.state = {
       n: opts.initial.n ?? 0,
@@ -231,7 +247,7 @@ export class Simulation {
     this.act.boomMain = sailTarget(side, awa, this.mainLimit);
     this.act.boomJib = sailTarget(side, awa, this.jibLimit);
     for (let i = 0; i < 3; i++) {
-      this.act.crewY = this.input.autoCrew ? this.autoCrewTarget() : side * this.crewOffset();
+      this.act.crewY = this.input.autoCrew ? this.autoCrewTarget(this.windHere(), this.currentHere()) : side * this.crewOffset();
       this.state.phi = heelEquilibrium(this.params, this.state, this.act, this.windHere(), this.currentHere(), this.fluids);
     }
   }
@@ -241,9 +257,15 @@ export class Simulation {
     return this.env.waterLevel?.(t) ?? DEFAULT_WATER_LEVEL_ODN;
   }
 
+  /** Water level and seabed at time t (one reused record: read it before the next call). */
   private groundAt(t: number): GroundContext | undefined {
-    return this.seabed ? { waterLevel: this.waterLevel(t), seabed: this.seabed } : undefined;
+    if (!this.seabed) return undefined;
+    const g = (this.groundCtx ??= { waterLevel: 0, seabed: this.seabed });
+    g.waterLevel = this.waterLevel(t);
+    return g;
   }
+
+  private groundCtx?: GroundContext;
 
   private windHere(): NE {
     return this.env.wind(this.time, this.state.n, this.state.e);
@@ -253,9 +275,9 @@ export class Simulation {
     return this.env.current(this.time, this.state.n, this.state.e);
   }
 
-  private autoCrewTarget(): number {
+  private autoCrewTarget(wind: NE, cur: NE): number {
     const p = this.params;
-    const m = aeroHeelMoment(p, this.state, this.act, this.windHere(), this.currentHere(), this.fluids, this.state.phi);
+    const m = aeroHeelMoment(p, this.state, this.act, wind, cur, this.fluids, this.state.phi);
     return clamp(-m / (p.crewMass * G * Math.cos(this.state.phi)), -p.crewOut, p.crewOut);
   }
 
@@ -264,14 +286,12 @@ export class Simulation {
     return p.crewIn + clamp(this.input.crewHike, 0, 1) * (p.crewOut - p.crewIn);
   }
 
-  /** Apparent wind angle seen by the heeled sail plane at the current state. */
-  effectiveAwa(): number {
+  /** Apparent wind angle seen by the heeled sail plane at the current state (wind and current here, if known). */
+  effectiveAwa(wind: NE = this.windHere(), cur: NE = this.currentHere()): number {
     const s = this.state;
     const through = bodyToWorld(s.u, s.v, s.psi);
-    const cur = this.currentHere();
-    const wind = this.windHere();
     const rel = worldToBody(wind.n - through.n - cur.n, wind.e - through.e - cur.e, s.psi);
-    return effectiveApparent({ ax: rel.x, ay: rel.y, aws: Math.hypot(rel.x, rel.y), awa: 0 }, this.state.phi).awa;
+    return effectiveApparent({ ax: rel.x, ay: rel.y, aws: hypot2(rel.x, rel.y), awa: 0 }, this.state.phi).awa;
   }
 
   private computeSheetLimits(_awa: number): void {
@@ -296,25 +316,29 @@ export class Simulation {
    * (incidence above target), trim when it starts to luff (below target). Works on the effective incidence,
    * i.e. including the jib's downwash on the main. Rate: full sheet range in about 3 s.
    */
-  private updateAutoTrim(dt: number): void {
-    const p = this.params;
-    const wind = this.windHere();
-    const cur = this.currentHere();
-    const f = computeForces(p, this.state, this.act, wind, cur, this.fluids, this.groundAt(this.time));
-    const step = (sail: 'main' | 'jib'): void => {
-      const sf = sail === 'main' ? f.main : f.jib;
-      const target = p[sail].autoTrimAlpha;
-      const inc = Math.abs(sf.incidence);
-      // Leech-first flow (by the lee) or no wind: let the sheet run.
-      const error = inc > Math.PI / 2 || sf.aws < 0.05 ? 1 : (inc - target) / (5 * DEG);
-      this.autoSheet[sail] = clamp(this.autoSheet[sail] + clamp(error, -1, 1) * (dt / 3), 0, 1);
-    };
-    step('main');
-    step('jib');
+  private updateAutoTrim(
+    dt: number,
+    wind: NE = this.windHere(),
+    cur: NE = this.currentHere(),
+    ground: GroundContext | undefined = this.groundAt(this.time),
+  ): ForceBreakdown {
+    const f = computeForces(this.params, this.state, this.act, wind, cur, this.fluids, ground, this.work.forces);
+    this.autoSheet.main = this.trimmedSheet(this.autoSheet.main, f.main, this.params.main.autoTrimAlpha, dt);
+    this.autoSheet.jib = this.trimmedSheet(this.autoSheet.jib, f.jib, this.params.jib.autoTrimAlpha, dt);
+    return f;
+  }
+
+  /** One auto-trim step for a sail: ease when over-sheeted, trim when luffing. */
+  private trimmedSheet(sheet: number, sf: SailForce, target: number, dt: number): number {
+    const inc = Math.abs(sf.incidence);
+    // Leech-first flow (by the lee) or no wind: let the sheet run.
+    const error = inc > Math.PI / 2 || sf.aws < 0.05 ? 1 : (inc - target) / (5 * DEG);
+    return clamp(sheet + clamp(error, -1, 1) * (dt / 3), 0, 1);
   }
 
   /** Change control inputs; takes effect at the next step and is recorded in the input log. */
   setInput(change: Partial<ControlInput>): void {
+    if (this.inputUnchanged(change)) return;
     const next = { ...this.input, ...change };
     next.helm = clamp(next.helm, -1, 1);
     next.mainSheet = clamp(next.mainSheet, 0, 1);
@@ -323,9 +347,29 @@ export class Simulation {
     const changed = (Object.keys(next) as (keyof ControlInput)[]).some((k) => next[k] !== this.input[k]);
     if (!changed) return;
     this.input = next;
+    if (!this.logInputs) return;
     const last = this.inputLog[this.inputLog.length - 1];
     if (last && last.step === this.step) last.input = { ...next };
     else this.inputLog.push({ step: this.step, input: { ...next } });
+  }
+
+  /**
+   * True when `change` would leave the input as it is (the usual case for a controller called every step):
+   * the same test as setInput's, without building the new input. The current values must be in range,
+   * since setInput would otherwise clamp them.
+   */
+  private inputUnchanged(change: Partial<ControlInput>): boolean {
+    const cur = this.input;
+    if (!(cur.helm >= -1 && cur.helm <= 1 && cur.mainSheet >= 0 && cur.mainSheet <= 1)) return false;
+    if (!(cur.jibSheet >= 0 && cur.jibSheet <= 1 && cur.crewHike >= 0 && cur.crewHike <= 1)) return false;
+    for (const k in change) {
+      const key = k as keyof ControlInput;
+      let v = change[key];
+      if (key === 'helm') v = clamp(v as number, -1, 1);
+      else if (key === 'mainSheet' || key === 'jibSheet' || key === 'crewHike') v = clamp(v as number, 0, 1);
+      if (v !== cur[key]) return false;
+    }
+    return true;
   }
 
   /**
@@ -341,23 +385,29 @@ export class Simulation {
     const p = this.params;
     const a = this.act;
     const dt = DT;
+    // Wind, current and water level at the boat for this step (the state does not change until integration).
+    const wind = this.windHere();
+    const cur = this.currentHere();
+    const ground = this.groundAt(this.time);
 
     // Helm: tiller moves at a finite rate towards the demanded angle.
     const rudderTarget = this.input.helm * p.rudder.maxAngle;
     a.rudder += clamp(rudderTarget - a.rudder, -p.rudder.rate * dt, p.rudder.rate * dt);
 
-    if (this.input.autoMain || this.input.autoJib) this.updateAutoTrim(dt);
-    const awa = this.effectiveAwa();
+    const wasInverted = a.mainInverted;
+    const trimForces = this.input.autoMain || this.input.autoJib ? this.updateAutoTrim(dt, wind, cur, ground) : undefined;
+    const awa = this.effectiveAwa(wind, cur);
     this.computeSheetLimits(awa);
 
     // Main: a hinged body. By the lee beyond the threshold, a rigid flat sail would still be pressed further
     // out (forward) by wind from astern; the real twisted sail flips and drives the boom across. Model that
     // by reversing the chord-normal force only in that case (when the plain force pushes the boom outwards).
+    // The auto-trim's forces were computed from the same state and actuators unless the main was inverted.
     a.mainInverted = false;
-    let f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids, this.groundAt(this.time));
+    let f = trimForces && !wasInverted ? trimForces : computeForces(p, this.state, a, wind, cur, this.fluids, ground, this.work.forces);
     if (byTheLeeAngle(a.boomMain, awa) > p.main.byTheLee && f.main.boomTorque * a.boomMain > 0) {
       a.mainInverted = true;
-      f = computeForces(p, this.state, a, this.windHere(), this.currentHere(), this.fluids, this.groundAt(this.time));
+      f = computeForces(p, this.state, a, wind, cur, this.fluids, ground, this.work.forces);
     }
     const boom = stepBoom(p, a.boomMain, a.boomRate, f.main.boomTorque, this.state.phi, this.mainLimit, dt);
     if (boom.fetchedUp && Math.abs(a.boomRate) > 1.0) this.lastBoomEvent = { t: this.time, rate: a.boomRate };
@@ -373,51 +423,26 @@ export class Simulation {
 
     // Crew: manual = sit to windward (opposite the main) at the chosen hike; auto = move to cancel the
     // heeling moment. Either way they move across at a finite speed.
-    const crewTarget = this.input.autoCrew ? this.autoCrewTarget() : a.mainSide * this.crewOffset();
+    const crewTarget = this.input.autoCrew ? this.autoCrewTarget(wind, cur) : a.mainSide * this.crewOffset();
     a.crewY += clamp(crewTarget - a.crewY, -p.crewSpeed * dt, p.crewSpeed * dt);
 
-    this.integrate(dt);
+    this.integrate(dt, wind, cur);
     this.time = (this.step + 1) * dt;
     this.step += 1;
   }
 
-  private integrate(dt: number): void {
+  /** RK4 over one step; `wind0` and `cur0` are the wind and current at the state at the start of the step. */
+  private integrate(dt: number, wind0: NE, cur0: NE): void {
     const s0 = this.state;
     const t0 = this.time;
-    const deriv = (s: RigidState, t: number): RigidState => {
-      const wind = this.env.wind(t, s.n, s.e);
-      const cur = this.env.current(t, s.n, s.e);
-      const f = computeForces(this.params, s, this.act, wind, cur, this.fluids, this.groundAt(t));
-      if (this.testThrust !== 0) f.total.x += this.testThrust;
-      const ext = this.external;
-      if (ext) {
-        const c = Math.cos(s.psi);
-        const sn = Math.sin(s.psi);
-        f.total.x += ext.n * c + ext.e * sn;
-        f.total.y += -ext.n * sn + ext.e * c;
-        f.total.n += ext.yaw;
-      }
-      const d = derivatives(this.params, s, f, cur);
-      if (this.lockHeading) {
-        d.psi = 0;
-        d.r = 0;
-      }
-      return d;
-    };
-    const add = (s: RigidState, k: RigidState, h: number): RigidState => ({
-      n: s.n + k.n * h,
-      e: s.e + k.e * h,
-      psi: s.psi + k.psi * h,
-      u: s.u + k.u * h,
-      v: s.v + k.v * h,
-      r: s.r + k.r * h,
-      phi: s.phi + k.phi * h,
-      p: s.p + k.p * h,
-    });
-    const k1 = deriv(s0, t0);
-    const k2 = deriv(add(s0, k1, dt / 2), t0 + dt / 2);
-    const k3 = deriv(add(s0, k2, dt / 2), t0 + dt / 2);
-    const k4 = deriv(add(s0, k3, dt), t0 + dt);
+    const work = this.work;
+    const k1 = this.deriv(s0, t0, wind0, cur0, work.k[0]);
+    let s = this.stage(s0, k1, dt / 2);
+    const k2 = this.deriv(s, t0 + dt / 2, this.env.wind(t0 + dt / 2, s.n, s.e), this.env.current(t0 + dt / 2, s.n, s.e), work.k[1]);
+    s = this.stage(s0, k2, dt / 2);
+    const k3 = this.deriv(s, t0 + dt / 2, this.env.wind(t0 + dt / 2, s.n, s.e), this.env.current(t0 + dt / 2, s.n, s.e), work.k[2]);
+    s = this.stage(s0, k3, dt);
+    const k4 = this.deriv(s, t0 + dt, this.env.wind(t0 + dt, s.n, s.e), this.env.current(t0 + dt, s.n, s.e), work.k[3]);
     const w = dt / 6;
     this.state = {
       n: s0.n + w * (k1.n + 2 * k2.n + 2 * k3.n + k4.n),
@@ -429,6 +454,40 @@ export class Simulation {
       phi: s0.phi + w * (k1.phi + 2 * k2.phi + 2 * k3.phi + k4.phi),
       p: s0.p + w * (k1.p + 2 * k2.p + 2 * k3.p + k4.p),
     };
+  }
+
+  /** Derivative of the rigid state at (s, t) with the actuators held, written into `out`. */
+  private deriv(s: RigidState, t: number, wind: NE, cur: NE, out: RigidState): RigidState {
+    const f = computeForces(this.params, s, this.act, wind, cur, this.fluids, this.groundAt(t), this.work.forces);
+    if (this.testThrust !== 0) f.total.x += this.testThrust;
+    const ext = this.external;
+    if (ext) {
+      const c = Math.cos(s.psi);
+      const sn = Math.sin(s.psi);
+      f.total.x += ext.n * c + ext.e * sn;
+      f.total.y += -ext.n * sn + ext.e * c;
+      f.total.n += ext.yaw;
+    }
+    const d = derivatives(this.params, s, f, cur, out);
+    if (this.lockHeading) {
+      d.psi = 0;
+      d.r = 0;
+    }
+    return d;
+  }
+
+  /** RK4 stage state s0 + h·k (one reused record, consumed by the next derivative before it is overwritten). */
+  private stage(s0: RigidState, k: RigidState, h: number): RigidState {
+    const o = this.work.stage;
+    o.n = s0.n + k.n * h;
+    o.e = s0.e + k.e * h;
+    o.psi = s0.psi + k.psi * h;
+    o.u = s0.u + k.u * h;
+    o.v = s0.v + k.v * h;
+    o.r = s0.r + k.r * h;
+    o.phi = s0.phi + k.phi * h;
+    o.p = s0.p + k.p * h;
+    return o;
   }
 
   /** Run whole steps covering `seconds` of simulated time. */

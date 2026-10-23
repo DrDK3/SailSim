@@ -45,7 +45,7 @@ npm run dev          # open the printed URL; press H in the app for help
 | `npm run calibrate -- obs.csv [--fit knobs]` | Compare the model with observed sailing points; optionally fit coefficient multipliers ([how](docs/CALIBRATION.md)) |
 | `npm run golden:update` | Regenerate the golden regression traces after an intended physics change |
 | `npm run perf` | Criterion 12: cost per frame for 21 boats on the River Dart (physics only) and for a full race with 20 AI boats |
-| `npm run ai:trials [-- --runs 100 --boats 5]` | Phase 5 acceptance: seeded AI races, clean-run rate, every contact listed (`out/ai-trials.json`) |
+| `npm run ai:trials [-- --runs 100 --boats 5 --first 1 --river]` | Phase 5 acceptance: seeded AI races in parallel processes, clean-run rate, every contact listed (`out/ai-trials.json`); `--first 101` runs seeds the AI was not tuned on |
 | `npm run ai:polar` | Regenerate the AI target-speed table from the boat parameters (model output) |
 | `.venv/bin/python -I tools/geodata/build.py EXTRACT` | Rebuild the River Dart data in `public/geo/` from open data ([how](docs/GEODATA.md)); not needed to run the app |
 

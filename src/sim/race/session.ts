@@ -17,6 +17,7 @@ import { CONTACT, Fleet, markRadius, type CircleObstacle, type ContactEvent, typ
 import { placeOutline } from './hull';
 import { DEFAULT_COMMITTEE, RaceCommittee, type BoatRaceStatus, type CommitteeOptions, type ResultRow, type Signal } from './committee';
 import { PenaltyTracker, rightOfWay, TackTracker, type Incident, type RulesBoat } from './rules';
+import { hypot2 } from '../math/hypot';
 
 /**
  * One race: a fleet (the user's boat and/or AI boats) on a course, with the race committee, a course judge
@@ -116,6 +117,8 @@ export class RaceSession implements AiWorld {
         ownsEnvironment: false,
         initial: e.initial,
         input: e.kind === 'ai' ? { autoMain: true, autoJib: true, autoCrew: true } : opts.humanInput,
+        // An AI boat's helm changes every step; its race is reproduced from the seed, not an input log.
+        logInputs: e.kind !== 'ai',
       });
       const boat = this.fleet.add({ id: e.id, name: e.name, sailNumber: e.sailNumber, colour: e.colour, kind: e.kind, sim });
       if (e.kind === 'ai') {
@@ -130,7 +133,7 @@ export class RaceSession implements AiWorld {
     }
     // Each AI boat's spot on the starting line follows the order of the starting slots along the line.
     const [la, lb] = opts.resolved.start;
-    const lineLen = Math.hypot(lb.n - la.n, lb.e - la.e) || 1;
+    const lineLen = hypot2(lb.n - la.n, lb.e - la.e) || 1;
     const alongOf = (b: FleetBoat) => ((b.sim.state.n - la.n) * (lb.n - la.n) + (b.sim.state.e - la.e) * (lb.e - la.e)) / lineLen;
     const ranked = [...this.fleet.boats].sort((x, y) => alongOf(x) - alongOf(y));
     ranked.forEach((b, i) => {
@@ -141,6 +144,8 @@ export class RaceSession implements AiWorld {
     this.committee = new RaceCommittee({ ...DEFAULT_COMMITTEE, ...opts.committee }, opts.entries.map((e) => e.id), opts.resolved.start, first);
     this.resetJudges();
     for (const b of this.fleet.boats) this.judgeOf(b.id).update(0, this.pose(b));
+    // Signals due now (a sequence that begins at once) are made before the first step, so the flags show.
+    this.updateCommittee(this.time);
   }
 
   // ---------------------------------------------------------------- world
@@ -238,6 +243,10 @@ export class RaceSession implements AiWorld {
     }
     if (this.fleet.step % 10 === 0) this.trackRightOfWay(t);
     for (const c of contacts) this.onContact(c);
+    this.updateCommittee(t);
+  }
+
+  private updateCommittee(t: number): void {
     const sigs = this.committee.update(t, this.status(), (id) => {
       const b = this.fleet.boat(id)!;
       return placeOutline(b.outline, b.sim.state.n, b.sim.state.e, b.sim.state.psi);
@@ -298,7 +307,7 @@ export class RaceSession implements AiWorld {
         const a = boats[i]!;
         const b = boats[j]!;
         const key = PAIR(a.id, b.id);
-        if (Math.hypot(a.sim.state.n - b.sim.state.n, a.sim.state.e - b.sim.state.e) > 40) {
+        if (hypot2(a.sim.state.n - b.sim.state.n, a.sim.state.e - b.sim.state.e) > 40) {
           this.rowHistory.delete(key);
           continue;
         }

@@ -359,7 +359,7 @@ test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, r
   });
   expect(names.filter((n) => n.startsWith('fleet-boat-'))).toHaveLength(3);
   expect(await page.evaluate(() => window.__squib!.controller.getState().fleet.length)).toBe(3);
-  // Sail the race out (the user's boat just drifts and does not start), until the committee closes it.
+  // Sail the race out (the user's boat is not sailed), until the committee closes it.
   await page.evaluate(() => {
     for (let i = 0; i < 60 && !window.__squib!.controller.getState().race!.raceOver; i++) window.__squib!.advance(30);
   });
@@ -369,6 +369,10 @@ test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, r
   const rows = await results.locator('tbody tr').allInnerTexts();
   expect(rows).toHaveLength(4);
   expect(rows.filter((r) => /\bFIN\b/.test(r))).toHaveLength(3);
-  expect(rows.some((r) => /You/.test(r) && /DNS/.test(r))).toBe(true);
+  // Your boat was not sailed: it either never started (DNS) or drifted over the line early (OCS); either way
+  // it scores entries + 1 = 5 points (low point).
+  const you = rows.find((r) => /You/.test(r));
+  expect(you).toMatch(/\b(DNS|OCS)\b/);
+  expect(you).toMatch(/\b5\b/);
   expect(errors).toEqual([]);
 });

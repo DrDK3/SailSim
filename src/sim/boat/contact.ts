@@ -1,4 +1,5 @@
 import { G } from '../units';
+import { hypot2 } from '../math/hypot';
 import type { Seabed } from '../geo/dart';
 import type { BoatParams } from './params';
 import type { NE } from './forces';
@@ -48,6 +49,7 @@ export function groundContact(
   s: { n: number; e: number; psi: number; u: number; v: number; r: number; phi: number; p: number },
   current: NE,
   ground: GroundContext,
+  out?: ContactForce,
 ): ContactForce {
   const c = Math.cos(s.psi);
   const sn = Math.sin(s.psi);
@@ -60,7 +62,9 @@ export function groundContact(
   let roll = 0;
   let grounded = false;
   let depthAtKeel = Infinity;
-  const points: ContactPointState[] = [];
+  // With `out`, its point records are reused (same points, same order every call).
+  const points: ContactPointState[] = out ? out.points : [];
+  let ip = 0;
   for (const cp of p.contactPoints) {
     const ly = -cp.depth * Math.sin(s.phi); // the keel tip swings to windward as the boat heels
     const pn = s.n + cp.x * c - ly * sn;
@@ -68,20 +72,23 @@ export function groundContact(
     const water = ground.waterLevel - ground.seabed.bedElevation(pn, pe);
     if (cp.name === 'keel') depthAtKeel = water;
     const pen = cp.depth * Math.cos(s.phi) - water;
-    points.push({ name: cp.name, clearance: -pen });
+    const rec = points[ip];
+    if (out && rec) rec.clearance = -pen;
+    else points[ip] = { name: cp.name, clearance: -pen };
+    ip++;
     if (pen <= 0) continue;
     grounded = true;
     // Velocity of the point over the ground, body frame.
     const vx = s.u + cx;
     const vy = s.v + s.r * cp.x - s.p * cp.depth + cy;
-    const sp = Math.hypot(vx, vy);
+    const sp = hypot2(vx, vy);
     const load = Math.min(RHO_WATER * G * p.waterplaneArea * pen * SHARE[cp.name], 2 * p.weight * SHARE[cp.name]);
     const fric = sp > 1e-9 ? (p.contactFriction * load * Math.tanh(sp / 0.05)) / sp : 0;
     const damp = p.contactDamping * Math.min(pen / 0.05, 1);
     let px = -(fric + damp) * vx;
     let py = -(fric + damp) * vy;
     const g = ground.seabed.bedGradient(pn, pe);
-    const slope = Math.hypot(g.n, g.e);
+    const slope = hypot2(g.n, g.e);
     if (slope > 1e-6) {
       const push = (load * Math.min(slope, p.contactSlopeLimit)) / slope;
       // Down-slope = −∇bed, rotated into the body frame.
@@ -93,5 +100,13 @@ export function groundContact(
     yaw += cp.x * py;
     roll += -py * cp.depth;
   }
-  return { x: fx, y: fy, n: yaw, roll, grounded, depthAtKeel, points };
+  points.length = ip;
+  if (!out) return { x: fx, y: fy, n: yaw, roll, grounded, depthAtKeel, points };
+  out.x = fx;
+  out.y = fy;
+  out.n = yaw;
+  out.roll = roll;
+  out.grounded = grounded;
+  out.depthAtKeel = depthAtKeel;
+  return out;
 }

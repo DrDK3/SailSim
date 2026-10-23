@@ -140,6 +140,18 @@ Differences from this list:
 - A selected RRS 2025–2028 Part 2 subset, after verifying the rule text and the SIs. Flagged as non-authoritative.
 - **Acceptance:** criterion 12. AI boats complete a practice course without grounding or collisions in at least 95% of 100 seeded runs.
 
+**Status: done, 23 Oct 2026** ([PHASE5_REPORT.md](PHASE5_REPORT.md), [RACING.md](RACING.md)):
+- **Race management:** start sequences with P, U and black flags; individual and general recall; laps, finishing and low-point results.
+- **Contact:** fleet contact with boats, marks, the committee boat, moored boats and ferries.
+- **Rules:** rules 10–13 and 31 with penalty turns, labelled non-authoritative.
+- **AI:** AI Squibs on the same physics.
+- **Clean-run criterion: passes.** 97 of 100 seeded runs are clean, and 97 of 100 hold-out seeds.
+- **Criterion 12: passes for the physics.** 0.80 ms mean and 1.98 ms p99 per frame for 1 + 20 boats. With the AI the p99 is about 5 ms; the criterion sets no budget for the AI.
+- **Not done:**
+  - mark-room and the other rules in RACING.md §3;
+  - flags I and Z;
+  - the club's SI choices (documents needed).
+
 ## Phase 6: Visual refinement, replays, optimisation, deployment (M6)
 
 - Water, wake and sail-shape polish; weather presets; helm and cockpit view refinement.

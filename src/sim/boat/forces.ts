@@ -7,9 +7,10 @@
  *  - Yaw moment N > 0 turns the bow to starboard.
  */
 import { wrapPi } from '../math/angles';
+import { hypot2 } from '../math/hypot';
 import { interpTable } from '../math/interp';
 import { G, NU_WATER } from '../units';
-import { foilCoefficients, sailCoefficients } from './coefficients';
+import { foilCoefficients, sailCoefficients, type Coeffs, type SailCoeffs } from './coefficients';
 import type { BoatParams, FoilParams, SailParams } from './params';
 
 export interface NE {
@@ -24,7 +25,7 @@ export function windVelocity(speed: number, fromDir: number): NE {
 
 /** Direction (FROM, compass radians in [0, 2π)) and speed of a wind velocity vector. */
 export function windFrom(v: NE): { speed: number; fromDir: number } {
-  const speed = Math.hypot(v.n, v.e);
+  const speed = hypot2(v.n, v.e);
   const dir = Math.atan2(-v.e, -v.n);
   return { speed, fromDir: dir < 0 ? dir + 2 * Math.PI : dir };
 }
@@ -54,9 +55,21 @@ export interface ApparentWind {
  * Apparent wind = true wind over ground − boat velocity over ground.
  * (Equivalently: wind over water − boat velocity through water.)
  */
-export function apparentWind(windGround: NE, boatGround: NE, psi: number): ApparentWind {
-  const { x, y } = worldToBody(windGround.n - boatGround.n, windGround.e - boatGround.e, psi);
-  return { ax: x, ay: y, aws: Math.hypot(x, y), awa: Math.atan2(-y, -x) };
+export function apparentWind(windGround: NE, boatGround: NE, psi: number, out?: ApparentWind): ApparentWind {
+  const n = windGround.n - boatGround.n;
+  const e = windGround.e - boatGround.e;
+  const c = Math.cos(psi);
+  const s = Math.sin(psi);
+  const x = n * c + e * s;
+  const y = -n * s + e * c;
+  const aws = hypot2(x, y);
+  const awa = Math.atan2(-y, -x);
+  if (!out) return { ax: x, ay: y, aws, awa };
+  out.ax = x;
+  out.ay = y;
+  out.aws = aws;
+  out.awa = awa;
+  return out;
 }
 
 export interface SailForce {
@@ -88,7 +101,7 @@ const ZERO_SAIL: SailForce = {
 /** Effective apparent wind in the heeled sail plane: the athwartships component is reduced by cos φ. */
 export function effectiveApparent(aw: ApparentWind, heel: number): { ax: number; ay: number; aws: number; awa: number } {
   const ay = aw.ay * Math.cos(heel);
-  return { ax: aw.ax, ay, aws: Math.hypot(aw.ax, ay), awa: Math.atan2(-ay, -aw.ax) };
+  return { ax: aw.ax, ay, aws: hypot2(aw.ax, ay), awa: Math.atan2(-ay, -aw.ax) };
 }
 
 /** Rates that move a sail's centre of effort relative to the air (rad/s). */
@@ -102,6 +115,68 @@ export interface SailMotion {
 }
 
 const NO_MOTION: SailMotion = { boomRate: 0, rollRate: 0, yawRate: 0 };
+
+/** Geometry and local airflow of one sail (a reused scratch object: read it before the next call). */
+interface SailFlow {
+  cosB: number;
+  sinB: number;
+  cosH: number;
+  arm: number;
+  ceX: number;
+  ceY: number;
+  ax: number;
+  ay: number;
+  aws: number;
+  dx: number;
+  dy: number;
+  /** Angle from the chord to the airflow, before any interaction shift. */
+  geometric: number;
+}
+
+const FLOW: SailFlow = { cosB: 0, sinB: 0, cosH: 0, arm: 0, ceX: 0, ceY: 0, ax: 0, ay: 0, aws: 0, dx: 0, dy: 0, geometric: 0 };
+
+function sailFlow(p: SailParams, boom: number, aw: ApparentWind, heel: number, motion: SailMotion): SailFlow {
+  const f = FLOW;
+  const cosH = Math.cos(heel);
+  const cosB = Math.cos(boom);
+  const sinB = Math.sin(boom);
+  const cx = -cosB;
+  const cy = -sinB;
+  const arm = p.ceChordFrac * p.foot;
+  const ceX = p.pivotX + arm * cx;
+  const ceYPlane = arm * cy;
+  const ceY = ceYPlane * cosH + p.ceHeight * Math.sin(heel);
+  // Velocity of the CE in the sail plane: yaw (r × position), roll (p·h sideways), swing (ω·arm ⟂ chord).
+  const vx = -motion.yawRate * ceY + motion.boomRate * arm * sinB;
+  const vy = motion.yawRate * ceX * cosH + motion.rollRate * p.ceHeight - motion.boomRate * arm * cosB;
+  const ax = aw.ax - vx;
+  const ay = aw.ay * cosH - vy;
+  const aws = hypot2(ax, ay);
+  f.cosB = cosB;
+  f.sinB = sinB;
+  f.cosH = cosH;
+  f.arm = arm;
+  f.ceX = ceX;
+  f.ceY = ceY;
+  f.ax = ax;
+  f.ay = ay;
+  f.aws = aws;
+  if (aws < 1e-9) return f;
+  f.dx = ax / aws;
+  f.dy = ay / aws;
+  f.geometric = wrapPi(Math.atan2(f.dy, f.dx) - Math.atan2(cy, cx));
+  return f;
+}
+
+// Scratch coefficients, read straight after each call (the force functions are not re-entrant).
+const K_SAIL: SailCoeffs = { cl: 0, cd: 0, luff: 0, stall: 0 };
+const K_FOIL: Coeffs = { cl: 0, cd: 0 };
+
+/** Lift coefficient of a sail on its own (no interaction with the other sail): sailForce(…).cl, without the forces. */
+function sailLiftAlone(p: SailParams, boom: number, aw: ApparentWind, heel: number, motion: SailMotion): number {
+  const fl = sailFlow(p, boom, aw, heel, motion);
+  return fl.aws < 1e-9 ? 0 : sailCoefficients(fl.geometric, p.coeff, K_SAIL).cl;
+}
 
 /**
  * Aerodynamic force of one sail. Lift ⟂ to the local airflow, drag along it, from the incidence between the
@@ -123,30 +198,21 @@ export function sailForce(
   incidenceShift = 0,
   motion: SailMotion = NO_MOTION,
   inverted = false,
+  out?: SailForce,
 ): SailForce {
-  const cosH = Math.cos(heel);
-  const cx = -Math.cos(boom);
-  const cy = -Math.sin(boom);
-  const arm = p.ceChordFrac * p.foot;
-  const ceX = p.pivotX + arm * cx;
-  const ceYPlane = arm * cy;
-  const ceY = ceYPlane * cosH + p.ceHeight * Math.sin(heel);
-  // Velocity of the CE in the sail plane: yaw (r × position), roll (p·h sideways), swing (ω·arm ⟂ chord).
-  const vx = -motion.yawRate * ceY + motion.boomRate * arm * Math.sin(boom);
-  const vy = motion.yawRate * ceX * cosH + motion.rollRate * p.ceHeight - motion.boomRate * arm * Math.cos(boom);
-  const ax = aw.ax - vx;
-  const ay = aw.ay * cosH - vy;
-  const aws = Math.hypot(ax, ay);
-  if (aws < 1e-9) return { ...ZERO_SAIL, ceX, ceY };
-  const dx = ax / aws;
-  const dy = ay / aws;
-  const geometric = wrapPi(Math.atan2(dy, dx) - Math.atan2(cy, cx));
+  const { cosB, sinB, cosH, arm, ceX, ceY, ax, ay, aws, dx, dy, geometric } = sailFlow(p, boom, aw, heel, motion);
+  if (aws < 1e-9) {
+    const o = out ? Object.assign(out, ZERO_SAIL) : { ...ZERO_SAIL };
+    o.ceX = ceX;
+    o.ceY = ceY;
+    return o;
+  }
   // Interaction with the other sail (up/downwash) shifts the incidence magnitude for luff-first flow.
   const incidence =
     incidenceShift !== 0 && Math.abs(geometric) < Math.PI / 2
       ? Math.sign(geometric) * Math.max(0, Math.abs(geometric) + incidenceShift)
       : geometric;
-  const k = sailCoefficients(incidence, p.coeff);
+  const k = sailCoefficients(incidence, p.coeff, K_SAIL);
   const q = 0.5 * rhoAir * aws * aws * p.area * effectiveness;
   const sgn = incidence >= 0 ? 1 : -1;
   const lx = -sgn * dy;
@@ -155,18 +221,29 @@ export function sailForce(
   let fyPlane = q * (k.cl * ly + k.cd * dy);
   if (inverted) {
     // Reflect the chord-normal component: n = (sin β, -cos β).
-    const nx = Math.sin(boom);
-    const ny = -Math.cos(boom);
+    const nx = sinB;
+    const ny = -cosB;
     const fn = fx * nx + fyPlane * ny;
     fx -= 2 * fn * nx;
     fyPlane -= 2 * fn * ny;
   }
   const fy = fyPlane * cosH;
-  return {
-    x: fx, y: fy, yPlane: fyPlane, n: ceX * fy - ceY * fx, incidence, cl: k.cl, cd: k.cd, luff: k.luff,
-    stall: k.stall, ceX, ceY, aws, awa: Math.atan2(-ay, -ax),
-    boomTorque: arm * (fx * Math.sin(boom) - fyPlane * Math.cos(boom)),
-  };
+  const o = out ?? { ...ZERO_SAIL };
+  o.x = fx;
+  o.y = fy;
+  o.yPlane = fyPlane;
+  o.n = ceX * fy - ceY * fx;
+  o.incidence = incidence;
+  o.cl = k.cl;
+  o.cd = k.cd;
+  o.luff = k.luff;
+  o.stall = k.stall;
+  o.ceX = ceX;
+  o.ceY = ceY;
+  o.aws = aws;
+  o.awa = Math.atan2(-ay, -ax);
+  o.boomTorque = arm * (fx * sinB - fyPlane * cosB);
+  return o;
 }
 
 /** Jib effectiveness when running: blanketed by the main beyond jibBlanketStartAwa. */
@@ -175,6 +252,12 @@ export function jibEffectiveness(params: BoatParams, awa: number): number {
   if (a <= params.jibBlanketStartAwa) return 1;
   const t = (a - params.jibBlanketStartAwa) / (Math.PI - params.jibBlanketStartAwa);
   return 1 - t * (1 - params.jibBlanketMin);
+}
+
+export interface SailPair {
+  main: SailForce;
+  jib: SailForce;
+  jibEffectiveness: number;
 }
 
 /**
@@ -192,13 +275,16 @@ export function sailPairForces(
   mainMotion: SailMotion = NO_MOTION,
   jibMotion: SailMotion = NO_MOTION,
   mainInverted = false,
-): { main: SailForce; jib: SailForce; jibEffectiveness: number } {
+  out?: SailPair,
+): SailPair {
   const jEff = jibEffectiveness(params, aw.awa);
   const w = Math.max(0, Math.cos(aw.awa));
-  const mainAlone = sailForce(params.main, boomMain, aw, heel, rhoAir, 1, 0, mainMotion, mainInverted);
-  const jib = sailForce(params.jib, boomJib, aw, heel, rhoAir, jEff, w * params.mainUpwashOnJib * Math.max(0, mainAlone.cl), jibMotion);
-  const main = sailForce(params.main, boomMain, aw, heel, rhoAir, 1, -w * params.jibDownwashOnMain * Math.max(0, jib.cl), mainMotion, mainInverted);
-  return { main, jib, jibEffectiveness: jEff };
+  const mainAloneCl = sailLiftAlone(params.main, boomMain, aw, heel, mainMotion);
+  const jib = sailForce(params.jib, boomJib, aw, heel, rhoAir, jEff, w * params.mainUpwashOnJib * Math.max(0, mainAloneCl), jibMotion, false, out?.jib);
+  const main = sailForce(params.main, boomMain, aw, heel, rhoAir, 1, -w * params.jibDownwashOnMain * Math.max(0, jib.cl), mainMotion, mainInverted, out?.main);
+  if (!out) return { main, jib, jibEffectiveness: jEff };
+  out.jibEffectiveness = jEff;
+  return out;
 }
 
 export interface BodyForce {
@@ -208,12 +294,16 @@ export interface BodyForce {
 }
 
 /** Windage of hull, rig and crew: drag along the apparent wind. */
-export function windageForce(params: BoatParams, aw: ApparentWind, heel: number, rhoAir: number): BodyForce {
+export function windageForce(params: BoatParams, aw: ApparentWind, heel: number, rhoAir: number, out?: BodyForce): BodyForce {
   const k = 0.5 * rhoAir * params.windageCdA * aw.aws;
   const fx = k * aw.ax;
   const fy = k * aw.ay;
   const yArm = params.windageHeight * Math.sin(heel);
-  return { x: fx, y: fy, n: -yArm * fx };
+  if (!out) return { x: fx, y: fy, n: -yArm * fx };
+  out.x = fx;
+  out.y = fy;
+  out.n = -yArm * fx;
+  return out;
 }
 
 export interface FoilForce extends BodyForce {
@@ -238,14 +328,19 @@ export function foilForce(
   deflection: number,
   heel: number,
   rhoWater: number,
+  out?: FoilForce,
 ): FoilForce {
+  const o = out ?? { x: 0, y: 0, yPlane: 0, n: 0, alpha: 0, cl: 0, cd: 0, speed: 0 };
   const v2 = u * u + vLocal * vLocal;
-  if (v2 < 1e-12) return { x: 0, y: 0, yPlane: 0, n: 0, alpha: 0, cl: 0, cd: 0, speed: 0 };
+  if (v2 < 1e-12) {
+    o.x = o.y = o.yPlane = o.n = o.alpha = o.cl = o.cd = o.speed = 0;
+    return o;
+  }
   const speed = Math.sqrt(v2);
   const ca = Math.cos(deflection);
   const sa = Math.sin(deflection);
   const alpha = Math.atan2(u * sa + vLocal * ca, u * ca - vLocal * sa);
-  const k = foilCoefficients(alpha, p);
+  const k = foilCoefficients(alpha, p, K_FOIL);
   const dx = -u / speed;
   const dy = -vLocal / speed;
   const qPlane = 0.5 * rhoWater * v2 * p.area;
@@ -253,7 +348,15 @@ export function foilForce(
   const yPlane = qPlane * (k.cl * dx + k.cd * dy);
   const fx = qPlane * cosH * (k.cl * -dy + k.cd * dx);
   const fy = yPlane * cosH;
-  return { x: fx, y: fy, yPlane, n: p.x * fy, alpha, cl: k.cl, cd: k.cd, speed };
+  o.x = fx;
+  o.y = fy;
+  o.yPlane = yPlane;
+  o.n = p.x * fy;
+  o.alpha = alpha;
+  o.cl = k.cl;
+  o.cd = k.cd;
+  o.speed = speed;
+  return o;
 }
 
 export interface HullResistance {
@@ -268,9 +371,13 @@ export interface HullResistance {
  * Upright resistance: ITTC-1957 friction on total wetted area x form factor, plus a residuary term
  * R_R = m g f(Fn) from the calibration table; both scaled by (1 + k φ²) for heel.
  */
-export function hullResistance(params: BoatParams, u: number, heel: number, rhoWater: number): HullResistance {
+export function hullResistance(params: BoatParams, u: number, heel: number, rhoWater: number, out?: HullResistance): HullResistance {
+  const o = out ?? { friction: 0, residuary: 0, total: 0, froude: 0, x: 0 };
   const speed = Math.abs(u);
-  if (speed < 1e-9) return { friction: 0, residuary: 0, total: 0, froude: 0, x: 0 };
+  if (speed < 1e-9) {
+    o.friction = o.residuary = o.total = o.froude = o.x = 0;
+    return o;
+  }
   const re = Math.max((speed * 0.7 * params.lwl) / NU_WATER, 1e5);
   const lr = Math.log10(re) - 2;
   const cf = 0.075 / (lr * lr);
@@ -279,13 +386,18 @@ export function hullResistance(params: BoatParams, u: number, heel: number, rhoW
   const froude = speed / Math.sqrt(G * params.lwl);
   const residuary = params.weight * Math.max(0, interpTable(params.residuary, froude)) * heelFactor;
   const total = friction + residuary;
-  return { friction, residuary, total, froude, x: -Math.sign(u) * total };
+  o.friction = friction;
+  o.residuary = residuary;
+  o.total = total;
+  o.froude = froude;
+  o.x = -Math.sign(u) * total;
+  return o;
 }
 
 const CROSS_FLOW_STRIPS = 10;
 
 /** Quadratic cross-flow drag of the canoe body, integrated in strips (sway and yaw damping at low speed). */
-export function hullCrossFlow(params: BoatParams, v: number, r: number, rhoWater: number): BodyForce {
+export function hullCrossFlow(params: BoatParams, v: number, r: number, rhoWater: number, out?: BodyForce): BodyForce {
   const len = params.lwl;
   const dx = len / CROSS_FLOW_STRIPS;
   const k = 0.5 * rhoWater * params.hullCrossFlowCd * params.hullDraft * dx;
@@ -298,5 +410,9 @@ export function hullCrossFlow(params: BoatParams, v: number, r: number, rhoWater
     y += f;
     n += x * f;
   }
-  return { x: 0, y, n };
+  if (!out) return { x: 0, y, n };
+  out.x = 0;
+  out.y = y;
+  out.n = n;
+  return out;
 }

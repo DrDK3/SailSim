@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { wrapPi, wrap2Pi, smoothstep, DEG } from '../../src/sim/math/angles';
 import { interpTable } from '../../src/sim/math/interp';
+import { hypot2 } from '../../src/sim/math/hypot';
 import { createRng } from '../../src/sim/math/rng';
 import { hashNumbers } from '../../src/sim/hash';
 import { validateProvenance, buildBoatParams } from '../../src/sim/boat/params';
@@ -31,6 +32,33 @@ describe('math utilities', () => {
     const xs = Array.from({ length: 5 }, () => a.next());
     expect(xs).toEqual(Array.from({ length: 5 }, () => b.next()));
     expect(xs.every((x) => x >= 0 && x < 1)).toBe(true);
+  });
+
+  it('hypot2 is bit-identical to Math.hypot (two arguments)', () => {
+    const specials = [0, -0, 1, -1, 3, 4, Infinity, -Infinity, NaN, 5e-324, 1e-308, 1e-160, 1e154, 1e308];
+    for (const a of specials) for (const b of specials) expect(Object.is(hypot2(a, b), Math.hypot(a, b))).toBe(true);
+    const rng = createRng(7);
+    const bits = new Float64Array(1);
+    const words = new Uint32Array(bits.buffer);
+    let mismatches = 0;
+    for (let i = 0; i < 300_000; i++) {
+      let x: number;
+      let y: number;
+      if (i % 3 === 0) {
+        // Arbitrary bit patterns (any exponent, subnormals, NaNs).
+        words[0] = rng.next() * 2 ** 32;
+        words[1] = rng.next() * 2 ** 32;
+        x = bits[0]!;
+        words[0] = rng.next() * 2 ** 32;
+        words[1] = rng.next() * 2 ** 32;
+        y = bits[0]!;
+      } else {
+        x = (rng.next() - 0.5) * 10 ** (rng.next() * 8 - 4);
+        y = (rng.next() - 0.5) * 10 ** (rng.next() * 8 - 4);
+      }
+      if (!Object.is(hypot2(x, y), Math.hypot(x, y))) mismatches++;
+    }
+    expect(mismatches).toBe(0);
   });
 
   it('hash is bit-exact', () => {

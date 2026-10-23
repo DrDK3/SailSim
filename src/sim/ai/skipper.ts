@@ -13,6 +13,7 @@ import type { RaceCommittee } from '../race/committee';
 import { rightOfWay, type RulesBoat } from '../race/rules';
 import type { Polar } from './polar';
 import { aiSheetInput, type SheetState } from './sheets';
+import { hypot2 } from '../math/hypot';
 
 /**
  * AI skipper for one Squib. It sails with the same physics and controls as the user (helm, sheets via the
@@ -158,6 +159,11 @@ export class AiSkipper {
   private returning = false;
   private onFinalApproach = false;
   private blockedSince?: number;
+  /** Since when the boat has been steered well away from its course by other boats (-1: not). */
+  private pinnedSince = -1;
+  /** Letting the boats that pin it pass: until when, and the heading held meanwhile. */
+  private yieldUntil = -Infinity;
+  private yieldHeading = 0;
   /** Obstacle ids of the starting and finishing line ends. */
   private readonly lineEnds: Set<string>;
   /** Side (TWA sign) a tack or gybe in progress is turning to; 0 when none. */
@@ -179,7 +185,7 @@ export class AiSkipper {
     this.cmd = { mode: 'heading', target: boat.sim.state.psi, depower: 0 };
     this.holdPoint = { n: boat.sim.state.n, e: boat.sim.state.e };
     const ends = [...world.course.start, ...world.course.finish];
-    this.lineEnds = new Set(world.obstacles.filter((o) => ends.some((p) => Math.hypot(p.n - o.n, p.e - o.e) < 0.5)).map((o) => o.id));
+    this.lineEnds = new Set(world.obstacles.filter((o) => ends.some((p) => hypot2(p.n - o.n, p.e - o.e) < 0.5)).map((o) => o.id));
   }
 
   /** Per-step control (installed as the Simulation's controller). */
@@ -244,7 +250,7 @@ export class AiSkipper {
     }
     if (!near.length) return undefined;
     const mv = bodyToWorld(s.u, s.v, s.psi);
-    const spd = Math.hypot(s.u, s.v);
+    const spd = hypot2(s.u, s.v);
     const rMax = clamp(5.3 * spd, 2, 18) * DEG;
     const clearance = (helmSign: number): number => {
       let best = Infinity;
@@ -267,7 +273,7 @@ export class AiSkipper {
             const an = n + cx * Math.cos(psi);
             const ae = e + cx * Math.sin(psi);
             for (const [ox, or] of o.circles) {
-              const d = Math.hypot(an - (on + ox * Math.cos(op)), ae - (oe + ox * Math.sin(op))) - cr - or;
+              const d = hypot2(an - (on + ox * Math.cos(op)), ae - (oe + ox * Math.sin(op))) - cr - or;
               if (d < best) best = d;
             }
           }
@@ -315,7 +321,7 @@ export class AiSkipper {
     const twaNow = wrapPi(wind.dir - s.psi);
     if (Math.abs(twaNow) > 2 * DEG) this.side = twaNow > 0 ? 1 : -1;
     this.refreshMoorings(me);
-    const stw = Math.hypot(s.u, s.v);
+    const stw = hypot2(s.u, s.v);
     if (Math.abs(twaNow) < 70 * DEG && stw > 0.8) this.leeway += 0.02 * (Math.abs(Math.atan2(s.v, s.u)) - this.leeway);
 
     // Penalty turns: once well clear of other boats and marks, turn until the judge counts them.
@@ -336,7 +342,13 @@ export class AiSkipper {
     const run = W.polar.run(wind.speed);
     const sc = this.makeScorer(sim, me, goal, wind, beat.twa);
     let nav = goal.hold ? this.holdCommand(sim, wind.dir, beat.twa, goal) : this.navigate(sim, me, goal, wind, beat.twa, run.twa, twaNow, sc);
-    nav = this.avoid(sim, sc, nav, wind, beat.twa);
+    const yielding = this.letPass(sim, sc, nav, wind.dir, goal);
+    if (yielding) nav = yielding;
+    else {
+      const planned = nav;
+      nav = this.avoid(sim, sc, nav, wind, beat.twa);
+      this.updatePinned(sim.time, planned, wind.dir, goal);
+    }
     // Mid-tack (head to wind): finish the turn already started rather than flip back and forth.
     const navTwa = nav.mode === 'twa' ? nav.target : nav.mode === 'heading' ? wrapPi(wind.dir - nav.target) : 0;
     if (Math.abs(twaNow) < beat.twa - 8 * DEG && this.turningTo !== 0 && nav.mode !== 'helm' && Math.sign(navTwa) !== this.turningTo && !goal.hold) {
@@ -348,12 +360,48 @@ export class AiSkipper {
     }
     let depower = Math.max(goal.depower, nav.depower);
     // Too slow to steer clear with a boat close by: power up.
-    if (depower > 0.3 && this.crowded(me, 22)) depower = 0.3;
+    if (depower > 0.3 && !yielding && this.crowded(me, 22)) depower = 0.3;
     if (goal.arriveAt !== undefined) depower = Math.max(depower, this.startSpeedControl(sim, me, goal));
     // Light air: keep enough way on to steer (ease less).
-    if (!goal.hold) depower = Math.min(depower, clamp((wind.speed / 0.5144 - 5) / 6, 0.3, 0.8));
+    if (!goal.hold && !yielding) depower = Math.min(depower, clamp((wind.speed / 0.5144 - 5) / 6, 0.3, 0.8));
     nav.depower = depower;
     this.cmd = nav;
+  }
+
+  /**
+   * A boat held well off its course by other boats for a long time (e.g. to windward of a boat it must pass
+   * astern of, both sailing on side by side) slows down for up to 25 s with its sails eased, so that they draw
+   * ahead, while that is safe; it stops as soon as its own course is clear of boats. Returns the command, or
+   * undefined when not yielding.
+   */
+  private letPass(sim: Simulation, sc: Scorer, nav: Command, windDir: number, goal: Goal): Command | undefined {
+    if (sim.time >= this.yieldUntil || goal.hold || nav.mode === 'helm') return undefined;
+    const hNav = nav.mode === 'heading' ? nav.target : windDir - nav.target;
+    if (sc.score(hNav, false, 0, 'boats') < 0.3 || sc.score(this.yieldHeading, true, 0, 'risk') > 1) {
+      this.yieldUntil = -Infinity;
+      return undefined;
+    }
+    this.intent += ' · letting boats pass';
+    return { mode: 'heading', target: this.yieldHeading, depower: 1 };
+  }
+
+  /**
+   * Time how long avoidance has held the boat more than 60° off its planned course (`planned`, before
+   * avoidance); after 30 s, start letting boats pass.
+   */
+  private updatePinned(t: number, planned: Command, windDir: number, goal: Goal): void {
+    if (goal.hold || planned.mode === 'helm' || this.avoidHeading === undefined) {
+      this.pinnedSince = -1;
+      return;
+    }
+    const hNav = planned.mode === 'heading' ? planned.target : windDir - planned.target;
+    if (Math.abs(wrapPi(this.avoidHeading - hNav)) < 60 * DEG) this.pinnedSince = -1;
+    else if (this.pinnedSince < 0) this.pinnedSince = t;
+    else if (t - this.pinnedSince > 30) {
+      this.yieldUntil = t + 25;
+      this.yieldHeading = this.boat.sim.state.psi;
+      this.pinnedSince = -1;
+    }
   }
 
   /**
@@ -365,8 +413,8 @@ export class AiSkipper {
     const W = this.world;
     if (W.outOfRace(this.id)) return true;
     if (W.outOfRace(b.id)) return false;
-    const slowMe = Math.hypot(this.boat.sim.state.u, this.boat.sim.state.v) < 0.8;
-    const slowIt = Math.hypot(b.sim.state.u, b.sim.state.v) < 0.8;
+    const slowMe = hypot2(this.boat.sim.state.u, this.boat.sim.state.v) < 0.8;
+    const slowIt = hypot2(b.sim.state.u, b.sim.state.v) < 0.8;
     if (slowIt && !slowMe) return true;
     if (slowMe && !slowIt) return false;
     if (slowMe && slowIt) return this.id > b.id;
@@ -382,7 +430,7 @@ export class AiSkipper {
       if (b.id === this.id) continue;
       const bs = b.sim.state;
       const p = { n: bs.n - me.n, e: bs.e - me.e };
-      if (Math.hypot(p.n, p.e) > r) continue;
+      if (hypot2(p.n, p.e) > r) continue;
       const bv = bodyToWorld(bs.u, bs.v, bs.psi);
       const closing = p.n * (bv.n - mv.n) + p.e * (bv.e - mv.e) < 0;
       if (closing && this.keepsClearOf(b, mine)) return true;
@@ -398,14 +446,14 @@ export class AiSkipper {
       if (b.id === this.id) continue;
       const bs = b.sim.state;
       const p = { n: bs.n - me.n, e: bs.e - me.e };
-      if (Math.hypot(p.n, p.e) < 15) return false;
+      if (hypot2(p.n, p.e) < 15) return false;
       const bv = bodyToWorld(bs.u, bs.v, bs.psi);
       const w = { n: bv.n - mv.n * 0.3, e: bv.e - mv.e * 0.3 }; // we will be nearly stopped while turning
       const w2 = w.n * w.n + w.e * w.e;
       const tc = w2 > 1e-6 ? clamp(-(p.n * w.n + p.e * w.e) / w2, 0, 15) : 0;
-      if (Math.hypot(p.n + w.n * tc, p.e + w.e * tc) < 12) return false;
+      if (hypot2(p.n + w.n * tc, p.e + w.e * tc) < 12) return false;
     }
-    for (const m of this.world.obstacles) if (Math.hypot(m.n - me.n, m.e - me.e) < 20 + m.radius) return false;
+    for (const m of this.world.obstacles) if (hypot2(m.n - me.n, m.e - me.e) < 20 + m.radius) return false;
     return true;
   }
 
@@ -419,7 +467,7 @@ export class AiSkipper {
     const judge = W.judgeOf(this.id);
     const firstMark = course.legs[0]!.target;
     const lineDir = { n: B.n - A.n, e: B.e - A.e };
-    const L = Math.hypot(lineDir.n, lineDir.e);
+    const L = hypot2(lineDir.n, lineDir.e);
     const u = { n: lineDir.n / L, e: lineDir.e / L };
     // Normal towards the course side.
     let nc = { n: -u.e, e: u.n };
@@ -434,13 +482,13 @@ export class AiSkipper {
       const fm = v((fa.n + fb.n) / 2, (fa.e + fb.e) / 2);
       const last = course.legs[course.legs.length - 1]!.target;
       let fn = { n: -(fb.e - fa.e), e: fb.n - fa.n };
-      const fl = Math.hypot(fn.n, fn.e) || 1;
+      const fl = hypot2(fn.n, fn.e) || 1;
       fn = { n: fn.n / fl, e: fn.e / fl };
       if ((last.n - fm.n) * fn.n + (last.e - fm.e) * fn.e > 0) fn = { n: -fn.n, e: -fn.e };
       const k = this.phase / 3;
       const off = ((k % 7) - 3) * 30;
       const park = v(fm.n + fn.n * (150 + 40 * Math.floor(k / 7)) + (fb.n - fa.n) / fl * off, fm.e + fn.e * (150 + 40 * Math.floor(k / 7)) + (fb.e - fa.e) / fl * off);
-      if (Math.hypot(park.n - me.n, park.e - me.e) < 25) return { p: park, label: 'clear of the course', lineWall: false, depower: 1, hold: true };
+      if (hypot2(park.n - me.n, park.e - me.e) < 25) return { p: park, label: 'clear of the course', lineWall: false, depower: 1, hold: true };
       return { p: park, label: 'clear of the course', lineWall: false, depower: 0.3 };
     }
 
@@ -471,15 +519,15 @@ export class AiSkipper {
       const da = dirOf(hApp);
       const appr = v(spot.n - da.n * 25, spot.e - da.e * 25);
       const beforeAppr = (me.n - appr.n) * da.n + (me.e - appr.e) * da.e < -3 && !this.onFinalApproach;
-      const leg1 = beforeAppr ? Math.hypot(appr.n - me.n, appr.e - me.e) : 0;
+      const leg1 = beforeAppr ? hypot2(appr.n - me.n, appr.e - me.e) : 0;
       const from = beforeAppr ? appr : me;
       const twa1 = beforeAppr ? Math.abs(wrapPi(wind.dir - bearing(me, appr))) : beat.twa;
       const v1 = W.polar.speed(wind.speed, Math.max(twa1, beat.twa)) * Math.cos(Math.max(0, beat.twa - twa1)) * 0.85;
-      const leg2 = Math.hypot(spot.n - from.n, spot.e - from.e);
-      const slow = Math.hypot(sim.state.u, sim.state.v) < 0.5 * beat.speed;
+      const leg2 = hypot2(spot.n - from.n, spot.e - from.e);
+      const slow = hypot2(sim.state.u, sim.state.v) < 0.5 * beat.speed;
       const need = leg1 / Math.max(0.5, v1) + leg2 / Math.max(0.5, beat.speed * 0.85) + (slow ? 8 : 2) + this.skill.startLateS;
       if (tau > need + 15) {
-        const dh = Math.hypot(hold.n - me.n, hold.e - me.e);
+        const dh = hypot2(hold.n - me.n, hold.e - me.e);
         if (dh < 15 || (t < this.holdUntil && dh < 30)) {
           this.holdUntil = t + 6;
           return { p: hold, label: 'holding behind the line', lineWall: true, depower: 0.9, hold: true };
@@ -528,10 +576,10 @@ export class AiSkipper {
         // Apex: the point the boat passes, on the outside of the turn.
         const din = { n: c.n - leg.prev.n, e: c.e - leg.prev.e };
         const dout = { n: leg.next.n - c.n, e: leg.next.e - c.e };
-        const li = Math.hypot(din.n, din.e) || 1;
-        const lo = Math.hypot(dout.n, dout.e) || 1;
+        const li = hypot2(din.n, din.e) || 1;
+        const lo = hypot2(dout.n, dout.e) || 1;
         let a = { n: din.n / li - dout.n / lo, e: din.e / li - dout.e / lo };
-        let la = Math.hypot(a.n, a.e);
+        let la = hypot2(a.n, a.e);
         if (la < 0.3) {
           // Passing straight on: leave it on the required side (port mark: pass to the right of it).
           a = sign > 0 ? { n: -din.e / li, e: din.n / li } : { n: din.e / li, e: -din.n / li };
@@ -601,7 +649,7 @@ export class AiSkipper {
     // Leave the mark just rounded astern before turning for the next point.
     if (this.recent) {
       const rc = this.recent;
-      const d = Math.hypot(rc.c.n - me.n, rc.c.e - me.e);
+      const d = hypot2(rc.c.n - me.n, rc.c.e - me.e);
       if (d > 6 * rc.radius || t - rc.t > 90) this.recent = undefined;
       else if (segmentCircle(me, goal.p, rc.c, rc.radius * 0.9)) track = this.circleTrack(me, rc);
     }
@@ -614,7 +662,7 @@ export class AiSkipper {
     const bias = sk.twaBiasDeg * DEG;
     // No tacking right next to the mark being rounded, or within 15 m of any mark or the committee boat (the
     // boat would stall beside it): carry on and tack when clear.
-    const nearMark = (!!r && Math.hypot(r.c.n - me.n, r.c.e - me.e) < 2 * r.radius) || this.world.obstacles.some((o) => Math.hypot(o.n - me.n, o.e - me.e) < 15 + o.radius);
+    const nearMark = (!!r && hypot2(r.c.n - me.n, r.c.e - me.e) < 2 * r.radius) || this.world.obstacles.some((o) => hypot2(o.n - me.n, o.e - me.e) < 15 + o.radius);
     const tackNearMark = nearMark && passesHeadToWind(sim.state.psi, hReq, wind.dir);
     if (Math.abs(twaReq) >= upLimit && Math.abs(twaReq) <= downLimit) {
       if (!switching || (!tackNearMark && !this.blockedByTraffic(sc, t, hReq, sim.state.psi))) return { mode: 'heading', target: hReq, depower: 0 };
@@ -640,7 +688,7 @@ export class AiSkipper {
       brg = bearing(me, target);
       const gF = this.groundVel(wind, sFinal * angle);
       const fetch = (upwind ? -sFinal : sFinal) * wrapPi(brg - Math.atan2(gF.e, gF.n));
-      const near = Math.hypot(target.n - me.n, target.e - me.e) < Math.max(60, 6 * r.radius);
+      const near = hypot2(target.n - me.n, target.e - me.e) < Math.max(60, 6 * r.radius);
       if (side !== sFinal && fetch >= sk.overstandDeg * DEG && t - this.lastTack > 4) {
         side = sFinal;
         locked = true;
@@ -660,7 +708,7 @@ export class AiSkipper {
       const dOff = off(side) - off(side === 1 ? -1 : 1);
       if (canChange && dOff > 2 * sk.shiftDeg * DEG) side = side === 1 ? -1 : 1;
       // Cone: do not stray too far either side of the line to the goal.
-      const dist = Math.hypot(target.n - me.n, target.e - me.e);
+      const dist = hypot2(target.n - me.n, target.e - me.e);
       const axis = upwind ? wind.dir + Math.PI : wind.dir; // direction from the goal back along the wind axis
       const lateral = (me.n - target.n) * -Math.sin(axis) + (me.e - target.e) * Math.cos(axis);
       const g = this.groundVel(wind, side * angle);
@@ -671,7 +719,7 @@ export class AiSkipper {
     if (t - this.lastTack > 4 && this.hazardAhead(sim, me, wind, side * angle, goal)) side = side === 1 ? -1 : 1;
     if (nearMark && upwind) side = this.side; // no tacks near marks (see above)
     // Too slow to tack cleanly (it would stall head to wind): build speed first, unless a hazard forces it.
-    if (side !== this.side && upwind && Math.hypot(sim.state.u, sim.state.v) < 0.6 * this.world.polar.beat(wind.speed).speed && !(t - this.lastTack > 4 && this.hazardAhead(sim, me, wind, this.side * angle, goal))) side = this.side;
+    if (side !== this.side && upwind && hypot2(sim.state.u, sim.state.v) < 0.6 * this.world.polar.beat(wind.speed).speed && !(t - this.lastTack > 4 && this.hazardAhead(sim, me, wind, this.side * angle, goal))) side = this.side;
     // Traffic: do not tack (gybe) into another boat's way; wait until it is clear.
     if (side !== this.side && this.blockedByTraffic(sc, t, wind.dir - side * angle, wind.dir - this.side * angle)) side = this.side;
     if (side !== this.side) {
@@ -698,7 +746,7 @@ export class AiSkipper {
 
   /** Track direction to follow a circle round a mark (port rounding = anticlockwise, mark on the left). */
   private circleTrack(me: LocalPoint, r: { c: LocalPoint; sign: 1 | -1; radius: number }): number {
-    const d = Math.hypot(r.c.n - me.n, r.c.e - me.e);
+    const d = hypot2(r.c.n - me.n, r.c.e - me.e);
     const b = bearing(me, r.c);
     if (d > r.radius) return b + r.sign * Math.asin(r.radius / d);
     return b + r.sign * (Math.PI / 2 + ((r.radius - d) / r.radius) * 40 * DEG);
@@ -721,9 +769,9 @@ export class AiSkipper {
   /** Mooring areas within 400 m (refreshed when the boat has moved 100 m). */
   private refreshMoorings(me: LocalPoint): void {
     if (this.nearMoorings.length === 0 && this.world.mooringAreas.length === 0) return;
-    if (this.nearMooringsAt && Math.hypot(me.n - this.nearMooringsAt.n, me.e - this.nearMooringsAt.e) < 100) return;
+    if (this.nearMooringsAt && hypot2(me.n - this.nearMooringsAt.n, me.e - this.nearMooringsAt.e) < 100) return;
     this.nearMooringsAt = me;
-    this.nearMoorings = this.world.mooringAreas.filter((a) => a.ring.some((q) => Math.hypot(q.n - me.n, q.e - me.e) < 400));
+    this.nearMoorings = this.world.mooringAreas.filter((a) => a.ring.some((q) => hypot2(q.n - me.n, q.e - me.e) < 400));
   }
 
   /** Does the path a→b cross a course boundary? */
@@ -737,7 +785,7 @@ export class AiSkipper {
     if (seconds <= 0) return false;
     const [A, B] = this.world.course.start;
     const ext = 150;
-    const L = Math.hypot(B.n - A.n, B.e - A.e) || 1;
+    const L = hypot2(B.n - A.n, B.e - A.e) || 1;
     const ux = (B.n - A.n) / L;
     const uy = (B.e - A.e) / L;
     const end = v(bow.n + vel.n * seconds, bow.e + vel.e * seconds);
@@ -754,7 +802,7 @@ export class AiSkipper {
   /** Distance (m) along the ground track at TWA `twa` to the first hazard (shallow water, boundary, moorings, the line before the start), up to 60 m. */
   private hazardDistance(sim: Simulation, me: LocalPoint, wind: { dir: number; speed: number; cur: NE }, twa: number, goal: Goal): number {
     const g = this.groundVel(wind, twa);
-    const sp = Math.max(0.5, Math.hypot(g.n, g.e));
+    const sp = Math.max(0.5, hypot2(g.n, g.e));
     const ux = g.n / sp;
     const uy = g.e / sp;
     const meIn = this.inMoorings(me);
@@ -774,7 +822,7 @@ export class AiSkipper {
   /** Is there a hazard close ahead on this tack, with more room on the other one? */
   private hazardAhead(sim: Simulation, me: LocalPoint, wind: { dir: number; speed: number; cur: NE }, twa: number, goal: Goal): boolean {
     const here = this.hazardDistance(sim, me, wind, twa, goal);
-    const speed = Math.hypot(sim.state.u, sim.state.v);
+    const speed = hypot2(sim.state.u, sim.state.v);
     if (here > Math.max(15, 7 * speed)) return false;
     return this.hazardDistance(sim, me, wind, -twa, goal) > here;
   }
@@ -801,11 +849,11 @@ export class AiSkipper {
     for (const b of W.fleet.boats) {
       if (b.id === this.id) continue;
       const bs = b.sim.state;
-      const d = Math.hypot(bs.n - me.n, bs.e - me.e);
+      const d = hypot2(bs.n - me.n, bs.e - me.e);
       if (d > 70) continue;
       const giveWay = this.keepsClearOf(b, mine);
       const cur = sim.env.current(t, bs.n, bs.e);
-      const spd = Math.hypot(bs.u, bs.v);
+      const spd = hypot2(bs.u, bs.v);
       const drift = Math.atan2(bs.v, bs.u);
       // Two hypotheses: she holds her present heading, or she keeps turning at her present rate for 3 s.
       const extrapolate = (rate: number): Float64Array => {
@@ -833,7 +881,7 @@ export class AiSkipper {
     const meIn = this.inMoorings(me);
     const r = goal.round;
     const wall = this.wallTime(t, goal);
-    const stw0 = Math.hypot(s.u, s.v);
+    const stw0 = hypot2(s.u, s.v);
     const tr = new Float64Array(2 * (K + 1));
     // Polar speeds at this wind speed, per degree of TWA (one lookup table per decision).
     const spTab = new Float64Array(182);
@@ -900,7 +948,7 @@ export class AiSkipper {
         const T = giveWay ? K : 14; // stand-on boats react only to what is about to happen (rule 14)
         let worst = 0;
         for (let k = 1; k <= T; k++) {
-          const d = Math.hypot(tr[2 * k]! - o.x[2 * k]!, tr[2 * k + 1]! - o.x[2 * k + 1]!);
+          const d = hypot2(tr[2 * k]! - o.x[2 * k]!, tr[2 * k + 1]! - o.x[2 * k + 1]!);
           if (d < need) worst = Math.max(worst, ((need - d) / need) * (1 - (k * DT) / (T * DT + 2)));
         }
         cost += (giveWay ? 5 : 8) * worst;
@@ -909,13 +957,13 @@ export class AiSkipper {
       // Marks and the committee boat.
       for (const mk of W.obstacles) {
         if (Math.abs(mk.n - me.n) > 80 || Math.abs(mk.e - me.e) > 80) continue;
-        const rounding = r && Math.hypot(mk.n - r.c.n, mk.e - r.c.e) < 0.5;
+        const rounding = r && hypot2(mk.n - r.c.n, mk.e - r.c.e) < 0.5;
         // The ends of the starting line (committee boat, pin) are where boats bunch up: keep well clear.
         const lineEnd = this.lineEnds.has(mk.id);
         const need = mk.radius + (rounding ? 4 : lineEnd ? 9 : 7);
         let worst = 0;
         for (let k = 1; k <= 16; k++) {
-          const d = Math.hypot(tr[2 * k]! - mk.n, tr[2 * k + 1]! - mk.e);
+          const d = hypot2(tr[2 * k]! - mk.n, tr[2 * k + 1]! - mk.e);
           if (d < need) worst = Math.max(worst, ((need - d) / need) * (1 - k / 20));
         }
         cost += (lineEnd ? 9 : 5) * worst;
@@ -927,7 +975,7 @@ export class AiSkipper {
         const need = f.length / 2 + 25;
         let worst = 0;
         for (let k = 2; k <= K; k += 2) {
-          const d = Math.hypot(tr[2 * k]! - (f.n + fv.n * k * DT), tr[2 * k + 1]! - (f.e + fv.e * k * DT));
+          const d = hypot2(tr[2 * k]! - (f.n + fv.n * k * DT), tr[2 * k + 1]! - (f.e + fv.e * k * DT));
           if (d < need) worst = Math.max(worst, (need - d) / need);
         }
         cost += 5 * worst;
@@ -1007,7 +1055,7 @@ export class AiSkipper {
       }
     }
     // Slowing down is an escape only with way on (a slow boat cannot steer).
-    if (Math.hypot(s.u, s.v) > 1.2) {
+    if (hypot2(s.u, s.v) > 1.2) {
       consider(hNav, true, 0);
       consider(s.psi, true, Math.abs(wrapPi(s.psi - hNav)) / Math.PI);
     }
@@ -1031,7 +1079,7 @@ export class AiSkipper {
     const t = sim.time;
     const s = sim.state;
     if (t >= W.committee.startTime) return 0;
-    const L = Math.hypot(B.n - A.n, B.e - A.e) || 1;
+    const L = hypot2(B.n - A.n, B.e - A.e) || 1;
     let nc = { n: -(B.e - A.e) / L, e: (B.n - A.n) / L };
     const first = W.course.legs[0]!.target;
     if ((first.n - A.n) * nc.n + (first.e - A.e) * nc.e < 0) nc = { n: -nc.n, e: -nc.e };
@@ -1073,5 +1121,5 @@ function segmentCircle(a: LocalPoint, b: LocalPoint, c: LocalPoint, r: number): 
   const de = b.e - a.e;
   const l2 = dn * dn + de * de;
   const s = l2 > 0 ? clamp(((c.n - a.n) * dn + (c.e - a.e) * de) / l2, 0, 1) : 0;
-  return Math.hypot(a.n + s * dn - c.n, a.e + s * de - c.e) < r;
+  return hypot2(a.n + s * dn - c.n, a.e + s * de - c.e) < r;
 }

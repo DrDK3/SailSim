@@ -58,6 +58,7 @@ function measure(label: string, stepOnce: () => void, frames: number, warm = 60)
       initial: { n: -40 - i * 25, e: -180 + (i % 3) * 30 + i * 30, headingDeg: -twa, speedKn: 4 },
       input: { autoMain: true, autoJib: true },
       controller: (s) => ({ helm: autopilotHelm(s, { mode: 'twa', target: twa * DEG }) }),
+      logInputs: false, // as for AI boats: the helm changes every step
     });
   });
   measure(`${boats} boats, physics only (River Dart, grounding, channel stream, shifty gusts), ${seconds} s`, () => {

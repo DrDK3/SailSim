@@ -291,4 +291,16 @@ describe('AI race (short)', () => {
     expect(b.stateHash()).toBe(a.stateHash());
     expect(b.results().map((r) => [r.id, r.finishTime])).toEqual(res.map((r) => [r.id, r.finishTime]));
   }, 120_000);
+
+  test('a sequence that begins at once shows its flags before the first step', () => {
+    const course = practiceCourse({ kind: 'windward-leeward', centre: { n: -3500, e: 1200 }, windFromDeg: 220, legM: 250, laps: 1, startLineM: 100 });
+    const { session } = createRace({
+      conditions: { startTime: '2026-07-15T13:00:00Z', weather: { source: 'manual', twsKn: 11, twdDeg: 220 }, gusts: { preset: 'moderate', seed: 3 }, current: { mode: 'none' } },
+      geo, features, course, aiCount: 1, level: 'good', seed: 3,
+      committee: { startAt: 60, sequence: 'one-minute' },
+    });
+    expect(session.time).toBe(0);
+    expect([...session.committee.flags]).toEqual(['class']);
+    expect(session.log.filter((l) => l.kind === 'signal').map((l) => [l.t, l.text])).toEqual([[0, 'One minute: class flag up (long sound)']]);
+  });
 });

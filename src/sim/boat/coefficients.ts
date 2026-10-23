@@ -22,7 +22,7 @@ function plateCn(cn90: number, absSin: number): number {
  * smoothly over [stall, stall + stallWidth]. Lift is an odd function of α. Profile drag is accounted for in
  * the hull friction (total wetted area), so no zero-lift drag term here.
  */
-export function foilCoefficients(alpha: number, p: FoilParams): Coeffs {
+export function foilCoefficients(alpha: number, p: FoilParams, out?: Coeffs): Coeffs {
   const s = Math.sin(alpha);
   const c = Math.cos(alpha);
   const a = liftSlope(p.ar);
@@ -35,7 +35,12 @@ export function foilCoefficients(alpha: number, p: FoilParams): Coeffs {
   const absA = Math.abs(alpha);
   const folded = Math.min(absA, Math.PI - absA);
   const w = smoothstep(p.stall, p.stall + p.stallWidth, folded);
-  return { cl: (1 - w) * clAtt + w * clPlate, cd: (1 - w) * cdAtt + w * cdPlate };
+  const cl = (1 - w) * clAtt + w * clPlate;
+  const cd = (1 - w) * cdAtt + w * cdPlate;
+  if (!out) return { cl, cd };
+  out.cl = cl;
+  out.cd = cd;
+  return out;
 }
 
 export interface SailCoeffs extends Coeffs {
@@ -51,7 +56,7 @@ export interface SailCoeffs extends Coeffs {
  * - Luffing: below alphaLuffStart the sail flogs (no lift, flapping drag); fully drawing above alphaFull.
  * - Drawing: lift rises to clMax at alphaPeak, then blends to flat-plate behaviour (drag device downwind).
  */
-export function sailCoefficients(incidence: number, p: SailCoeffParams): SailCoeffs {
+export function sailCoefficients(incidence: number, p: SailCoeffParams, out?: SailCoeffs): SailCoeffs {
   const a = Math.abs(incidence);
   const folded = Math.min(a, Math.PI - a);
   const luff = smoothstep(p.alphaLuffStart, p.alphaFull, folded);
@@ -66,5 +71,12 @@ export function sailCoefficients(incidence: number, p: SailCoeffParams): SailCoe
   const w = smoothstep(p.alphaPeak, p.alphaPeak + p.stallWidth, a);
   const clDraw = (1 - w) * clAtt + w * clPlate;
   const cdDraw = (1 - w) * cdAtt + w * cdPlate;
-  return { cl: luff * clDraw, cd: luff * cdDraw + (1 - luff) * p.cdFlap, luff, stall: w };
+  const cl = luff * clDraw;
+  const cd = luff * cdDraw + (1 - luff) * p.cdFlap;
+  if (!out) return { cl, cd, luff, stall: w };
+  out.cl = cl;
+  out.cd = cd;
+  out.luff = luff;
+  out.stall = w;
+  return out;
 }

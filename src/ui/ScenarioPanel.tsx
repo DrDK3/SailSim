@@ -273,6 +273,7 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             racing rules. Their sail numbers are invented. Starting sequence per rule 26; individual and general recalls per rule 29;
             the club's sailing instructions are not available, so the finishing window and recall policy are estimates.
             With a course you start in the first slot behind the line; practice start lines are longer for bigger fleets.
+            The AI was tested with fleets of 5; in bigger fleets AI boats collide or start late more often.
           </p>
         </>
       )}

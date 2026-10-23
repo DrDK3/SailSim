@@ -81,6 +81,36 @@ export function rightingArm(p: BoatParams, phi: number): number {
   return Math.sign(phi) * interpTable(p.gz, Math.abs(phi));
 }
 
+/** An empty force breakdown, to pass to computeForces as `out` and reuse step after step. */
+export function newForceBreakdown(): ForceBreakdown {
+  const sail = (): SailForce => ({ x: 0, y: 0, yPlane: 0, n: 0, incidence: 0, cl: 0, cd: 0, luff: 0, stall: 0, ceX: 0, ceY: 0, aws: 0, awa: 0, boomTorque: 0 });
+  const foil = (): FoilForce => ({ x: 0, y: 0, yPlane: 0, n: 0, alpha: 0, cl: 0, cd: 0, speed: 0 });
+  return {
+    aw: { ax: 0, ay: 0, aws: 0, awa: 0 },
+    groundVelocity: { n: 0, e: 0 },
+    main: sail(),
+    jib: sail(),
+    jibEffectiveness: 0,
+    windage: { x: 0, y: 0, n: 0 },
+    lateral: foil(),
+    rudder: foil(),
+    hull: { friction: 0, residuary: 0, total: 0, froude: 0, x: 0 },
+    crossFlow: { x: 0, y: 0, n: 0 },
+    yawDamping: 0,
+    contact: { ...NO_CONTACT, points: [] },
+    roll: { sails: 0, hydro: 0, crew: 0, righting: 0, damping: 0, ground: 0, total: 0 },
+    total: { x: 0, y: 0, n: 0 },
+  };
+}
+
+// Sail motion records, read straight away by the sail force functions.
+const MAIN_MOTION = { rollRate: 0, yawRate: 0, boomRate: 0 };
+const JIB_MOTION = { rollRate: 0, yawRate: 0, boomRate: 0 };
+
+/**
+ * All forces and moments at a state. With `out` (from newForceBreakdown, never shared between two callers
+ * that keep results), the result is written into it instead of new objects: the hot path allocates nothing.
+ */
 export function computeForces(
   p: BoatParams,
   s: RigidState,
@@ -89,54 +119,76 @@ export function computeForces(
   current: NE,
   fluids: Fluids,
   ground?: GroundContext,
+  out?: ForceBreakdown,
 ): ForceBreakdown {
-  const through = bodyToWorld(s.u, s.v, s.psi);
-  const groundVelocity = { n: through.n + current.n, e: through.e + current.e };
-  const aw = apparentWind(wind, groundVelocity, s.psi);
-  const motion = { rollRate: s.p, yawRate: s.r };
-  const { main, jib, jibEffectiveness: jEff } = sailPairForces(
-    p, a.boomMain, a.boomJib, aw, s.phi, fluids.rhoAir,
-    { ...motion, boomRate: a.boomRate }, { ...motion, boomRate: 0 }, a.mainInverted,
-  );
-  const windage = windageForce(p, aw, s.phi, fluids.rhoAir);
+  const o = out ?? newForceBreakdown();
+  const c = Math.cos(s.psi);
+  const sn = Math.sin(s.psi);
+  // Velocity over the ground: through the water (body → world), plus the current.
+  const groundVelocity = o.groundVelocity;
+  groundVelocity.n = s.u * c - s.v * sn + current.n;
+  groundVelocity.e = s.u * sn + s.v * c + current.e;
+  const aw = apparentWind(wind, groundVelocity, s.psi, o.aw);
+  MAIN_MOTION.rollRate = JIB_MOTION.rollRate = s.p;
+  MAIN_MOTION.yawRate = JIB_MOTION.yawRate = s.r;
+  MAIN_MOTION.boomRate = a.boomRate;
+  JIB_MOTION.boomRate = 0;
+  const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, s.phi, fluids.rhoAir, MAIN_MOTION, JIB_MOTION, a.mainInverted, o);
+  const windage = windageForce(p, aw, s.phi, fluids.rhoAir, o.windage);
   // Local sway at each foil: yaw (r·x) and roll (the keel swings opposite to the mast: −p·depth).
-  const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x - s.p * p.clrDepth, 0, s.phi, fluids.rhoWater);
+  const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x - s.p * p.clrDepth, 0, s.phi, fluids.rhoWater, o.lateral);
   // The keel's downwash straightens the flow reaching the rudder: only part of the hull's leeway remains.
   const rudderSway = s.v * (1 - p.rudder.flowStraightening) + s.r * p.rudder.x - s.p * p.rudderDepth;
-  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, s.phi, fluids.rhoWater);
-  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater);
-  const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater);
+  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, s.phi, fluids.rhoWater, o.rudder);
+  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater, o.hull);
+  const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater, o.crossFlow);
   const yawDamping = -p.yawLinearDamping * s.r;
-  const contact = ground ? groundContact(p, s, current, ground) : NO_CONTACT;
-  const total = {
-    x: main.x + jib.x + windage.x + lateral.x + rudder.x + hull.x + contact.x,
-    y: main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y + contact.y,
-    n: main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping + contact.n,
-  };
+  o.yawDamping = yawDamping;
+  let contact: ContactForce = NO_CONTACT;
+  if (ground) contact = groundContact(p, s, current, ground, out ? o.contact : undefined);
+  else if (out) {
+    // No seabed: the reused record holds NO_CONTACT's values (never NO_CONTACT itself, which is shared).
+    contact = o.contact;
+    contact.x = contact.y = contact.n = contact.roll = 0;
+    contact.grounded = false;
+    contact.depthAtKeel = Infinity;
+    contact.points.length = 0;
+  }
+  o.contact = contact;
+  const total = o.total;
+  total.x = main.x + jib.x + windage.x + lateral.x + rudder.x + hull.x + contact.x;
+  total.y = main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y + contact.y;
+  total.n = main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping + contact.n;
   // Roll about the waterline: sail-plane side forces act above it, keel and rudder forces below it.
-  const sails = main.yPlane * p.main.ceHeight + jib.yPlane * p.jib.ceHeight + windage.y * p.windageHeight;
-  const hydro = -lateral.yPlane * p.clrDepth - rudder.yPlane * p.rudderDepth;
-  const crew = p.crewMass * G * a.crewY * Math.cos(s.phi);
-  const righting = -p.weight * rightingArm(p, s.phi);
-  const damping = -p.rollLinearDamping * s.p;
-  const roll = { sails, hydro, crew, righting, damping, ground: contact.roll, total: sails + hydro + crew + righting + damping + contact.roll };
-  return { aw, groundVelocity, main, jib, jibEffectiveness: jEff, windage, lateral, rudder, hull, crossFlow, yawDamping, contact, roll, total };
+  const r = o.roll;
+  r.sails = main.yPlane * p.main.ceHeight + jib.yPlane * p.jib.ceHeight + windage.y * p.windageHeight;
+  r.hydro = -lateral.yPlane * p.clrDepth - rudder.yPlane * p.rudderDepth;
+  r.crew = p.crewMass * G * a.crewY * Math.cos(s.phi);
+  r.righting = -p.weight * rightingArm(p, s.phi);
+  r.damping = -p.rollLinearDamping * s.p;
+  r.ground = contact.roll;
+  r.total = r.sails + r.hydro + r.crew + r.righting + r.damping + contact.roll;
+  return o;
 }
 
-/** Time derivative of the rigid state (4-DOF with added mass and Coriolis terms in surge/sway/yaw). */
-export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, current: NE): RigidState {
+/**
+ * Time derivative of the rigid state (4-DOF with added mass and Coriolis terms in surge/sway/yaw), written
+ * into `out` when given.
+ */
+export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, current: NE, out?: RigidState): RigidState {
   const t = f.total;
-  const through = bodyToWorld(s.u, s.v, s.psi);
-  return {
-    n: through.n + current.n,
-    e: through.e + current.e,
-    psi: s.r,
-    u: (t.x + p.m22 * s.v * s.r) / p.m11,
-    v: (t.y - p.m11 * s.u * s.r) / p.m22,
-    r: t.n / p.i66,
-    phi: s.p,
-    p: f.roll.total / p.i44,
-  };
+  const c = Math.cos(s.psi);
+  const sn = Math.sin(s.psi);
+  const d = out ?? { n: 0, e: 0, psi: 0, u: 0, v: 0, r: 0, phi: 0, p: 0 };
+  d.n = s.u * c - s.v * sn + current.n;
+  d.e = s.u * sn + s.v * c + current.e;
+  d.psi = s.r;
+  d.u = (t.x + p.m22 * s.v * s.r) / p.m11;
+  d.v = (t.y - p.m11 * s.u * s.r) / p.m22;
+  d.r = t.n / p.i66;
+  d.phi = s.p;
+  d.p = f.roll.total / p.i44;
+  return d;
 }
 
 /**
@@ -158,6 +210,12 @@ export function heelEquilibrium(p: BoatParams, s: RigidState, a: Actuators, wind
   return (lo + hi) / 2;
 }
 
+// Scratch records for aeroHeelMoment (it returns a number, so nothing it fills escapes).
+const HEEL_WORK = (() => {
+  const f = newForceBreakdown();
+  return { ground: { n: 0, e: 0 }, aw: f.aw, pair: { main: f.main, jib: f.jib, jibEffectiveness: 0 }, windage: f.windage };
+})();
+
 /**
  * Heeling moment (N m, > 0 heels to starboard) of the sails and windage at heel angle phi, about the centre
  * of lateral resistance: sail-plane side force x (CE height + CLR depth).
@@ -172,9 +230,12 @@ export function aeroHeelMoment(
   phi: number,
 ): number {
   const through = bodyToWorld(s.u, s.v, s.psi);
-  const aw = apparentWind(wind, { n: through.n + current.n, e: through.e + current.e }, s.psi);
-  const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, phi, fluids.rhoAir, undefined, undefined, a.mainInverted);
-  const windage = windageForce(p, aw, phi, fluids.rhoAir);
+  const ground = HEEL_WORK.ground;
+  ground.n = through.n + current.n;
+  ground.e = through.e + current.e;
+  const aw = apparentWind(wind, ground, s.psi, HEEL_WORK.aw);
+  const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, phi, fluids.rhoAir, undefined, undefined, a.mainInverted, HEEL_WORK.pair);
+  const windage = windageForce(p, aw, phi, fluids.rhoAir, HEEL_WORK.windage);
   return (
     main.yPlane * (p.main.ceHeight + p.clrDepth) +
     jib.yPlane * (p.jib.ceHeight + p.clrDepth) +

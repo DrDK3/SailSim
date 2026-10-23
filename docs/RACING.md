@@ -133,6 +133,11 @@ Other boats are extrapolated two ways: holding course, and continuing their pres
 - **Costs:** deviation from the tactical heading, manoeuvres, and a small preference for the escape chosen last time (to commit to it).
 - **No real risk:** the tactical heading stands.
 
+**Pinned by another boat:** if avoidance has held the boat more than 60° off its course for 30 s, it lets the other boats go ahead. For example, a boat to windward of a boat it must pass astern of, both sailing on side by side.
+- **How:** it holds its heading with the sails fully eased, for at most 25 s.
+- **Safety:** only while the slowed track carries no real risk.
+- **Ends:** as soon as its own course is clear of boats.
+
 **Tacks and gybes:**
 - **Traffic:** they wait for traffic for at most 20 s, and only if clearly riskier than carrying on.
 - **Speed:** they wait until the boat has way on.
@@ -188,6 +193,9 @@ It never changes the physics.
   - **Each seed:** 5 AI boats, a one-lap windward–leeward or triangle in the Start Bay practice area, wind 6–16 kn from any direction, moderate or shifty gusts, and a 5-minute starting sequence.
   - **A run is clean only if:** every boat finishes; no boat touches another boat, a mark, the committee boat, a moored boat or a ferry; no boat touches the bottom; and no boundary is crossed. **Touching a mark counts as a failure here**, a stricter reading than "collision".
   - The report (`out/ai-trials.json`) lists every contact with its time.
-  - **Results:** see [PHASE5_REPORT.md](PHASE5_REPORT.md).
-- **Criterion 12 (performance with AI):** `npm run perf` (1 user + 20 AI boats on the River Dart, full race logic). See the report.
+  - **Results (23 Oct 2026):** 97 of 100 runs clean (seeds 1–100), and 97 of 100 on seeds 101–200, which were never used for tuning (`npm run ai:trials -- --first 101`). Details in [PHASE5_REPORT.md](PHASE5_REPORT.md).
+- **Criterion 12 (performance with AI):** `npm run perf`.
+  - **Physics only:** 21 boats on the River Dart, 0.80 ms mean and 1.98 ms p99 per 1/60 s frame.
+  - **Full race:** 1 user + 20 AI boats, including the AI and race logic, 1.7 ms mean and about 5 ms p99.
+  - See the report.
 - **Why the turn model is brisk:** using the measured turn rate in the avoidance search was tried. Clean runs fell from 88% to 30% on the same 40 seeds: when every escape looks equally late, the boat holds on into trouble. The brisk model starts avoidance earlier and further; the reflex, which does use the measured rate, handles the last 2.5 s.

@@ -1,9 +1,10 @@
 import type { LocalPoint } from './types';
+import { hypot2 } from '../math/hypot';
 
 /** Plane geometry in the local frame (n north, e east). Orientation: +x = east, +y = north. */
 
 export const sub = (a: LocalPoint, b: LocalPoint): LocalPoint => ({ n: a.n - b.n, e: a.e - b.e });
-export const dist = (a: LocalPoint, b: LocalPoint): number => Math.hypot(a.n - b.n, a.e - b.e);
+export const dist = (a: LocalPoint, b: LocalPoint): number => hypot2(a.n - b.n, a.e - b.e);
 /** z-component of (b − a) × (p − a) with x = e, y = n: > 0 when p is to the left of a→b. */
 export function cross(a: LocalPoint, b: LocalPoint, p: LocalPoint): number {
   return (b.e - a.e) * (p.n - a.n) - (b.n - a.n) * (p.e - a.e);
@@ -31,7 +32,7 @@ export function segmentCrossing(p0: LocalPoint, p1: LocalPoint, a: LocalPoint, b
 export function pointSegmentDistance(p: LocalPoint, a: LocalPoint, b: LocalPoint): number {
   const len2 = (b.n - a.n) ** 2 + (b.e - a.e) ** 2;
   const u = len2 > 0 ? Math.max(0, Math.min(1, ((p.n - a.n) * (b.n - a.n) + (p.e - a.e) * (b.e - a.e)) / len2)) : 0;
-  return Math.hypot(p.n - (a.n + (b.n - a.n) * u), p.e - (a.e + (b.e - a.e) * u));
+  return hypot2(p.n - (a.n + (b.n - a.n) * u), p.e - (a.e + (b.e - a.e) * u));
 }
 
 export function segmentSegmentDistance(p0: LocalPoint, p1: LocalPoint, a: LocalPoint, b: LocalPoint): number {

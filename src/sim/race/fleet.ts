@@ -4,6 +4,7 @@ import { bodyToWorld, windFrom, type NE } from '../boat/forces';
 import { ferryStates, type FerryRoute } from '../env/ferries';
 import type { Environment } from '../env/environment';
 import { boxOutline, circleContact, placeOutline, polygonContact, squibOutline, type Contact, type Outline, type Vec } from './hull';
+import { hypot2 } from '../math/hypot';
 
 /**
  * Several boats sharing one environment, stepped together at the fixed 10 ms step, with contact between
@@ -85,7 +86,7 @@ export function markRadius(kind: string): number | null {
 
 /** Where a moored boat lies: head to the stream (or, in slack water, the wind), downstream of its buoy. */
 export function mooredBoatPose(m: { n: number; e: number; l: number }, stream: NE, windFromDir: number, jitterDeg = 0): { n: number; e: number; heading: number } {
-  const sp = Math.hypot(stream.n, stream.e);
+  const sp = hypot2(stream.n, stream.e);
   const bowTo = sp > 0.08 ? Math.atan2(-stream.e, -stream.n) : windFromDir + jitterDeg * (Math.PI / 180);
   const back = m.l * 0.5 + 2;
   return { n: m.n - Math.cos(bowTo) * back, e: m.e - Math.sin(bowTo) * back, heading: bowTo };
@@ -237,7 +238,7 @@ export class Fleet {
       const fN = Math.max(0, k * c.depth - damp * vn);
       const tn = vRel.n - vn * nn;
       const te = vRel.e - vn * ne;
-      const vt = Math.hypot(tn, te);
+      const vt = hypot2(tn, te);
       const fT = vt > 1e-9 ? (CONTACT.friction * fN * Math.tanh(vt / 0.1)) / vt : 0;
       return { n: fN * nn - fT * tn, e: fN * ne - fT * te };
     };
