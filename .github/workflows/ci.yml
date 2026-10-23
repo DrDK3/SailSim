@@ -23,6 +23,9 @@ jobs:
       - run: npm run lint
       - name: Build (typecheck, Vite, secret check)
         run: npm run build
+        env:
+          # Names the build in saved replays (not a secret).
+          VITE_BUILD_ID: ${{ github.sha }}
       - run: npm test
       - uses: actions/setup-python@v5
         with:

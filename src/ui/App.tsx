@@ -13,6 +13,8 @@ import { RacePanel } from './RacePanel';
 import { SKY_PRESETS } from '../sim/env/sky';
 import { ResultsPanel } from './ResultsPanel';
 import { CourseEditor } from './CourseEditor';
+import { LibraryPanel } from './LibraryPanel';
+import { ReplayBar } from './ReplayBar';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
 
@@ -31,6 +33,7 @@ export function App({ ctl }: { ctl: SimController }) {
   const host = useRef<HTMLDivElement>(null);
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   useEffect(() => {
     const el = host.current!;
@@ -65,6 +68,7 @@ export function App({ ctl }: { ctl: SimController }) {
         <button aria-pressed={ui.showDashboard} onClick={() => ctl.toggleDashboard()} title="Validation dashboard (V)">Dashboard</button>
         <button aria-pressed={ui.showPolar} onClick={() => ctl.togglePolar()} title="Model polar sweep">Polar</button>
         <button aria-pressed={scenarioOpen} onClick={() => setScenarioOpen(!scenarioOpen)}>Scenario</button>
+        <button aria-pressed={libraryOpen} onClick={() => setLibraryOpen(!libraryOpen)} title="Scenario library and replays">Library</button>
         <button aria-pressed={ui.showLabels} onClick={() => ctl.toggleLabels()} title="Place labels (L)">Labels</button>
         <button aria-pressed={ui.showMinimap} onClick={() => ctl.toggleMinimap()} title="Minimap (N)">Map</button>
         <button aria-pressed={ui.showLayers} onClick={() => ctl.toggleLayers()} title="Layers, provisional elements and sources">Layers</button>
@@ -73,12 +77,13 @@ export function App({ ctl }: { ctl: SimController }) {
       </nav>
       <div className="side">
         {scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => setScenarioOpen(false)} />}
+        {libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => setLibraryOpen(false)} />}
         {ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}
         {ui.showDebug && <DebugPanel ui={ui} />}
       </div>
       {ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}
-      <Controls ctl={ctl} ui={ui} />
-      {ui.paused && <div className="banner">Paused (P to resume)</div>}
+      {ui.replay ? <ReplayBar ctl={ctl} ui={ui} /> : <Controls ctl={ctl} ui={ui} />}
+      {ui.paused && <div className="banner">{ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}</div>}
       {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
       {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}
       {(ui.dart.issues.length > 0 || ui.dart.status === 'unavailable') && (

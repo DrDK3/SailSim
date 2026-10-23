@@ -1,4 +1,4 @@
-import { DT, Simulation, type BoatSnapshot, type ControlInput } from '../sim/simulation';
+import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
 import { squibParams } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clamp } from '../sim/math/angles';
@@ -24,6 +24,7 @@ import { sunPosition } from '../sim/env/sun';
 import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
+import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
 
 /**
  * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
@@ -153,6 +154,10 @@ export interface UiState {
   tideSources: DataSource[];
   /** Problems finding or reading the live-data files (shown in the scenario panel). */
   liveIssues: string[];
+  /** Playing back a recording (controls disabled until "Take over"). */
+  replay?: ReplayStatus;
+  /** Simulation speed relative to real time (1, 2, 4, 8). */
+  timeScale: number;
   telemetryVersion: number;
   /** River Dart data: loading, loaded, or unavailable; plus anything that failed to load. */
   dart: { status: 'loading' | 'loaded' | 'unavailable'; issues: DartData['issues'] };
@@ -174,6 +179,10 @@ const HELM_RATE = 1.4;
 const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
 const MAX_STEPS_PER_FRAME = 12;
+/** Identifies the build in recordings (Vite's mode and the package version; a commit id when CI provides one). */
+const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
+/** Fills a partial starting input to a full one for the recording. */
+const DEFAULT_INPUT_FOR_RECORD: ControlInput = { helm: 0, mainSheet: 0.3, jibSheet: 0.3, autoMain: false, autoJib: true, crewHike: 0.6, autoCrew: true };
 
 /** The list of live and replay data files served next to the app (public/live/README.md). */
 const LIVE_INDEX = 'live/index.json';
@@ -207,6 +216,12 @@ export class SimController {
   private lastPublish = 0;
   /** Real time (ms) of the last weather/sun update sent to the scene; -Infinity forces one. */
   private lastWeather = -Infinity;
+  /** The input the user's boat was built with (part of a recording), and the state hashes so far. */
+  private initialInput: ControlInput | null = null;
+  private checkpoints: [number, string][] = [];
+  /** Replay in progress: the recording, its decoded inputs and how far it has been checked. */
+  private replay?: { rec: Recording; inputs: InputLogEntry[]; next: number; matched: number; total: number; verifiedTo: number; divergedAt?: number; ended: boolean; notes: string[] };
+  private timeScale = 1;
   private lastRecordT = -Infinity;
   private frames = 0;
   private fpsT0 = 0;
@@ -246,7 +261,11 @@ export class SimController {
   // ------------------------------------------------------------ lifecycle
 
   /** Start (or restart) a run. On invalid settings the previous run continues and the error is shown. */
-  restart(scenario: AppScenario = this.scenario): boolean {
+  /**
+   * Start (or restart) a run. `initialInput` overrides the input the user's boat is built with (a replay
+   * passes the recorded one; by default the previous run's input carries over with the helm centred).
+   */
+  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean } = {}): boolean {
     let built: BuiltConditions;
     const geo = this.dartData?.geo;
     try {
@@ -258,6 +277,8 @@ export class SimController {
     }
     const loc = START_LOCATIONS.find((l) => l.id === scenario.startLocation) ?? START_LOCATIONS[0];
     const prevInput = this.sim?.input;
+    const startInput: ControlInput | undefined =
+      opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
     let race: SimController['race'];
     let sim: Simulation;
     if (scenario.course) {
@@ -277,7 +298,7 @@ export class SimController {
           seed: scenario.conditions.gusts.seed,
           human: {
             controller: () => this.sampleInputs(),
-            input: prevInput ? { ...prevInput, helm: 0 } : undefined,
+            input: startInput,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             initial: fleet.aiCount > 0 ? undefined : preStartPosition,
           },
@@ -299,7 +320,7 @@ export class SimController {
         seabed: geo,
         ownsEnvironment: false,
         initial: { n: loc.n, e: loc.e, headingDeg: scenario.startHeadingDeg, speedKn: scenario.startSpeedKn },
-        input: prevInput ? { ...prevInput, helm: 0 } : undefined,
+        input: startInput,
         controller: () => this.sampleInputs(),
       });
       const fleet = new Fleet(built.env);
@@ -315,7 +336,13 @@ export class SimController {
     this.race = race;
     this.sim = sim;
     // Start with sensible manual sheet settings for the starting point of sail.
-    if (!prevInput) this.sim.setInput(optimalSheets(this.sim));
+    if (!startInput) this.sim.setInput(optimalSheets(this.sim));
+    this.initialInput = startInput ? { ...DEFAULT_INPUT_FOR_RECORD, ...startInput } : null;
+    this.checkpoints = [];
+    if (!opts.keepReplay) {
+      this.replay = undefined;
+      this.timeScale = 1;
+    }
     this.currSnap = this.sim.snapshot(false);
     this.prevSnap = this.currSnap;
     this.detailSnap = this.sim.snapshot();
@@ -349,9 +376,101 @@ export class SimController {
 
   /** One physics step: the whole race (fleet, committee, judges, rules, AI) or the user's boat alone. */
   private stepSim(): void {
+    if (this.replay && !this.replay.ended && this.sim.step >= this.replay.rec.endStep) {
+      // The recording's last checkpoint is where it was saved, usually between the regular ones.
+      if (this.sim.step % CHECKPOINT_STEPS !== 0) this.verify(this.sim.step, this.stateHash());
+      this.replay.ended = true;
+      this.paused = true;
+      this.publish(true);
+    }
+    if (this.replay?.ended) return; // hold at the end of the recording until "Take over"
     if (this.race) this.race.session.step();
     else if (this.soloFleet) this.soloFleet.stepOnce();
     else this.sim.stepOnce();
+    if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
+  }
+
+  /** The whole run's state hash: every boat (and so, through determinism, everything else). */
+  stateHash(): string {
+    return this.race ? this.race.session.stateHash() : this.soloFleet ? this.soloFleet.stateHash() : this.sim.stateHash();
+  }
+
+  private checkpoint(): void {
+    const step = this.sim.step;
+    const hash = this.stateHash();
+    this.checkpoints.push([step, hash]);
+    this.verify(step, hash);
+  }
+
+  /** In a replay, compare a state hash with the recording's for the same step (if it has one). */
+  private verify(step: number, hash: string): void {
+    const r = this.replay;
+    if (!r) return;
+    const expected = r.rec.checkpoints.find((c) => c[0] === step);
+    if (!expected) return;
+    if (expected[1] === hash && r.divergedAt === undefined) {
+      r.matched++;
+      r.verifiedTo = step * DT;
+    } else if (r.divergedAt === undefined) r.divergedAt = step * DT;
+  }
+
+  // ------------------------------------------------------------ recordings
+
+  /** The run so far as a recording (the replay file). */
+  saveRecording(title = 'Squib session'): Recording {
+    const sc = structuredClone(this.scenario);
+    // Carry the course itself, so the replay does not depend on this browser's course library.
+    if (this.race) sc.course = { source: 'inline', course: structuredClone(this.race.course) };
+    const checkpoints = this.checkpoints.filter((c) => c[0] <= this.sim.step);
+    if (!checkpoints.length || checkpoints[checkpoints.length - 1]![0] !== this.sim.step) checkpoints.push([this.sim.step, this.stateHash()]);
+    return {
+      schema: REPLAY_SCHEMA,
+      created: new Date().toISOString(),
+      title,
+      build: BUILD_ID,
+      scenario: sc,
+      initialInput: this.initialInput,
+      dart: this.dartData?.geo ? 'loaded' : 'none',
+      inputs: encodeInputs(this.sim.inputLog),
+      checkpoints,
+      endStep: this.sim.step,
+    };
+  }
+
+  /** Play a recording back: same scenario and starting input, the user's inputs fed step by step, checked. */
+  startReplay(json: unknown): boolean {
+    let rec: Recording;
+    try {
+      rec = parseRecording(json);
+    } catch (err) {
+      this.scenarioError = (err as Error).message;
+      this.publish(true);
+      return false;
+    }
+    const notes: string[] = [];
+    const dartNow = this.dartData?.geo ? 'loaded' : 'none';
+    if (rec.dart !== dartNow) notes.push(`Recorded ${rec.dart === 'loaded' ? 'with' : 'without'} the River Dart data, played ${dartNow === 'loaded' ? 'with' : 'without'} it: it will not match.`);
+    if (rec.build !== BUILD_ID) notes.push(`Recorded with build ${rec.build}; this is ${BUILD_ID}. A different build may not reproduce it exactly.`);
+    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true })) return false;
+    this.replay = { rec, inputs: decodeInputs(rec.inputs), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
+    this.held.clear();
+    this.paused = false;
+    this.publish(true);
+    return true;
+  }
+
+  /** Stop the replay here and sail on from this point (the recording continues from the replayed part). */
+  takeOver(): void {
+    this.replay = undefined;
+    this.timeScale = 1;
+    this.held.clear();
+    this.paused = false;
+    this.publish(true);
+  }
+
+  setTimeScale(x: number): void {
+    this.timeScale = [1, 2, 4, 8].includes(x) ? x : 1;
+    this.publish(true);
   }
 
   private contactText(): string | undefined {
@@ -525,9 +644,9 @@ export class SimController {
     this.lastFrame = now;
     if (!this.paused) {
       const t0 = performance.now();
-      this.accumulator += dt;
+      this.accumulator += dt * this.timeScale;
       let steps = 0;
-      while (this.accumulator >= DT && steps < MAX_STEPS_PER_FRAME) {
+      while (this.accumulator >= DT && steps < MAX_STEPS_PER_FRAME * this.timeScale) {
         // Keep (light) snapshots of the last two physics states for render interpolation.
         const last = this.accumulator - DT < DT;
         if (last) {
@@ -588,6 +707,18 @@ export class SimController {
 
   /** Called by the simulation at the start of every step (deterministic sampling of held controls). */
   private sampleInputs(): Partial<ControlInput> | void {
+    const r = this.replay;
+    if (r) {
+      // Playing back: the recorded input for this step, if there is one; the keyboard is ignored.
+      const step = this.sim.step;
+      while (r.next < r.inputs.length && r.inputs[r.next]!.step < step) r.next++;
+      const e = r.inputs[r.next];
+      if (e && e.step === step) {
+        r.next++;
+        return { ...e.input };
+      }
+      return undefined;
+    }
     const i = this.sim.input;
     const change: Partial<ControlInput> = {};
     const left = this.held.has('helmLeft');
@@ -613,6 +744,7 @@ export class SimController {
 
   /** Held controls (keyboard or on-screen buttons). */
   press(action: string, down: boolean): void {
+    if (this.replay && down) return;
     if (down) this.held.add(action);
     else this.held.delete(action);
   }
@@ -644,20 +776,24 @@ export class SimController {
   }
 
   setInput(change: Partial<ControlInput>): void {
+    if (this.replay) return; // playing back: the recording drives the boat
     this.sim.setInput(change);
     this.publish(true);
   }
 
   releaseSheets(): void {
+    if (this.replay) return;
     this.sim.setInput({ autoMain: false, autoJib: false, mainSheet: 1, jibSheet: 1 });
     this.publish(true);
   }
 
   centreHelm(): void {
+    if (this.replay) return;
     this.sim.setInput({ helm: 0 });
   }
 
   togglePause(): void {
+    if (this.replay?.ended) return; // the recording is over: "Take over" sails on
     this.paused = !this.paused;
     this.lastFrame = performance.now();
     this.publish(true);
@@ -786,6 +922,20 @@ export class SimController {
     this.ui = {
       snapshot: this.detailSnap,
       paused: this.paused,
+      timeScale: this.timeScale,
+      replay: this.replay
+        ? {
+            title: this.replay.rec.title,
+            state: this.replay.divergedAt !== undefined ? 'diverged' : this.replay.ended ? 'ended' : 'playing',
+            finished: this.replay.ended,
+            verifiedToS: this.replay.verifiedTo,
+            checkpointsMatched: this.replay.matched,
+            checkpointsTotal: this.replay.total,
+            divergedAtS: this.replay.divergedAt,
+            endS: this.replay.rec.endStep * DT,
+            notes: this.replay.notes,
+          }
+        : undefined,
       camera: this.view?.cameraMode ?? 'chase',
       showForces: this.showForces,
       showDebug: this.showDebug,

@@ -69,7 +69,7 @@ option { background: #0d1b24; }
 /* Toolbar */
 .toolbar { top: 12px; right: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; max-width: calc(100% - 410px); justify-content: flex-end; }
 .select { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-.side { position: absolute; top: 70px; right: 12px; display: flex; flex-direction: column; gap: var(--gap); max-height: calc(100% - 300px); overflow: auto; }
+.side { position: absolute; z-index: 2; top: 70px; right: 12px; display: flex; flex-direction: column; gap: var(--gap); max-height: calc(100% - 300px); overflow: auto; }
 .side .panel { position: static; width: 380px; }
 
 /* Controls */
@@ -267,3 +267,14 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .results tr.you td { font-weight: 700; background: rgba(95, 224, 138, 0.1); }
 .results .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; border: 1px solid rgba(0, 0, 0, 0.4); }
 .contact-banner { top: 120px; }
+
+/* Library and replays (Phase 6) */
+
+.lib-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lib-row { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--panel-border); }
+.lib-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lib-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.lib-actions button { padding: 3px 8px; }
+.lib-input { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-border); border-radius: 5px; padding: 4px 6px; flex: 1; min-width: 120px; }
+.replay-bar progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.replay-bar .row { align-items: center; }
