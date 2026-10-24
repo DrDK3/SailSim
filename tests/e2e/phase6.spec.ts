@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
+/** CI runners draw the scene in software, several times slower (playwright.config.ts). */
+const CI_SLOW = process.env.CI ? 2 : 1;
+
 /** Phase 6 in the browser: the scenario library, replays (save, open, verify, diverge, take over), visual weather. */
 
 async function open(page: Page): Promise<string[]> {
@@ -18,7 +21,7 @@ async function open(page: Page): Promise<string[]> {
 const library = (page: Page) => page.getByRole('region', { name: 'Library' });
 
 test('Phase 6: replays: a raced session saved from the library plays back verified, a changed one diverges', async ({ page }, info) => {
-  test.setTimeout(180_000);
+  test.setTimeout(180_000 * CI_SLOW);
   const errors = await open(page);
   await page.getByRole('button', { name: 'Library' }).click();
   await library(page).getByRole('button', { name: 'Load Practice race: windward–leeward, 5 AI boats' }).click();
@@ -91,7 +94,7 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
 });
 
 test('Phase 6: scenario library: built-ins, save in the browser, export and import, bad files reported', async ({ page }, info) => {
-  test.setTimeout(180_000);
+  test.setTimeout(180_000 * CI_SLOW);
   const errors = await open(page);
   await page.getByRole('button', { name: 'Library' }).click();
   const lib = library(page);

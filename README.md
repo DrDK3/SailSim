@@ -16,7 +16,8 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | 3: the River Dart from open data (terrain, buildings, piers, moorings, ferries, grounding, channel stream, minimap) | Done, 22 Oct 2026 ([phase report](docs/PHASE3_REPORT.md)) |
 | 4: courses, course judge and editor (practice courses, validation, starts, roundings, finishes) | Done, 22 Oct 2026 ([phase report](docs/PHASE4_REPORT.md)). No RDYC club courses yet: the documents are needed |
 | 5: race management and AI competitors (fleet physics and contact, race committee, rules subset, penalties, results, AI Squibs) | Done, 23 Oct 2026 ([phase report](docs/PHASE5_REPORT.md), [racing](docs/RACING.md)) |
-| **6: deployment, live data, visual weather, replays, scenario library, performance** | **Done, 23 Oct 2026** ([phase report](docs/PHASE6_REPORT.md), [deployment](docs/DEPLOYMENT.md)). **Built and tested here, not yet deployed:** no GitHub account is connected |
+| **6: deployment, live data, visual weather, replays, scenario library, performance** | **Done, 23 Oct 2026** ([phase report](docs/PHASE6_REPORT.md), [deployment](docs/DEPLOYMENT.md)). Deployed 24 Oct 2026 from [DrDK3/SailSim](https://github.com/DrDK3/SailSim) to GitHub Pages, with the live-data job running |
+| UX review: watertight boat, crew and buildings, tutorial, phone layout | Done, 24 Oct 2026 ([review](docs/UX_REVIEW.md)) |
 
 **New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from the toolbar or Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
 

@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** CI runners draw the scene in software, several times slower (playwright.config.ts). */
+const CI_SLOW = process.env.CI ? 2 : 1;
+
 /** The UX pass: first-visit welcome, the tutorial, toolbar menus, Escape, reset confirmation, phones, watertight boats. */
 
 async function ready(page: Page): Promise<string[]> {
@@ -18,7 +21,7 @@ test.describe('first visit', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('the welcome offers the tutorial; the tutorial teaches step by step and moves on when the goal is met', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(180_000 * CI_SLOW);
     const errors = await ready(page);
     const welcome = page.getByRole('dialog', { name: 'Squib sailing simulator' });
     await expect(welcome).toBeVisible();

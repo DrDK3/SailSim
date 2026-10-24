@@ -6,7 +6,12 @@ This page covers:
 - what is checked automatically;
 - what it costs.
 
-**Status (23 Oct 2026):** everything below is built and was rehearsed locally against a stand-in repository (§7). It has **not run on GitHub yet**: this development environment has no GitHub account linked (decision D3). The tide hosts (Environment Agency, UKHO) are blocked here, so the tide ingest has only been tested on fixtures. The first run needs the checks in §5.
+**Status (24 Oct 2026): deployed.**
+- **Repository:** [DrDK3/SailSim](https://github.com/DrDK3/SailSim) on GitHub, public.
+- **Site:** Deploy published it on `gh-pages`. GitHub Pages is enabled (its build runs succeed). The site could not be opened from the development environment, whose network policy blocks github.io.
+- **Live data:** the job runs on schedule.
+- **First-run checks (§5):** done on 24 Oct; the results are below.
+- **CI's browser tests:** they failed on GitHub's runners until they were split into three jobs (§3).
 
 ## 1. What is published
 
@@ -48,10 +53,19 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
 
 | Workflow | When | What |
 |---|---|---|
-| `ci.yml` | Every push and pull request | Lint; build (typecheck, Vite, **secret check**); unit tests; ingest tests (Python); browser tests on the production build, at the root and under `/squib-dart-sim/` |
+| `ci.yml` | Every push and pull request | Job **checks**: lint; build (typecheck, Vite, **secret check**); unit tests; ingest tests (Python). Job **browser**, in three parallel shards: browser tests on the production build, at the root and under `/squib-dart-sim/` |
 | `deploy.yml` | Push to `main`, or by hand | Build and test, then `tools/ci/publish-pages.sh`: replace the site on `gh-pages`, keep the live-data files, rebuild `live/index.json` |
 | `live-data.yml` | :07 and :37 past each hour, 06–20 UTC; hourly 21–05 UTC | Runs `tools/ingest/weather.py`, `tide.py` and `index.py`, then `tools/ci/push-live-data.sh` |
 | `tide-harmonics.yml` | Mondays 03:23 UTC, or by hand | `tools/ingest/harmonics.py`: derive the constants, validate them, write a year of HW/LW events |
+
+**Why the browser tests run in three shards:**
+- **No GPU:** GitHub's hosted runners have no GPU, so Chromium draws the 3D scene in software.
+- **Two browsers starve each other:** with two at once, a page could take over 90 s just to show the instruments. That is how the first two CI runs failed.
+- **The fix:**
+  - each shard runs one browser;
+  - time limits are doubled on CI;
+  - a test is retried once, and one that passes only on retry is reported as **flaky**;
+  - failures appear as annotations on the run (Playwright's GitHub reporter).
 
 **How the live-data job pushes:**
 - **Commits:** consecutive data commits are squashed into one ("Live data", amended and force-pushed with a lease), so `gh-pages` does not grow by 48 commits a day.
@@ -90,7 +104,16 @@ All thresholds are estimates (E), chosen for sessions of about an hour.
 
 ## 5. First run on GitHub: what to check
 
-The tide part has never reached the real services. After the first **Live data** run:
+**Results of the first run (24 Oct 2026):**
+1. **Log:** the job log could not be read from the development environment. The saved history shows the gauge worked: 191 readings over 48 h at 15-min steps, no gaps.
+2. **Gauge values:** −1.54 to +2.14 m AOD, with two regular tides a day. Pass.
+3. **UKHO:** no key set; not tested.
+4. **Weather:** 9 wind steps (the 05:00 UTC run, 09:00–11:00) and 3 hourly sky readings. Pass.
+5. **Harmonics:** need 36 days of history, so the first possible run is Monday 30 Nov 2026.
+
+**No `tide.json` yet.** `tide.py` writes it only when there are predictions: from UKHO (needs the key) or from the harmonics (needs 36 days). Until then the app has no live tide. Manual tide and recorded snapshots still work.
+
+The checks, for this or a later run:
 
 1. **Log:** the job log should show `EA gauge: N readings, latest …` with N about 190 for 48 h. If it shows an error, compare the EA response with `ea_tidal_measure` and `ea_readings` in `tools/ingest/tide.py`.
 2. **Gauge values:** open `live/tide.json` on the site. Gauge `mAOD` values at Dartmouth should lie between about −3 and +3.

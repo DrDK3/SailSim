@@ -9,7 +9,12 @@ const chromium = process.env.PW_CHROMIUM ?? (existsSync('/opt/pw-browsers/chromi
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  timeout: 90_000,
+  // CI runners draw the 3D scene in software, several times slower than a desktop: allow more time there, run
+  // one browser per job, and retry once (a test that passes only on retry is reported as flaky).
+  timeout: process.env.CI ? 180_000 : 90_000,
+  expect: { timeout: process.env.CI ? 15_000 : 5_000 },
+  workers: process.env.CI ? 1 : undefined,
+  retries: process.env.CI ? 1 : 0,
   // On GitHub Actions, failures also become annotations on the run (readable without downloading the log).
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {

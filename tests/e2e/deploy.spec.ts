@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
+/** CI runners draw the scene in software, several times slower (playwright.config.ts). */
+const CI_SLOW = process.env.CI ? 2 : 1;
+
 /**
  * Phase 6 acceptance on the production build served like GitHub Pages: under a sub-path
  * (http://localhost:4174/squib-dart-sim/, tools/pages-server.mjs), with no fallback routing.
@@ -46,7 +49,7 @@ test('the production build runs under a sub-path: assets, River Dart data, physi
 });
 
 test('the polar worker loads from the sub-path', async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(150_000 * CI_SLOW);
   const { errors } = await open(page);
   await page.getByRole('button', { name: /^Tools/ }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
@@ -156,7 +159,7 @@ test('live data: a forecast that has run out is stale (warned), a day-old one on
 });
 
 test('live data: a corrupt file is reported and skipped; a missing index falls back to the bundled replays', async ({ page }) => {
-  test.setTimeout(180_000); // two full loads of the app
+  test.setTimeout(180_000 * CI_SLOW); // two full loads of the app
   await serveLive(page, { 'latest.json': '{"model": {"available": tru' });
   const { errors } = await open(page);
   await expect.poll(async () => (await liveUi(page)).liveIssues.length).toBe(1);

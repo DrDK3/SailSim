@@ -1,5 +1,7 @@
 # Every push and pull request: lint, typecheck, build (with the no-secrets check), unit tests, ingest tests,
 # and the browser tests against the production build (at the root and under a GitHub Pages sub-path).
+# The hosted runners have no GPU: the 3D scene is drawn in software, so the browser tests are split over three
+# parallel jobs with one browser each (two browsers on one runner starve each other: docs/DEPLOYMENT.md).
 name: CI
 on:
   push:
@@ -10,9 +12,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -35,14 +37,28 @@ jobs:
       - run: pip install -r tools/ingest/requirements.txt
       - name: Ingest tests
         run: python -I -m unittest discover -s tools/ingest -p 'test_*.py'
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Browser tests
-        run: npm run test:e2e
+      - name: Browser tests (shard ${{ matrix.shard }} of 3)
+        run: npx playwright test --shard=${{ matrix.shard }}/3
         env:
           CI: 'true'
       - if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.shard }}
           path: test-results/
           retention-days: 7

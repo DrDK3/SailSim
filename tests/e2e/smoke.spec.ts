@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { runDeterminismState } from '../../src/sim/testing/determinism';
 import { msToKn, runScenario } from '../../src/sim/index';
 
+/** CI runners draw the scene in software, several times slower (playwright.config.ts). */
+const CI_SLOW = process.env.CI ? 2 : 1;
+
 type Snap = { t: number; heading: number; stw: number; rudder: number; mainSide: number };
 
 const snap = (page: Page) => page.evaluate(() => window.__squib!.snapshot() as Snap);
@@ -155,7 +158,7 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
 });
 
 test('polar panel sweeps the model in a worker and matches the Node model', async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(150_000 * CI_SLOW);
   const errors = await open(page);
   await page.getByRole('button', { name: /^Tools/ }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
@@ -338,7 +341,7 @@ test('Phase 4: course editor: add a mark, live check, import, export', async ({ 
 });
 
 test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, results', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * CI_SLOW);
   const errors = await open(page);
   await page.getByRole('button', { name: 'Scenario' }).click();
   const panel = page.getByRole('region', { name: 'Scenario settings' });
