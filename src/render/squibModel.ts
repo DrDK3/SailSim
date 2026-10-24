@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { BoatParams } from '../sim/boat/params';
+import { CrewFigure } from './crew';
 
 /**
  * Procedural Squib. Principal dimensions come from the class data (LOA, beam, draft, mast, boom, sail
@@ -19,6 +20,23 @@ export interface SailShapeInput {
   inverted: boolean;
 }
 
+/** Draws nothing; marks each boat's deck outline in the stencil so the water is not drawn inside the hull. */
+export const WATER_MASK_ORDER = 1;
+const WATER_MASK_MATERIAL = new THREE.MeshBasicMaterial({
+  colorWrite: false,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  stencilWrite: true,
+  stencilRef: 1,
+  stencilFunc: THREE.AlwaysStencilFunc,
+  stencilZPass: THREE.ReplaceStencilOp,
+});
+
+function smoothstep(e0: number, e1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
 const BOW_Z = -2.95;
 const MAST_Z = -0.55;
 const GOOSENECK_Y = 1.3;
@@ -28,7 +46,7 @@ export class SquibModel {
   readonly group = new THREE.Group();
   private readonly boom = new THREE.Group();
   private readonly rudder = new THREE.Group();
-  private readonly crew: THREE.Group[] = [];
+  private readonly crew: CrewFigure[] = [];
   private readonly mainGeo: THREE.BufferGeometry;
   private readonly jibGeo: THREE.BufferGeometry;
   private readonly jibSheetLine: THREE.Line;
@@ -74,10 +92,10 @@ export class SquibModel {
     this.jibSheetLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), sheetMat);
     this.group.add(this.jibSheetLine);
 
-    for (let i = 0; i < 2; i++) {
-      const c = this.buildCrewMember(i === 0 ? 0xc0392b : 0x2c3e50);
+    for (const role of ['helm', 'crew'] as const) {
+      const c = new CrewFigure(role);
       this.crew.push(c);
-      this.group.add(c);
+      this.group.add(c.group);
     }
 
     this.anchors = {
@@ -91,6 +109,8 @@ export class SquibModel {
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true;
     });
+    // Added after the shadow pass setup: the mask draws nothing and must cast no shadow.
+    this.group.add(this.buildWaterMask());
   }
 
   // ------------------------------------------------------------------ hull
@@ -166,20 +186,31 @@ export class SquibModel {
     const pos: number[] = [];
     const idx: number[] = [];
     // Two side strips from the sheer inwards; they meet on the centreline except over the cockpit opening.
+    // The opening's ends get two rows at the same station (closed, then open), so its edges are square and
+    // the deck has no wedge-shaped gaps there.
+    const OPEN_FROM = -0.2;
+    const OPEN_TO = 2.3;
+    const rows: { z: number; open: boolean }[] = [];
     for (let i = 0; i <= N; i++) {
-      const t = i / N;
-      const z = BOW_Z + t * this.p.loa;
-      const { b, h } = this.hullStation(t);
-      const inner = z > -0.2 && z < 2.3 ? Math.min(0.53, b * 0.8) : 0;
+      const z = BOW_Z + (i / N) * this.p.loa;
+      if (z > OPEN_FROM && z < OPEN_TO) rows.push({ z, open: true });
+      else rows.push({ z, open: false });
+    }
+    rows.push({ z: OPEN_FROM, open: false }, { z: OPEN_FROM, open: true }, { z: OPEN_TO, open: true }, { z: OPEN_TO, open: false });
+    // Order by station; at an end the closed row comes on the outer side of the opening.
+    rows.sort((a, b) => a.z - b.z || (a.z === OPEN_FROM ? Number(a.open) - Number(b.open) : Number(b.open) - Number(a.open)));
+    rows.forEach(({ z, open }, i) => {
+      const { b, h } = this.hullStation((z - BOW_Z) / this.p.loa);
+      const inner = open ? Math.min(0.53, b * 0.8) : 0;
       const y = h + 0.004;
       pos.push(-b, y, z, -inner, y, z, inner, y, z, b, y, z);
-      if (i < N) {
+      if (i < rows.length - 1) {
         const a = i * 4;
         const n = a + 4;
         idx.push(a, n, a + 1, a + 1, n, n + 1);
         idx.push(a + 2, n + 2, a + 3, a + 3, n + 2, n + 3);
       }
-    }
+    });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setIndex(idx);
@@ -197,8 +228,55 @@ export class SquibModel {
     wellR.position.x = 0.53;
     const cuddy = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.16, 1.15), new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.7 }));
     cuddy.position.set(0, this.sheerAt(0.3) + 0.08, -1.15);
-    g.add(sole, wellL, wellR, cuddy);
+    // Bulkheads close the well at both ends, so it is a watertight tub (estimated layout).
+    const tAt = (z: number) => (z - BOW_Z) / this.p.loa;
+    const ends = [-0.2, 2.3].map((z) => {
+      const top = this.sheerAt(tAt(z));
+      const height = top - (deckY - 0.34);
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(1.09, height, 0.03), wellMat);
+      wall.position.set(0, top - height / 2, z);
+      return wall;
+    });
+    // Toe straps along the sole for the hiking crew, and a varnished thwart under the main sheet (estimated).
+    const strapMat = new THREE.MeshStandardMaterial({ color: 0x2d4a6d, roughness: 0.9 });
+    const straps = [-0.3, 0.3].map((x) => {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.015, 1.7), strapMat);
+      strap.position.set(x, deckY - 0.29, 1.05);
+      return strap;
+    });
+    const thwart = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.04, 0.22), new THREE.MeshStandardMaterial({ color: 0x9b7448, roughness: 0.55 }));
+    thwart.position.set(0, deckY - 0.12, 0.35);
+    g.add(sole, wellL, wellR, cuddy, ...ends, ...straps, thwart);
     return g;
+  }
+
+  /**
+   * The hull is an open shell sitting in the water, so the sea surface would be drawn wherever it is nearer
+   * the camera than the hull's inside: in the cockpit, and over the leeward deck when heeled. This invisible
+   * cap over the deck outline marks the boat in the stencil buffer, and the water is not drawn there
+   * (src/render/water.ts). It is drawn after the opaque scene and before the water (renderOrder), tests depth
+   * against the deck and hull so it marks only what is seen inside the boat, and writes no colour or depth.
+   */
+  private buildWaterMask(): THREE.Mesh {
+    const N = 44;
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const z = BOW_Z + t * this.p.loa;
+      const { b, h } = this.hullStation(t);
+      pos.push(-b, h - 0.012, z, b, h - 0.012, z);
+      if (i < N) idx.push(i * 2, i * 2 + 2, i * 2 + 1, i * 2 + 1, i * 2 + 2, i * 2 + 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    const mask = new THREE.Mesh(geo, WATER_MASK_MATERIAL);
+    mask.name = 'water-mask';
+    mask.renderOrder = WATER_MASK_ORDER;
+    mask.castShadow = false;
+    mask.receiveShadow = false;
+    return mask;
   }
 
   private buildKeel(): THREE.Mesh {
@@ -274,19 +352,6 @@ export class SquibModel {
     const spreader = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.02, 0.03), spar);
     spreader.position.set(0, 3.6, MAST_Z);
     this.group.add(spreader);
-  }
-
-  private buildCrewMember(color: number): THREE.Group {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.42, 4, 10), new THREE.MeshStandardMaterial({ color, roughness: 0.8 }));
-    body.position.y = 0.35;
-    body.rotation.x = -0.25;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), new THREE.MeshStandardMaterial({ color: 0xe0b08a, roughness: 0.7 }));
-    head.position.set(0, 0.78, -0.08);
-    const hat = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x22313f }));
-    hat.position.copy(head.position).add(new THREE.Vector3(0, 0.02, 0));
-    g.add(body, head, hat);
-    return g;
   }
 
   private gridGeometry(nu: number, nv: number): THREE.BufferGeometry {
@@ -418,15 +483,19 @@ export class SquibModel {
 
     this.rudder.rotation.y = params.rudder;
 
-    // Crew: helm aft, crew forward of them, both at the lateral position from the physics.
+    // Crew: helm aft, crew forward of them, posed from the lateral position in the physics: sitting inboard
+    // (0.15 m) up to sitting out on the side deck and leaning out (0.8 m; data/boats calibration, E).
     const deckY = this.sheerAt(0.72);
     const out = Math.abs(params.crewY);
     const side = params.crewY >= 0 ? 1 : -1;
+    const hike = Math.min(1, Math.max(0, (out - 0.15) / 0.65));
+    const up = smoothstep(0.15, 0.55, hike);
     this.crew.forEach((c, i) => {
-      const lateral = side * Math.min(0.85, out + (out > 0.5 ? 0.0 : 0.05));
-      c.position.set(lateral, deckY - (out > 0.55 ? 0.05 : 0.25), i === 0 ? 1.75 : 0.55);
-      c.rotation.z = -side * Math.min(0.5, out * 0.45);
-      c.visible = !(i === 0 && params.hideHelm);
+      c.setPose(hike);
+      const g = c.group;
+      g.position.set(side * (0.28 + 0.5 * smoothstep(0, 0.55, hike)), deckY - 0.3 + 0.32 * up, i === 0 ? 1.75 : 0.6);
+      g.scale.x = side; // mirrored on the port side: the figure's +x is outboard
+      g.visible = !(i === 0 && params.hideHelm);
     });
   }
 }

@@ -157,7 +157,8 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
 test('polar panel sweeps the model in a worker and matches the Node model', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = await open(page);
-  await page.getByRole('button', { name: 'Polar' }).click();
+  await page.getByRole('button', { name: /^Tools/ }).click();
+  await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   const polar = page.getByRole('region', { name: 'Model polar' });
   await expect(polar).toContainText('not measured Squib performance');
   await expect(polar.getByRole('status')).toContainText('Computing 10 kn', { timeout: 10_000 });
@@ -193,7 +194,8 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   // Depth at the keel is shown, from the provisional depths mid-river.
   await expect(page.locator('.cell', { hasText: 'Depth' })).toContainText('m');
   // Every provisional layer is labelled in the Layers panel.
-  await page.getByRole('button', { name: 'Layers' }).click();
+  await page.getByRole('button', { name: /^View/ }).click();
+  await page.getByRole('menuitemcheckbox', { name: /Layers and sources/ }).click();
   const list = page.getByTestId('provisional-list');
   for (const label of ['Water depth below the low-water line', 'Individual moorings and moored boats', 'Ferries', 'Tidal stream pattern', 'Navigation marks', 'Chart datum offset', 'Official RDYC courses and marks']) {
     await expect(list).toContainText(label);

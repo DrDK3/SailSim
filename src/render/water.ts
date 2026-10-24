@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WATER_MASK_ORDER } from './squibModel';
 
 /**
  * Procedural open water: a sum of directional waves (displacement + analytic normals) plus fine
@@ -93,6 +94,9 @@ void main() {
 }
 `;
 
+/** After the opaque scene and the boats' water masks (WATER_MASK_ORDER), so the stencil is set when it is drawn. */
+const WATER_ORDER = WATER_MASK_ORDER + 1;
+
 export class Water {
   readonly mesh: THREE.Mesh;
   /** Flat, very large plane beyond the detailed mesh (same shader), so the horizon is water, not seabed. */
@@ -121,16 +125,24 @@ export class Water {
         uLight: { value: 1 },
         uPuffs: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 1, 0)) },
       },
+      // Not drawn where a boat's deck mask marked the stencil (inside the hulls: squibModel.ts).
+      stencilWrite: true,
+      stencilRef: 1,
+      stencilFunc: THREE.NotEqualStencilFunc,
+      stencilFail: THREE.KeepStencilOp,
+      stencilZFail: THREE.KeepStencilOp,
+      stencilZPass: THREE.KeepStencilOp,
     });
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = WATER_ORDER;
     this.mesh.name = 'water';
     const far = new THREE.PlaneGeometry(40000, 40000, 1, 1);
     far.rotateX(-Math.PI / 2);
     this.farMesh = new THREE.Mesh(far, this.material);
     this.farMesh.position.y = -0.25;
     this.farMesh.frustumCulled = false;
-    this.farMesh.renderOrder = -1;
+    this.farMesh.renderOrder = WATER_ORDER;
     this.farMesh.name = 'water-far';
   }
 

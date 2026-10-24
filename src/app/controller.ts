@@ -25,6 +25,8 @@ import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
 import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
+import { TUTORIAL_INPUT, TUTORIAL_SCENARIO, Tutorial, type TutorialState } from './tutorial';
+import { sailState } from './sailStatus';
 
 /**
  * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
@@ -158,6 +160,10 @@ export interface UiState {
   replay?: ReplayStatus;
   /** Simulation speed relative to real time (1, 2, 4, 8). */
   timeScale: number;
+  /** The interactive tutorial, while it runs. */
+  tutorial?: TutorialState & { finished: boolean };
+  /** Reset was asked for during a race: the UI asks before throwing the race away. */
+  confirmReset: boolean;
   telemetryVersion: number;
   /** River Dart data: loading, loaded, or unavailable; plus anything that failed to load. */
   dart: { status: 'loading' | 'loaded' | 'unavailable'; issues: DartData['issues'] };
@@ -222,6 +228,9 @@ export class SimController {
   /** Replay in progress: the recording, its decoded inputs and how far it has been checked. */
   private replay?: { rec: Recording; inputs: InputLogEntry[]; next: number; matched: number; total: number; verifiedTo: number; divergedAt?: number; ended: boolean; notes: string[] };
   private timeScale = 1;
+  /** The interactive tutorial, while it runs (src/app/tutorial.ts). */
+  private tutorial?: Tutorial;
+  private confirmReset = false;
   private lastRecordT = -Infinity;
   private frames = 0;
   private fpsT0 = 0;
@@ -343,6 +352,9 @@ export class SimController {
       this.replay = undefined;
       this.timeScale = 1;
     }
+    this.confirmReset = false;
+    // Starting anything other than the tutorial's own scenario ends the tutorial (Reset keeps it).
+    if (this.tutorial && JSON.stringify(scenario) !== JSON.stringify(TUTORIAL_SCENARIO)) this.tutorial = undefined;
     this.currSnap = this.sim.snapshot(false);
     this.prevSnap = this.currSnap;
     this.detailSnap = this.sim.snapshot();
@@ -388,6 +400,86 @@ export class SimController {
     else if (this.soloFleet) this.soloFleet.stepOnce();
     else this.sim.stepOnce();
     if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
+    if (this.tutorial && this.sim.step % 10 === 0) this.updateTutorial();
+  }
+
+  /**
+   * Reset from the toolbar or R. Once the start signal has gone (and until you finish), ask first: one key
+   * would otherwise throw the race away (error prevention). Otherwise reset at once.
+   */
+  requestReset(): void {
+    const judge = this.race?.session.judgeOf('you');
+    if (judge && !this.replay && this.sim.time >= judge.startSignalTime && judge.phase !== 'finished') {
+      this.confirmReset = true;
+      this.publish(true);
+      return;
+    }
+    this.restart();
+  }
+
+  answerReset(reset: boolean): void {
+    this.confirmReset = false;
+    if (reset) this.restart();
+    else this.publish(true);
+  }
+
+  // ------------------------------------------------------------- tutorial
+
+  /** Start the interactive tutorial: its own open-water scenario, steady breeze, steps checked as you sail. */
+  startTutorial(): void {
+    if (!this.restart(structuredClone(TUTORIAL_SCENARIO), { initialInput: TUTORIAL_INPUT })) return;
+    this.tutorial = new Tutorial();
+    this.paused = false;
+    this.applyTutorialInput();
+    this.publish(true);
+  }
+
+  endTutorial(): void {
+    this.tutorial = undefined;
+    this.publish(true);
+  }
+
+  tutorialNext(): void {
+    this.tutorial?.next();
+    this.applyTutorialInput();
+    this.publish(true);
+  }
+
+  tutorialBack(): void {
+    this.tutorial?.back();
+    this.applyTutorialInput();
+    this.publish(true);
+  }
+
+  private applyTutorialInput(): void {
+    const t = this.tutorial;
+    if (!t?.pendingInput) return;
+    this.sim.setInput(t.pendingInput);
+    t.pendingInput = undefined;
+  }
+
+  /** Every 0.1 s of simulated time: check the step's goal; move on 2 s after it is met. */
+  private updateTutorial(): void {
+    const t = this.tutorial!;
+    const s = this.sim.snapshot(false);
+    const R2D = 180 / Math.PI;
+    t.update({
+      t: s.t,
+      headingDeg: s.heading * R2D,
+      twaDeg: Math.abs(s.twa) * R2D,
+      stwKn: s.stw / 0.514444,
+      mainSide: s.mainSide,
+      main: sailState(s.forces.main),
+      autoMain: s.input.autoMain,
+      autoCrew: s.input.autoCrew,
+      crewHike: s.input.crewHike,
+    });
+    const since = t.sinceDone(s.t);
+    if (since !== undefined && since >= 2 && t.state.index < t.state.total - 1) {
+      t.next();
+      this.applyTutorialInput();
+      this.publish(true);
+    }
   }
 
   /** The whole run's state hash: every boat (and so, through determinism, everything else). */
@@ -880,7 +972,7 @@ export class SimController {
       case 'KeyM': this.setInput({ autoMain: !this.sim.input.autoMain }); break;
       case 'KeyK': this.setInput({ autoCrew: !this.sim.input.autoCrew }); break;
       case 'KeyP': this.togglePause(); break;
-      case 'KeyR': this.restart(); break;
+      case 'KeyR': this.requestReset(); break;
       case 'KeyC': this.cycleCamera(); break;
       case 'KeyF': this.toggleForces(); break;
       case 'KeyG': this.toggleDebug(); break;
@@ -925,6 +1017,8 @@ export class SimController {
       snapshot: this.detailSnap,
       paused: this.paused,
       timeScale: this.timeScale,
+      tutorial: this.tutorial ? { ...this.tutorial.state, finished: this.tutorial.finished } : undefined,
+      confirmReset: this.confirmReset,
       replay: this.replay
         ? {
             title: this.replay.rec.title,

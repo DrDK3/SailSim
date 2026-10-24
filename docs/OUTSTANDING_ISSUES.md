@@ -1,6 +1,6 @@
 # Outstanding issues and risks
 
-Updated: 23 Oct 2026 (end of Phase 6)
+Updated: 24 Oct 2026 (UX review)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
@@ -50,3 +50,6 @@ Updated: 23 Oct 2026 (end of Phase 6)
 | 44 | Visual weather is indicative: the cloud layer is procedural noise at the forecast cover (not the observed cloud pattern); the rain-streak density and the share of fog in the sky are visual choices (E). Visibility sets the fog by Koschmieder's law | The sky looks plausible for the forecast, not as it was | Acceptable; it is labelled visual only and does not affect the physics |
 | 45 | User scenarios are kept in this browser's storage only; replays are downloaded as files | Clearing the browser loses saved scenarios | Export scenarios to keep them; a shared library would need a server (not planned: no servers) |
 | 46 | A replay of a session that used live data carries the forecast inside it (tens of kB). A replay recorded with a different build is played, with a warning, but may not match | Replays can be large and are tied to a build | Expected; the build is named in the file and the mismatch is reported |
+| 47 | The tutorial's goal thresholds (e.g. TWA 38–55° at ≥ 2.5 kn for close-hauled, < 1 kn to stop) and timings are estimates (E). A scripted helmsman completes every step, but no person new to sailing has tried it yet | Steps may be too strict or too lax for beginners | Watch three to five beginners take the tutorial; tune (UX_REVIEW.md "Not done") |
+| 48 | Crew figures, building roofs, windows and wall colours are illustrative, not data | The town and crew look plausible, not as they are | Acceptable for training; roof shapes from OSM `roof:shape` where tagged, if wanted |
+| 49 | The scenario panel and course editor are long and dense, and not designed for touch | Harder to use on phones and for beginners | Tabs and a quick-start view (UX_REVIEW.md) |

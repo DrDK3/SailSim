@@ -1,12 +1,26 @@
+import { useState } from 'react';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { EnvironmentInfo } from '../sim/env/environment';
 import { describeSky } from '../sim/env/sky';
 import { Compass } from './Compass';
 import { bearing, deg, kn, sideAngle } from './format';
 
-function Cell({ label, value, unit, title }: { label: string; value: string; unit?: string; title?: string }) {
+const MORE_KEY = 'squib.instruments.more';
+
+/** Show all the instruments (remembered in this browser); by default on screens wide enough for them. */
+function initialMore(): boolean {
+  try {
+    const v = localStorage.getItem(MORE_KEY);
+    if (v !== null) return v === '1';
+  } catch {
+    // storage unavailable: use the default
+  }
+  return typeof window === 'undefined' || window.innerWidth >= 700;
+}
+
+function Cell({ label, value, unit, title, tutorial }: { label: string; value: string; unit?: string; title?: string; tutorial?: string }) {
   return (
-    <div className="cell" title={title}>
+    <div className="cell" title={title} data-tutorial={tutorial}>
       <div className="cell-label">{label}</div>
       <div className="cell-value">
         {value}
@@ -18,11 +32,22 @@ function Cell({ label, value, unit, title }: { label: string; value: string; uni
 
 export function Instruments({ s }: { s: BoatSnapshot }) {
   const tack = s.mainSide === 1 ? 'Starboard' : 'Port';
+  const [more, setMore] = useState(initialMore);
+  const toggleMore = () => {
+    setMore(!more);
+    try {
+      localStorage.setItem(MORE_KEY, more ? '0' : '1');
+    } catch {
+      // storage unavailable: the choice lasts for this visit
+    }
+  };
   return (
-    <section className="panel instruments" aria-label="Instruments">
+    <section className={`panel instruments ${more ? '' : 'compact'}`} aria-label="Instruments">
       <div className="instr-top">
-        <Compass s={s} />
-        <div className="big">
+        <div data-tutorial="compass">
+          <Compass s={s} />
+        </div>
+        <div className="big" data-tutorial="speed">
           <div className="cell-label">Speed through water</div>
           <div className="big-value" data-testid="stw">{kn(s.stw, 2)}<span className="unit">kn</span></div>
           <div className="tack-chip" data-tack={tack.toLowerCase()}>{tack} tack</div>
@@ -30,27 +55,34 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
       </div>
       <div className="grid">
         <Cell label="Heading" value={bearing(s.heading)} unit="°" />
-        <Cell label="SOG" value={kn(s.sog, 2)} unit="kn" title="Speed over ground" />
-        <Cell label="COG" value={bearing(s.cog)} unit="°" title="Course over ground" />
-        <Cell label="TWA" value={sideAngle(s.twa)} title="True wind angle (relative to the water)" />
+        <Cell label="TWA" value={sideAngle(s.twa)} title="True wind angle: where the wind comes from, relative to the bow (0° = head to wind, 180° = dead downwind)" tutorial="twa" />
         <Cell label="TWS" value={kn(s.tws)} unit="kn" title="True wind speed (relative to the water)" />
-        <Cell label="VMG" value={kn(s.vmg, 2)} unit="kn" title="Velocity made good towards the true wind (through the water)" />
-        <Cell label="AWA" value={sideAngle(s.awa)} title="Apparent wind angle" />
-        <Cell label="AWS" value={kn(s.aws)} unit="kn" title="Apparent wind speed" />
-        <Cell label="Heel" value={`${deg(Math.abs(s.heel))}° ${s.heel > 0.005 ? 'stbd' : s.heel < -0.005 ? 'port' : ''}`} />
-        <Cell label="Leeway" value={deg(Math.abs(s.leeway), 1)} unit="°" />
-        <Cell label="Rudder" value={sideAngle(s.rudder)} />
-        <Cell label="Helm balance" value={helmText(s.helmBalance)} title="Rudder angle that would hold the boat straight right now. Weather helm = the boat wants to round up." />
+        <Cell label="Heel" value={`${deg(Math.abs(s.heel))}° ${s.heel > 0.005 ? 'stbd' : s.heel < -0.005 ? 'port' : ''}`} title="How far the boat leans over" />
+        <Cell label="VMG" value={kn(s.vmg, 2)} unit="kn" title="Velocity made good: speed towards (or away from) the wind" />
         <Cell
           label="Depth"
           value={Number.isFinite(s.depthAtKeel) ? s.depthAtKeel.toFixed(1) : '—'}
           unit={Number.isFinite(s.depthAtKeel) ? 'm' : undefined}
           title="Water depth at the keel (draft 0.99 m). Near the shore from LIDAR; mid-channel from the PROVISIONAL depth estimate. Not for navigation."
         />
-        <Cell label="Current" value={Math.hypot(s.current.n, s.current.e) < 0.01 ? 'none' : `${kn(Math.hypot(s.current.n, s.current.e))} → ${bearing(Math.atan2(s.current.e, s.current.n))}°`} unit={Math.hypot(s.current.n, s.current.e) < 0.01 ? undefined : 'kn'} title={s.env?.currentLabel ?? 'Water velocity over the ground at the boat'} />
+        {more && (
+          <>
+            <Cell label="SOG" value={kn(s.sog, 2)} unit="kn" title="Speed over ground" />
+            <Cell label="COG" value={bearing(s.cog)} unit="°" title="Course over ground" />
+            <Cell label="AWA" value={sideAngle(s.awa)} title="Apparent wind angle: the wind you feel on board" />
+            <Cell label="AWS" value={kn(s.aws)} unit="kn" title="Apparent wind speed" />
+            <Cell label="Leeway" value={deg(Math.abs(s.leeway), 1)} unit="°" title="Sideways slip through the water" />
+            <Cell label="Rudder" value={sideAngle(s.rudder)} />
+            <Cell label="Helm balance" value={helmText(s.helmBalance)} title="Rudder angle that would hold the boat straight right now. Weather helm = the boat wants to round up." />
+            <Cell label="Current" value={Math.hypot(s.current.n, s.current.e) < 0.01 ? 'none' : `${kn(Math.hypot(s.current.n, s.current.e))} → ${bearing(Math.atan2(s.current.e, s.current.n))}°`} unit={Math.hypot(s.current.n, s.current.e) < 0.01 ? undefined : 'kn'} title={s.env?.currentLabel ?? 'Water velocity over the ground at the boat'} />
+          </>
+        )}
       </div>
+      <button className="link more-toggle" aria-expanded={more} onClick={toggleMore}>
+        {more ? 'Fewer instruments' : 'More instruments and conditions'}
+      </button>
       {s.grounded && <div className="chip bad" role="alert" data-testid="aground">Aground: the keel is on the bottom</div>}
-      {s.env && <Conditions env={s.env} waterLevel={s.waterLevel} />}
+      {more && s.env && <Conditions env={s.env} waterLevel={s.waterLevel} />}
     </section>
   );
 }

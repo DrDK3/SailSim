@@ -6,6 +6,9 @@ import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
 import { SKY_PRESETS } from '../sim/env/sky';
 import { ReplayBar } from './ReplayBar';
+import { Menu } from './Menu';
+import { TutorialPanel } from './TutorialPanel';
+import { Welcome, markWelcomed, shouldWelcome } from './Welcome';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
 
@@ -39,18 +42,56 @@ export function App({ ctl }: { ctl: SimController }) {
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [welcome, setWelcome] = useState(shouldWelcome);
+  // Small screens: the toolbar folds behind a Menu button (styles.css).
+  const [toolsOpen, setToolsOpen] = useState(false);
+  // One side panel at a time: opening Scenario closes the Library and the other way round.
+  const openScenario = (open: boolean) => {
+    setScenarioOpen(open);
+    if (open) setLibraryOpen(false);
+  };
+  const openLibrary = (open: boolean) => {
+    setLibraryOpen(open);
+    if (open) setScenarioOpen(false);
+  };
+  const closeWelcome = (then?: () => void) => {
+    markWelcomed();
+    setWelcome(false);
+    then?.();
+  };
+
+  // Escape closes the panels this component owns (the controller closes help, polar and layers).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setScenarioOpen(false);
+      setLibraryOpen(false);
+      setToolsOpen(false);
+      ctl.toggleEditor(false);
+      ctl.toggleDashboard(false);
+      ctl.toggleResults(false);
+      if (ctl.getState().confirmReset) ctl.answerReset(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ctl]);
 
   useEffect(() => {
     const nav = toolbar.current;
     if (!nav) return;
+    const instruments = document.querySelector<HTMLElement>('.instruments');
     const place = () => {
       const r = nav.getBoundingClientRect();
-      // On small screens the toolbar sits at the bottom (styles.css): keep the default position then.
-      setSideTop(r.top < window.innerHeight / 2 ? Math.round(r.bottom + 8) : undefined);
+      // On tablets the toolbar sits at the bottom (styles.css): keep the default position then.
+      let top = r.top < window.innerHeight / 2 ? r.bottom + 8 : undefined;
+      // On phones the instruments span the top: open panels (the tutorial too) below them, not over them.
+      if (window.innerWidth <= 700 && instruments) top = Math.max(top ?? 0, instruments.getBoundingClientRect().bottom + 8);
+      setSideTop(top === undefined ? undefined : Math.round(top));
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(nav);
+    if (instruments) ro.observe(instruments);
     window.addEventListener('resize', place);
     return () => {
       ro.disconnect();
@@ -74,33 +115,60 @@ export function App({ ctl }: { ctl: SimController }) {
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
       <Instruments s={ui.snapshot} />
-      <nav ref={toolbar} className="panel toolbar" aria-label="Simulation">
-        <button onClick={() => ctl.togglePause()} data-testid="pause">{ui.paused ? 'Resume' : 'Pause'}</button>
-        <button onClick={() => ctl.restart()} title="Reset to the scenario start (R)">Reset</button>
-        <label className="select">
-          Camera
-          <select value={ui.camera} onChange={(e) => ctl.setCamera(e.target.value as CameraMode)}>
-            <option value="chase">Chase</option>
-            <option value="helm">Helm</option>
-            <option value="orbit">Orbit (drag)</option>
-            <option value="top">Top-down</option>
-          </select>
-        </label>
-        <button aria-pressed={ui.showForces} onClick={() => ctl.toggleForces()} title="Force arrows (F)">Forces</button>
-        <button aria-pressed={ui.showDebug} onClick={() => ctl.toggleDebug()} title="Physics panel (G)">Debug</button>
-        <button aria-pressed={ui.showDashboard} onClick={() => ctl.toggleDashboard()} title="Validation dashboard (V)">Dashboard</button>
-        <button aria-pressed={ui.showPolar} onClick={() => ctl.togglePolar()} title="Model polar sweep">Polar</button>
-        <button aria-pressed={scenarioOpen} onClick={() => setScenarioOpen(!scenarioOpen)}>Scenario</button>
-        <button aria-pressed={libraryOpen} onClick={() => setLibraryOpen(!libraryOpen)} title="Scenario library and replays">Library</button>
-        <button aria-pressed={ui.showLabels} onClick={() => ctl.toggleLabels()} title="Place labels (L)">Labels</button>
-        <button aria-pressed={ui.showMinimap} onClick={() => ctl.toggleMinimap()} title="Minimap (N)">Map</button>
-        <button aria-pressed={ui.showLayers} onClick={() => ctl.toggleLayers()} title="Layers, provisional elements and sources">Layers</button>
-        <button aria-pressed={ui.showEditor} onClick={() => ctl.toggleEditor()} title="Course editor">Courses</button>
-        <button onClick={() => ctl.toggleHelp()} title="Help (H)">Help</button>
+      <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation">
+        <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
+          {toolsOpen ? 'Close menu' : 'Menu'}
+        </button>
+        <div className="tb-items">
+          <div className="tb-group">
+            <button onClick={() => ctl.togglePause()} data-testid="pause" title="Pause or resume (P)">{ui.paused ? 'Resume' : 'Pause'}</button>
+            <button onClick={() => ctl.requestReset()} title="Reset to the scenario start (R)">Reset</button>
+            <label className="select">
+              <span className="sr-only">Camera</span>
+              <select value={ui.camera} onChange={(e) => ctl.setCamera(e.target.value as CameraMode)} title="Camera (C cycles)">
+                <option value="chase">Chase view</option>
+                <option value="helm">Helm view</option>
+                <option value="orbit">Orbit (drag)</option>
+                <option value="top">Top-down</option>
+              </select>
+            </label>
+          </div>
+          <div className="tb-group">
+            <button aria-pressed={!!ui.tutorial} onClick={() => (ui.tutorial ? ctl.endTutorial() : ctl.startTutorial())} title="Learn to sail, step by step" data-tutorial="tutorial">
+              Tutorial
+            </button>
+            <button aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
+            <button aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
+            <button aria-pressed={ui.showEditor} onClick={() => ctl.toggleEditor()} title="Course editor">Courses</button>
+          </div>
+          <div className="tb-group">
+            <Menu
+              label="View"
+              title="What is shown"
+              items={[
+                { label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
+                { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
+                { label: 'Force arrows', keys: 'F', checked: ui.showForces, onSelect: () => ctl.toggleForces() },
+                { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
+              ]}
+            />
+            <Menu
+              label="Tools"
+              title="Physics and validation tools"
+              items={[
+                { label: 'Validation dashboard', keys: 'V', checked: ui.showDashboard, onSelect: () => ctl.toggleDashboard() },
+                { label: 'Polar sweep', checked: ui.showPolar, onSelect: () => ctl.togglePolar() },
+                { label: 'Physics panel', keys: 'G', checked: ui.showDebug, onSelect: () => ctl.toggleDebug() },
+              ]}
+            />
+            <button onClick={() => ctl.toggleHelp()} title="Help and keys (H)" data-tutorial="help">Help</button>
+          </div>
+        </div>
       </nav>
       <div className="side" style={sideTop === undefined ? undefined : { top: sideTop, maxHeight: `calc(100% - ${sideTop + 230}px)` }}>
-        <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => setScenarioOpen(false)} />}</Suspense>
-        <Suspense fallback={null}>{libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => setLibraryOpen(false)} />}</Suspense>
+        {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} />}
+        <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => openScenario(false)} />}</Suspense>
+        <Suspense fallback={null}>{libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => openLibrary(false)} />}</Suspense>
         <Suspense fallback={null}>{ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}</Suspense>
         <Suspense fallback={null}>{ui.showDebug && <DebugPanel ui={ui} />}</Suspense>
       </div>
@@ -120,9 +188,38 @@ export function App({ ctl }: { ctl: SimController }) {
       <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
       <footer className="badge">
-        Phase 6 · {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · coefficients estimated · not for navigation
+        {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · physics estimated · not for navigation
       </footer>
-      <Suspense fallback={null}>{ui.showHelp && <Help onClose={() => ctl.toggleHelp(false)} />}</Suspense>
+      <Suspense fallback={null}>
+        {ui.showHelp && (
+          <Help
+            onClose={() => ctl.toggleHelp(false)}
+            onTutorial={() => {
+              ctl.toggleHelp(false);
+              ctl.startTutorial();
+            }}
+          />
+        )}
+      </Suspense>
+      {ui.confirmReset && (
+        <div className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" data-testid="confirm-reset">
+          <section className="panel confirm">
+            <h3 id="reset-title">Restart the race?</h3>
+            <p>The race has started. Resetting goes back to the beginning of the sequence and your progress is lost.</p>
+            <div className="row left">
+              <button className="primary" autoFocus onClick={() => ctl.answerReset(false)}>Keep racing</button>
+              <button onClick={() => ctl.answerReset(true)}>Restart</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {welcome && (
+        <Welcome
+          onTutorial={() => closeWelcome(() => ctl.startTutorial())}
+          onLibrary={() => closeWelcome(() => openLibrary(true))}
+          onExplore={() => closeWelcome()}
+        />
+      )}
     </div>
   );
 }

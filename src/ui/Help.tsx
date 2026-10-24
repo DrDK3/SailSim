@@ -8,7 +8,7 @@ const KEYS: [string, string][] = [
   ['E / Q', 'Trim / ease the jib sheet'],
   ['M / J', 'Toggle auto-trim assist for main / jib'],
   ['K', 'Toggle auto crew weight'],
-  ['X', 'Release both sheets (sails luff, boat slows: “stop”)'],
+  ['X', 'Release both sheets (sails luff; head to wind as well to stop)'],
   ['P', 'Pause / resume'],
   ['R', 'Reset to the scenario start'],
   ['C', 'Cycle camera: chase, helm, orbit, top'],
@@ -16,19 +16,23 @@ const KEYS: [string, string][] = [
   ['G', 'Show the physics debug panel'],
   ['V', 'Validation dashboard (live charts, table, CSV export)'],
   ['L / N', 'Place labels / minimap'],
-  ['Esc', 'Close help and the polar panel'],
+  ['Esc', 'Close the open panels and menus'],
   ['H or ?', 'This help'],
 ];
 
-export function Help({ onClose }: { onClose: () => void }) {
+export function Help({ onClose, onTutorial }: { onClose: () => void; onTutorial: () => void }) {
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Help" onClick={onClose}>
       <section className="panel help" onClick={(e) => e.stopPropagation()}>
+        <div className="row left help-top">
+          <button className="primary" onClick={onTutorial} autoFocus>Start the tutorial</button>
+          <span className="fine">A step-by-step lesson: steer, trim, tack, gybe and stop (about 5 minutes).</span>
+        </div>
         <h3>How to sail</h3>
         <p>
           You helm a National Squib. Sail angle is set by the sheet: the sail blows out until the sheet stops it.
           Too far out and it luffs (no drive); too far in and it stalls. Watch the status chips under the sails.
-          To tack, steer through the wind keeping speed; to stop, head into the wind or release the sheets.
+          To tack, steer through the wind keeping speed; to stop, release the sheets and head into the wind.
         </p>
         <table>
           <tbody>{KEYS.map(([k, d]) => <tr key={k}><td className="key">{k}</td><td>{d}</td></tr>)}</tbody>
@@ -43,7 +47,7 @@ export function Help({ onClose }: { onClose: () => void }) {
           for touching a mark, one turn. The judge is a simplified subset of the racing rules, not an authoritative one.
         </p>
         <p className="fine">
-          Phase 6 on the River Dart: terrain, buildings, piers and the shoreline come from open data; water
+          On the River Dart: terrain, buildings, piers and the shoreline come from open data; water
           depths mid-channel, individual moorings, ferry timetables and the tidal stream are provisional estimates (see
           Layers). You can run aground: the keel stops you in shallow water, and moored boats and ferries are solid. The boat heels dynamically, the boom swings on its own and can gybe
           unexpectedly by the lee, and the wind has seeded gusts and shifts (dark patches on the water are puffs).

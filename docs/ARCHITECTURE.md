@@ -149,9 +149,15 @@ A **course validator** runs in both CI and the editor. It checks that:
 
 - **Water:** custom shader with a sum of Gerstner waves driven by wind; sky reflection; wake ribbon and foam trail.
 - **Terrain:** chunked heightmap meshes from EA LIDAR (3 m near, coarser far) with a Sentinel-2 colour drape.
-- **Buildings:** OSM footprints extruded, merged per chunk. Heights come from OSM where present, otherwise estimated by class (labelled).
+- **Buildings:** OSM footprints extruded, merged per chunk. Heights come from OSM where present, otherwise estimated by class (labelled). Added detail is illustrative, not data:
+  - hipped roofs on house-sized footprints (ridge along the principal axis);
+  - windows drawn per fragment from each wall's coordinates, some lit after dark;
+  - painted-render colours like the waterfronts'.
+  - **Place labels** are decluttered on screen by priority (marks, landmarks, ferries).
 - **Landmarks:** bespoke low-poly proxies (Dartmouth Castle, St Petrox, Kingswear Castle, RDYC, BRNC, St Saviour's), progressively improved.
 - **Harbour furniture:** pontoons from OSM; trot moorings with instanced moored boats (positions provisional); ferries as kinematic agents on OSM routes.
+- **Watertight boats:** each boat's hull is an open shell sitting in the water. An invisible cap over its deck marks the boat in the stencil buffer, and the water skips marked pixels, so the sea is never drawn inside a hull. The cockpit well is a closed tub.
+- **Crew:** jointed figures (jacket, lifejacket, cap, arms, legs) posed from the crew's lateral position in the physics, from sitting inboard to sitting out and leaning out (`src/render/crew.ts`, illustrative).
 - **Squib:** procedural lofted hull from parametric sections (principal dimensions from class data; shape estimated), keel, rudder, rig and rigging lines. Sails are deformable meshes driven by physics angle, camber and twist, plus a luff-flutter vertex shader. The procedural hull can later be replaced by a modelled glTF file.
 - **Cameras:** chase, helm/cockpit, free orbit, high-level course view.
 - **Debug overlays:** force vectors (sails, keel, rudder, hull, current, wind) drawn as 3D arrows.
@@ -169,6 +175,16 @@ A **course validator** runs in both CI and the editor. It checks that:
 | Validation dashboard | Live plots of STW, VMG, leeway, α per sail, heel, rudder angle, forces and moments. A headless **polar sweep** tool that plots *model-predicted* polars, labelled as model output |
 | Library (Phase 6) | Built-in practice scenarios, the user's own (browser storage), scenario export and import (`squib-scenario/1`); save and open replays |
 | Replay bar (Phase 6) | Replaces the sailing controls while a replay plays: progress, verification, speed ×1–×8, Take over |
+
+**Onboarding and layout (UX_REVIEW.md):**
+- **First visit:** a welcome dialog.
+- **Interactive tutorial** (`src/app/tutorial.ts`): its own open-water scenario, eleven steps. Each goal is checked against the boat every 0.1 s of simulated time, and the tutorial moves on two seconds after a goal is met.
+- **Toolbar:** View and Tools menus (WAI-ARIA menu buttons).
+- **Escape** closes any panel.
+- **One side panel at a time.**
+- **Reset** asks first in a race that has started.
+- **Instruments:** essentials first, the rest under "More".
+- **Phones:** a separate layout below 700 px.
 
 Panels that open on demand (scenario, library, dashboard, polar, debug, layers, course editor, results, help) are loaded when first opened (`React.lazy`); three.js and React are separate chunks (PERFORMANCE.md).
 

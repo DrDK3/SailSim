@@ -10,6 +10,8 @@ const chromium = process.env.PW_CHROMIUM ?? (existsSync('/opt/pw-browsers/chromi
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 90_000,
+  // On GitHub Actions, failures also become annotations on the run (readable without downloading the log).
+  reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
     baseURL: 'http://localhost:4173',
     launchOptions: {
@@ -17,6 +19,11 @@ export default defineConfig({
       args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
     },
     viewport: { width: 1280, height: 800 },
+    // The first-visit welcome dialog is tested on its own (tests/e2e/ux.spec.ts); elsewhere it is already seen.
+    storageState: {
+      cookies: [],
+      origins: ['http://localhost:4173', 'http://localhost:4174'].map((origin) => ({ origin, localStorage: [{ name: 'squib.welcomed.v1', value: '1' }] })),
+    },
   },
   projects: [
     // The app and its features, on the production build served at the root.

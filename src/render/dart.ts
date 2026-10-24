@@ -47,6 +47,7 @@ export class DartScene {
   private readonly markLights: { mesh: THREE.Mesh; period: number; flashes: number }[] = [];
   private lastMooringUpdate = -Infinity;
   private readonly features?: DartFeatures;
+  private readonly buildingUniforms = { uNight: { value: 0 } };
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -177,16 +178,26 @@ export class DartScene {
 
   // ---------------------------------------------------------------- buildings
 
+  /**
+   * Buildings from the OSM footprints and heights (GEODATA.md). Detail added here is illustrative, not data:
+   * hipped roofs on house-sized footprints, windows drawn by the material on every wall (some lit after dark),
+   * and painted-render wall colours like those of the Dartmouth and Kingswear waterfronts.
+   */
   private buildBuildings(f: DartFeatures): void {
-    const tiles = new Map<string, { pos: number[]; nor: number[]; col: number[] }>();
-    // Colours are sRGB (rendered, painted and stone walls; slate and tile roofs), converted to linear for lighting.
+    const tiles = new Map<string, { pos: number[]; nor: number[]; col: number[]; wall: number[] }>();
+    // Colours are sRGB (painted render, stone; slate and tile roofs), converted to linear for lighting.
     const lin = (hex: number) => {
       const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
       return [c.r, c.g, c.b];
     };
-    const wallPalette = [0xc4bdae, 0xd0cbc0, 0xb3ada2, 0xc2b69f, 0xa9adae, 0xcabea8, 0xa49a89].map(lin);
-    const roofPalette = [0x4a4f57, 0x55565c, 0x7a4a3a, 0x4d4542, 0x5f5a55].map(lin);
+    // Off-white and pastel render, ochre, sandstone and grey stone; mostly slate roofs, some clay tile.
+    // Scaled to a painted wall's albedo (about 0.5–0.7): the sun, sky and environment light together would
+    // otherwise drive pale render to white.
+    const wallPalette = [0xe4ddcc, 0xddc394, 0xd4a49b, 0xa3bccf, 0xdcc56f, 0xafc39b, 0xc4ae90, 0xd2cbbc, 0x9ea4a6, 0xe8e3d8].map((h) => lin(h).map((c) => c * 0.72));
+    const roofPalette = [0x2f3338, 0x363a41, 0x3d4148, 0x2b2e33, 0x7f4532, 0x45403c].map(lin);
     const stone = lin(0x9a948a);
+    const v = new THREE.Vector3();
+    const w = new THREE.Vector3();
     f.buildings.forEach((b, idx) => {
       const ring = b.r;
       if (ring.length < 3) return;
@@ -194,10 +205,13 @@ export class DartScene {
       const cn = ring.reduce((a, p) => a + p[1], 0) / ring.length;
       const key = `${Math.floor(cx / 800)},${Math.floor(cn / 800)}`;
       let t = tiles.get(key);
-      if (!t) tiles.set(key, (t = { pos: [], nor: [], col: [] }));
+      if (!t) tiles.set(key, (t = { pos: [], nor: [], col: [], wall: [] }));
       const landmark = /castle|church|petrox|saviour|college|chapel/i.test(b.n ?? '') || b.c === 'church' || b.c === 'chapel';
       const wall = landmark ? stone : wallPalette[(idx * 7919) % wallPalette.length]!;
       const roof = landmark ? lin(0x7d786f) : roofPalette[(idx * 104729) % roofPalette.length]!;
+      // Windows on ordinary buildings (flag > 0.5; its fraction seeds which windows are lit at night).
+      const winFlag = landmark || b.c === 'garage' ? 0 : 1 + ((idx * 37) % 97) / 100;
+      const height = b.t - b.b;
       // Counter-clockwise check (in e,n) so that wall normals face out.
       let area = 0;
       for (let i = 0; i < ring.length; i++) {
@@ -214,35 +228,77 @@ export class DartScene {
         // Outward normal of a CCW ring edge in (e, n) is (dn, −de); in three.js (x = e, z = −n).
         const nx = (n1 - n0) / len;
         const nz = (e1 - e0) / len;
-        const quad = [[e0, b.b, -n0], [e1, b.b, -n1], [e1, b.t, -n1], [e0, b.b, -n0], [e1, b.t, -n1], [e0, b.t, -n0]];
-        for (const q of quad) {
-          t.pos.push(...q);
+        // Window bays are centred on each wall (a wall narrower than a bay gets one centred window).
+        const u0 = len < WINDOW_BAY_M ? (WINDOW_BAY_M - len) / 2 : -(len % WINDOW_BAY_M) / 2;
+        const quad: [number, number, number, number, number][] = [
+          [e0, b.b, -n0, u0, 0], [e1, b.b, -n1, u0 + len, 0], [e1, b.t, -n1, u0 + len, height],
+          [e0, b.b, -n0, u0, 0], [e1, b.t, -n1, u0 + len, height], [e0, b.t, -n0, u0, height],
+        ];
+        for (const [x, y, z, u, h] of quad) {
+          t.pos.push(x, y, z);
           t.nor.push(nx, 0, nz);
           t.col.push(...wall);
+          t.wall.push(u, h, height, winFlag);
         }
       }
-      const contour = pts.map(([e, n]) => new THREE.Vector2(e, n));
-      for (const tri of THREE.ShapeUtils.triangulateShape(contour, [])) {
-        // CCW in (e, n) seen from above is CCW in three.js seen from +y (x = e, z = −n): faces up.
-        for (const vi of [tri[0]!, tri[1]!, tri[2]!]) {
-          const p = pts[vi]!;
-          t.pos.push(p[0], b.t, -p[1]);
-          t.nor.push(0, 1, 0);
+      const tri = (a: number[], b2: number[], c: number[]) => {
+        // Flat-shaded roof triangle, wound to face up.
+        v.set(b2[0]! - a[0]!, b2[1]! - a[1]!, b2[2]! - a[2]!);
+        w.set(c[0]! - a[0]!, c[1]! - a[1]!, c[2]! - a[2]!);
+        const nrm = v.cross(w);
+        if (nrm.lengthSq() < 1e-10) return;
+        nrm.normalize();
+        const verts = nrm.y >= 0 ? [a, b2, c] : [a, c, b2];
+        if (nrm.y < 0) nrm.negate();
+        for (const p of verts) {
+          t.pos.push(p[0]!, p[1]!, p[2]!);
+          t.nor.push(nrm.x, nrm.y, nrm.z);
           t.col.push(...roof);
+          t.wall.push(0, 0, 0, 0);
+        }
+      };
+      const ridge = !landmark && pts.length <= 8 && Math.abs(area) / 2 <= 400 && height >= 3.5 && b.c !== 'garage' ? hipRidge(pts) : undefined;
+      if (ridge) {
+        // Hipped roof: every eave edge rises to its nearest point on the ridge (E: pitch about 30°).
+        const rise = Math.min(3.5, Math.max(1.0, 0.55 * ridge.halfWidth));
+        for (let i = 0; i < pts.length; i++) {
+          const p0 = pts[i]!;
+          const p1 = pts[(i + 1) % pts.length]!;
+          const r0 = ridge.at(p0);
+          const r1 = ridge.at(p1);
+          const a = [p0[0], b.t, -p0[1]];
+          const c = [p1[0], b.t, -p1[1]];
+          const ra = [r0[0], b.t + rise, -r0[1]];
+          const rc = [r1[0], b.t + rise, -r1[1]];
+          tri(a, c, rc);
+          tri(a, rc, ra);
+        }
+      } else {
+        const contour = pts.map(([e, n]) => new THREE.Vector2(e, n));
+        for (const tr of THREE.ShapeUtils.triangulateShape(contour, [])) {
+          const [p0, p1, p2] = [pts[tr[0]!]!, pts[tr[1]!]!, pts[tr[2]!]!];
+          tri([p0[0], b.t, -p0[1]], [p1[0], b.t, -p1[1]], [p2[0], b.t, -p2[1]]);
         }
       }
     });
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.4 });
+    const mat = buildingMaterial(this.buildingUniforms);
     for (const t of tiles.values()) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3));
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(t.col, 3));
+      geo.setAttribute('aWall', new THREE.Float32BufferAttribute(t.wall, 4));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = 'buildings';
       this.fixed.add(mesh);
     }
+  }
+
+  /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
+  setDaylight(day: number): void {
+    const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
+    this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
   }
 
   // ------------------------------------------------------------- piers etc.
@@ -356,6 +412,7 @@ export class DartScene {
         this.floating.add(g);
         const label = makeLabel(`${fr.label}${fr.ram ? ' · RAM' : ''}`, fr.ram ? '#ffd28a' : '#ffffff');
         label.position.y = 6;
+        label.userData.priority = 2;
         g.add(label);
         this.ferryMeshes.push({ mesh: g, label });
       }
@@ -378,6 +435,7 @@ export class DartScene {
       this.markLights.push({ mesh: light, flashes: m?.[1] ? Number(m[1]) : 1, period: m?.[2] ? Number(m[2]) : 5 });
       const lab = makeLabel(`${mk.name} (${mk.light})`, '#bff5c8');
       lab.position.set(mk.e, 5, -mk.n);
+      lab.userData.priority = 0;
       this.labels.add(lab);
     }
   }
@@ -388,6 +446,7 @@ export class DartScene {
       const h = this.input.geo.bedElevation(l.n, l.e);
       s.position.set(l.e, h + 25, -l.n);
       s.userData.fixedToLand = true;
+      s.userData.priority = 1;
       this.labels.add(s);
     }
   }
@@ -420,5 +479,119 @@ export class DartScene {
     this.labels.visible = u.showLabels;
     for (const l of this.labels.children) l.visible = u.showLabels && l.position.distanceTo(cam) < LABEL_RANGE_M;
     for (const fm of this.ferryMeshes) if (fm.label) fm.label.visible = u.showLabels && fm.mesh.position.distanceTo(cam) < FERRY_LABEL_RANGE_M;
+    if (u.showLabels) this.declutter(u.camera);
   }
+
+  /**
+   * Hide labels that would overlap one already shown on screen: navigation marks first, then landmarks, then
+   * ferries; nearer before farther. Sprites are drawn at a fixed screen size (sizeAttenuation off), so their
+   * extent in normalised device coordinates is ½·scale·P (P = the projection's x or y scale).
+   */
+  private declutter(camera: THREE.Camera): void {
+    const shown: { x0: number; x1: number; y0: number; y1: number }[] = [];
+    const cand: { s: THREE.Object3D; pri: number; d: number; p: THREE.Vector3 }[] = [];
+    const sprites = [...this.labels.children, ...this.ferryMeshes.flatMap((f) => (f.label ? [f.label] : []))];
+    for (const s of sprites) {
+      if (!s.visible) continue;
+      const p = s.getWorldPosition(new THREE.Vector3());
+      cand.push({ s, pri: (s.userData.priority as number | undefined) ?? 1, d: p.distanceToSquared(camera.position), p });
+    }
+    cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
+    const P = camera.projectionMatrix.elements;
+    for (const c of cand) {
+      const ndc = c.p.project(camera);
+      if (ndc.z > 1 || ndc.z < -1) continue; // behind the camera or beyond the far plane: not drawn anyway
+      const hw = 0.5 * c.s.scale.x * P[0]! + 0.004;
+      const hh = 0.5 * c.s.scale.y * P[5]! + 0.004;
+      const r = { x0: ndc.x - hw, x1: ndc.x + hw, y0: ndc.y - hh, y1: ndc.y + hh };
+      if (shown.some((o) => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0)) c.s.visible = false;
+      else shown.push(r);
+    }
+  }
+}
+
+/** Width of one window bay along a wall, and storey height (m): typical of the terraces (E). */
+const WINDOW_BAY_M = 3.0;
+const STOREY_M = 2.8;
+
+/**
+ * The ridge of a hipped roof over a footprint: along the footprint's long axis (principal axis of its
+ * corners), through its centre, shortened at each end by half the width so the hips slope like the sides.
+ */
+function hipRidge(pts: [number, number][]): { halfWidth: number; at: (p: [number, number]) => [number, number] } | undefined {
+  const n = pts.length;
+  const cx = pts.reduce((a, p) => a + p[0], 0) / n;
+  const cy = pts.reduce((a, p) => a + p[1], 0) / n;
+  let sxx = 0;
+  let syy = 0;
+  let sxy = 0;
+  for (const [x, y] of pts) {
+    sxx += (x - cx) ** 2;
+    syy += (y - cy) ** 2;
+    sxy += (x - cx) * (y - cy);
+  }
+  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  const ax = Math.cos(ang);
+  const ay = Math.sin(ang);
+  let lo = Infinity;
+  let hi = -Infinity;
+  let wlo = Infinity;
+  let whi = -Infinity;
+  for (const [x, y] of pts) {
+    const u = (x - cx) * ax + (y - cy) * ay;
+    const v = -(x - cx) * ay + (y - cy) * ax;
+    lo = Math.min(lo, u);
+    hi = Math.max(hi, u);
+    wlo = Math.min(wlo, v);
+    whi = Math.max(whi, v);
+  }
+  const halfWidth = (whi - wlo) / 2;
+  if (!(halfWidth > 0.5)) return undefined;
+  const mu = (lo + hi) / 2;
+  const mv = (wlo + whi) / 2;
+  const halfRidge = Math.max(0, (hi - lo) / 2 - halfWidth);
+  const ox = cx + mu * ax - mv * ay;
+  const oy = cy + mu * ay + mv * ax;
+  return {
+    halfWidth,
+    at: ([x, y]) => {
+      const u = Math.min(halfRidge, Math.max(-halfRidge, (x - ox) * ax + (y - oy) * ay));
+      return [ox + u * ax, oy + u * ay];
+    },
+  };
+}
+
+/**
+ * Walls and roofs with vertex colours, plus windows drawn per fragment from each wall's (u along the wall,
+ * height above the base) coordinates: a grid of bays and storeys, dark glass by day, some lit warm at night.
+ */
+function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.4 });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uNight = uniforms.uNight;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nvarying vec4 vWall;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float winLit = 0.0;
+        if (vWall.w > 0.5) {
+          float bay = floor(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
+          float storey = floor(vWall.y / ${STOREY_M.toFixed(1)});
+          float fu = fract(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
+          float fv = fract(vWall.y / ${STOREY_M.toFixed(1)});
+          float inWin = step(0.3, fu) * step(fu, 0.7) * step(0.3, fv) * step(fv, 0.8) * step(0.7, vWall.y) * step(vWall.y, vWall.z - 0.5);
+          float frame = inWin * (1.0 - step(0.33, fu) * step(fu, 0.67) * step(0.34, fv) * step(fv, 0.76));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.085, 0.1), inWin - frame);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.92, 0.9), frame);
+          float seed = fract(vWall.w) * 61.0;
+          winLit = (inWin - frame) * step(0.6, fract(sin(dot(vec2(bay + seed, storey + seed * 1.7), vec2(12.9898, 78.233))) * 43758.5453));
+        }`,
+      )
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * 1.6 * winLit * uNight;');
+  };
+  return mat;
 }

@@ -91,7 +91,8 @@ export class SceneView {
   showForces = false;
 
   constructor(container: HTMLElement, params: BoatParams) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // Stencil: boats mark their decks so the sea is not drawn inside the hulls (squibModel.ts, water.ts).
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -196,6 +197,7 @@ export class SceneView {
     const DEG = Math.PI / 180;
     const { cloud, lowCloud, visibilityM, rainMmH } = w.sky;
     const day = daylight(w.sunElevationDeg);
+    this.dart?.setDaylight(day);
     sunVector(w.sunElevationDeg * DEG, w.sunAzimuthDeg * DEG, this.sunDir);
     const u = this.skyMesh.material.uniforms;
     u['sunPosition']!.value.copy(this.sunDir);

@@ -48,7 +48,8 @@ test('the production build runs under a sub-path: assets, River Dart data, physi
 test('the polar worker loads from the sub-path', async ({ page }) => {
   test.setTimeout(150_000);
   const { errors } = await open(page);
-  await page.getByRole('button', { name: 'Polar' }).click();
+  await page.getByRole('button', { name: /^Tools/ }).click();
+  await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   const polar = page.getByRole('region', { name: 'Model polar' });
   await expect(polar.getByRole('status')).toContainText('Computing', { timeout: 10_000 });
   await expect(polar.getByRole('status')).toBeHidden({ timeout: 120_000 });

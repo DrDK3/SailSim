@@ -18,6 +18,8 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | 5: race management and AI competitors (fleet physics and contact, race committee, rules subset, penalties, results, AI Squibs) | Done, 23 Oct 2026 ([phase report](docs/PHASE5_REPORT.md), [racing](docs/RACING.md)) |
 | **6: deployment, live data, visual weather, replays, scenario library, performance** | **Done, 23 Oct 2026** ([phase report](docs/PHASE6_REPORT.md), [deployment](docs/DEPLOYMENT.md)). **Built and tested here, not yet deployed:** no GitHub account is connected |
 
+**New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from the toolbar or Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
+
 Physics coefficients are **estimates** awaiting Squib performance data ([calibration workflow](docs/CALIBRATION.md)). Mid-channel depths, individual moorings, ferry timetables and the tidal stream are provisional estimates (the in-app **Layers** panel lists them), and Met Office wind is forecast-model output. This is not for navigation or performance prediction.
 
 ![Phase 3: the River Dart up-river from above Kingswear](docs/img/phase3-overview.png)
@@ -60,16 +62,25 @@ npm run dev          # open the printed URL; press H in the app for help
 | E / Q | Trim / ease the jib sheet |
 | M / J | Auto-trim assist for main / jib |
 | K | Auto crew weight |
-| X | Release both sheets (stop) |
+| X | Release both sheets (the sails luff; head to wind as well to stop) |
 | Space | Centre the helm |
-| P / R | Pause / reset |
+| P / R | Pause / reset (in a race that has started, reset asks first) |
+| Esc | Close the open panels and menus |
 | C | Cycle camera |
 | F / G | Force arrows / physics panel |
 | V | Validation dashboard (live charts, table, CSV export) |
 | L / N | Place labels / minimap |
 | H | Help |
 
-On-screen buttons provide the same controls. The toolbar also opens:
+On-screen buttons provide the same controls, with their keys shown on them. The sail status says what to do ("Luffing · trim in (W)"). On a phone the toolbar folds behind a Menu button.
+
+The toolbar has:
+- **Pause**, **Reset** and the **camera**;
+- **Tutorial**, **Library**, **Scenario** and **Courses**;
+- a **View** menu (labels, minimap, force arrows, layers and sources) and a **Tools** menu (validation dashboard, polar sweep, physics panel);
+- **Help**.
+
+The panels:
 - the **Polar** panel: the model polar, computed in a Web Worker;
 - the **Scenario** panel: start position and time, wind source, gusts, tide, current, course, start sequence, and the fleet (0–20 AI boats, their level, the preparatory flag: [docs/RACING.md](docs/RACING.md));
 - the **Layers** panel: what is data and what is provisional, with sources and licences;
@@ -94,9 +105,9 @@ No API keys are in the client code; the build fails if one appears in `dist/`. *
 src/sim/      physics core: pure TypeScript, no DOM/Three/React (lint and tsconfig enforced)
 src/sim/race/ fleet and contact, race committee, rules subset, race session, trials
 src/sim/ai/   AI skippers, AI sheet handling, AI target-speed polar
-src/render/   Three.js scene, water, procedural Squib, wake, force arrows, River Dart (terrain, buildings, piers, moorings, ferries)
-src/ui/       React instruments, controls, dashboard, polar, debug, scenario and help panels
-src/app/      game loop (fixed 100 Hz step with render interpolation), input, telemetry, polar worker, replays, scenario library
+src/render/   Three.js scene, water (with per-boat deck masks), procedural Squib and crew, wake, force arrows, River Dart (terrain, buildings with roofs and windows, piers, moorings, ferries)
+src/ui/       React instruments, controls, toolbar menus, welcome, tutorial card, dashboard, polar, debug, scenario, library and help panels
+src/app/      game loop (fixed 100 Hz step with render interpolation), input, telemetry, polar worker, replays, scenario library, tutorial
 public/live/  data files the app discovers through index.json (bundled Met Office replays; live weather and tide when deployed)
 public/geo/   River Dart data (packed elevation and stream grids, drape, minimap, features, manifest with provenance)
 .github/      CI, deploy to GitHub Pages, scheduled live data and tide harmonics
@@ -114,6 +125,7 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 
 | Document | Contents |
 |---|---|
+| [docs/UX_REVIEW.md](docs/UX_REVIEW.md) | Usability review (heuristics, accessibility, phones): findings, severities, changes, what is not done |
 | [docs/PHASE6_REPORT.md](docs/PHASE6_REPORT.md) | Phase 6: what works, test results, acceptance, decisions, known defects, manual test steps |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Publishing to GitHub Pages, the scheduled live-data jobs, freshness rules, automatic checks, first-run checklist, costs |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Simulation cost per frame, download size and load profile, how to measure |
