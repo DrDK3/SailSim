@@ -182,7 +182,7 @@ K_damping  = −220·p                                (linear structural/viscous
 
 **Results (free decay, no wind):** the period is 2.10 s against the small-angle theory 2π·√(I44/(m·g·GM)) = 2.09 s. In still air the peaks decay 15° → 9.6° → 6.4° → 4.3°: the foils and the linear term damp it; in wind, the sails add much more.
 
-**Static equilibrium (diagnostic):** `heelEquilibrium` finds by bisection the angle where the sail heeling moment (arm = CE height + CLR depth) and the crew balance m·g·GZ(φ). The dynamic heel settles to within 1° of it in steady wind (8.8° against 9.0° at 10 kn; 28.2° against 28.7° at 15 kn, close-hauled with auto trim and auto crew).
+**Static equilibrium (diagnostic, and the starting heel):** `heelEquilibrium` finds the angle where the sail heeling moment (arm = CE height + CLR depth) and the crew balance m·g·GZ(φ): the first change of sign heeling over from upright, refined by bisection. (A bisection over ±90° alone could balance at 90°, where the heeled-plane sail model is outside its range, and start a boat on its side with the crew to leeward; fixed 25 Oct 2026, `tests/sim/variants.test.ts`.) The dynamic heel settles to within 1° of it in steady wind (8.8° against 9.0° at 10 kn; 28.2° against 28.7° at 15 kn, close-hauled with auto trim and auto crew).
 
 **Crew position:**
 - Manual: the crew sit to windward at the "hike" setting.

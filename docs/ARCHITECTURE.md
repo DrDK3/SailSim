@@ -148,19 +148,21 @@ A **course validator** runs in both CI and the editor. It checks that:
 
 ## 7. Rendering (`src/render`)
 
-- **Water:** custom shader on a dense radial mesh round the camera. Eight Gerstner wave trains, weighted per place by a 32 × 32 field of the modelled sea state (height, peak wavelength, whitecaps, steepness), per-pixel normals, foam on compressed crests; sky reflection; wake ribbon and foam trail.
-- **Terrain:** chunked heightmap meshes from EA LIDAR (8 m grid; 4 m over the towns) with a Sentinel-2 colour drape.
+- **Water:** custom shader on a dense radial mesh round the camera, drawn only near tidal water (the pipeline's water mask, so low ground inland stays dry). Eight Gerstner wave trains, weighted per place by a 32 × 32 field of the modelled sea state (height, peak wavelength, whitecaps, steepness), per-pixel normals, foam on compressed crests; sky reflection; wake ribbon and foam trail.
+- **Terrain:** chunked heightmap meshes from EA LIDAR (8 m grid; 4 m over the towns) with a Sentinel-2 colour drape, and detail the 10 m drape cannot show: fine variation, rock on steep slopes, mud and shingle on the tidal foreshore (illustrative).
+- **Woodland** (`trees.ts`): instanced trees where the drape shows woods (dark, green-dominant pixels) and a few hedgerow trees in fields, off the foreshore and out of building footprints; seeded by place, built in chunks round the camera, coarser further off (illustrative, E).
 - **Buildings:** OSM footprints extruded, merged per chunk, on bases from the LIDAR ground. Heights come from OSM where present, otherwise estimated by class (labelled). Roofs from the pipeline (OSM roof:shape, else inferred: terraces gabled along the street with party walls, hips, flat). Added detail is illustrative, not data:
-  - gable-end walls, hips, chimney stacks;
-  - windows drawn per fragment from each wall's coordinates, some lit after dark;
+  - gable-end walls, hips, chimney stacks, slate or tile courses;
+  - windows drawn per fragment from each wall's coordinates, some lit after dark, none starting below the ground along the wall;
   - painted-render colours like the waterfronts'.
   - **Place labels** are decluttered on screen by priority (marks, landmarks, ferries).
 - **Landmarks:** bespoke low-poly proxies (Dartmouth Castle, St Petrox, Kingswear Castle, RDYC, BRNC, St Saviour's), progressively improved.
 - **Harbour furniture:** pontoons from OSM; trot moorings with instanced moored boats (positions provisional); ferries as kinematic agents on OSM routes.
 - **Watertight boats:** each boat's hull is an open shell sitting in the water. An invisible cap over its deck marks the boat in the stencil buffer, and the water skips marked pixels, so the sea is never drawn inside a hull. The cockpit well is a closed tub.
-- **Crew:** jointed figures (jacket, lifejacket, cap, arms, legs) posed from the crew's lateral position in the physics, from sitting inboard to sitting out and leaning out (`src/render/crew.ts`, illustrative).
+- **Crew** (`crew.ts`): each sailor is one skinned mesh with a skeleton, posed every frame by two-bone inverse kinematics from the physics' lateral crew position and its rate: sitting in, sitting out and leaning back to hike with feet under the toe straps, crouching under the boom while crossing in a tack or gybe. The helm's hand holds the tiller extension (which swings from the tiller's end to it) and the mainsheet; the crew holds the leeward jib sheet; the sheets run to their hands (illustrative). Passengers on the ferries are the same figure, posed once and baked into static geometry.
 - **Squib:** procedural hull from parametric sections (principal dimensions from class data; shape estimated) with boot top and sheer stripe, foil-section keel and rudder, tapered mast, spreaders, wire rigging, boom, kicker and mainsheet, deck fittings, a cockpit per type (`squibModel.ts`), RDYC on the transom and the RDYC burgee streaming in the apparent wind (`burgee.ts`). Sail cloth is canvas-drawn (`squibTextures.ts`). Sails are deformable meshes driven by physics angle, camber and twist. Static parts are built once per type and shared by every boat.
-- **River traffic:** `traffic.ts` draws the vessels the traffic model places: the Lower Ferry's float and its tug (moved separately), the Higher Ferry and its cables, launches, cruisers, yachts and RIBs, with wakes and navigation lights.
+- **River traffic:** `traffic.ts` draws the vessels the traffic model places, modelled with the vessel kit (`vessels.ts`: lofted hulls, superstructures with framed windows, rails, fendering, masts, cars, passengers; merged per material, built once per version and copied): the Lower Ferry's float and its tug (moved separately), the Higher Ferry and its cables, the Dartmouth Princess, the Cardiff Castle, launches, motor cruisers, yachts and RIBs, with wakes and navigation lights.
+- **Riding the waves:** each boat takes the heave, pitch and part of the cross slope of the plane fitted to the drawn sea over its waterplane (visual only).
 - **Cameras:** chase, helm/cockpit, free orbit, high-level course view.
 - **Debug overlays:** force vectors (sails, keel, rudder, hull, current, wind) drawn as 3D arrows.
 - **Sky and weather (Phase 6, visual only):** the sun's position for the run's time and place (`src/sim/env/sun.ts`, NOAA algorithm) lights the scene, through twilight to night. A procedural cloud dome drifts with the wind. Fog density follows the visibility (Koschmieder). Rain streaks follow the rain rate. All come from a sky preset or the forecast's hourly sky fields; the physics never reads them.
@@ -206,6 +208,7 @@ AI boats need no log: they are reproduced from the scenario's seed. Playback reb
 |---|---|
 | Unit and property | Frames, apparent wind, coefficient tables, force signs, line and rounding geometry |
 | Scenario | JSON scenario plus input script, run headless by `npm run scenario`. Produces CSV traces and is compared against golden traces with tolerances |
+| Render units (`tests/render`) | The sailors' rig (reach, grip on the extension, hiking feet, heads below the boom), the traffic models (every kind builds within a triangle budget, ramps hinge, copies share geometry) |
 | End-to-end smoke | Playwright: app loads, canvas renders, controls change state, no console errors, graceful errors when assets are missing |
 | Performance | `npm run perf`: headless benchmark with 1 + 20 boats, physics only and a full AI race. Manual frame-rate check on reference hardware |
 | AI acceptance | `npm run ai:trials`: 100 seeded AI races (parallel processes), clean-run rate and every contact |

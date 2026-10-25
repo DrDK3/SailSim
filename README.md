@@ -19,6 +19,7 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | **6: deployment, live data, visual weather, replays, scenario library, performance** | **Done, 23 Oct 2026** ([phase report](docs/PHASE6_REPORT.md), [deployment](docs/DEPLOYMENT.md)). Deployed 24 Oct 2026 from [DrDK3/SailSim](https://github.com/DrDK3/SailSim) to GitHub Pages, with the live-data job running |
 | UX review: watertight boat, crew and buildings, tutorial, phone layout | Done, 24 Oct 2026 ([review](docs/UX_REVIEW.md)) |
 | Hi-fi: three Squib types with their physics, detailed Squib with the RDYC burgee and transom, wind over tide, river traffic, town roofs | Done, 25 Oct 2026 ([report](docs/HIFI_REPORT.md)) |
+| Hi-fi, second pass: closed transom and boats riding the waves, sailors posed by inverse kinematics, remodelled river traffic, no flooded streets or buried floors, woodland and terrain detail | Done, 25 Oct 2026 ([report](docs/HIFI2_REPORT.md)) |
 
 **New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from the toolbar or Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
 
@@ -130,6 +131,7 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 | Document | Contents |
 |---|---|
 | [docs/HIFI_REPORT.md](docs/HIFI_REPORT.md) | Hi-fi pass: Squib types and their physics, the detailed Squib, burgee and transom, wind over tide, river traffic, town roofs; sources, estimates and gaps |
+| [docs/HIFI2_REPORT.md](docs/HIFI2_REPORT.md) | Hi-fi, second pass: the stern, the sailors, the houses, the traffic and the overall look, with what was found and fixed |
 | [docs/UX_REVIEW.md](docs/UX_REVIEW.md) | Usability review (heuristics, accessibility, phones): findings, severities, changes, what is not done |
 | [docs/PHASE6_REPORT.md](docs/PHASE6_REPORT.md) | Phase 6: what works, test results, acceptance, decisions, known defects, manual test steps |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Publishing to GitHub Pages, the scheduled live-data jobs, freshness rules, automatic checks, first-run checklist, costs |
