@@ -1,0 +1,145 @@
+{
+ "_meta": {
+  "description": "The three Squib types the user can choose. The class is a strict one-design: every builder used the same hull form and sail plan (C10), so the types differ only where the sources say they do - the cockpit (self-draining since Rondar, C9, C10) and the sails (the new Hyde B3 / Batt designs, C11, C12) - plus estimates (E) labelled as such. Each type is a hull build plus a sail package; 'calibration' holds partial calibration.json documents merged over the defaults.",
+  "updated": "2026-10-25"
+ },
+ "_types": [
+  {
+   "id": "rondar",
+   "label": "Rondar Squib (the modern standard)",
+   "hull": "rondar",
+   "sails": "standard",
+   "summary": "Rondar build (2016-2024): self-draining cockpit, so water shipped over the rail runs out through the transom. Earlier-design sails. The simulator's calibrated default."
+  },
+  {
+   "id": "classic",
+   "label": "Classic Parker or Hunter hull (the traditional fleet)",
+   "hull": "classic",
+   "sails": "standard",
+   "summary": "Hunter (1970s-1997) or Parker (1997-2010) build: same hull form, but the cockpit is not self-draining - water shipped in gusts or chop stays aboard until the crew bails it, making the boat heavier and more tender. Assumed 15 kg over the class minimum (estimate)."
+  },
+  {
+   "id": "new-sails",
+   "label": "New sail package (Hyde B3 / Batt designs)",
+   "hull": "rondar",
+   "sails": "new",
+   "summary": "Rondar hull with the 2024 sail designs: a flatter foot lets the jib and main sheet closer to the centreline, a wider groove upwind and a fuller main downwind (maker's claims; the size of each effect is an estimate)."
+  }
+ ],
+ "hulls": {
+  "rondar": {
+   "_label": "Rondar Raceboats, Mark 3 mould (2016-2024)",
+   "calibration": {}
+  },
+  "classic": {
+   "_label": "Hunter Boats (sail numbers 158-724) and Parker Sailboats (1997-2010)",
+   "calibration": {
+    "mass": {
+     "aboveMinimum": {
+      "value": 15,
+      "unit": "kg",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Older GRP hulls are often heavier than new ones (absorbed water, repairs, older fittings). Not measured: weigh the boat and change this"
+     }
+    },
+    "cockpit": {
+     "selfDraining": {
+      "value": 0,
+      "unit": "-",
+      "tag": "S",
+      "source": "C9, C10",
+      "note": "Self-draining cockpits came with the Rondar build; earlier boats keep the water until it is bailed (a few have been fitted with the new floor moulding, the 'hybrid Squib')"
+     },
+     "soleAboveCG": {
+      "value": 0.35,
+      "unit": "m",
+      "tag": "E",
+      "source": "estimate",
+      "note": "Lower, non-draining cockpit floor (near the waterline)"
+     }
+    }
+   }
+  }
+ },
+ "sails": {
+  "standard": {
+   "_label": "Earlier sail designs (the simulator's calibrated default)",
+   "calibration": {}
+  },
+  "new": {
+   "_label": "Hyde B3 (2024) and Batt Sails' current championship design",
+   "calibration": {
+    "sails": {
+     "main": {
+      "clMax": {
+       "value": 1.42,
+       "unit": "-",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Flatter base: a little less peak lift (default 1.45)"
+      },
+      "cd0": {
+       "value": 0.028,
+       "unit": "-",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Flatter base and reduced luff curve: less profile drag sheeted hard (default 0.03)"
+      },
+      "stallWidthDeg": {
+       "value": 28,
+       "unit": "deg",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "'Easier to trim upwind': a wider groove before the flow separates (default 25)"
+      },
+      "cn90": {
+       "value": 1.3,
+       "unit": "-",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "'Better downwind shape' from the broader seam shape: more drive with the sail square to the wind (default 1.25)"
+      },
+      "sheetMinDeg": {
+       "value": 1,
+       "unit": "deg",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Sheets closer to the centreline (default 2)"
+      }
+     },
+     "jib": {
+      "clMax": {
+       "value": 1.33,
+       "unit": "-",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Flatter base (default 1.35)"
+      },
+      "cd0": {
+       "value": 0.028,
+       "unit": "-",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Designed for the rig's forestay sag: less drag when pointing (default 0.03)"
+      },
+      "stallWidthDeg": {
+       "value": 25,
+       "unit": "deg",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Wider groove (default 22)"
+      },
+      "sheetMinDeg": {
+       "value": 9,
+       "unit": "deg",
+       "tag": "E",
+       "source": "C11 (claim), estimate (size)",
+       "note": "Jib sheets closer to the centreline (default 10)"
+      }
+     }
+    }
+   }
+  }
+ }
+}

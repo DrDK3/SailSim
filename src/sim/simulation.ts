@@ -21,6 +21,7 @@ import {
   type RigidState,
 } from './boat/dynamics';
 import type { BoatParams } from './boat/params';
+import { greenWaterInflow, sprayInflow, stepWater } from './boat/cockpit';
 import type { ContactPointState, GroundContext } from './boat/contact';
 import type { Seabed } from './geo/dart';
 import type { Environment, EnvironmentInfo } from './env/environment';
@@ -163,6 +164,8 @@ export interface BoatSnapshot {
   mainSheetLimit: number;
   jibSheetLimit: number;
   crewY: number;
+  /** Water shipped into the cockpit (kg). */
+  cockpitWater: number;
   input: ControlInput;
   forces: ForceBreakdown;
   /** Conditions here: sources, tide, flags (when the environment can describe itself). */
@@ -225,7 +228,7 @@ export class Simulation {
       phi: 0,
       p: 0,
     };
-    this.act = { rudder: 0, boomMain: 0, boomRate: 0, mainInverted: false, mainSide: 1, boomJib: 0, jibSide: 1, crewY: 0 };
+    this.act = { rudder: 0, boomMain: 0, boomRate: 0, mainInverted: false, mainSide: 1, boomJib: 0, jibSide: 1, crewY: 0, water: 0 };
     this.settleActuators();
     this.inputLog.push({ step: 0, input: { ...this.input } });
   }
@@ -426,9 +429,27 @@ export class Simulation {
     const crewTarget = this.input.autoCrew ? this.autoCrewTarget(wind, cur) : a.mainSide * this.crewOffset();
     a.crewY += clamp(crewTarget - a.crewY, -p.crewSpeed * dt, p.crewSpeed * dt);
 
+    // Water over the rail or in spray; out through the transom (self-draining) or bailed.
+    a.water = stepWater(p.cockpit, a.water, this.waterInflow(), dt);
+
     this.integrate(dt, wind, cur);
     this.time = (this.step + 1) * dt;
     this.step += 1;
+  }
+
+  /**
+   * Water coming aboard now (kg/s): green water over the buried rail, and spray when sailing into waves. A
+   * self-draining cockpit sheds spray as fast as it arrives, so spray is counted only for the older builds.
+   */
+  waterInflow(): number {
+    const p = this.params;
+    let q = greenWaterInflow(p.cockpit, this.state.phi);
+    const sea = p.cockpit.selfDraining ? undefined : this.env.seaState?.(this.time, this.state.n, this.state.e);
+    if (sea && sea.hs > p.cockpit.sprayStartHs) {
+      // Waves travel towards sea.dirTo: head-on when that is opposite the heading.
+      q += sprayInflow(p.cockpit, sea.hs, this.state.u, -Math.cos(sea.dirTo - this.state.psi));
+    }
+    return q;
   }
 
   /** RK4 over one step; `wind0` and `cur0` are the wind and current at the state at the start of the step. */
@@ -553,6 +574,7 @@ export class Simulation {
       mainSheetLimit: this.mainLimit,
       jibSheetLimit: this.jibLimit,
       crewY: a.crewY,
+      cockpitWater: a.water,
       input: { ...this.input },
       forces,
       env: detailed ? this.env.describe?.(this.time, s.n, s.e) : undefined,
@@ -590,9 +612,12 @@ export class Simulation {
   stateHash(): string {
     const s = this.state;
     const a = this.act;
-    return hashNumbers([
+    const values = [
       this.time, this.step, s.n, s.e, s.psi, s.u, s.v, s.r, s.phi, s.p,
       a.rudder, a.boomMain, a.boomRate, a.mainInverted ? 1 : 0, a.mainSide, a.boomJib, a.jibSide, a.crewY,
-    ]);
+    ];
+    // Cockpit water joins the hash once there is some (runs that never ship water keep their old hashes).
+    if (a.water !== 0) values.push(a.water);
+    return hashNumbers(values);
   }
 }

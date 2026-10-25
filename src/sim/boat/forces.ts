@@ -369,9 +369,10 @@ export interface HullResistance {
 
 /**
  * Upright resistance: ITTC-1957 friction on total wetted area x form factor, plus a residuary term
- * R_R = m g f(Fn) from the calibration table; both scaled by (1 + k φ²) for heel.
+ * R_R = m g f(Fn) from the calibration table; both scaled by (1 + k φ²) for heel. `extraWeight` (N) is water
+ * shipped into the cockpit.
  */
-export function hullResistance(params: BoatParams, u: number, heel: number, rhoWater: number, out?: HullResistance): HullResistance {
+export function hullResistance(params: BoatParams, u: number, heel: number, rhoWater: number, out?: HullResistance, extraWeight = 0): HullResistance {
   const o = out ?? { friction: 0, residuary: 0, total: 0, froude: 0, x: 0 };
   const speed = Math.abs(u);
   if (speed < 1e-9) {
@@ -384,7 +385,7 @@ export function hullResistance(params: BoatParams, u: number, heel: number, rhoW
   const heelFactor = 1 + params.heelResistance * heel * heel;
   const friction = 0.5 * rhoWater * speed * speed * params.wettedArea * cf * params.formFactor * heelFactor;
   const froude = speed / Math.sqrt(G * params.lwl);
-  const residuary = params.weight * Math.max(0, interpTable(params.residuary, froude)) * heelFactor;
+  const residuary = (extraWeight > 0 ? params.weight + extraWeight : params.weight) * Math.max(0, interpTable(params.residuary, froude)) * heelFactor;
   const total = friction + residuary;
   o.friction = friction;
   o.residuary = residuary;

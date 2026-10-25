@@ -37,6 +37,8 @@ export interface EntrySpec {
 export interface RaceSessionOptions {
   env: Environment;
   params: BoatParams;
+  /** The user's boat when it is a different Squib type from the AI fleet (default: `params`). */
+  humanParams?: BoatParams;
   seabed?: Seabed;
   course: Course;
   resolved: ResolvedCourse;
@@ -111,7 +113,7 @@ export class RaceSession implements AiWorld {
     let aiIndex = 0;
     for (const e of opts.entries) {
       const sim = new Simulation({
-        params: opts.params,
+        params: e.kind === 'human' ? (opts.humanParams ?? opts.params) : opts.params,
         env: opts.env,
         seabed: opts.seabed,
         ownsEnvironment: false,

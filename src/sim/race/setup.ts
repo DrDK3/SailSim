@@ -3,6 +3,7 @@ import type { Environment } from '../env/environment';
 import type { DartGeo } from '../geo/dart';
 import { DART_PROJECTION } from '../geo/projection';
 import { squibParams } from '../boat/squib';
+import type { BoatParams } from '../boat/params';
 import { buildRestrictions } from '../course/restrictions';
 import { DART_LEVELS, validateCourse, type CourseIssue } from '../course/validate';
 import type { Course } from '../course/types';
@@ -37,6 +38,8 @@ export interface RaceSetup {
     input?: Partial<ControlInput>;
     /** Where the user's boat starts (or a function of the resolved course); default: the first starting slot. */
     initial?: InitialConditions | ((r: ResolvedCourse) => InitialConditions);
+    /** The user's Squib type (default: the Rondar type the AI fleet sails). */
+    params?: BoatParams;
   };
   committee: Partial<Omit<CommitteeOptions, 'startAt'>> & { startAt: number };
 }
@@ -115,6 +118,7 @@ export function createRace(s: RaceSetup): CreatedRace {
   const session = new RaceSession({
     env,
     params,
+    humanParams: s.human?.params,
     seabed: geo,
     course: s.course,
     resolved: v.resolved,

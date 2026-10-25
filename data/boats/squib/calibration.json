@@ -1,7 +1,7 @@
 {
  "_meta": {
   "description": "Estimated (tag E) coefficients for the Squib physics model. None of these is Squib-specific measured data. They are prototype values chosen from general naval-architecture practice and are meant to be recalibrated when performance evidence arrives (docs/MISSING_INFORMATION.md B2-B5). See docs/PHYSICS.md for how each is used.",
-  "updated": "2026-10-22"
+  "updated": "2026-10-25"
  },
  "mass": {
   "crewMassEach": {
@@ -37,6 +37,13 @@
    "unit": "-",
    "tag": "E",
    "source": "estimate"
+  },
+  "aboveMinimum": {
+   "value": 0,
+   "unit": "kg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Boat weight above the class minimum (minBoatMass). 0 for the Rondar default; data/boats/squib/variants.json sets it for other builds"
   }
  },
  "geometry": {
@@ -779,6 +786,134 @@
    "tag": "E",
    "source": "estimate",
    "note": "Cap on the bed slope used for the down-slope push (8 m grid turns quay walls into ramps)"
+  }
+ },
+ "cockpit": {
+  "selfDraining": {
+   "value": 1,
+   "unit": "-",
+   "tag": "S",
+   "source": "C9, C10",
+   "note": "Rondar cockpit (default): 1 = self-draining (water runs out through the transom outlets); 0 = water stays until bailed (Hunter and Parker builds)"
+  },
+  "deckEdgeY": {
+   "value": 0.93,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Half-breadth of the rail (side-deck outer edge) at the cockpit: half the class beam"
+  },
+  "deckEdgeZ": {
+   "value": 0.55,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Height of the rail above the waterline at the cockpit (no lines plan; same estimate as the 3D model)"
+  },
+  "cockpitEdgeY": {
+   "value": 0.53,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Half-width of the cockpit opening (inner edge of the side deck)"
+  },
+  "cockpitEdgeZ": {
+   "value": 0.58,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Height of the cockpit edge above the waterline (deck camber; estimate)"
+  },
+  "railSlop": {
+   "value": 0.05,
+   "unit": "-",
+   "tag": "E",
+   "source": "estimate",
+   "note": "With the rail under but the cockpit edge still clear, this fraction of the water running onto the side deck slops on into the cockpit"
+  },
+  "toeRail": {
+   "value": 0.03,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Water must rise this far over the rail (toe rail) before it runs onto the side deck"
+  },
+  "inflowLength": {
+   "value": 2.0,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Length of the cockpit side (and of side deck) over which water runs in"
+  },
+  "weirCoefficient": {
+   "value": 1.8,
+   "unit": "m^0.5/s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Broad-crested weir, Q = C L h^1.5 (C = 2/3 Cd sqrt(2g), Cd 0.61)"
+  },
+  "sprayRate": {
+   "value": 0.8,
+   "unit": "kg/s per m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Spray and slop shipped when sailing into waves: rate per metre of significant wave height above sprayStartHs, at 2 m/s through the water, head-on"
+  },
+  "sprayStartHs": {
+   "value": 0.25,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Significant wave height below which no water comes aboard"
+  },
+  "soleWidth": {
+   "value": 1.0,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Width of the cockpit floor where shipped water collects"
+  },
+  "soleLength": {
+   "value": 2.5,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Length of the cockpit floor"
+  },
+  "soleAboveCG": {
+   "value": 0.5,
+   "unit": "m",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Height of the cockpit floor above the centre of gravity. Rondar: a raised self-draining floor above the waterline; the CG is low (375 kg iron keel, about 0.25 m below the waterline, E)"
+  },
+  "drainArea": {
+   "value": 0.03,
+   "unit": "m2",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Self-draining cockpit: total outlet area through the transom (orifice, Cd 0.61); used only when selfDraining = 1. Sized so a cockpit sheds water slopping in over a buried rail (estimate)"
+  },
+  "bailRate": {
+   "value": 0.5,
+   "unit": "kg/s",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Crew bailing by hand (about a litre every two seconds) once the water passes bailStart"
+  },
+  "bailStart": {
+   "value": 10,
+   "unit": "kg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Water in the boat before the crew starts bailing"
+  },
+  "capacity": {
+   "value": 600,
+   "unit": "kg",
+   "tag": "E",
+   "source": "estimate",
+   "note": "Cockpit full (swamped): buoyancy keeps the boat afloat, no more water comes in"
   }
  }
 }

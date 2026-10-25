@@ -19,6 +19,7 @@ import {
 } from './forces';
 import type { BoatParams, SailParams } from './params';
 import { groundContact, NO_CONTACT, type ContactForce, type GroundContext } from './contact';
+import { waterHeelMoment } from './cockpit';
 
 /**
  * Continuous state integrated by RK4 (4-DOF: surge, sway, yaw, roll). Velocities are through the water, in
@@ -50,6 +51,8 @@ export interface Actuators {
   boomJib: number;
   jibSide: 1 | -1;
   crewY: number;
+  /** Water shipped into the cockpit (kg; src/sim/boat/cockpit.ts). */
+  water: number;
 }
 
 export interface Fluids {
@@ -71,8 +74,10 @@ export interface ForceBreakdown {
   yawDamping: number;
   /** Bottom contact (grounding); NO_CONTACT without a seabed. */
   contact: ContactForce;
-  /** Roll moments (N m, > 0 heels to starboard). */
-  roll: { sails: number; hydro: number; crew: number; righting: number; damping: number; ground: number; total: number };
+  /** Water in the cockpit (kg) the forces were computed with: it moves with the boat (derivatives). */
+  water: number;
+  /** Roll moments (N m, > 0 heels to starboard). `water`: the shipped water running to the low side. */
+  roll: { sails: number; hydro: number; crew: number; righting: number; damping: number; ground: number; water: number; total: number };
   total: BodyForce;
 }
 
@@ -98,7 +103,8 @@ export function newForceBreakdown(): ForceBreakdown {
     crossFlow: { x: 0, y: 0, n: 0 },
     yawDamping: 0,
     contact: { ...NO_CONTACT, points: [] },
-    roll: { sails: 0, hydro: 0, crew: 0, righting: 0, damping: 0, ground: 0, total: 0 },
+    water: 0,
+    roll: { sails: 0, hydro: 0, crew: 0, righting: 0, damping: 0, ground: 0, water: 0, total: 0 },
     total: { x: 0, y: 0, n: 0 },
   };
 }
@@ -140,7 +146,10 @@ export function computeForces(
   // The keel's downwash straightens the flow reaching the rudder: only part of the hull's leeway remains.
   const rudderSway = s.v * (1 - p.rudder.flowStraightening) + s.r * p.rudder.x - s.p * p.rudderDepth;
   const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, s.phi, fluids.rhoWater, o.rudder);
-  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater, o.hull);
+  const water = a.water;
+  o.water = water;
+  // Shipped water adds weight: more residuary resistance (and more displacement in the righting moment below).
+  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater, o.hull, water > 0 ? water * G : 0);
   const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater, o.crossFlow);
   const yawDamping = -p.yawLinearDamping * s.r;
   o.yawDamping = yawDamping;
@@ -167,7 +176,16 @@ export function computeForces(
   r.righting = -p.weight * rightingArm(p, s.phi);
   r.damping = -p.rollLinearDamping * s.p;
   r.ground = contact.roll;
+  r.water = 0;
   r.total = r.sails + r.hydro + r.crew + r.righting + r.damping + contact.roll;
+  if (water > 0) {
+    // The hull carries the extra displacement at the same righting arm; the water's weight acts at its own
+    // centre, above the CG and run to leeward (free surface), so the net effect is a loss of stability.
+    const extra = -water * G * rightingArm(p, s.phi);
+    r.water = waterHeelMoment(p.cockpit, water, s.phi);
+    r.righting += extra;
+    r.total += extra + r.water;
+  }
   return o;
 }
 
@@ -183,9 +201,20 @@ export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, cur
   d.n = s.u * c - s.v * sn + current.n;
   d.e = s.u * sn + s.v * c + current.e;
   d.psi = s.r;
-  d.u = (t.x + p.m22 * s.v * s.r) / p.m11;
-  d.v = (t.y - p.m11 * s.u * s.r) / p.m22;
-  d.r = t.n / p.i66;
+  if (f.water > 0) {
+    // Shipped water moves with the hull in surge, sway and yaw: spread over the cockpit floor, centred near
+    // the crew (crewX).
+    const w = f.water;
+    const m11 = p.m11 + w;
+    const m22 = p.m22 + w;
+    d.u = (t.x + m22 * s.v * s.r) / m11;
+    d.v = (t.y - m11 * s.u * s.r) / m22;
+    d.r = t.n / (p.i66 + w * (p.crewX * p.crewX + (p.cockpit.soleLength * p.cockpit.soleLength) / 12));
+  } else {
+    d.u = (t.x + p.m22 * s.v * s.r) / p.m11;
+    d.v = (t.y - p.m11 * s.u * s.r) / p.m22;
+    d.r = t.n / p.i66;
+  }
   d.phi = s.p;
   d.p = f.roll.total / p.i44;
   return d;
@@ -197,7 +226,10 @@ export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, cur
  * state oscillates about and settles to this angle.
  */
 export function heelEquilibrium(p: BoatParams, s: RigidState, a: Actuators, wind: NE, current: NE, fluids: Fluids): number {
-  const f = (phi: number) => aeroHeelMoment(p, s, a, wind, current, fluids, phi) + p.crewMass * G * a.crewY * Math.cos(phi) - p.weight * rightingArm(p, phi);
+  const w = a.water;
+  const f = (phi: number) =>
+    aeroHeelMoment(p, s, a, wind, current, fluids, phi) + p.crewMass * G * a.crewY * Math.cos(phi) - (p.weight + w * G) * rightingArm(p, phi) +
+    waterHeelMoment(p.cockpit, w, phi);
   let lo = -Math.PI / 2;
   let hi = Math.PI / 2;
   if (f(lo) < 0 && f(hi) < 0) return lo;

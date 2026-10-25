@@ -91,6 +91,32 @@ export interface FoilParams {
   cn90: number;
 }
 
+/**
+ * The cockpit and the water it can hold (src/sim/boat/cockpit.ts). Green water pours in once the cockpit's
+ * leeward edge is under (a knockdown) and some slops in while the rail is buried; spray comes aboard in waves.
+ * A self-draining cockpit lets it out through the transom, otherwise the crew bails it.
+ */
+export interface CockpitParams {
+  selfDraining: boolean;
+  deckEdgeY: number;
+  deckEdgeZ: number;
+  cockpitEdgeY: number;
+  cockpitEdgeZ: number;
+  railSlop: number;
+  toeRail: number;
+  inflowLength: number;
+  weirCoefficient: number;
+  sprayRate: number;
+  sprayStartHs: number;
+  soleWidth: number;
+  soleLength: number;
+  soleAboveCG: number;
+  drainArea: number;
+  bailRate: number;
+  bailStart: number;
+  capacity: number;
+}
+
 /** Flat, SI-unit parameter set consumed by the physics. Built from the JSON documents by buildSquibParams. */
 export interface BoatParams {
   loa: number;
@@ -145,6 +171,7 @@ export interface BoatParams {
   crewIn: number;
   crewOut: number;
   crewSpeed: number;
+  cockpit: CockpitParams;
 }
 
 type Doc = Record<string, unknown>;
@@ -186,7 +213,7 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
   validateProvenance(cal);
   const loa = num(spec, 'loa');
   const crewMass = num(spec, 'crewCount') * num(cal, 'mass.crewMassEach');
-  const mass = num(spec, 'minBoatMass') + crewMass;
+  const mass = num(spec, 'minBoatMass') + num(cal, 'mass.aboveMinimum') + crewMass;
   const kzz = num(cal, 'mass.yawRadiusOfGyrationFrac') * loa;
   const izz = mass * kzz * kzz;
   return {
@@ -286,5 +313,25 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
     crewIn: num(cal, 'geometry.crewLateralIn'),
     crewOut: num(cal, 'geometry.crewLateralOut'),
     crewSpeed: num(cal, 'geometry.crewMoveSpeed'),
+    cockpit: {
+      selfDraining: num(cal, 'cockpit.selfDraining') !== 0,
+      deckEdgeY: num(cal, 'cockpit.deckEdgeY'),
+      deckEdgeZ: num(cal, 'cockpit.deckEdgeZ'),
+      cockpitEdgeY: num(cal, 'cockpit.cockpitEdgeY'),
+      cockpitEdgeZ: num(cal, 'cockpit.cockpitEdgeZ'),
+      railSlop: num(cal, 'cockpit.railSlop'),
+      toeRail: num(cal, 'cockpit.toeRail'),
+      inflowLength: num(cal, 'cockpit.inflowLength'),
+      weirCoefficient: num(cal, 'cockpit.weirCoefficient'),
+      sprayRate: num(cal, 'cockpit.sprayRate'),
+      sprayStartHs: num(cal, 'cockpit.sprayStartHs'),
+      soleWidth: num(cal, 'cockpit.soleWidth'),
+      soleLength: num(cal, 'cockpit.soleLength'),
+      soleAboveCG: num(cal, 'cockpit.soleAboveCG'),
+      drainArea: num(cal, 'cockpit.drainArea'),
+      bailRate: num(cal, 'cockpit.bailRate'),
+      bailStart: num(cal, 'cockpit.bailStart'),
+      capacity: num(cal, 'cockpit.capacity'),
+    },
   };
 }

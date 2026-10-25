@@ -1,5 +1,5 @@
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
-import { squibParams } from '../sim/boat/squib';
+import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clamp } from '../sim/math/angles';
 import { optimalSheets } from '../sim/control/trim';
@@ -53,6 +53,8 @@ export interface AppScenario {
   race?: { sequence: 'one-minute' | 'three-minute' | 'five-minute'; startInS: number };
   /** AI boats racing against the user (0 = sail the course alone), their level and the preparatory flag. */
   fleet?: { aiCount: number; level: AiLevel; prepFlag: PrepFlag };
+  /** The user's Squib type (data/boats/squib/variants.json); default the Rondar. AI boats sail the default. */
+  boat?: SquibTypeId;
 }
 
 /** One row of the live fleet ranking or the results. */
@@ -290,6 +292,7 @@ export class SimController {
       opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
     let race: SimController['race'];
     let sim: Simulation;
+    const boatParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
     if (scenario.course) {
       try {
         const w = windFrom(built.env.wind(0, loc.n, loc.e));
@@ -308,6 +311,7 @@ export class SimController {
           human: {
             controller: () => this.sampleInputs(),
             input: startInput,
+            params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             initial: fleet.aiCount > 0 ? undefined : preStartPosition,
           },
@@ -324,7 +328,7 @@ export class SimController {
     } else {
       // Free sailing: the user's boat alone in a one-boat fleet, so moored boats and ferries are solid.
       sim = new Simulation({
-        params: squibParams(),
+        params: boatParams,
         env: built.env,
         seabed: geo,
         ownsEnvironment: false,
