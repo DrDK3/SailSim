@@ -6,6 +6,7 @@ import { ferryStates } from '../app/ferrySchedule';
 import type { RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
+import { Woodland } from './trees';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -63,6 +64,7 @@ export class DartScene {
   private readonly buildingUniforms = { uNight: { value: 0 } };
   /** For the water surface (scene.ts): tidal water and its banks, so low ground inland stays dry. */
   readonly waterMask?: WaterMask;
+  private readonly woodland?: Woodland;
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -92,6 +94,11 @@ export class DartScene {
       this.buildFerries(f);
       this.buildMarks(f);
       this.buildLabels(f);
+    }
+    const pixels = input.drape ? drapePixels(input.drape) : undefined;
+    if (pixels) {
+      this.woodland = new Woodland({ pixels, drape: input.manifest.drape, groundAt: (e, n) => this.groundAt(e, n), buildings: f?.buildings.map((b) => b.r) });
+      this.fixed.add(this.woodland.group);
     }
   }
 
@@ -209,6 +216,7 @@ export class DartScene {
       tex.needsUpdate = true;
       // The satellite colours already contain sunlight: scale the albedo down so the scene's lights don't double it.
       material = new THREE.MeshStandardMaterial({ map: tex, color: 0x8a8a8a, roughness: 1, metalness: 0, envMapIntensity: 0.25 });
+      terrainDetail(material as THREE.MeshStandardMaterial, this.waterMask);
     } else {
       material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     }
@@ -714,6 +722,7 @@ export class DartScene {
     this.labels.visible = u.showLabels;
     for (const l of this.labels.children) l.visible = u.showLabels && l.position.distanceTo(cam) < LABEL_RANGE_M;
 
+    this.woodland?.update(u.camera);
     if (u.showLabels) this.declutter(u.camera);
   }
 
@@ -805,10 +814,10 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uNight = uniforms.uNight;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nattribute float aGround;\nvarying vec4 vWall;\nvarying float vGround;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvGround = aGround;');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nattribute float aGround;\nvarying vec4 vWall;\nvarying float vGround;\nvarying vec3 vBWorld;\nvarying vec3 vBNormal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvGround = aGround;\nvBWorld = transformed;\nvBNormal = objectNormal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;\nvarying float vGround;')
+      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;\nvarying float vGround;\nvarying vec3 vBWorld;\nvarying vec3 vBNormal;\nfloat bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -828,7 +837,80 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
           winLit = (inWin - frame) * step(0.6, fract(sin(dot(vec2(bay + seed, storey + seed * 1.7), vec2(12.9898, 78.233))) * 43758.5453));
         }`,
       )
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * 1.6 * winLit * uNight;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * 1.6 * winLit * uNight;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        if (vWall.w <= 0.0 && vWall.z <= 0.0 && vBNormal.y > 0.25) {
+          // Roofs: courses of slates or tiles (lines across the slope) and a little weathering.
+          float course = fract(vBWorld.y * 4.2);
+          diffuseColor.rgb *= 0.86 + 0.14 * smoothstep(0.0, 0.12, course) + 0.06 * (bHash(floor(vBWorld.xz * 2.5)) - 0.5);
+        } else if (vWall.z > 0.0) {
+          // Walls: the render's texture, darker towards the foot (splash and shade).
+          diffuseColor.rgb *= 0.94 + 0.08 * bHash(floor(vBWorld.xz * 6.0 + vBWorld.y * 3.0));
+          diffuseColor.rgb *= 0.72 + 0.28 * smoothstep(max(vGround, 0.0) - 0.1, max(vGround, 0.0) + 1.6, vWall.y);
+        }`,
+      );
   };
   return mat;
+}
+
+/** The drape image's RGBA pixels (rows north to south), or undefined outside a browser. */
+function drapePixels(img: TexImageSource): Uint8ClampedArray | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const w = (img as HTMLImageElement).naturalWidth || (img as ImageBitmap).width;
+  const h = (img as HTMLImageElement).naturalHeight || (img as ImageBitmap).height;
+  if (!w || !h) return undefined;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  if (!g) return undefined;
+  g.drawImage(img as CanvasImageSource, 0, 0);
+  return g.getImageData(0, 0, w, h).data;
+}
+
+/**
+ * Detail the 10 m satellite colours cannot show: a fine variation of the ground (two octaves of noise), bare
+ * rock where the slope is steep (the cliffs at the entrance), and mud and shingle below high water, which the
+ * picture taken at an unknown tide shows as water or weed. Illustrative (E).
+ */
+function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uMask = { value: mask?.texture ?? null };
+    shader.uniforms.uMaskBox = { value: mask?.box ?? new THREE.Vector4(0, 0, 0, 0) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGround;\nvarying float vUpright;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGround = transformed;\nvUpright = objectNormal.y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vGround;
+        varying float vUpright;
+        uniform sampler2D uMask;
+        uniform vec4 uMaskBox;
+        float tHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float tNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(tHash(i), tHash(i + vec2(1.0, 0.0)), u.x), mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float tn = tNoise(vGround.xz * 0.21) * 0.55 + tNoise(vGround.xz * 0.9) * 0.3 + tNoise(vGround.xz * 3.1) * 0.15;
+        diffuseColor.rgb *= 0.84 + 0.32 * tn;
+        float rock = smoothstep(0.8, 0.58, vUpright);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.19, 0.17) * (0.75 + 0.5 * tn), rock * 0.7);
+        // Mud only on the tidal foreshore (near tidal water), not on low ground inland.
+        float tidal = 1.0;
+        if (uMaskBox.z > 0.0) {
+          vec2 muv = (vec2(vGround.x, -vGround.z) - uMaskBox.xy) / uMaskBox.zw;
+          tidal = smoothstep(-24.0, -6.0, (texture2D(uMask, muv).r * 255.0 - 128.0) * 0.5);
+        }
+        float mud = smoothstep(2.6, 1.6, vGround.y) * smoothstep(-4.0, -2.5, vGround.y) * tidal;
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.27, 0.24, 0.2), vec3(0.42, 0.39, 0.34), step(0.62, tn)) * (0.8 + 0.4 * tn), mud * 0.8);`,
+      );
+  };
 }

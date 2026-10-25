@@ -223,13 +223,15 @@ export class SceneView {
     u['rayleigh']!.value = 1.2 - 0.6 * cloud;
     // Direct sun: dimmed by cloud (low cloud most), warmer near the horizon; diffuse sky light grows under cloud.
     const sunVis = day * (1 - 0.75 * cloud - 0.2 * lowCloud) * Math.min(1, Math.max(0, w.sunElevationDeg / 4));
-    this.sun.intensity = 2.4 * Math.max(0, sunVis);
+    this.sun.intensity = 3.0 * Math.max(0, sunVis);
     this.sun.castShadow = this.sun.intensity > 0.3;
     const warm = Math.min(1, Math.max(0, (12 - w.sunElevationDeg) / 12));
     this.sun.color.setRGB(1, 0.95 - 0.25 * warm, 0.88 - 0.45 * warm);
-    this.hemi.intensity = (0.04 + 0.66 * day) * (1 + 0.4 * cloud);
+    // The sky's light comes mostly from the environment map; the hemisphere light only lifts the shade a
+    // little (together they flattened the scene: buildings and hills washed out to pastels).
+    this.hemi.intensity = (0.02 + 0.22 * day) * (1 + 0.8 * cloud);
     this.hemi.color.setRGB(0.81 - 0.25 * cloud, 0.89 - 0.3 * cloud, 0.96 - 0.32 * cloud);
-    this.scene.environmentIntensity = (0.04 + 0.96 * day) * (1 - 0.55 * cloud);
+    this.scene.environmentIntensity = (0.04 + 0.66 * day) * (1 - 0.45 * cloud);
     // Fog: the visibility (σ = 3.912 / V; exp² fog reaches 98% at V when d = 1.978 / V), never thinner than
     // the scene's own haze; grey under cloud, dark at night.
     const density = Math.max(this.baseFogDensity, 1.978 / Math.max(visibilityM, 50));
