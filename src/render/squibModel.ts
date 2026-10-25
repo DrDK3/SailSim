@@ -358,7 +358,10 @@ export class SquibModel {
     return mesh;
   }
 
-  /** The flat transom, textured with the hull's bands and the lettering. */
+  /**
+   * The flat transom, textured with the hull's bands and the lettering: the whole stern section closed from
+   * the keel up each side to the sheer and across under the cambered deck edge, as a fan about its centre.
+   */
   private buildTransom(text: string): THREE.Mesh {
     const M = SECTION;
     const { b, d, h } = this.hullStation(1);
@@ -368,21 +371,30 @@ export class SquibModel {
     const v = new THREE.Vector3();
     const top = h;
     const bottom = -d;
-    pos.push(0, (top + bottom) / 2, this.sternZ + 0.002);
-    uv.push(0.5, 0.5);
-    for (let side = -1; side <= 1; side += 2) {
-      for (let j = 0; j <= M; j++) {
-        this.sectionPoint(1, (j / M) * (Math.PI / 2), side, v);
-        pos.push(v.x, v.y, this.sternZ + 0.002);
-        // Seen from astern, starboard (x > 0) is on the right.
-        uv.push(0.5 + v.x / (2 * b), (v.y - bottom) / (top - bottom));
-      }
+    const z = this.sternZ + 0.002;
+    const push = (x: number, y: number) => {
+      pos.push(x, y, z);
+      // Seen from astern, starboard (x > 0) is on the right.
+      uv.push(0.5 + x / (2 * b), (y - bottom) / (top - bottom));
+    };
+    push(0, (top + bottom) / 2);
+    // Outline: port side keel → sheer, across the deck edge (with the deck's camber) to starboard, starboard
+    // sheer → keel. Every consecutive pair makes a triangle with the centre, so the outline is closed.
+    for (let j = 0; j <= M; j++) {
+      this.sectionPoint(1, (j / M) * (Math.PI / 2), -1, v);
+      push(v.x, v.y);
     }
-    for (let j = 0; j < M; j++) {
-      const p0 = 1 + j;
-      const s0 = 1 + (M + 1) + j;
-      idx.push(0, p0 + 1, p0, 0, s0, s0 + 1);
+    const ACROSS = 12;
+    for (let k = 1; k < ACROSS; k++) {
+      const x = -b + (2 * b * k) / ACROSS;
+      push(x, h + 0.004 + DECK_CAMBER * (1 - (x / b) ** 2) * Math.min(1, b / 0.6));
     }
+    for (let j = M; j >= 0; j--) {
+      this.sectionPoint(1, (j / M) * (Math.PI / 2), 1, v);
+      push(v.x, v.y);
+    }
+    const n = pos.length / 3;
+    for (let k = 1; k < n - 1; k++) idx.push(0, k, k + 1);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));

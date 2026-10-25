@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
-import { lerpAngle, nedToThree, orientBoat } from './frames';
+import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { SquibModel } from './squibModel';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
@@ -85,6 +85,9 @@ export class SceneView {
   private envFor = { el: NaN, cloud: NaN };
   private mode: CameraMode = 'chase';
   private chaseHeading = 0;
+  private readonly ride: WaveRide = { heave: 0, pitch: 0, roll: 0 };
+  private readonly rideTarget: WaveRide = { heave: 0, pitch: 0, roll: 0 };
+  private rideStarted = false;
   private lastWind = { tws: -1, twd: -1, wat: false };
   private crewSide = 1;
   private dart?: DartScene;
@@ -299,15 +302,13 @@ export class SceneView {
     if (env?.sea) this.water.updateField(env.sea, this.camera.position.x, this.camera.position.z, time, env.sea(n, e), curr.current);
     if (env) this.updatePuffs(env.puffs, x, z);
 
-    // Visual-only wave response: the hull rides the surface; pitch from the local slope.
-    const h0 = this.water.heightAt(x, z, time);
-    const fwd = new THREE.Vector2(Math.sin(heading), -Math.cos(heading));
-    const hF = this.water.heightAt(x + fwd.x * 2, z + fwd.y * 2, time);
-    const hA = this.water.heightAt(x - fwd.x * 2, z - fwd.y * 2, time);
-    const pitch = Math.atan2(hF - hA, 4) * 0.6;
+    // Visual-only wave response: the hull floats on the surface over its waterplane (heave, pitch, roll).
+    rideWaves((wx, wz) => this.water.heightAt(wx, wz, time), x, z, heading, this.rideTarget);
+    easeRide(this.ride, this.rideTarget, frameDt, !this.rideStarted);
+    this.rideStarted = true;
     const prevPos = this.boatRoot.position.clone();
-    this.boatRoot.position.set(x, h0 * 0.7, z);
-    orientBoat(this.boatRoot, heading, heel, pitch);
+    this.boatRoot.position.set(x, this.ride.heave, z);
+    orientBoat(this.boatRoot, heading, heel + this.ride.roll, this.ride.pitch);
     const moved = prevPos.distanceTo(this.boatRoot.position);
 
     const f = curr.forces;
@@ -342,7 +343,7 @@ export class SceneView {
     this.rain.update(this.camera, frameDt, wx, wz);
     if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
     if (this.course && env?.course) this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
-    if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
+    if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.renderer.render(this.scene, this.camera);
   }
 
