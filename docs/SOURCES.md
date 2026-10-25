@@ -20,6 +20,13 @@
 | C6 | Wikipedia, "Squib (keelboat)" | https://en.wikipedia.org/wiki/Squib_(keelboat) | n.d. | Blocked; excerpt | LOA, beam, weight, sail area, PY 1142, builder history |
 | C7 | keelindex.com, Squib | https://www.keelindex.com/boat/squib | n.d. | Excerpt | LWL, draft, ballast, hull-speed formula, ORC GPH 880.1 |
 | C8 | Royal Mersey YC, Squib fleet | https://royalmersey-yc.co.uk/squib-fleet | n.d. | Excerpt | Year of design, sail areas, crew roles |
+| C9 | NSOA, History of the Squib | https://squibs.co.uk/the-boat/history/ | n.d. | Excerpt (host blocked, 25 Oct 2026) | Builders: Oliver Lee prototype (1967); Hunter Boats, Rochford (sail numbers 158–724); Parker Sailboats from 1997 (to 2010, sail number 888); new NSOA hull and deck moulds 2009/10; Rondar licensed July 2016 and remodelled the cockpit to be self-draining; a few older boats fitted with the new floor ("hybrid Squib") |
+| C10 | Rondar Raceboats, Squib news | http://www.rondarboats.com/news/latestnews/category/squib/ | 2016–2018 | Excerpt | "Hull form and sail plan remain unchanged"; new internal design with a self-draining cockpit; Mark 3 mould, self-draining epoxy hull |
+| C11 | Hyde Sails, "Hyde Sails Release New Squib Designs" (news) and the Squib Jib B3 product page | https://fishingboating.world/news/273680/Hyde-Sails-Release-New-Squib-Designs ; https://www.hydesails.com/product/squib-jib-beta3/ | 2024 | Excerpt | B3 main and jib (2024): flatter base lets both sheet closer to the centreline; broader seam shape and less luff curve give the main a better downwind shape; easier to trim upwind; jib designed for the rig's luff sag; three telltale windows and a collision window on the jib; leech or collision window on the main; draft stripes optional. These are the maker's claims; the size of their effect in the simulator is an estimate |
+| C12 | Batt Sails, Squib | https://battsails.com/index.php/keelboats/squib/ | 2025 | Excerpt | Sails "replicate the current Championship winning design"; windows and draft (camber) stripes |
+| C13 | NSOA features page (C4) | https://squibs.co.uk/features/ | n.d. | Excerpt | Three licensed sailmakers: Batt Sails (Chichester), Lonton and Gray, Hyde Sails |
+| C14 | Wikipedia, "Squib (keelboat)" (C6) | https://en.wikipedia.org/wiki/Squib_(keelboat) | n.d. | Excerpt | Parker to 2009 (hull 885); Rondar no longer licensed by the RYA as of July 2024 (latest sail number 909) |
+| C15 | Hyde Sails team, early-season Squib sailing and the new Rondar | http://www.rondarboats.com/news/latestnews/2016/05/18/hyde-reflection-on-early-season-squib-sailing-the-new-rondar/ | May 2016 | Excerpt | A higher mast step because of the self-draining floor (not modelled: whether rig heights change is not established) |
 
 ## Royal Dart Yacht Club
 
@@ -32,6 +39,9 @@
 | R5 | RDYC Corinthian Class page | https://royaldart.co.uk/racing/corinthian-class/ | 2026 | Excerpt | Pursuit courses are in the booklet |
 | R6 | Wikidata Q7374097, Royal Dart Yacht Club | https://www.wikidata.org/wiki/Q7374097 | n.d. | Excerpt | Clubhouse coordinates (cross-check) |
 | R7 | RDYC Whole Sailing Programme 2024 v3 | https://royaldart.co.uk/wp-content/uploads/2024/02/Whole-Sailing-Programme-2024-v3.pdf | Feb 2024 | Blocked | Possibly earlier course plans |
+| R8 | RDYC Constitution and Rules (October 2019), rule 3.1 | https://royaldart.co.uk/wp-content/uploads/2023/11/Constitution-and-Rules-Oct-2019.pdf | Oct 2019 (uploaded Nov 2023) | Excerpt | The burgee: "a Burgee Gules charged in fess by a royal crown and dart in flight to the sinister Or" (a red burgee with a gold royal crown and a gold dart side by side across its middle, the dart flying towards the fly). Whether a later revision changed it was not checked |
+| R9 | Flags of the World, Royal Dart Yacht Club | https://www.crwflags.com/FOTW/FLAGS/gb~yrdrt.html | n.d. | Excerpt (host blocked) | Ensign: red ensign with St Edward's crown and a golden arrow ("dart") below; burgee image credited to Clay Moss (2007), no written description |
+| R10 | Wikimedia Commons, "Burgee of the Royal Dart Yacht Club.svg" | https://en.wikipedia.org/wiki/File:Burgee_of_the_Royal_Dart_Yacht_Club.svg | 2014 | Excerpt (host blocked) | Drawing 1000 × 600 px: the burgee's proportions (fly 5 : hoist 3) |
 
 ## Harbour, navigation and tides
 
@@ -48,6 +58,29 @@
 | H9 | Dartmouth wave and tidal modelling report | https://dartmouthplan.org/wp-content/uploads/2021/07/O-Historci-Flooding-Incident-Report.pdf | 2021 | Not read | Possible modelled currents |
 | H10 | UKHO Admiralty chart 2253 (Dartmouth Harbour) | n/a (commercial) | — | Not accessed | Bathymetry and tidal diamonds. **Copyright; licence needed** |
 | H11 | UKHO EasyTide and UK Tidal API | https://easytide.admiralty.co.uk | — | Blocked | Tidal height predictions |
+
+## River traffic
+
+| # | Source | URL | Date | Access | Used for |
+|---|---|---|---|---|---|
+| F1 | Wikipedia, "Dartmouth Lower Ferry" | https://en.wikipedia.org/wiki/Dartmouth_Lower_Ferry | n.d. | Excerpt | Unpowered pontoons (floats) carrying up to 8 cars, each pushed and pulled by a tug; two float/tug combinations when traffic demands; floats Tom Avis (1994) and Tom Casey (1989); tugs Hauley IV, V and VI |
+| F2 | Dartmouth Lower Ferry (operator: South Hams District Council) | https://www.dartmouthlowerferry.co.uk/ | 2026 | Excerpt | No timetable: continuous shuttle. Monday–Saturday first departures Kingswear 07:00, Dartmouth 07:10; last 22:45 / 22:55; Sunday from 08:00 / 08:10; not on Christmas Day. Refit of the Tom Avis and Hauley VI 29 October – 13 December 2026, single ferry running |
+| F3 | Cameraderie forum photo essay, "Challenging conditions for the Dartmouth Lower Ferry" | https://cameraderie.org/threads/challenging-conditions-for-the-dartmouth-lower-ferry.8847/ | n.d. | Excerpt | The manoeuvre: the tug goes astern to clear the slip, then, held only by the head rope, swings round to face the other bank; a stern rope is added and it heads across. Both units pass mid-stream |
+| F4 | Tripadvisor reviews of the Lower and Higher Ferries | https://www.tripadvisor.com/Attraction_Review-g1467218-d12845359-Reviews-or20-Lower_Ferry-Kingswear_Dartmouth_Devon_England.html | 2026 | Excerpt | Lower Ferry crossing "about 5 minutes" / "a couple of minutes"; Higher Ferry up to 36 cars (summary) |
+| F5 | Dartmouth Higher Ferry (operator) | https://dkfb.co.uk/ | n.d. | Excerpt | Shuttle service, about a 3-minute crossing; 2009 vessel built by Pendennis; a closure notice of unknown date (current status not confirmed) |
+| F6 | Dartmouth Higher Ferry, secondary descriptions | https://en.wikipedia.org/wiki/Dartmouth_Higher_Ferry | n.d. | Excerpt | Runs on two cables; four thrusters, one at each corner |
+
+Sizes of the floats, tugs and Higher Ferry, crossing speeds, loading times and the other services' timetables were not found; they are estimates (E) in `src/sim/env/traffic.ts`. Dart Marina's position is OpenStreetMap's (G1).
+
+## Waves (wind over tide)
+
+| # | Source | Used for |
+|---|---|---|
+| WV1 | Hasselmann et al. (1973), JONSWAP fetch-limited growth, as given in the US Army Corps of Engineers Coastal Engineering Manual (EM 1110-2-1100) and its implementations (scientimate documentation) | g·Hs/U² = 0.0016 (gF/U²)^½; peak frequency fp = 3.5 (g/U)(gF/U²)^−0.33; fully developed limits g·Hs/U² = 0.243, g·Tp/U = 8.13 |
+| WV2 | Wave–current interaction: conserved absolute frequency (Doppler shift) and wave action; blocking of gravity waves at \|U\| = gT/8π (Nardin et al., PRL 2009; Rousseaux et al. arXiv:1203.2492) | Shortening and steepening of waves running into an opposing stream; breaking at blocking |
+| WV3 | Monahan and O'Muircheartaigh (1980), whitecap coverage W = 3.84·10⁻⁶ · U₁₀^3.41 (U₁₀ in m/s) | Whitecap cover (scaled by the modelled steepening, an estimate) |
+
+The formulas were checked against search excerpts and standard references; the steepness and depth breaking limits, the open-sea fetch beyond the map and the effective-fetch treatment of a stream along the fetch are estimates (`src/sim/env/seaState.ts`).
 
 ## Open geodata (inspected directly)
 

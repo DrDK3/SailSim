@@ -1,6 +1,6 @@
 # Outstanding issues and risks
 
-Updated: 24 Oct 2026 (UX review)
+Updated: 25 Oct 2026 (hi-fi graphics, Squib types, wind over tide, river traffic)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
@@ -30,7 +30,7 @@ Updated: 24 Oct 2026 (UX review)
 | 24 | The live-weather job is built (Phase 6) and was tested against the real Met Office feed, but is not deployed | The app offers bundled replays until the site and its scheduled job run on GitHub | Issue 8 |
 | 25 | The jib is kinematic, not a hinged body | Jib behaviour in a gybe is simplified | Acceptable for now; revisit if it looks wrong in manoeuvres |
 | 26 | Pontoons and piers are not obstacles (moored boats and ferries are, since Phase 5) | You can sail through pontoons | Add pier polygons to the fleet contact model |
-| 27 | Individual mooring positions, ferry timetables and vessel sizes are estimates | Scenery and traffic are illustrative | Ask DHNA and the ferry operators; moorings from DHNA or aerial imagery |
+| 27 | Individual mooring positions are estimates. Ferry movements now follow speed profiles, the stream and (Lower Ferry) the operator's first and last departures and refit, but vessel sizes, speeds, loading times and the other services' timetables are still estimates | Scenery and traffic are plausible, not as they are | Ask DHNA and the ferry operators (F1–F6); moorings from DHNA or aerial imagery |
 | 28 | The LIDAR survey date and tide are unknown | The lower edge of the drying areas is approximate | Look up the EA survey metadata (host blocked) |
 | 29 | The 8 m elevation grid turns quay walls into ramps | Boats ground a few metres off walls | Finer near-shore grid if it matters for racing |
 | 30 | ~~River Dart data 5.1 MB; one 1,060 kB bundle~~ | **Handled in Phase 6:** grids packed losslessly, panels loaded on demand, vendor chunks. The first load transfers 1.43 MB instead of 4.92 MB ([PERFORMANCE.md](PERFORMANCE.md)) | `features.json` (185 kB gzipped) could still be halved |
@@ -51,5 +51,12 @@ Updated: 24 Oct 2026 (UX review)
 | 45 | User scenarios are kept in this browser's storage only; replays are downloaded as files | Clearing the browser loses saved scenarios | Export scenarios to keep them; a shared library would need a server (not planned: no servers) |
 | 46 | A replay of a session that used live data carries the forecast inside it (tens of kB). A replay recorded with a different build is played, with a warning, but may not match | Replays can be large and are tied to a build | Expected; the build is named in the file and the mismatch is reported |
 | 47 | The tutorial's goal thresholds (e.g. TWA 38–55° at ≥ 2.5 kn for close-hauled, < 1 kn to stop) and timings are estimates (E). A scripted helmsman completes every step, but no person new to sailing has tried it yet | Steps may be too strict or too lax for beginners | Watch three to five beginners take the tutorial; tune (UX_REVIEW.md "Not done") |
-| 48 | Crew figures, building roofs, windows and wall colours are illustrative, not data | The town and crew look plausible, not as they are | Acceptable for training; roof shapes from OSM `roof:shape` where tagged, if wanted |
+| 48 | Crew figures, windows, chimneys and wall colours are illustrative; roof shapes are OSM's where tagged (14 buildings) and otherwise inferred from the footprints (terraces from shared walls) | The town looks plausible and sits on the measured ground, but its roofs are not measured | Allow `environment.data.gov.uk` (EA LIDAR DSM, 1 m, OGL) and fit roofs to it (GEODATA.md, "Measured roofs") |
 | 49 | The scenario panel and course editor are long and dense, and not designed for touch | Harder to use on phones and for beginners | Tabs and a quick-start view (UX_REVIEW.md) |
+| 50 | The three Squib types differ by the cockpit (sourced) and by estimates: the classic boat's extra 15 kg, every rate in the cockpit-water model, and the size of each effect of the new sails (only their direction comes from the maker) | The types behave plausibly differently; their margins are not validated | Weigh boats; time a self-draining and a classic cockpit emptying; GPS tracks of boats with the old and new sails (B5) |
+| 51 | Waves do not slow the boat (no added resistance or pitching in chop); they bring spray aboard older boats only | Wind against tide looks right and fills a classic cockpit, but costs no speed | Add an added-resistance term once there are observations to check it against |
+| 52 | The sea state uses an estimated 40 km of open sea beyond the map, ignores swell from beyond the Channel and the offshore tidal streams, and treats a stream along the fetch by an effective-fetch estimate | Wave heights in Start Bay are indicative; the entrance's wind-over-tide pattern is the model's | Local observations (C4); a wave buoy or model for Start Bay |
+| 53 | The Higher Ferry's 2026 operating status and hours were not confirmed (an undated closure notice exists on the operator's site) | It may be running in the simulator when it is not | Check with the operator (F5) |
+| 54 | The marina boats' numbers, kinds, speeds and destinations are estimates; boats do not react to the user's boat (they hold only for ferries) | Traffic near Dart Marina is illustrative | DHNA or marina movement counts; give way to sailing boats if it matters |
+| 55 | The harbour speed limit applies north of about Castle Ledge's latitude (n > −1,750 m), an approximation of the byelaw line | Boats may speed up a little early or late | The byelaw's line (H2) |
+| 56 | The burgee's crown and dart are drawn from the club's blazon (R8), not copied from an official drawing | Close up, the burgee's details may differ from the real one | A photo or drawing from the club to check against |

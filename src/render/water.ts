@@ -167,10 +167,12 @@ void main() {
   vec3 hv = normalize(uSunDir + viewDir);
   col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, hv), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near) * uGlint;
   // Whitecaps: foam on compressed crests, as much as the modelled cover, broken up and streaked downwind.
-  float cover = clamp(f.b * 5.0, 0.0, 1.0);
-  float crest = smoothstep(0.75, 0.05, jac) * smoothstep(0.1, 0.6, h / max(f.r * 0.5, 0.02));
+  // A few per cent cover already reads as a sea of white horses, so the cover is scaled up for the eye.
+  float cover = clamp(f.b * 20.0, 0.0, 1.0);
+  float crest = smoothstep(0.85, 0.15, jac) * smoothstep(0.0, 0.5, h / max(f.r * 0.5, 0.02));
   float breakup = noise(vWorld.xz * 0.35 + uComp[4].xy * uTime * 0.6) * 0.6 + noise(vWorld.xz * 1.7) * 0.4;
-  float foam = clamp(crest * cover * 2.2 * smoothstep(0.35, 0.75, breakup), 0.0, 1.0);
+  float streaks = noise(vec2(dot(vWorld.xz, uComp[4].xy) * 0.08, dot(vWorld.xz, vec2(-uComp[4].y, uComp[4].x)) * 1.2));
+  float foam = clamp(crest * cover * 2.5 * smoothstep(0.3, 0.7, breakup) + cover * 0.25 * smoothstep(0.62, 0.9, streaks) * steep, 0.0, 1.0);
   col = mix(col, vec3(0.92, 0.95, 0.96) * (0.35 + 0.65 * uLight), foam * (0.3 + 0.7 * near));
   float fog = 1.0 - exp(-pow(uFogDensity * dist, 2.0));
   gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);

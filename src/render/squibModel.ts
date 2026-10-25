@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BoatParams } from '../sim/boat/params';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { CrewFigure } from './crew';
@@ -307,7 +308,7 @@ export class SquibModel {
     g.add(this.buildHull(), this.buildTransom(transomText), this.buildDeck(), this.buildCockpit(), this.buildKeel());
     for (const m of this.buildRig(mastTopY)) g.add(m);
     for (const m of this.buildFittings()) g.add(m);
-    return { group: g, mastTopY };
+    return { group: mergeByMaterial(g), mastTopY };
   }
 
   private buildHull(): THREE.Mesh {
@@ -391,7 +392,9 @@ export class SquibModel {
       typeof document === 'undefined'
         ? null
         : transomTexture({ top, bottom, stripe: [h - STRIPE_DROP[0], h - STRIPE_DROP[1]], boot: BOOT, colours: { topsides: TOPSIDES, stripe: SHEER_STRIPE, boot: BOOT_TOP, bottom: ANTIFOULING } }, text);
-    const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ map, roughness: 0.4, clearcoat: 0.35, clearcoatRoughness: 0.4, side: THREE.DoubleSide }));
+    const material = new THREE.MeshPhysicalMaterial({ map, roughness: 0.4, clearcoat: 0.35, clearcoatRoughness: 0.4, side: THREE.DoubleSide });
+    material.userData.role = 'transom';
+    const mesh = new THREE.Mesh(geo, material);
     mesh.name = 'hull-transom';
     return mesh;
   }
@@ -924,6 +927,35 @@ export class SquibModel {
     this.water.rotation.set(0, 0, s * Math.atan(t));
     this.water.scale.set((x1 - x0) / Math.cos(Math.atan(t)), 1, L);
   }
+}
+
+/**
+ * The fixed parts of a boat as one mesh per material (dozens of parts become about fifteen draw calls, which
+ * matters with a fleet). Each part's transform is baked into its geometry; the hull keeps its name (tinting).
+ */
+function mergeByMaterial(root: THREE.Group): THREE.Group {
+  root.updateMatrixWorld(true);
+  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    let geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld);
+    if (geo.index) geo = geo.toNonIndexed();
+    const list = byMat.get(o.material as THREE.Material) ?? [];
+    list.push(geo);
+    byMat.set(o.material as THREE.Material, list);
+  });
+  const out = new THREE.Group();
+  for (const [mat, geos] of byMat) {
+    // Keep only the attributes every part has (some have uv or colour, some not).
+    const names = Object.keys(geos[0]!.attributes).filter((n) => geos.every((g) => g.getAttribute(n)));
+    for (const g of geos) for (const n of Object.keys(g.attributes)) if (!names.includes(n)) g.deleteAttribute(n);
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.name = mat === MAT.hull ? 'hull' : mat.userData.role === 'transom' ? 'hull-transom' : 'static';
+    out.add(mesh);
+  }
+  return out;
 }
 
 /** Sheer line (deck edge height above the waterline): estimated, rising slightly to the transom. */

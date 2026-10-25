@@ -96,7 +96,8 @@ export class DartScene {
         const i1 = Math.min(i0 + C, t.nx - 1);
         const j1 = Math.min(j0 + C, t.ny - 1);
         const lod = new THREE.LOD();
-        for (const [step, dist] of [[1, 0], [4, FAR_LOD_M]] as const) {
+        // Full 4 m detail only near the camera; 8 m, then 16 m further off.
+        for (const [step, dist] of [[1, 0], [2, 450], [4, FAR_LOD_M]] as const) {
           const is: number[] = [];
           for (let i = i0; i < i1; i += step) is.push(i);
           is.push(i1);
@@ -180,6 +181,15 @@ export class DartScene {
         let max = -Infinity;
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) max = Math.max(max, z(i, j));
         if (max < SUBMERGED_ODN) continue;
+        // Wholly under the town's finer ground: not drawn at all.
+        const tb = this.townBox;
+        if (tb && this.input.drape) {
+          const e0 = g.e0 + (i0 + 0.5) * g.cell;
+          const e1 = g.e0 + (i1 + 0.5) * g.cell;
+          const n0 = g.n0 + (j0 + 0.5) * g.cell;
+          const n1 = g.n0 + (j1 + 0.5) * g.cell;
+          if (e0 > tb.eMin + g.cell && e1 < tb.eMax - g.cell && n0 > tb.nMin + g.cell && n1 < tb.nMax - g.cell) continue;
+        }
         const lod = new THREE.LOD();
         for (const [step, dist] of [[1, 0], [4, FAR_LOD_M]] as const) {
           lod.addLevel(new THREE.Mesh(this.chunkGeometry(i0, j0, i1, j1, step, width, height, !this.input.drape), material), dist);

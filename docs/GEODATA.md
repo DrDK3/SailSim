@@ -25,7 +25,9 @@ The River Dart in the simulator is built from open data by a reproducible pipeli
 | Drying areas | Same LIDAR | Inside the water mask, ground above the LIDAR water surface (−2.6 … −1.9 m ODN at the time of the survey) and below +2.5 m ODN, within 200 m of the shore | V (survey date unknown) |
 | Bed below the low-water line | **Estimate** | Depth below chart datum D = Dcap·(1 − e^(−d/35 m)), d = distance from the low-water edge. Dcap = 9 m in the harbour, growing 6 m per km seaward of the castles, to 25 m. ETOPO1 values offshore (18–29 m) are a plausibility check only | **E** |
 | Terrain colour | Sentinel-2 L2A true colour, 12 Jul 2025, 10 m | Resampled to the local grid; mild gamma and gain | V |
-| Buildings | OSM and Microsoft ML footprints via Overture | Simplified 0.3 m. Height from the data (2,041), from floor counts (392), or by building type (2,971, E). Base at the lowest ground under the footprint (at most 4 m below the median) | S / E |
+| Buildings | OSM and Microsoft ML footprints via Overture | Simplified 0.3 m. Height (to the ridge) from the data (2,041), from floor counts (392), or by building type (2,971, E). Base at the lowest ground under the footprint (at most 4 m below the median), from the ~3 m LIDAR terrain in the towns. Roofs (`town.py`): OSM roof:shape where tagged (14); otherwise inferred (E) - footprints sharing walls with neighbours (1,050) are terraces, gabled with the ridge square to the party walls and no windows on those walls; detached houses hipped, or gabled along their length when long and narrow; large, irregular or utility buildings flat (3,246 gabled, 1,532 hipped, 626 flat) | S / E |
+| Town ground | Same LIDAR DTM (z15 tiles, about 3 m) | Resampled to 4 m over Dartmouth and Kingswear (e −1000 … 800, n −1000 … 1700). For the picture only: the physics keeps the 8 m grid (they agree to a median 0.03 m on land) | V |
+| Marinas | OSM leisure=marina via Overture | Name and centre (Dart Marina, Dart Haven Marina) | S |
 | Landmarks | OSM names and footprints | Labels at footprint centroids; real footprints only, no invented detail | S |
 | Piers and pontoons | OSM `man_made=pier` | Floating if tagged so or named "Pontoon". Line widths (2.5–3 m) and fixed deck height (+3.0 m ODN) are estimates | S / E |
 | Mooring areas | OSM water polygons: Kingswear, Noss and Distins Trots, DHNA anchorage | As mapped | S |
@@ -59,7 +61,8 @@ The pattern is faster in the narrows, slack in the creeks and spreads out into S
 | `current.i16z` | Int16 × 4 components (tidal e/n, river e/n), ×0.001, 425 × 610 cells of 16 m; packed | 92 kB (2.1 MB unpacked) |
 | `drape.jpg` | 680 × 976 px, 10 m | 140 kB |
 | `minimap.png` | 425 × 610 px, 16 m | 110 kB |
-| `features.json` | Buildings, landmarks, piers, mooring areas, moorings, ferries, marks | 700 kB |
+| `town.i16z` | Int16, centimetres ODN, 450 × 675 cells of 4 m over the towns; packed (below) | 159 kB |
+| `features.json` | Buildings (with roofs, eaves, ridge bearings, party walls, floors), landmarks, piers, mooring areas, moorings, marinas, ferries, marks | 840 kB |
 
 **Packing (Phase 6).** The two grids are packed **losslessly** for download (`tools/geodata/pack.py`, unpacked by `src/sim/geo/pack.ts`; packing `i16-gradient-zigzag-planes-gzip/1`, named in the manifest):
 - each value is replaced by its difference from the prediction left + up − up-left, wrapped to 16 bits;
@@ -98,6 +101,10 @@ npm test                                                                        
 | App projection vs PROJ | < 1 mm over the area | `tests/sim/projection.test.ts` |
 | Distances between 8 reference landmarks (28 pairs) vs WGS84 geodesics from the source coordinates | worst 8 cm (criterion: 2 m) | `tests/sim/phase3.test.ts` |
 | Landmarks on land above high water; mid-river and entrance deep; Castle Ledge buoy and every generated mooring in water | pass | `tests/sim/phase3.test.ts` |
+
+## Measured roofs: what is missing
+
+The buildings' roofs are inferred, not measured: OpenStreetMap tags roof shapes on 14 of Dartmouth's 5,743 buildings and has no building parts (towers, wings). The measured source is the **Environment Agency LIDAR Composite DSM (1 m, Open Government Licence)**: subtracting the DTM gives each roof's real height and shape, chimneys and dormers included. Its host, `environment.data.gov.uk`, is refused by this build environment's network policy (checked 25 Oct 2026). With it allowed, `town.py` can fit roof planes to the DSM inside each footprint (the pipeline already samples the DTM the same way).
 
 ## Known limitations
 
