@@ -93,7 +93,7 @@ The changes:
 | Suite | Result |
 |---|---|
 | Unit (Vitest) | 211 tests pass (200 before), including:<ul><li>the starting heel (`variants.test.ts`): fails on the old solver;</li><li>the water mask (`watermask.test.ts`);</li><li>the new render tests (`tests/render`): the sailors' reach, grip on the extension at any rudder angle, hiking feet at the straps, heads below the boom when crossing; every vessel builds within a triangle budget, ramps hinge, copies share geometry</li></ul> |
-| Browser (Playwright) | The full suite, locally and on CI (see the commit's run) |
+| Browser (Playwright) | 37 tests. Locally with two workers on the software renderer, 35 passed; the other two (the race results and the toolbar) passed when run again on their own. Both wait on screen updates that a two-second software frame can outlast; the toolbar test has failed this way before. On CI: see the run for this commit |
 | Determinism | Unchanged: the reference race hash is still `5de2cc60d1e76458` and every golden trace matches |
 
 ## Cost
