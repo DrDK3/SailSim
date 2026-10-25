@@ -171,7 +171,10 @@ test('live data: a corrupt file is reported and skipped; a missing index falls b
   await expect(panel.getByTestId('no-live-weather')).toBeVisible();
   expect(errors).toEqual([]);
 
-  const page2 = await page.context().newPage();
+  // A fresh page for the second load; close the first so the two do not share a software-rendered GPU.
+  const context = page.context();
+  await page.close();
+  const page2 = await context.newPage();
   await serveLive(page2, {}, 'missing');
   const r2 = await open(page2);
   await expect.poll(async () => (await liveUi(page2)).weatherSources.length).toBe(2);
