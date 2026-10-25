@@ -1,7 +1,8 @@
 import { DT, type ExternalForce, type Simulation } from '../simulation';
 import { hashNumbers } from '../hash';
 import { bodyToWorld, windFrom, type NE } from '../boat/forces';
-import { ferryStates, type FerryRoute } from '../env/ferries';
+import type { FerryRoute } from '../env/ferries';
+import { RiverTraffic, type VesselState } from '../env/traffic';
 import type { Environment } from '../env/environment';
 import { boxOutline, circleContact, placeOutline, polygonContact, squibOutline, type Contact, type Outline, type Vec } from './hull';
 import { hypot2 } from '../math/hypot';
@@ -110,7 +111,7 @@ export class Fleet {
   marks: CircleObstacle[] = [];
   private moored: MooredBoat[] = [];
   private mooredGrid = new Map<string, number[]>();
-  private ferries: FerryRoute[] = [];
+  private traffic?: RiverTraffic;
   private readonly startEpochMs: number;
   private touching = new Set<string>();
   private readonly mooredOutline = new Map<number, Outline>();
@@ -135,11 +136,16 @@ export class Fleet {
   /** Bounding box of all ferry routes, grown by 150 m (no ferry can be outside it). */
   private ferryBox?: { nMin: number; nMax: number; eMin: number; eMax: number };
 
-  setObstacles(o: { marks?: CircleObstacle[]; moored?: MooredBoat[]; ferries?: FerryRoute[] }): void {
+  /**
+   * Fixed and moving obstacles. River traffic: a prebuilt model (the app's, so the physics and the picture are
+   * the same traffic), or one built here from the ferry routes with this environment's stream.
+   */
+  setObstacles(o: { marks?: CircleObstacle[]; moored?: MooredBoat[]; ferries?: FerryRoute[]; traffic?: RiverTraffic }): void {
     if (o.marks) this.marks = o.marks;
-    if (o.ferries) {
-      this.ferries = o.ferries;
-      const pts = o.ferries.flatMap((f) => f.route);
+    if (o.traffic || o.ferries) {
+      const start = this.startEpochMs;
+      this.traffic = o.traffic ?? new RiverTraffic(o.ferries!, { current: (ms, n, e) => this.env.current((ms - start) / 1000, n, e) });
+      const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route)];
       this.ferryBox = pts.length
         ? { nMin: Math.min(...pts.map((p) => p[1])) - 150, nMax: Math.max(...pts.map((p) => p[1])) + 150, eMin: Math.min(...pts.map((p) => p[0])) - 150, eMax: Math.max(...pts.map((p) => p[0])) + 150 }
         : undefined;
@@ -160,7 +166,7 @@ export class Fleet {
     return this.boats.find((b) => b.id === id);
   }
 
-  private ferryCache = new Map<number, ReturnType<typeof ferryStates>>();
+  private ferryCache = new Map<number, VesselState[]>();
 
   /** Could a ferry be within reach of this point (inside the routes' bounding box)? */
   nearFerries(n: number, e: number): boolean {
@@ -169,12 +175,12 @@ export class Fleet {
   }
 
   /** Ferry positions at a sim time (deterministic timetable; the last few times are cached). */
-  ferriesAt(t: number) {
-    if (!this.ferries.length) return [];
+  ferriesAt(t: number): VesselState[] {
+    if (!this.traffic) return [];
     let f = this.ferryCache.get(t);
     if (!f) {
       if (this.ferryCache.size > 8) this.ferryCache.clear();
-      f = ferryStates(this.ferries, this.startEpochMs + t * 1000);
+      f = this.traffic.states(this.startEpochMs + t * 1000);
       this.ferryCache.set(t, f);
     }
     return f;
@@ -305,27 +311,32 @@ export class Fleet {
       }
     }
 
-    // Ferries (scripted bodies moving on their timetable).
-    if (this.ferries.length && bodies.some((B) => this.nearFerries(B.n, B.e))) {
+    // River traffic (scripted bodies on their schedules): each vessel's parts (a float and its tug) are solid.
+    if (this.traffic && bodies.some((B) => this.nearFerries(B.n, B.e))) {
       const fs = this.ferriesAt(this.time);
-      const fs2 = this.ferriesAt(this.time + 1);
-      fs.forEach((fy, k) => {
-        const ol = boxOutline(fy.length, fy.beam);
-        const pts = placeOutline(ol, fy.n, fy.e, fy.heading);
-        const v = { n: fs2[k]!.n - fy.n, e: fs2[k]!.e - fy.e };
-        for (let i = 0; i < this.boats.length; i++) {
-          const A = bodies[i]!;
-          const oa = this.boats[i]!;
-          const rr = oa.outline.radius + ol.radius;
-          if ((A.n - fy.n) ** 2 + (A.e - fy.e) ** 2 > rr * rr) continue;
-          const c = polygonContact(A.pts, pts);
-          if (!c) continue;
-          const va = pointVel(A, c.point);
-          const f = force(c, { n: v.n - va.n, e: v.e - va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
-          apply(i, { n: -f.n, e: -f.e }, c.point);
-          touch(pairKey(oa.id, `ferry-${fy.name}-${fy.unit}`), { kind: 'ferry', a: oa.id, b: `ferry-${fy.name}-${fy.unit}`, label: fy.label, speed: Math.max(0, -((v.n - va.n) * c.normal.n + (v.e - va.e) * c.normal.e)), point: c.point });
-        }
-      });
+      const later = new Map(this.ferriesAt(this.time + 1).map((x) => [x.id, x]));
+      for (const fy of fs) {
+        const next = later.get(fy.id);
+        fy.parts.forEach((part, pi) => {
+          const ol = boxOutline(part.length, part.beam);
+          const pts = placeOutline(ol, part.n, part.e, part.heading);
+          const np = next?.parts[pi];
+          const v = np ? { n: np.n - part.n, e: np.e - part.e } : { n: 0, e: 0 };
+          for (let i = 0; i < this.boats.length; i++) {
+            const A = bodies[i]!;
+            const oa = this.boats[i]!;
+            const rr = oa.outline.radius + ol.radius;
+            if ((A.n - part.n) ** 2 + (A.e - part.e) ** 2 > rr * rr) continue;
+            const c = polygonContact(A.pts, pts);
+            if (!c) continue;
+            const va = pointVel(A, c.point);
+            const f = force(c, { n: v.n - va.n, e: v.e - va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
+            apply(i, { n: -f.n, e: -f.e }, c.point);
+            const key = `ferry-${fy.id}`;
+            touch(pairKey(oa.id, key), { kind: 'ferry', a: oa.id, b: key, label: pi > 0 ? `${fy.label} (tug)` : fy.label, speed: Math.max(0, -((v.n - va.n) * c.normal.n + (v.e - va.e) * c.normal.e)), point: c.point });
+          }
+        });
+      }
     }
 
     this.touching = now;

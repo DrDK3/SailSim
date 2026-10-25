@@ -4,6 +4,7 @@ import type { DartGeo } from '../geo/dart';
 import { DART_PROJECTION } from '../geo/projection';
 import { squibParams } from '../boat/squib';
 import type { BoatParams } from '../boat/params';
+import type { RiverTraffic } from '../env/traffic';
 import { buildRestrictions } from '../course/restrictions';
 import { DART_LEVELS, validateCourse, type CourseIssue } from '../course/validate';
 import type { Course } from '../course/types';
@@ -42,6 +43,8 @@ export interface RaceSetup {
     params?: BoatParams;
   };
   committee: Partial<Omit<CommitteeOptions, 'startAt'>> & { startAt: number };
+  /** River traffic shared with the picture (default: built here from the features' ferry routes). */
+  traffic?: RiverTraffic;
 }
 
 /** Hull colours for AI boats (distinct, readable on water). */
@@ -128,6 +131,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     humanInput: s.human?.input,
     moored: s.features?.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })),
     ferries: s.features?.ferries,
+    traffic: s.traffic,
     mooringAreas: restrictions?.moorings,
     seed: s.seed,
   });

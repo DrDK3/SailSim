@@ -5,6 +5,7 @@ import { groundContact } from '../boat/contact';
 import type { BoatParams } from '../boat/params';
 import type { Environment } from '../env/environment';
 import type { FerryRoute } from '../env/ferries';
+import type { RiverTraffic } from '../env/traffic';
 import type { Seabed } from '../geo/dart';
 import type { ResolvedCourse } from '../course/course';
 import type { Course } from '../course/types';
@@ -49,6 +50,7 @@ export interface RaceSessionOptions {
   humanInput?: Partial<ControlInput>;
   moored?: MooredBoat[];
   ferries?: FerryRoute[];
+  traffic?: RiverTraffic;
   mooringAreas?: MooringArea[];
   seed?: number;
 }
@@ -108,7 +110,7 @@ export class RaceSession implements AiWorld {
         stiffness: hard ? CONTACT.hardStiffness : CONTACT.softStiffness, damping: hard ? CONTACT.hardDamping : CONTACT.softDamping,
       });
     }
-    this.fleet.setObstacles({ marks: this.obstacles, moored: opts.moored, ferries: opts.ferries });
+    this.fleet.setObstacles({ marks: this.obstacles, moored: opts.moored, ferries: opts.ferries, traffic: opts.traffic });
     const aiCount = opts.entries.filter((e) => e.kind === 'ai').length;
     let aiIndex = 0;
     for (const e of opts.entries) {

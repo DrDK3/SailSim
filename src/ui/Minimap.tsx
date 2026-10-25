@@ -56,7 +56,7 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         ctx.fill();
       }
       const epoch = (ctl.sim.env.startEpochMs ?? 0) + s.t * 1000;
-      for (const fs of ferryStates(f.ferries, epoch)) {
+      for (const fs of ctl.traffic ? ctl.traffic.states(epoch) : ferryStates(f.ferries, epoch)) {
         const [x, y] = toPx(fs.n, fs.e);
         if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
         ctx.fillStyle = fs.ram ? '#f2b84b' : '#e8eef2';

@@ -3,7 +3,9 @@ import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
+import type { RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
+import { TrafficView } from './traffic';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -16,7 +18,6 @@ const FAR_LOD_M = 1400;
 const SUBMERGED_ODN = -3.6; // chunks entirely below this never show (below the lowest tides)
 const FIXED_DECK_ODN = 3.0; // E: deck level of fixed jetties and quays
 const LABEL_RANGE_M = 1600;
-const FERRY_LABEL_RANGE_M = 900;
 
 export interface DartSceneInput {
   manifest: ManifestFull;
@@ -33,6 +34,8 @@ export interface DartUpdate {
   stream: (n: number, e: number) => NE;
   windFromDir: number;
   showLabels: boolean;
+  /** The run's river traffic (ferries crabbing in its stream, Dart Marina boats); else ferries alone. */
+  traffic?: RiverTraffic;
 }
 
 export class DartScene {
@@ -43,7 +46,7 @@ export class DartScene {
   private readonly mooredMast?: THREE.InstancedMesh;
   private readonly mooredCabin?: THREE.InstancedMesh;
   private readonly buoys?: THREE.InstancedMesh;
-  private readonly ferryMeshes: { mesh: THREE.Group; label?: THREE.Sprite }[] = [];
+  private readonly traffic = new TrafficView();
   private readonly markLights: { mesh: THREE.Mesh; period: number; flashes: number }[] = [];
   private lastMooringUpdate = -Infinity;
   private readonly features?: DartFeatures;
@@ -297,6 +300,7 @@ export class DartScene {
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
   setDaylight(day: number): void {
+    this.traffic.setDaylight(day);
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
   }
@@ -397,24 +401,19 @@ export class DartScene {
     for (const im of [this.mooredHull, this.mooredMast, this.mooredCabin, this.buoys]) im.instanceMatrix.needsUpdate = true;
   }
 
+  /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
   private buildFerries(f: DartFeatures): void {
-    const hullMat = new THREE.MeshStandardMaterial({ color: 0x24426b, roughness: 0.6 });
-    const topMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.5 });
-    for (const fr of f.ferries) {
-      for (let u = 0; u < fr.units; u++) {
-        const g = new THREE.Group();
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(fr.beam, 1.4, fr.length), hullMat);
-        hull.position.y = 0.3;
-        const house = new THREE.Mesh(new THREE.BoxGeometry(Math.min(3, fr.beam * 0.5), 2.2, Math.min(4, fr.length * 0.25)), topMat);
-        house.position.set(fr.beam * 0.25, 2.0, 0);
-        g.add(hull, house);
-        g.name = 'ferry';
-        this.floating.add(g);
-        const label = makeLabel(`${fr.label}${fr.ram ? ' · RAM' : ''}`, fr.ram ? '#ffd28a' : '#ffffff');
-        label.position.y = 6;
-        label.userData.priority = 2;
-        g.add(label);
-        this.ferryMeshes.push({ mesh: g, label });
+    this.floating.add(this.traffic.group);
+    const cable = new THREE.MeshStandardMaterial({ color: 0x1c1f22, roughness: 0.6, metalness: 0.4 });
+    for (const fr of f.ferries.filter((x) => /Higher Ferry/.test(x.name))) {
+      const [a, b] = [fr.route[0]!, fr.route[fr.route.length - 1]!];
+      const dx = b[0] - a[0];
+      const dn = b[1] - a[1];
+      const len = Math.hypot(dx, dn);
+      const off = { e: (-dn / len) * 5, n: (dx / len) * 5 };
+      for (const s of [-1, 1]) {
+        const pts = [0, 0.15, 0.5, 0.85, 1].map((t) => new THREE.Vector3(a[0] + dx * t + s * off.e, t === 0 || t === 1 ? 0.2 : -0.08, -(a[1] + dn * t + s * off.n)));
+        this.floating.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.06, 5, false), cable));
       }
     }
   }
@@ -461,13 +460,8 @@ export class DartScene {
       this.updateMoorings(u.stream, u.windFromDir);
     }
     if (this.features) {
-      const states = ferryStates(this.features.ferries, u.epochMs);
-      states.forEach((s, i) => {
-        const fm = this.ferryMeshes[i];
-        if (!fm) return;
-        fm.mesh.position.set(s.e, 0, -s.n);
-        fm.mesh.rotation.y = -s.heading;
-      });
+      const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
+      this.traffic.update(states, u.time, u.camera, u.showLabels);
     }
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {
@@ -478,7 +472,7 @@ export class DartScene {
     const cam = u.camera.position;
     this.labels.visible = u.showLabels;
     for (const l of this.labels.children) l.visible = u.showLabels && l.position.distanceTo(cam) < LABEL_RANGE_M;
-    for (const fm of this.ferryMeshes) if (fm.label) fm.label.visible = u.showLabels && fm.mesh.position.distanceTo(cam) < FERRY_LABEL_RANGE_M;
+
     if (u.showLabels) this.declutter(u.camera);
   }
 
@@ -490,7 +484,7 @@ export class DartScene {
   private declutter(camera: THREE.Camera): void {
     const shown: { x0: number; x1: number; y0: number; y1: number }[] = [];
     const cand: { s: THREE.Object3D; pri: number; d: number; p: THREE.Vector3 }[] = [];
-    const sprites = [...this.labels.children, ...this.ferryMeshes.flatMap((f) => (f.label ? [f.label] : []))];
+    const sprites = [...this.labels.children, ...this.traffic.labels()];
     for (const s of sprites) {
       if (!s.visible) continue;
       const p = s.getWorldPosition(new THREE.Vector3());

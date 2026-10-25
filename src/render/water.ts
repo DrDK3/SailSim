@@ -2,38 +2,90 @@ import * as THREE from 'three';
 import { WATER_MASK_ORDER } from './squibModel';
 
 /**
- * Procedural open water: a sum of directional waves (displacement + analytic normals) plus fine
- * procedural ripples, fresnel sky reflection and sun glint. Visual only: the physics uses flat water in
- * Phase 1. The mesh follows the camera in grid-snapped steps; the pattern is in world coordinates.
+ * The sea surface, driven by the modelled sea state (src/sim/env/seaState.ts): significant height, peak
+ * wavelength, whitecap cover and steepness are sampled on a 32 × 32 field (50 m cells) round the camera and
+ * read by the shaders, so the waves change from place to place - short, steep and breaking where the stream
+ * runs against them (wind over tide), small in a lee. Eight Gerstner wave trains span 0.45 … 1.7 times the
+ * reference wavelength; each place weights them by how near they are to its own peak wavelength (a
+ * log-normal spectrum) and scales them to its own height, which shifts the energy to shorter waves without
+ * the phase breaks a stretched wave would show. Normals are evaluated per pixel; foam forms where crests are
+ * compressed, in proportion to the whitecap cover. Visual only: the physics reads the sea state itself.
  */
-const vertex = /* glsl */ `
+const N_COMP = 8;
+const FIELD_N = 32;
+const FIELD_CELL = 50;
+const FACTORS = [0.45, 0.58, 0.72, 0.86, 1.0, 1.17, 1.38, 1.7];
+const SPREAD = [-0.55, 0.32, -0.18, 0.08, -0.04, 0.22, -0.36, 0.5];
+const SPECTRUM_WIDTH = 0.32;
+const G = 9.81;
+
+const common = /* glsl */ `
 uniform float uTime;
-uniform vec4 uWaves[4];      // (dirX, dirZ, wavelength, amplitude)
+uniform vec4 uComp[${N_COMP}];   // (dirX, dirZ, wavelength, phase seed)
+uniform vec2 uCurrent;           // stream (Three.js xz, m/s): advects the waves
+uniform sampler2D uField;        // (Hs, peak wavelength, whitecaps, steepness)
+uniform vec2 uFieldOrigin;       // xz of texel (0, 0)'s centre
+uniform float uFieldCell;
+const float FIELD_N = ${FIELD_N}.0;
+
+vec4 seaField(vec2 xz) {
+  vec2 uv = (xz - uFieldOrigin) / (uFieldCell * FIELD_N) + 0.5 / FIELD_N;
+  return texture2D(uField, uv);
+}
+
+// Amplitude of each component here: log-normal weights about the local peak, scaled to the local Hs.
+void amplitudes(vec4 f, out float amp[${N_COMP}]) {
+  float lp = max(f.g, 0.3);
+  float wsum = 0.0;
+  float w[${N_COMP}];
+  for (int i = 0; i < ${N_COMP}; i++) {
+    float r = log(uComp[i].z / lp);
+    w[i] = exp(-r * r / (2.0 * ${SPECTRUM_WIDTH} * ${SPECTRUM_WIDTH}));
+    wsum += w[i];
+  }
+  // Hs = 4 sqrt(m0), m0 = sum a^2 / 2.
+  for (int i = 0; i < ${N_COMP}; i++) amp[i] = f.r * 0.25 * sqrt(2.0 * w[i] / max(wsum, 1e-4));
+}
+
+float crestQ(vec4 f) { return mix(0.25, 0.9, smoothstep(0.02, 0.09, f.a)); }
+
+float phaseOf(int i, vec2 xz) {
+  vec2 d = uComp[i].xy;
+  float k = 6.2831853 / uComp[i].z;
+  float omega = sqrt(9.81 * k) + k * dot(d, uCurrent);
+  return k * dot(d, xz) - omega * uTime + uComp[i].w;
+}
+`;
+
+const vertex = /* glsl */ `
+${common}
 varying vec3 vWorld;
-varying vec3 vNormalW;
+varying vec2 vPlanar;
 
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
+  vec2 xz = world.xz;
+  vec4 f = seaField(xz);
+  float amp[${N_COMP}];
+  amplitudes(f, amp);
+  float q = crestQ(f);
   vec3 p = world.xyz;
-  float h = 0.0;
-  vec2 grad = vec2(0.0);
-  for (int i = 0; i < 4; i++) {
-    vec2 d = normalize(uWaves[i].xy);
-    float k = 6.2831853 / uWaves[i].z;
-    float c = sqrt(9.81 / k);
-    float ph = k * (dot(d, p.xz) - c * uTime);
-    h += uWaves[i].w * sin(ph);
-    grad += uWaves[i].w * k * cos(ph) * d;
+  for (int i = 0; i < ${N_COMP}; i++) {
+    float ph = phaseOf(i, xz);
+    float k = 6.2831853 / uComp[i].z;
+    float qi = q / (k * max(amp[i], 1e-4) * ${N_COMP}.0);
+    qi = min(qi, 1.0);
+    p.xz += qi * amp[i] * uComp[i].xy * cos(ph);
+    p.y += amp[i] * sin(ph);
   }
-  p.y += h;
   vWorld = p;
-  vNormalW = normalize(vec3(-grad.x, 1.0, -grad.y));
+  vPlanar = xz;
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
 }
 `;
 
 const fragment = /* glsl */ `
-uniform float uTime;
+${common}
 uniform vec3 uSunDir;
 uniform vec3 uDeep;
 uniform vec3 uShallow;
@@ -46,7 +98,7 @@ uniform float uGlint;
 uniform float uLight;
 uniform vec4 uPuffs[16];     // (x, z, radius, strength) in world metres; strength 0 = unused
 varying vec3 vWorld;
-varying vec3 vNormalW;
+varying vec2 vPlanar;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -61,7 +113,32 @@ vec2 rippleGrad(vec2 p) {
 }
 
 void main() {
-  vec3 n = vNormalW;
+  float dist = length(cameraPosition - vWorld);
+  vec4 f = seaField(vPlanar);
+  float amp[${N_COMP}];
+  amplitudes(f, amp);
+  float q = crestQ(f);
+  // Gerstner normal and crest compression (Jacobian) at this pixel; short trains fade out with distance
+  // before they alias.
+  vec3 n = vec3(0.0, 1.0, 0.0);
+  float jac = 1.0;
+  float h = 0.0;
+  for (int i = 0; i < ${N_COMP}; i++) {
+    float lambda = uComp[i].z;
+    float fade = 1.0 - smoothstep(lambda * 60.0, lambda * 160.0, dist);
+    float ph = phaseOf(i, vPlanar);
+    float k = 6.2831853 / lambda;
+    float wa = k * amp[i] * fade;
+    float qi = min(q / (k * max(amp[i], 1e-4) * ${N_COMP}.0), 1.0);
+    float c = cos(ph);
+    float s = sin(ph);
+    n.x -= uComp[i].x * wa * c;
+    n.z -= uComp[i].y * wa * c;
+    n.y -= qi * wa * s;
+    jac -= qi * wa * s * ${N_COMP}.0 * 0.5;
+    h += amp[i] * s;
+  }
+  n = normalize(n);
   // Puffs: darker, rougher water ("cat's paws"), as sailors read gusts on the surface.
   float puff = 0.0;
   for (int i = 0; i < 16; i++) {
@@ -71,23 +148,30 @@ void main() {
     puff += p.w * exp(-dot(d, d) / (2.0 * p.z * p.z));
   }
   puff = clamp(puff * 2.5, 0.0, 1.0);
+  float steep = smoothstep(0.02, 0.08, f.a);
   vec2 g = rippleGrad(vWorld.xz * 0.9 + vec2(uTime * 0.35, uTime * 0.2)) * 0.6
          + rippleGrad(vWorld.xz * 2.7 - vec2(uTime * 0.6, -uTime * 0.25)) * 0.3
-         + rippleGrad(vWorld.xz * 6.0 - vec2(uTime * 1.2, uTime * 0.7)) * 0.35 * puff;
-  // Fade the fine ripples and the glint with distance: beyond a few hundred metres they only alias.
-  float dist = length(cameraPosition - vWorld);
+         + rippleGrad(vWorld.xz * 6.0 - vec2(uTime * 1.2, uTime * 0.7)) * 0.35 * max(puff, steep);
   float near = exp(-dist / 450.0);
-  n = normalize(n + vec3(-g.x, 0.0, -g.y) * uRipple * (1.0 + 0.8 * puff) * near);
+  n = normalize(n + vec3(-g.x, 0.0, -g.y) * uRipple * (1.0 + 0.8 * puff + 0.6 * steep) * near);
   vec3 viewDir = normalize(cameraPosition - vWorld);
   float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, viewDir), 0.0), 5.0);
   vec3 refl = reflect(-viewDir, n);
   vec3 skyCol = mix(uHorizon, uSky, clamp(refl.y * 2.0, 0.0, 1.0));
   float facing = max(dot(n, viewDir), 0.0);
   vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5) * uLight;
+  // Light through the thin crest of a steep wave.
+  body += uShallow * uLight * 0.6 * smoothstep(0.2, 0.9, h / max(f.r * 0.5, 0.02)) * steep;
   vec3 col = mix(body, skyCol, fres * (1.0 - 0.45 * puff));
   col *= 1.0 - 0.18 * puff;
-  vec3 h = normalize(uSunDir + viewDir);
-  col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near) * uGlint;
+  vec3 hv = normalize(uSunDir + viewDir);
+  col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, hv), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near) * uGlint;
+  // Whitecaps: foam on compressed crests, as much as the modelled cover, broken up and streaked downwind.
+  float cover = clamp(f.b * 5.0, 0.0, 1.0);
+  float crest = smoothstep(0.75, 0.05, jac) * smoothstep(0.1, 0.6, h / max(f.r * 0.5, 0.02));
+  float breakup = noise(vWorld.xz * 0.35 + uComp[4].xy * uTime * 0.6) * 0.6 + noise(vWorld.xz * 1.7) * 0.4;
+  float foam = clamp(crest * cover * 2.2 * smoothstep(0.35, 0.75, breakup), 0.0, 1.0);
+  col = mix(col, vec3(0.92, 0.95, 0.96) * (0.35 + 0.65 * uLight), foam * (0.3 + 0.7 * near));
   float fog = 1.0 - exp(-pow(uFogDensity * dist, 2.0));
   gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
   #include <colorspace_fragment>
@@ -97,22 +181,70 @@ void main() {
 /** After the opaque scene and the boats' water masks (WATER_MASK_ORDER), so the stencil is set when it is drawn. */
 const WATER_ORDER = WATER_MASK_ORDER + 1;
 
+/** The sea state at a point, as the renderer needs it (dirTo: compass rad the waves travel towards). */
+export interface SeaSample {
+  hs: number;
+  wavelength: number;
+  dirTo: number;
+  whitecaps: number;
+  steepness: number;
+}
+
+/** Concentric rings, dense near the centre (0.4 m) and sparse at the edge: the camera sits at the centre. */
+function polarGrid(rings: number, segments: number, r0: number, r1: number): THREE.BufferGeometry {
+  const pos: number[] = [0, 0, 0];
+  const idx: number[] = [];
+  for (let j = 0; j < rings; j++) {
+    const r = r0 * Math.pow(r1 / r0, j / (rings - 1));
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      pos.push(Math.cos(a) * r, 0, Math.sin(a) * r);
+    }
+  }
+  for (let i = 0; i < segments; i++) idx.push(0, 1 + ((i + 1) % segments), 1 + i);
+  for (let j = 0; j < rings - 1; j++) {
+    for (let i = 0; i < segments; i++) {
+      const a = 1 + j * segments + i;
+      const b = 1 + j * segments + ((i + 1) % segments);
+      idx.push(a, b, a + segments, b, b + segments, a + segments);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
 export class Water {
   readonly mesh: THREE.Mesh;
   /** Flat, very large plane beyond the detailed mesh (same shader), so the horizon is water, not seabed. */
   readonly farMesh: THREE.Mesh;
   private readonly material: THREE.ShaderMaterial;
-  private readonly cell = 20;
+  private readonly fieldData = new Float32Array(FIELD_N * FIELD_N * 4);
+  private readonly fieldTex: THREE.DataTexture;
+  private fieldOrigin = new THREE.Vector2(NaN, NaN);
+  /** A field being filled over several frames (origin, data, next texel). */
+  private pending?: { origin: THREE.Vector2; data: Float32Array; next: number };
+  private lastRefresh = -Infinity;
+  private refL = 0;
+  private refDir = NaN;
 
   constructor(sunDir: THREE.Vector3, fogColor: THREE.Color, fogDensity: number) {
-    const geo = new THREE.PlaneGeometry(2400, 2400, 240, 240);
-    geo.rotateX(-Math.PI / 2);
+    this.fieldTex = new THREE.DataTexture(this.fieldData, FIELD_N, FIELD_N, THREE.RGBAFormat, THREE.FloatType);
+    this.fieldTex.magFilter = THREE.LinearFilter;
+    this.fieldTex.minFilter = THREE.LinearFilter;
+    this.fieldTex.wrapS = this.fieldTex.wrapT = THREE.ClampToEdgeWrapping;
+    this.fieldTex.needsUpdate = true;
     this.material = new THREE.ShaderMaterial({
       vertexShader: vertex,
       fragmentShader: fragment,
       uniforms: {
         uTime: { value: 0 },
-        uWaves: { value: [new THREE.Vector4(1, 0, 9, 0.05), new THREE.Vector4(1, 0, 5, 0.03), new THREE.Vector4(1, 0, 3, 0.02), new THREE.Vector4(1, 0, 14, 0.04)] },
+        uComp: { value: Array.from({ length: N_COMP }, () => new THREE.Vector4(1, 0, 6, 0)) },
+        uCurrent: { value: new THREE.Vector2() },
+        uField: { value: this.fieldTex },
+        uFieldOrigin: { value: new THREE.Vector2() },
+        uFieldCell: { value: FIELD_CELL },
         uSunDir: { value: sunDir.clone().normalize() },
         uDeep: { value: new THREE.Color(0x0b2f3d) },
         uShallow: { value: new THREE.Color(0x1d5a63) },
@@ -133,7 +265,7 @@ export class Water {
       stencilZFail: THREE.KeepStencilOp,
       stencilZPass: THREE.KeepStencilOp,
     });
-    this.mesh = new THREE.Mesh(geo, this.material);
+    this.mesh = new THREE.Mesh(polarGrid(170, 200, 0.4, 1800), this.material);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = WATER_ORDER;
     this.mesh.name = 'water';
@@ -144,6 +276,7 @@ export class Water {
     this.farMesh.frustumCulled = false;
     this.farMesh.renderOrder = WATER_ORDER;
     this.farMesh.name = 'water-far';
+    this.setWind(5, 0);
   }
 
   setFog(density: number): void {
@@ -178,44 +311,136 @@ export class Water {
   }
 
   /**
-   * Waves scale with wind speed and travel downwind (wind FROM direction twd, compass radians). Wind
-   * against tide makes them shorter and steeper (visual only; the physics uses flat water).
+   * Fine ripples follow the wind; without a sea state (no sampler) this also sets a plausible uniform sea
+   * from the wind alone (TWS m/s, FROM direction twd, compass radians).
    */
-  setWind(twsMs: number, twdFrom: number, windAgainstTide = false): void {
-    // Direction the waves travel, in Three.js xz (x = east, z = south).
-    const to = twdFrom + Math.PI;
-    const base = new THREE.Vector2(Math.sin(to), -Math.cos(to));
+  setWind(twsMs: number, twdFrom: number): void {
     const s = Math.min(1, twsMs / 10);
-    const amp = (0.02 + 0.13 * s * s) * (windAgainstTide ? 1.5 : 1);
-    const waves = this.material.uniforms.uWaves!.value as THREE.Vector4[];
-    const spread = [0, 0.35, -0.5, 0.2];
-    const shorten = windAgainstTide ? 0.6 : 1;
-    const lengths = [4 + 10 * s, 3 + 5 * s, 2 + 2.5 * s, 7 + 14 * s].map((l) => l * shorten);
-    const amps = [amp, amp * 0.55, amp * 0.3, amp * 0.6];
-    waves.forEach((w, i) => {
-      const d = base.clone().rotateAround(new THREE.Vector2(), spread[i]!);
-      w.set(d.x, d.y, lengths[i]!, amps[i]!);
-    });
     this.material.uniforms.uRipple!.value = 0.15 + 0.5 * s;
+    if (Number.isNaN(this.fieldOrigin.x)) {
+      const hs = 0.04 + 0.3 * s * s;
+      const l = 3 + 10 * s;
+      this.fieldData.fill(0);
+      for (let i = 0; i < FIELD_N * FIELD_N; i++) this.fieldData.set([hs, l, 0.01 * s, hs / l], i * 4);
+      this.fieldTex.needsUpdate = true;
+      this.setComponents(l, twdFrom + Math.PI);
+    }
+  }
+
+  /** The wave trains: directions spread about the mean, wavelengths about the reference. */
+  private setComponents(refL: number, dirTo: number): void {
+    this.refL = refL;
+    this.refDir = dirTo;
+    const comps = this.material.uniforms.uComp!.value as THREE.Vector4[];
+    comps.forEach((c, i) => {
+      const a = dirTo + SPREAD[i]!;
+      c.set(Math.sin(a), -Math.cos(a), Math.max(0.5, refL * FACTORS[i]!), (i * 2.399) % (2 * Math.PI));
+    });
+  }
+
+  /**
+   * Keep the sea-state field round the camera up to date from `sample` (n, e → sea state at the current sim
+   * time). The first fill is immediate; after that, when the camera has moved or every few seconds, a new
+   * field is filled a few texels per frame and swapped in whole. `boat` sets the reference wavelength and
+   * direction from the sea where the user is sailing; `current` advects the waves (m/s, n/e).
+   */
+  updateField(sample: (n: number, e: number) => SeaSample, camX: number, camZ: number, now: number, boat: SeaSample, current: { n: number; e: number }): void {
+    const ox = Math.round(camX / FIELD_CELL) * FIELD_CELL - (FIELD_N / 2) * FIELD_CELL;
+    const oz = Math.round(camZ / FIELD_CELL) * FIELD_CELL - (FIELD_N / 2) * FIELD_CELL;
+    (this.material.uniforms.uCurrent!.value as THREE.Vector2).set(current.e, -current.n);
+    const lRef = Math.max(0.6, boat.wavelength || 1);
+    const dd = Math.abs(Math.atan2(Math.sin(boat.dirTo - this.refDir), Math.cos(boat.dirTo - this.refDir)));
+    if (!(Math.abs(lRef / this.refL - 1) < 0.2) || !(dd < 0.2)) this.setComponents(lRef, boat.dirTo);
+    const fill = (origin: THREE.Vector2, data: Float32Array, from: number, to: number) => {
+      for (let k = from; k < to; k++) {
+        const i = k % FIELD_N;
+        const j = Math.floor(k / FIELD_N);
+        const x = origin.x + i * FIELD_CELL;
+        const z = origin.y + j * FIELD_CELL;
+        const s = sample(-z, x);
+        data[k * 4] = s.hs;
+        data[k * 4 + 1] = s.wavelength;
+        data[k * 4 + 2] = s.whitecaps;
+        data[k * 4 + 3] = s.steepness;
+      }
+    };
+    const total = FIELD_N * FIELD_N;
+    if (Number.isNaN(this.fieldOrigin.x)) {
+      this.fieldOrigin.set(ox, oz);
+      fill(this.fieldOrigin, this.fieldData, 0, total);
+      this.swapIn();
+      this.lastRefresh = now;
+      return;
+    }
+    const moved = Math.abs(ox - this.fieldOrigin.x) > 6 * FIELD_CELL || Math.abs(oz - this.fieldOrigin.y) > 6 * FIELD_CELL;
+    if (!this.pending && (moved || now - this.lastRefresh > 4)) {
+      this.pending = { origin: new THREE.Vector2(ox, oz), data: new Float32Array(total * 4), next: 0 };
+    }
+    const p = this.pending;
+    if (p) {
+      const to = Math.min(total, p.next + 96);
+      fill(p.origin, p.data, p.next, to);
+      p.next = to;
+      if (to >= total) {
+        this.fieldData.set(p.data);
+        this.fieldOrigin.copy(p.origin);
+        this.pending = undefined;
+        this.lastRefresh = now;
+        this.swapIn();
+      }
+    }
+  }
+
+  private swapIn(): void {
+    (this.material.uniforms.uFieldOrigin!.value as THREE.Vector2).copy(this.fieldOrigin);
+    this.fieldTex.needsUpdate = true;
   }
 
   update(time: number, camera: THREE.Camera): void {
     this.material.uniforms.uTime!.value = time;
-    this.mesh.position.set(Math.round(camera.position.x / this.cell) * this.cell, 0, Math.round(camera.position.z / this.cell) * this.cell);
-    this.farMesh.position.x = this.mesh.position.x;
-    this.farMesh.position.z = this.mesh.position.z;
+    this.mesh.position.set(camera.position.x, 0, camera.position.z);
+    this.farMesh.position.x = camera.position.x;
+    this.farMesh.position.z = camera.position.z;
   }
 
-  /** CPU copy of the vertex-shader surface height at a world point (for floating objects). */
-  heightAt(x: number, z: number, time: number): number {
-    const waves = this.material.uniforms.uWaves!.value as THREE.Vector4[];
-    let h = 0;
-    for (const w of waves) {
-      const len = Math.hypot(w.x, w.y);
-      const k = (2 * Math.PI) / w.z;
-      const c = Math.sqrt(9.81 / k);
-      h += w.w * Math.sin(k * ((w.x / len) * x + (w.y / len) * z - c * time));
+  /** The field (bilinear, as the GPU samples it) at a world point. */
+  private fieldAt(x: number, z: number): [number, number, number, number] {
+    const o = Number.isNaN(this.fieldOrigin.x) ? new THREE.Vector2() : this.fieldOrigin;
+    const fx = Math.min(FIELD_N - 1, Math.max(0, (x - o.x) / FIELD_CELL));
+    const fz = Math.min(FIELD_N - 1, Math.max(0, (z - o.y) / FIELD_CELL));
+    const i = Math.min(FIELD_N - 2, Math.floor(fx));
+    const j = Math.min(FIELD_N - 2, Math.floor(fz));
+    const tx = fx - i;
+    const tz = fz - j;
+    const d = this.fieldData;
+    const out: [number, number, number, number] = [0, 0, 0, 0];
+    for (let c = 0; c < 4; c++) {
+      const a = d[(j * FIELD_N + i) * 4 + c]!;
+      const b = d[(j * FIELD_N + i + 1) * 4 + c]!;
+      const e = d[((j + 1) * FIELD_N + i) * 4 + c]!;
+      const f = d[((j + 1) * FIELD_N + i + 1) * 4 + c]!;
+      out[c] = (a * (1 - tx) + b * tx) * (1 - tz) + (e * (1 - tx) + f * tx) * tz;
     }
+    return out;
+  }
+
+  /** CPU copy of the shader's surface height at a world point (for floating objects and the boats' motion). */
+  heightAt(x: number, z: number, time: number): number {
+    const [hs, lp] = this.fieldAt(x, z);
+    const comps = this.material.uniforms.uComp!.value as THREE.Vector4[];
+    const cur = this.material.uniforms.uCurrent!.value as THREE.Vector2;
+    const w = comps.map((c) => {
+      const r = Math.log(c.z / Math.max(lp, 0.3));
+      return Math.exp(-(r * r) / (2 * SPECTRUM_WIDTH * SPECTRUM_WIDTH));
+    });
+    const wsum = w.reduce((a, b) => a + b, 0);
+    let h = 0;
+    comps.forEach((c, i) => {
+      const amp = hs * 0.25 * Math.sqrt((2 * w[i]!) / Math.max(wsum, 1e-4));
+      const k = (2 * Math.PI) / c.z;
+      const omega = Math.sqrt(G * k) + k * (c.x * cur.x + c.y * cur.y);
+      h += amp * Math.sin(k * (c.x * x + c.y * z) - omega * time + c.w);
+    });
     return h;
   }
 }

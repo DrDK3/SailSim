@@ -10,6 +10,8 @@ export interface DartFeatures {
   mooringAreas: { name: string; ring: [number, number][] }[];
   /** Provisional moorings: position, boat kind, length (m), initial heading (deg), area name. */
   moorings: { e: number; n: number; k: 'yacht' | 'motor' | 'keelboat'; l: number; h: number; a: string }[];
+  /** Marinas (OSM leisure=marina): name and centre; absent from data built before the hi-fi work. */
+  marinas?: { name: string; n: number; e: number }[];
   ferries: {
     name: string;
     label: string;

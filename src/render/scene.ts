@@ -6,7 +6,8 @@ import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
 import { lerpAngle, nedToThree, orientBoat } from './frames';
 import { SquibModel } from './squibModel';
-import { Water } from './water';
+import type { SquibTypeId } from '../sim/boat/squib';
+import { Water, type SeaSample } from './water';
 import { Wake } from './wake';
 import { ForceArrows } from './arrows';
 import type { DartScene, DartUpdate } from './dart';
@@ -24,6 +25,8 @@ export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top' | 'free';
 export interface SceneEnvironment {
   puffs: readonly Puff[];
   windAgainstTide: boolean;
+  /** The modelled sea state (n, e → waves) at the current sim time: the water surface follows it. */
+  sea?: (n: number, e: number) => SeaSample;
   /** River Dart state (when the geodata is loaded). */
   dart?: Omit<DartUpdate, 'camera' | 'time'>;
   course?: { nextLeg: number; phase: string; showLabels: boolean };
@@ -64,7 +67,7 @@ export class SceneView {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly water: Water;
-  private readonly boat: SquibModel;
+  private boat: SquibModel;
   private readonly boatRoot = new THREE.Group();
   private readonly wake: Wake;
   private readonly arrows: ForceArrows;
@@ -159,6 +162,16 @@ export class SceneView {
     this.floats = new THREE.InstancedMesh(floatGeo, new THREE.MeshStandardMaterial({ color: 0xf2a516, roughness: 0.5 }), MAX_FLOATS);
     this.floats.frustumCulled = false;
     this.scene.add(this.floats);
+  }
+
+  /** Build the user's boat as another Squib type (data/boats/squib/variants.json). */
+  setBoatType(type: SquibTypeId, params: BoatParams): void {
+    if (this.boat.type === type) return;
+    this.boat.group.remove(this.arrows.bodyGroup);
+    this.boatRoot.remove(this.boat.group);
+    this.boat = new SquibModel(params, { type });
+    this.boatRoot.add(this.boat.group);
+    this.boat.group.add(this.arrows.bodyGroup);
   }
 
   /** Show the River Dart (or remove it with undefined). `depthAt` keeps the motion-cue floats in the water. */
@@ -280,9 +293,10 @@ export class SceneView {
 
     const wat = env?.windAgainstTide ?? false;
     if (Math.abs(curr.twsGround - this.lastWind.tws) > 0.3 || Math.abs(curr.twdGround - this.lastWind.twd) > 0.05 || wat !== this.lastWind.wat) {
-      this.water.setWind(curr.twsGround, curr.twdGround, wat);
+      this.water.setWind(curr.twsGround, curr.twdGround);
       this.lastWind = { tws: curr.twsGround, twd: curr.twdGround, wat };
     }
+    if (env?.sea) this.water.updateField(env.sea, this.camera.position.x, this.camera.position.z, time, env.sea(n, e), curr.current);
     if (env) this.updatePuffs(env.puffs, x, z);
 
     // Visual-only wave response: the hull rides the surface; pitch from the local slope.
@@ -304,6 +318,10 @@ export class SceneView {
       crewY: curr.crewY,
       time,
       hideHelm: this.mode === 'helm',
+      awa: curr.awa,
+      aws: curr.aws,
+      heel,
+      water: curr.cockpitWater,
     });
     this.crewSide = curr.crewY >= 0 ? 1 : -1;
 
