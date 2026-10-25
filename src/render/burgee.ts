@@ -122,7 +122,9 @@ function drawDart(g: CanvasRenderingContext2D, x0: number, x1: number, y: number
   }
 }
 
-function burgeeTexture(): THREE.CanvasTexture {
+/** The flag's texture (none outside a browser, e.g. in unit tests). */
+function burgeeTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
   if (!texture) {
     texture = new THREE.CanvasTexture(burgeeCanvas());
     texture.colorSpace = THREE.SRGBColorSpace;

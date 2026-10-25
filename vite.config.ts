@@ -22,7 +22,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['tests/sim/**/*.test.ts'],
+    include: ['tests/sim/**/*.test.ts', 'tests/render/**/*.test.ts'],
     environment: 'node',
   },
 });

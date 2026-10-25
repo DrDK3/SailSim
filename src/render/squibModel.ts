@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BoatParams } from '../sim/boat/params';
 import type { SquibTypeId } from '../sim/boat/squib';
-import { CrewFigure } from './crew';
+import { CrewFigure, bodyFrame, type BodyFrame, type CrewPose } from './crew';
 import { Burgee, BURGEE_STICK } from './burgee';
 import { nonSlipTexture, sailTexture, transomTexture, woodTexture } from './squibTextures';
 
@@ -47,6 +47,8 @@ const WATER_MASK_MATERIAL = new THREE.MeshBasicMaterial({
   stencilZPass: THREE.ReplaceStencilOp,
 });
 
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
 function smoothstep(e0: number, e1: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
@@ -62,6 +64,13 @@ const COCKPIT_FROM = -0.2;
 const COCKPIT_TO = 2.3;
 const COCKPIT_HALF = 0.53;
 const DECK_CAMBER = 0.035;
+/** Where the helm and crew sit (z, m aft of the centre of gravity) and the toe straps (x, each side). */
+const HELM_Z = 1.45;
+const CREW_Z = 0.5;
+const STRAP_X = 0.16;
+/** The tiller extension (m) and its universal joint at the tiller's end, in the rudder's frame. */
+const EXTENSION = 0.95;
+const EXTENSION_PIVOT = new THREE.Vector3(0, 0.68, -1.03);
 const STATIONS = 64;
 const SECTION = 22;
 
@@ -188,6 +197,8 @@ export class SquibModel {
   private readonly mastTopY: number;
   private readonly sternZ: number;
   private readonly soleY: number;
+  /** The crew's lateral position at the last frame, its smoothed rate and how much they are crossing. */
+  private readonly crewState = { y: NaN, t: NaN, rate: 0, moving: 0, side: 1 };
   readonly anchors: { mainCE: THREE.Vector3; jibCE: THREE.Vector3; keel: THREE.Vector3; rudder: THREE.Vector3; bow: THREE.Vector3; masthead: THREE.Vector3 };
 
   private static readonly MAIN_U = 14;
@@ -227,8 +238,9 @@ export class SquibModel {
     jib.name = 'jib';
     this.group.add(main, jib);
 
-    // Sheets (jib sheet to the fairlead, mainsheet tackle to the traveller) as thin lines that move.
-    for (const [count, colour] of [[2, 0x2f5f9a], [5, 0x8a8f96]] as const) {
+    // Sheets as thin lines that move: the jib sheet from the clew through the leeward fairlead to the crew's
+    // hand; the mainsheet tackle from the boom to the traveller car, and its tail to the helm's hand.
+    for (const [count, colour] of [[3, 0x2f5f9a], [7, 0x8a8f96]] as const) {
       const geo = new THREE.BufferGeometry().setFromPoints(Array.from({ length: count }, () => new THREE.Vector3()));
       const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: colour }));
       line.frustumCulled = false;
@@ -387,7 +399,7 @@ export class SquibModel {
     const ACROSS = 12;
     for (let k = 1; k < ACROSS; k++) {
       const x = -b + (2 * b * k) / ACROSS;
-      push(x, h + 0.004 + DECK_CAMBER * (1 - (x / b) ** 2) * Math.min(1, b / 0.6));
+      push(x, deckHeight(x, b, h));
     }
     for (let j = M; j >= 0; j--) {
       this.sectionPoint(1, (j / M) * (Math.PI / 2), 1, v);
@@ -433,8 +445,7 @@ export class SquibModel {
       for (let side = -1; side <= 1; side += 2) {
         for (let c = 0; c <= COLS; c++) {
           const x = side * (b - (b - inner) * (c / COLS));
-          // Camber: highest on the centreline.
-          const y = h + 0.004 + DECK_CAMBER * (1 - (x / Math.max(b, 1e-3)) ** 2) * Math.min(1, b / 0.6);
+          const y = deckHeight(x, b, h);
           pos.push(x, y, z);
           uv.push(x, z);
         }
@@ -542,8 +553,8 @@ export class SquibModel {
         g.add(outlet);
       }
     }
-    // Toe straps for the hiking crew.
-    for (const x of [-0.3, 0.3]) {
+    // Toe straps for the hiking crew, near the middle of the floor (feet from the windward deck reach them).
+    for (const x of [-STRAP_X, STRAP_X]) {
       const strap = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 1.7), MAT.strap);
       strap.position.set(x, this.soleY + (this.classic ? 0.05 : 0.03), 1.05);
       g.add(strap);
@@ -855,11 +866,15 @@ export class SquibModel {
     const jp = this.jibGeo.getAttribute('position') as THREE.BufferAttribute;
     const clew = new THREE.Vector3(jp.getX(SquibModel.JIB_U), jp.getY(SquibModel.JIB_U), jp.getZ(SquibModel.JIB_U));
     const lead = new THREE.Vector3(Math.sign(clew.x || 1) * 0.6, sheerAt(0.45) + 0.04, MAST_Z + 0.9);
+    this.rudder.rotation.y = params.rudder;
+    const hands = this.poseCrew(params.crewY, params.rudder, time, params.hideHelm ?? false, lead);
+
     const js = this.sheets[0]!.geo.getAttribute('position') as THREE.BufferAttribute;
     js.setXYZ(0, clew.x, clew.y, clew.z);
     js.setXYZ(1, lead.x, lead.y, lead.z);
+    js.setXYZ(2, hands.jib.x, hands.jib.y, hands.jib.z);
     js.needsUpdate = true;
-    // Mainsheet: a tackle from the boom (about 60% along) to the traveller car.
+    // Mainsheet: a tackle from the boom (about 60% along) to the traveller car, the tail to the helm's hand.
     const bp = new THREE.Vector3(0, -0.04, 0.6 * footMain).applyEuler(this.boom.rotation).add(this.boom.position);
     const car = new THREE.Vector3(0, sheerAt(0.7) - (this.classic ? 0.075 : 0.065), 0.35);
     const ms = this.sheets[1]!.geo.getAttribute('position') as THREE.BufferAttribute;
@@ -867,6 +882,8 @@ export class SquibModel {
       const p = i % 2 === 0 ? bp : car;
       ms.setXYZ(i, p.x + (i - 2) * 0.015, p.y, p.z);
     }
+    ms.setXYZ(5, car.x, car.y + 0.03, car.z);
+    ms.setXYZ(6, hands.main.x, hands.main.y, hands.main.z);
     ms.needsUpdate = true;
 
     // Telltales stream along the jib's surface, with the flow (or flick about when it is luffing).
@@ -885,30 +902,109 @@ export class SquibModel {
       t.position.x += (i % 2 ? -1 : 1) * 0.01;
     }
 
-    this.rudder.rotation.y = params.rudder;
-    // The extension swings up towards the helm's aft hand on the windward side.
-    const sideW = params.crewY >= 0 ? 1 : -1;
-    this.extension.rotation.set(-0.35, 0, -sideW * 1.0);
-
     this.burgee.update(awa, aws, time);
 
-    // Crew: helm aft, crew forward of them, posed from the lateral position in the physics: sitting inboard
-    // (0.15 m) up to sitting out on the side deck and leaning out (0.8 m; data/boats calibration, E).
-    const deckY = sheerAt(0.72);
-    const out = Math.abs(params.crewY);
-    const side = params.crewY >= 0 ? 1 : -1;
-    const hike = Math.min(1, Math.max(0, (out - 0.15) / 0.65));
-    const up = smoothstep(0.15, 0.55, hike);
-    const seat = deckY - (this.classic ? 0.3 : 0.24);
-    this.crew.forEach((c, i) => {
-      c.setPose(hike);
-      const g = c.group;
-      g.position.set(side * (0.28 + 0.5 * smoothstep(0, 0.55, hike)), seat + (deckY - seat + 0.02) * up, i === 0 ? 1.75 : 0.6);
-      g.scale.x = side; // mirrored on the port side: the figure's +x is outboard
-      g.visible = !(i === 0 && params.hideHelm);
-    });
-
     this.updateWater(params.water ?? 0, params.heel ?? 0);
+  }
+
+  /**
+   * Pose the helm and crew from the physics' lateral position of their weight: sitting in at 0.15 m, sitting
+   * out and leaning back over the water at 0.8 m (calibration, E). While that position is moving across (a
+   * tack or gybe) they crouch on the floor and duck under the boom; near the middle and still, they sit low
+   * in the cockpit. The helm's aft hand holds the tiller extension, which swings from the tiller's end to it;
+   * the forward hand the mainsheet. The crew holds the leeward jib sheet and steadies with the other hand.
+   * Both mostly watch the jib's luff, glancing up at the main and to windward. Returns where the sheets end.
+   */
+  private poseCrew(crewY: number, rudder: number, time: number, hideHelm: boolean, jibLead: THREE.Vector3): { jib: THREE.Vector3; main: THREE.Vector3 } {
+    const st = this.crewState;
+    const dt = Number.isFinite(st.t) ? Math.min(0.2, Math.max(0, time - st.t)) : 0;
+    if (Number.isFinite(st.y) && dt > 0) st.rate += ((crewY - st.y) / dt - st.rate) * (1 - Math.exp(-dt / 0.15));
+    st.y = crewY;
+    st.t = time;
+    if (Math.abs(crewY) > 0.04) st.side = crewY > 0 ? 1 : -1;
+    const movingTo = smoothstep(0.15, 0.4, Math.abs(st.rate));
+    st.moving += (movingTo - st.moving) * (dt > 0 ? 1 - Math.exp(-dt / 0.2) : 1);
+    const s = st.side;
+    const r = Math.abs(crewY);
+    const mv = st.moving;
+    const hike = smoothstep(0.3, 0.8, r);
+    const onDeck = smoothstep(0.08, 0.22, r);
+    const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    const sole = this.soleY + (this.classic ? 0.04 : 0.02);
+    const jibLuff = V(0, 2.4, -2.1);
+    const out = { jib: new THREE.Vector3(), main: new THREE.Vector3() };
+
+    this.crew.forEach((c, i) => {
+      const helm = i === 0;
+      const z = helm ? HELM_Z : CREW_Z;
+      const { b: edge, h } = this.hullStation((z - BOW_Z) / this.p.loa);
+      // Sitting on the side deck: just outboard of the coaming, out to the edge as they hike.
+      const xd = COCKPIT_HALF + 0.14 + (edge - COCKPIT_HALF - 0.24) * hike;
+      const deck = V(s * xd, deckHeight(xd, edge, h) + 0.1, z);
+      const low = V(s * (COCKPIT_HALF - 0.2), sole + 0.12, z);
+      const crouch = V(Math.max(-0.35, Math.min(0.35, crewY * 0.75)), sole + 0.3, z - 0.05);
+      const hip = low.clone().lerp(deck, onDeck).lerp(crouch, mv);
+      // Inboard and forward (the helm more forward); straight forward while crossing.
+      const ang = helm ? 0.9 : 0.55;
+      const facing = V(-s * Math.cos(ang), 0, -Math.sin(ang)).lerp(V(0, 0, -1), mv).normalize();
+      const sway = 0.025 * Math.sin(time * 1.1 + i * 2.1) + 0.015 * Math.sin(time * 2.3 + i);
+      const back = (0.32 + (0.06 + 0.62 * hike - 0.32) * onDeck) * (1 - mv) - 1.0 * mv + sway;
+      const fr: BodyFrame = bodyFrame(hip, facing, back);
+
+      // Feet: on the floor below the knees sitting in; under the toe strap hiking; under the hips crouching.
+      const footDeck = V(s * (COCKPIT_HALF - 0.16 + (STRAP_X - COCKPIT_HALF + 0.16) * hike), sole + 0.075, z - 0.1 - 0.15 * hike);
+      const footLow = V(hip.x + facing.x * 0.7, sole + 0.075, hip.z + facing.z * 0.7);
+      const footCrouch = V(hip.x, sole + 0.075, hip.z + 0.05);
+      const foot = footLow.lerp(footDeck, onDeck).lerp(footCrouch, mv);
+      const across = V(fr.right.x, 0, fr.right.z).normalize();
+      const feet: [THREE.Vector3, THREE.Vector3] = [foot.clone().addScaledVector(across, -0.12), foot.clone().addScaledVector(across, 0.12)];
+
+      // Which hand is aft (nearer the stern) depends on the side.
+      const aft = fr.shoulders[0]!.z > fr.shoulders[1]!.z ? 0 : 1;
+      const fwd = 1 - aft;
+      const hands: [THREE.Vector3, THREE.Vector3] = [new THREE.Vector3(), new THREE.Vector3()];
+      let look: THREE.Vector3;
+      const glance = smoothstep(0.55, 0.9, Math.sin(time * (helm ? 0.83 : 0.61) + (helm ? 0.4 : 2.2)));
+      if (helm) {
+        // The extension swings from its joint at the tiller's end towards the hand's natural place in front.
+        const pivot = EXTENSION_PIVOT.clone().applyAxisAngle(Y_AXIS, rudder).add(this.rudder.position);
+        // When that end would be out of reach, the extension is raised (more upright) until it is in reach.
+        const shoulder = fr.shoulders[aft]!;
+        const natural = shoulder.clone().addScaledVector(fr.front, 0.28).addScaledVector(Y_AXIS, -0.34).sub(pivot);
+        const dir = new THREE.Vector3();
+        let best = Infinity;
+        for (let k = 0; k <= 12; k++) {
+          const d = natural.clone().addScaledVector(Y_AXIS, k * 0.15).normalize();
+          const reach = pivot.clone().addScaledVector(d, EXTENSION).distanceTo(shoulder);
+          if (reach < best) {
+            best = reach;
+            dir.copy(d);
+          }
+          if (reach < 0.53) break;
+        }
+        hands[aft]!.copy(pivot).addScaledVector(dir, EXTENSION);
+        this.extension.quaternion.setFromUnitVectors(Y_AXIS, dir.applyAxisAngle(Y_AXIS, -rudder));
+        // The mainsheet tail, held in front of the body towards the middle of the boat.
+        hands[fwd]!.copy(fr.shoulders[fwd]!).addScaledVector(fr.front, 0.3).addScaledVector(Y_AXIS, -0.3).addScaledVector(across, -s * 0.08);
+        out.main.copy(hands[fwd]!);
+        look = jibLuff.clone().lerp(V(s * 10, 3, -18), glance);
+      } else {
+        // The leeward jib sheet, reached across towards its cleat; the other hand on the deck edge or a knee.
+        const cleat = V(-s * (COCKPIT_HALF + 0.07), sheerAt(0.5) + 0.04, 0.4);
+        const sh = fr.shoulders[fwd]!;
+        hands[fwd]!.copy(sh).addScaledVector(cleat.clone().sub(sh).normalize(), 0.42).addScaledVector(Y_AXIS, -0.06);
+        out.jib.copy(hands[fwd]!);
+        const rail = V(s * (edge - 0.04), deckHeight(edge - 0.04, edge, h) + 0.03, z + 0.25);
+        const knee = hip.clone().addScaledVector(facing, 0.35).addScaledVector(Y_AXIS, 0.02);
+        hands[aft]!.copy(knee).lerp(rail, hike).lerp(V(hip.x, sole + 0.1, hip.z - 0.35), mv);
+        look = V(-s * 0.2, 2.0, -1.6).lerp(V(0, 5, 1.5), glance);
+      }
+      const pose: CrewPose = { hip, facing, back, feet, hands, look };
+      c.pose(pose);
+      c.group.visible = !(helm && hideHelm);
+    });
+    if (out.jib.lengthSq() === 0) out.jib.copy(jibLead);
+    return out;
   }
 
   /**
@@ -968,6 +1064,11 @@ function mergeByMaterial(root: THREE.Group): THREE.Group {
     out.add(mesh);
   }
   return out;
+}
+
+/** Deck surface height at x across a station of half-breadth b and sheer h: cambered, highest on the centreline. */
+function deckHeight(x: number, b: number, h: number): number {
+  return h + 0.004 + DECK_CAMBER * (1 - (x / Math.max(b, 1e-3)) ** 2) * Math.min(1, b / 0.6);
 }
 
 /** Sheer line (deck edge height above the waterline): estimated, rising slightly to the transom. */
