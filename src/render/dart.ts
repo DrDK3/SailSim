@@ -26,6 +26,14 @@ export interface DartSceneInput {
   drape?: TexImageSource;
   /** Finer ground over the towns (4 m), drawn in place of the 8 m grid there. */
   town?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; values: Float32Array };
+  /** Signed distance to tidal water (watermask.png): the water surface is drawn only near tidal water. */
+  waterMask?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; image: TexImageSource };
+}
+
+/** Where the water surface may be drawn: a distance texture over a box (e0, n0, width, height in m). */
+export interface WaterMask {
+  texture: THREE.Texture;
+  box: THREE.Vector4;
 }
 
 export interface DartUpdate {
@@ -53,11 +61,24 @@ export class DartScene {
   private lastMooringUpdate = -Infinity;
   private readonly features?: DartFeatures;
   private readonly buildingUniforms = { uNight: { value: 0 } };
+  /** For the water surface (scene.ts): tidal water and its banks, so low ground inland stays dry. */
+  readonly waterMask?: WaterMask;
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
     this.floating.name = 'dart-floating';
     this.features = input.features;
+    const wm = input.waterMask;
+    if (wm) {
+      const texture = new THREE.Texture(wm.image);
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.generateMipmaps = false;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.needsUpdate = true;
+      const s = wm.spec;
+      this.waterMask = { texture, box: new THREE.Vector4(s.e0, s.n0, s.nx * s.cell, s.ny * s.cell) };
+    }
     this.buildTerrain();
     const f = input.features;
     if (f) {
@@ -75,6 +96,26 @@ export class DartScene {
   }
 
   // ------------------------------------------------------------------ terrain
+
+  /** Ground (m ODN) as the picture draws it: the towns' 4 m grid where there is one, else the 8 m grid. */
+  private groundAt(e: number, n: number): number {
+    const town = this.input.town;
+    if (town) {
+      const t = town.spec;
+      const x = (e - t.e0) / t.cell - 0.5;
+      const y = (n - t.n0) / t.cell - 0.5;
+      if (x >= 0 && y >= 0 && x < t.nx - 1 && y < t.ny - 1) {
+        const i = Math.floor(x);
+        const j = Math.floor(y);
+        const fx = x - i;
+        const fy = y - j;
+        const v = town.values;
+        const k = j * t.nx + i;
+        return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
+      }
+    }
+    return this.input.geo.bedElevation(n, e);
+  }
 
   private get townBox(): { eMin: number; eMax: number; nMin: number; nMax: number } | undefined {
     const t = this.input.town?.spec;
@@ -284,7 +325,7 @@ export class DartScene {
    * and painted-render wall colours like those of the Dartmouth and Kingswear waterfronts.
    */
   private buildBuildings(f: DartFeatures): void {
-    const tiles = new Map<string, { pos: number[]; nor: number[]; col: number[]; wall: number[] }>();
+    const tiles = new Map<string, { pos: number[]; nor: number[]; col: number[]; wall: number[]; gnd: number[] }>();
     // Colours are sRGB (painted render, stone; slate and tile roofs), converted to linear for lighting.
     const lin = (hex: number) => {
       const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
@@ -306,7 +347,7 @@ export class DartScene {
       const cn = ring.reduce((a, p) => a + p[1], 0) / ring.length;
       const key = `${Math.floor(cx / 800)},${Math.floor(cn / 800)}`;
       let t = tiles.get(key);
-      if (!t) tiles.set(key, (t = { pos: [], nor: [], col: [], wall: [] }));
+      if (!t) tiles.set(key, (t = { pos: [], nor: [], col: [], wall: [], gnd: [] }));
       const T = t;
       const landmark = /castle|church|petrox|saviour|college|chapel/i.test(b.n ?? '') || b.c === 'church' || b.c === 'chapel';
       const wall = landmark ? stone : wallPalette[(idx * 7919) % wallPalette.length]!;
@@ -339,15 +380,19 @@ export class DartScene {
         const nz = (p1[0] - p0[0]) / len;
         const u0 = len < WINDOW_BAY_M ? (WINDOW_BAY_M - len) / 2 : -(len % WINDOW_BAY_M) / 2;
         const flag = windows ? winFlag : 0;
-        const quad: [number, number, number, number, number][] = [
-          [p0[0], b.b, -p0[1], u0, 0], [p1[0], b.b, -p1[1], u0 + len, 0], [p1[0], top1, -p1[1], u0 + len, top1 - b.b],
-          [p0[0], b.b, -p0[1], u0, 0], [p1[0], top1, -p1[1], u0 + len, top1 - b.b], [p0[0], top0, -p0[1], u0, top0 - b.b],
+        // The ground along the wall (above the base): no window is drawn that would start below it.
+        const g0 = Math.max(0, this.groundAt(p0[0], p0[1]) - b.b) * storeyScale;
+        const g1 = Math.max(0, this.groundAt(p1[0], p1[1]) - b.b) * storeyScale;
+        const quad: [number, number, number, number, number, number][] = [
+          [p0[0], b.b, -p0[1], u0, 0, g0], [p1[0], b.b, -p1[1], u0 + len, 0, g1], [p1[0], top1, -p1[1], u0 + len, top1 - b.b, g1],
+          [p0[0], b.b, -p0[1], u0, 0, g0], [p1[0], top1, -p1[1], u0 + len, top1 - b.b, g1], [p0[0], top0, -p0[1], u0, top0 - b.b, g0],
         ];
-        for (const [x, y, z, u, h] of quad) {
+        for (const [x, y, z, u, h, g] of quad) {
           T.pos.push(x, y, z);
           T.nor.push(nx, 0, nz);
           T.col.push(...wall);
           T.wall.push(u, h * storeyScale, wallH * storeyScale, flag);
+          T.gnd.push(g);
         }
       };
       const tri = (a: number[], b2: number[], c: number[], colour = roof) => {
@@ -365,6 +410,7 @@ export class DartScene {
           T.nor.push(nrm.x, nrm.y, nrm.z);
           T.col.push(...colour);
           T.wall.push(0, 0, 0, 0);
+          T.gnd.push(0);
         }
       };
       const flatTop = (poly: [number, number][], height: (p: [number, number]) => number) => {
@@ -397,6 +443,7 @@ export class DartScene {
             T.nor.push(0, 0.2, 0);
             T.col.push(...wall);
             T.wall.push(0, 0, 0, 0);
+            T.gnd.push(0);
           }
         }
         tri([c[0]![0], top, -c[0]![1]], [c[1]![0], top, -c[1]![1]], [c[2]![0], top, -c[2]![1]], lin(0x3a3633));
@@ -484,6 +531,7 @@ export class DartScene {
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(t.col, 3));
       geo.setAttribute('aWall', new THREE.Float32BufferAttribute(t.wall, 4));
+      geo.setAttribute('aGround', new THREE.Float32BufferAttribute(t.gnd, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = 'buildings';
@@ -757,10 +805,10 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uNight = uniforms.uNight;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nvarying vec4 vWall;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nattribute float aGround;\nvarying vec4 vWall;\nvarying float vGround;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvGround = aGround;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;')
+      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;\nvarying float vGround;')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -770,7 +818,9 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
           float storey = floor(vWall.y / ${STOREY_M.toFixed(1)});
           float fu = fract(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
           float fv = fract(vWall.y / ${STOREY_M.toFixed(1)});
-          float inWin = step(0.3, fu) * step(fu, 0.7) * step(0.3, fv) * step(fv, 0.8) * step(0.7, vWall.y) * step(vWall.y, vWall.z - 0.5);
+          // Whole windows only, starting at least 0.4 m above the ground along the wall (hillside walls).
+          float sill = (storey + 0.3) * ${STOREY_M.toFixed(1)};
+          float inWin = step(0.3, fu) * step(fu, 0.7) * step(0.3, fv) * step(fv, 0.8) * step(0.7, vWall.y) * step(vWall.y, vWall.z - 0.5) * step(vGround + 0.4, sill);
           float frame = inWin * (1.0 - step(0.33, fu) * step(fu, 0.67) * step(0.34, fv) * step(fv, 0.76));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.085, 0.1), inWin - frame);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.92, 0.9), frame);

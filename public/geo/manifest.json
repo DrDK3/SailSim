@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-25T10:03:23Z",
+ "generated": "2026-10-25T18:26:52Z",
  "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
  "origin": {
   "lat": 50.34801,
@@ -76,6 +76,17 @@
   "e0": -3200.0,
   "n0": -5200.0,
   "order": "image rows north to south"
+ },
+ "waterMask": {
+  "file": "watermask.png",
+  "cell": 8.0,
+  "nx": 850,
+  "ny": 1220,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "image rows north to south, cell centres at e0 + (i + 0.5)\u00b7cell",
+  "encoding": "signed distance (m) to the tidal water outline (shoreline layer) = (v - 128) / 2, > 0 in the water, clamped to about \u00b164 m",
+  "meaning": "Where the picture may draw the water surface: tidal water and the bank next to it, not low ground inland"
  },
  "features": "features.json",
  "entrance": {

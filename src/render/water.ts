@@ -14,6 +14,8 @@ import { WATER_MASK_ORDER } from './squibModel';
 const N_COMP = 8;
 const FIELD_N = 32;
 const FIELD_CELL = 50;
+/** How far onto the bank (m, beyond the tidal water outline) the water may be drawn: high water springs, E. */
+const MASK_MARGIN_M = 24;
 const FACTORS = [0.45, 0.58, 0.72, 0.86, 1.0, 1.17, 1.38, 1.7];
 const SPREAD = [-0.55, 0.32, -0.18, 0.08, -0.04, 0.22, -0.36, 0.5];
 const SPECTRUM_WIDTH = 0.32;
@@ -97,6 +99,8 @@ uniform float uRipple;
 uniform float uGlint;
 uniform float uLight;
 uniform vec4 uPuffs[16];     // (x, z, radius, strength) in world metres; strength 0 = unused
+uniform sampler2D uMask;     // signed distance to tidal water (m) = (v·255 - 128) / 2, > 0 in the water
+uniform vec4 uMaskBox;       // e0, n0, width, height (m); width 0 = no mask
 varying vec3 vWorld;
 varying vec2 vPlanar;
 
@@ -113,6 +117,11 @@ vec2 rippleGrad(vec2 p) {
 }
 
 void main() {
+  // Only tidal water and its banks: low ground inland (below the tide but not connected) stays dry.
+  if (uMaskBox.z > 0.0) {
+    vec2 muv = (vec2(vWorld.x, -vWorld.z) - uMaskBox.xy) / uMaskBox.zw;
+    if (muv.x > 0.0 && muv.y > 0.0 && muv.x < 1.0 && muv.y < 1.0 && (texture2D(uMask, muv).r * 255.0 - 128.0) * 0.5 < -${MASK_MARGIN_M.toFixed(1)}) discard;
+  }
   float dist = length(cameraPosition - vWorld);
   vec4 f = seaField(vPlanar);
   float amp[${N_COMP}];
@@ -258,6 +267,8 @@ export class Water {
         uGlint: { value: 1 },
         uLight: { value: 1 },
         uPuffs: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 1, 0)) },
+        uMask: { value: null },
+        uMaskBox: { value: new THREE.Vector4(0, 0, 0, 0) },
       },
       // Not drawn where a boat's deck mask marked the stencil (inside the hulls: squibModel.ts).
       stencilWrite: true,
@@ -279,6 +290,13 @@ export class Water {
     this.farMesh.renderOrder = WATER_ORDER;
     this.farMesh.name = 'water-far';
     this.setWind(5, 0);
+  }
+
+  /** Draw the water only near tidal water (the River Dart's mask), or everywhere (undefined). */
+  setMask(mask: { texture: THREE.Texture; box: THREE.Vector4 } | undefined): void {
+    const u = this.material.uniforms;
+    u.uMask!.value = mask?.texture ?? null;
+    (u.uMaskBox!.value as THREE.Vector4).copy(mask?.box ?? new THREE.Vector4(0, 0, 0, 0));
   }
 
   setFog(density: number): void {

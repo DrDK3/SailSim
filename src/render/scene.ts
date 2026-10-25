@@ -183,6 +183,7 @@ export class SceneView {
     this.dart = dart;
     this.depthAt = dart ? depthAt : undefined;
     if (dart) this.scene.add(dart.fixed, dart.floating, dart.labels);
+    this.water.setMask(dart?.waterMask);
     this.baseFogDensity = dart ? FOG_DENSITY_DART : FOG_DENSITY;
     this.applyWeather();
   }
