@@ -159,3 +159,28 @@ describe('the types in the physics', () => {
     for (const id of ['classic', 'new-sails'] as const) expect(beat(id).sim.stateHash()).toBe(beat(id).sim.stateHash());
   });
 });
+
+describe('starting heel', () => {
+  it('a boat starting close-hauled in a strong wind with the main eased starts heeled to leeward, crew to windward, not on its side', () => {
+    // 19.5 kn from 40° on the starboard bow, main eased 23%: the heel solver once balanced at 90° (the
+    // heeled-plane sail model's spurious root) and started the boat flat with the crew to leeward.
+    for (const id of ['rondar', 'classic'] as const) {
+      const sim = new Simulation({
+        params: squibTypeParams(id),
+        env: uniformEnvironment({ twsKn: 19.5, twdDeg: 180 }),
+        initial: { headingDeg: 140, speedKn: 1 },
+        input: { autoMain: false, autoJib: true, mainSheet: 0.23, jibSheet: 0.1, autoCrew: true },
+      });
+      expect(sim.state.phi).toBeLessThan(0);
+      expect(sim.state.phi).toBeGreaterThan(-40 * DEG);
+      expect(sim.act.crewY).toBeGreaterThan(0);
+      let worst = 0;
+      for (let i = 0; i < 2000; i++) {
+        sim.stepOnce();
+        worst = Math.max(worst, Math.abs(sim.state.phi));
+      }
+      expect(worst).toBeLessThan(45 * DEG);
+      expect(sim.act.water).toBeLessThan(50);
+    }
+  });
+});
