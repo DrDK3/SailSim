@@ -28,6 +28,7 @@ import current  # noqa: E402
 import drape  # noqa: E402
 import pack  # noqa: E402
 import terrain  # noqa: E402
+import town  # noqa: E402
 import vector  # noqa: E402
 from common import (  # noqa: E402
     CD_BELOW_ODN, CELL, E_MAX, E_MIN, GEOD, GRID_E, GRID_N, N_MAX, N_MIN, NX, NY, OUT, PROJ, TO_LOCAL,
@@ -151,10 +152,16 @@ def reference_fixture(lms):
     )
 
 
-def buildings(extract, elev):
-    out = []
+def buildings(extract, elev, mosaic=None):
+    """Footprints with base, eaves and top heights (m ODN), roof shape and ridge bearing, party walls, floors.
+
+    Base: the lowest ground under the footprint (at most 4 m below the median), from the ~3 m LIDAR terrain in the
+    town box (town.py) and the 8 m grid elsewhere. Top: median ground + height (to the ridge).
+    """
+    rows = []
     methods = collections.Counter()
     sources = collections.Counter()
+    roofs = collections.Counter()
     for r in vector.load(extract, "building"):
         g = vector.local(wkb.loads(r["geometry"]))
         for p in vector.polygons(g):
@@ -164,22 +171,55 @@ def buildings(extract, elev):
             p = p.simplify(0.3, preserve_topology=True)
             if p.is_empty or p.area < 4:
                 continue
-            xs, ys = p.exterior.coords.xy
-            ground = sample_grid(elev, np.array(xs), np.array(ys))
-            med = float(np.median(ground))
-            base = max(float(ground.min()), med - 4.0) - 0.3
-            if r["height"]:
-                h, m = float(r["height"]), "data"
-            elif r["num_floors"]:
-                h, m = 3.0 * float(r["num_floors"]) + 1.5, "floors"
-            else:
-                h, m = CLASS_HEIGHT.get(r["class"] or "", DEFAULT_HEIGHT), "class"
-            h = max(2.5, min(h, 40.0))
-            methods[m] += 1
-            for s in r["sources"] or []:
-                sources[s.get("dataset")] += 1
-            out.append(dict(b=r1(base), t=r1(med + h), r=ring(list(p.exterior.coords)[:-1]), n=vector.name_of(r) or None, c=r["class"]))
-    return out, dict(methods=dict(methods), sources=dict(sources))
+            rows.append((r, p))
+    walls = town.party_walls([p for _, p in rows])
+    out = []
+    for (r, p), w in zip(rows, walls):
+        c = p.centroid
+        # Ground along the edges (every ~2 m) and at the centre.
+        pts = [p.exterior.interpolate(d) for d in np.arange(0, p.exterior.length, 2.0)] + [c]
+        xs = np.array([q.x for q in pts])
+        ys = np.array([q.y for q in pts])
+        fine = mosaic is not None and town.in_box(c.x, c.y)
+        ground = terrain.sample(mosaic, xs, ys) if fine else sample_grid(elev, xs, ys)
+        med = float(np.median(ground))
+        base = max(float(ground.min()), med - 4.0) - 0.3
+        if r["height"]:
+            h, m = float(r["height"]), "data"
+        elif r["num_floors"]:
+            h, m = 3.0 * float(r["num_floors"]) + 1.5, "floors"
+        else:
+            h, m = CLASS_HEIGHT.get(r["class"] or "", DEFAULT_HEIGHT), "class"
+        h = max(2.5, min(h, 40.0))
+        methods[m] += 1
+        for s in r["sources"] or []:
+            sources[s.get("dataset")] += 1
+        name = vector.name_of(r) or None
+        shape, ridge, rise = town.roof(p, r["class"], name, r.get("roof_shape"), w)
+        roofs[shape] += 1
+        top = med + h
+        eaves = max(base + 2.4, top - rise) if shape != "f" else top
+        rec = dict(b=r1(base), t=r1(top), r=ring(list(p.exterior.coords)[:-1]), n=name, c=r["class"], s=shape)
+        if shape != "f":
+            rec.update(e=r1(eaves), d=ridge)
+        if any(w):
+            rec["w"] = "".join(str(x) for x in w)
+        if r["num_floors"]:
+            rec["f"] = int(r["num_floors"])
+        out.append(rec)
+    return out, dict(methods=dict(methods), sources=dict(sources), roofs=dict(roofs), partyWalls=sum(1 for w in walls if any(w)), fine=mosaic is not None)
+
+
+def marinas(extract):
+    """Marinas (OSM leisure=marina via Overture land_use): name and centre."""
+    out = []
+    for r in vector.load(extract, "land_use"):
+        if r["class"] != "marina" or not vector.name_of(r):
+            continue
+        c = vector.local(wkb.loads(r["geometry"])).centroid
+        if E_MIN < c.x < E_MAX and N_MIN < c.y < N_MAX:
+            out.append(dict(name=vector.name_of(r), e=r1(c.x), n=r1(c.y)))
+    return sorted(out, key=lambda m: m["name"])
 
 
 def piers(extract, elev):
@@ -297,7 +337,8 @@ def main():
     extract = sys.argv[1]
     os.makedirs(OUT, exist_ok=True)
     print("terrain…", file=sys.stderr)
-    dem, terrain_info = terrain.build()
+    mosaic = terrain.mosaic()
+    dem, terrain_info = terrain.build(mosaic)
     print("water mask…", file=sys.stderr)
     wm = vector.water_mask(extract)
     water = vector.rasterize([wm])
@@ -314,7 +355,9 @@ def main():
     rgb, dmeta = drape.build()
     print("vectors…", file=sys.stderr)
     lms = landmarks(extract)
-    blds, binfo = buildings(extract, elev)
+    blds, binfo = buildings(extract, elev, mosaic)
+    mar = marinas(extract)
+    town_grid, tnx, tny = town.detail_grid(mosaic)
     prs = piers(extract, elev)
     areas = mooring_areas(extract)
     moor = layout_moorings(areas, elev)
@@ -329,6 +372,9 @@ def main():
     q_cur = np.clip(np.round(cur * 1000), -32768, 32767).astype("<i2")
     with open(os.path.join(OUT, "current.i16z"), "wb") as f:
         f.write(pack.pack_grid(q_cur, cmeta["nx"], cmeta["ny"]))
+    q_town = np.clip(np.round(town_grid * 100), -32768, 32767).astype("<i2")
+    with open(os.path.join(OUT, "town.i16z"), "wb") as f:
+        f.write(pack.pack_grid(q_town, tnx, tny))
     Image.fromarray(rgb).save(os.path.join(OUT, "drape.jpg"), quality=86, optimize=True)
     minimap(cls, elev, blds).save(os.path.join(OUT, "minimap.png"), optimize=True)
 
@@ -338,6 +384,7 @@ def main():
         piers=prs,
         mooringAreas=[dict(name=n, ring=ring(list(p.exterior.coords)[:-1])) for n, p in areas],
         moorings=moor,
+        marinas=mar,
         ferries=fer,
         marks=mk,
         marksNotPlaced=MARKS_NOT_PLACED,
@@ -359,6 +406,9 @@ def main():
         current=dict(file="current.i16z", type="int16le", scale=0.001, components=["tidal_ve", "tidal_vn", "river_ve", "river_vn"], **cmeta,
                      meaning="Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)", packing=pack.PACKING),
         drape=dict(file="drape.jpg", **dmeta, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
+        town=dict(file="town.i16z", type="int16le", scale=0.01, cell=town.CELL, nx=tnx, ny=tny, e0=town.BOX["eMin"], n0=town.BOX["nMin"],
+                  order="row-major, rows south to north, cell centres at e0 + (i + 0.5)·cell", packing=pack.PACKING,
+                  meaning="Ground (m ODN) over Dartmouth and Kingswear for the picture: the same LIDAR DTM at 4 m (the physics uses the 8 m grid)"),
         minimap=dict(file="minimap.png", cell=CELL * 2, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
         features="features.json",
         entrance=dict(a=[r1(a[0]), r1(a[1])], b=[r1(b[0]), r1(b[1])]),
@@ -376,7 +426,8 @@ def layer_provenance(terrain_info, binfo, nb, npier, nareas, nmoor, nfer, cls):
         dict(id="terrain", label="Terrain (land)", status="data", tag="V",
              source="Environment Agency LIDAR Composite DTM 2 m via Tilezen terrain tiles (AWS Open Data), z15, resampled to 8 m",
              licence="Open Government Licence v3 (© Environment Agency copyright and/or database right 2015. All rights reserved.)",
-             notes=[f"Tile sources (tile counts): {lidar}. Where LIDAR coverage ends (offshore), tiles blend EU-DEM, SRTM, GMTED and ETOPO1."]),
+             notes=[f"Tile sources (tile counts): {lidar}. Where LIDAR coverage ends (offshore), tiles blend EU-DEM, SRTM, GMTED and ETOPO1.",
+                    "Over Dartmouth and Kingswear the picture uses the same LIDAR at 4 m (town.i16z); the physics keeps the 8 m grid."]),
         dict(id="intertidal", label="Drying areas (mud, sand, rock)", status="data", tag="V",
              source="Same LIDAR DTM: ground above the water surface at the time of the survey, inside the tidal water mask",
              licence="Open Government Licence v3", notes=[f"{int((cls == 1).sum())} cells of 8 m. Survey date and tide not known: the lower limit is the survey water level, about +0.4 m above chart datum."]),
@@ -392,9 +443,12 @@ def layer_provenance(terrain_info, binfo, nb, npier, nareas, nmoor, nfer, cls):
              notes=["10 m pixels: fields, woods and towns are recognisable; individual buildings are not."]),
         dict(id="buildings", label="Buildings", status="data", tag="S",
              source=f"OpenStreetMap and Microsoft ML building footprints via Overture Maps {OVERTURE_RELEASE}", licence=ODBL + "; Microsoft ML Buildings ODbL",
-             notes=[f"{nb} footprints. Heights: {binfo['methods'].get('data', 0)} from the data (Microsoft ML estimates or OSM), {binfo['methods'].get('floors', 0)} from floor counts, {binfo['methods'].get('class', 0)} estimated by building type (E). Flat roofs."]),
+             notes=[f"{nb} footprints. Heights: {binfo['methods'].get('data', 0)} from the data (Microsoft ML estimates or OSM), {binfo['methods'].get('floors', 0)} from floor counts, {binfo['methods'].get('class', 0)} estimated by building type (E).",
+                    "Bases on the LIDAR ground (about 3 m in the towns). Roofs: OSM roof:shape where tagged; otherwise inferred (E) - terraces (shared party walls) "
+                    f"gabled along the street, detached houses hipped or gabled, large and utility buildings flat ({binfo['roofs']}; {binfo['partyWalls']} with party walls). "
+                    "Measured roof shapes need the Environment Agency LIDAR surface model (environment.data.gov.uk, not reachable from the build environment)."]),
         dict(id="landmarks", label="Landmarks", status="data", tag="S", source=f"OSM names and footprints via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,
-             notes=["Shown as their real footprints with labels; no invented detail (towers, battlements)."]),
+             notes=["Shown as their real footprints with labels; churches roofed as gables along their length and castles flat (E). No invented towers or battlements."]),
         dict(id="piers", label="Piers, jetties and pontoons", status="data", tag="S", source=f"OpenStreetMap (man_made=pier) via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,
              notes=[f"{npier} features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'."]),
         dict(id="mooring-areas", label="Mooring areas (trots)", status="data", tag="S", source=f"OpenStreetMap water polygons (Kingswear, Noss and Distins Trots; DHNA anchorage) via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,

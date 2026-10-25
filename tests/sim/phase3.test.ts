@@ -17,6 +17,7 @@ import {
   type ConditionsSettings,
 } from '../../src/sim/index';
 import { loadDartGeo, toKn } from './helpers';
+import { readGrid } from '../../tools/lib/dartGeoNode';
 
 const LONG = 120_000;
 const geo = loadDartGeo();
@@ -233,4 +234,60 @@ describe('Channel-following tidal stream (provisional)', () => {
     expect(Math.hypot(c.n, c.e)).toBeGreaterThan(knToMs(1));
     expect(Math.abs(s.sog - Math.hypot(c.n, c.e))).toBeLessThan(0.15);
   }, LONG);
+});
+
+describe('town detail (hi-fi buildings)', () => {
+  const dir = new URL('../../public/geo/', import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL('manifest.json', dir), 'utf8'));
+  const feats = JSON.parse(readFileSync(new URL('features.json', dir), 'utf8')) as {
+    buildings: { b: number; t: number; r: [number, number][]; s?: string; e?: number; d?: number; w?: string }[];
+    marinas: { name: string; e: number; n: number }[];
+  };
+
+  it('every building has a roof shape; pitched roofs have eaves below the top and a ridge bearing', () => {
+    let gabled = 0;
+    let party = 0;
+    for (const b of feats.buildings) {
+      expect(['g', 'h', 'f']).toContain(b.s);
+      if (b.s !== 'f') {
+        expect(b.e!).toBeLessThan(b.t);
+        expect(b.e!).toBeGreaterThanOrEqual(b.b + 2.39);
+        expect(b.d!).toBeGreaterThanOrEqual(0);
+        expect(b.d!).toBeLessThanOrEqual(180);
+      }
+      if (b.w) {
+        expect(b.w).toHaveLength(b.r.length);
+        party++;
+      }
+      if (b.s === 'g') gabled++;
+    }
+    // Dartmouth and Kingswear are towns of terraces: many footprints share walls.
+    expect(party).toBeGreaterThan(500);
+    expect(gabled).toBeGreaterThan(1000);
+  });
+
+  it('the 4 m town ground agrees with the 8 m grid the physics uses', () => {
+    const t = manifest.town;
+    const raw = new Int16Array(readGrid(dir, t));
+    const geo = loadDartGeo();
+    const diffs: number[] = [];
+    for (let j = 5; j < t.ny; j += 23) {
+      for (let i = 5; i < t.nx; i += 23) {
+        const e = t.e0 + (i + 0.5) * t.cell;
+        const n = t.n0 + (j + 0.5) * t.cell;
+        const fine = raw[j * t.nx + i]! * t.scale;
+        if (fine < 3) continue; // land only (the coarse grid's bed below water is an estimate)
+        diffs.push(Math.abs(fine - geo.bedElevation(n, e)));
+      }
+    }
+    diffs.sort((a, b) => a - b);
+    const median = diffs[Math.floor(diffs.length / 2)]!;
+    console.log(`[phase 3] town ground vs 8 m grid: ${diffs.length} land samples, median |diff| ${median.toFixed(2)} m, 90th percentile ${diffs[Math.floor(diffs.length * 0.9)]!.toFixed(2)} m`);
+    expect(median).toBeLessThan(1.0);
+  });
+
+  it('knows where Dart Marina is (OSM)', () => {
+    const m = feats.marinas.find((x) => x.name === 'Dart Marina')!;
+    expect(Math.hypot(m.e + 251, m.n - 1151)).toBeLessThan(10);
+  });
 });

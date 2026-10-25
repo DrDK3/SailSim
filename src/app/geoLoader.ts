@@ -4,8 +4,12 @@ import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
 /** public/geo/features.json (written by tools/geodata/build.py); local metres, rounded to 0.1 m. */
 export interface DartFeatures {
   landmarks: { name: string; group: 'reference' | 'extra'; e: number; n: number; lat: number; lon: number }[];
-  /** Buildings: base and top (m ODN), footprint ring [e, n][], name, OSM class. */
-  buildings: { b: number; t: number; r: [number, number][]; n: string | null; c: string | null }[];
+  /**
+   * Buildings: base and top (m ODN), footprint ring [e, n][], name, OSM class; roof shape (g gable, h hip,
+   * f flat), eaves height (m ODN) and ridge bearing (deg) for pitched roofs, party walls (a 0/1 flag per edge),
+   * floors (when the data has them). Older data has none of the roof fields (flat roofs).
+   */
+  buildings: { b: number; t: number; r: [number, number][]; n: string | null; c: string | null; s?: 'g' | 'h' | 'f'; e?: number; d?: number; w?: string; f?: number }[];
   piers: ({ name: string | null; floating: boolean } & ({ line: [number, number][]; width: number } | { poly: [number, number][] }))[];
   mooringAreas: { name: string; ring: [number, number][] }[];
   /** Provisional moorings: position, boat kind, length (m), initial heading (deg), area name. */
@@ -29,8 +33,21 @@ export interface DartFeatures {
   marksNotPlaced: { name: string; kind: string; light: string; reason: string }[];
 }
 
+/** The finer ground over Dartmouth and Kingswear, for the picture (town.i16z). */
+export interface TownGridSpec {
+  file: string;
+  packing?: string;
+  scale: number;
+  cell: number;
+  nx: number;
+  ny: number;
+  e0: number;
+  n0: number;
+}
+
 export interface ManifestFull extends DartManifest {
   generated: string;
+  town?: TownGridSpec;
   drape: { file: string; nx: number; ny: number; cell: number; e0: number; n0: number };
   minimap: { file: string; cell: number; e0: number; n0: number };
 }
@@ -41,6 +58,8 @@ export interface DartData {
   geo?: DartGeo;
   features?: DartFeatures;
   drape?: ImageBitmap | HTMLImageElement;
+  /** Town ground (m ODN), row-major from the south-west, when the data has it. */
+  town?: { spec: TownGridSpec; values: Float32Array };
   minimapUrl?: string;
   issues: { asset: string; message: string; effect: string }[];
 }
@@ -92,11 +111,12 @@ export async function loadDartData(base = BASE): Promise<DartData> {
     return out;
   }
   const m = out.manifest;
-  const [elev, cur, feat, drape] = await Promise.allSettled([
+  const [elev, cur, feat, drape, town] = await Promise.allSettled([
     fetchGrid(base, m.elevation),
     fetchGrid(base, m.current),
     fetchOk(base + 'features.json').then((r) => r.json() as Promise<DartFeatures>),
     loadImage(base + m.drape.file),
+    m.town ? fetchGrid(base, m.town) : Promise.resolve(undefined),
   ]);
   if (elev.status === 'rejected') {
     issue(m.elevation.file, elev.reason, 'No terrain or depths: sailing on open water.');
@@ -115,6 +135,13 @@ export async function loadDartData(base = BASE): Promise<DartData> {
   else issue('features.json', feat.reason, 'No buildings, piers, moorings, ferries, marks or landmark labels.');
   if (drape.status === 'fulfilled') out.drape = drape.value;
   else issue(m.drape.file, drape.reason, 'Terrain drawn in plain colours (no satellite colour).');
+  if (town.status === 'fulfilled' && town.value && m.town) {
+    const t = m.town;
+    if (town.value.byteLength === t.nx * t.ny * 2) {
+      const raw = new Int16Array(town.value);
+      out.town = { spec: t, values: Float32Array.from(raw, (v) => v * t.scale) };
+    } else issue(t.file, new Error('wrong size'), 'Town ground drawn from the 8 m grid.');
+  } else if (town.status === 'rejected' && m.town) issue(m.town.file, town.reason, 'Town ground drawn from the 8 m grid.');
   out.minimapUrl = base + m.minimap.file;
   return out;
 }

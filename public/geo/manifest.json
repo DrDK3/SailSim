@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-22T12:46:28Z",
+ "generated": "2026-10-25T10:03:23Z",
  "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
  "origin": {
   "lat": 50.34801,
@@ -57,6 +57,19 @@
   "n0": -5200.0,
   "order": "image rows north to south"
  },
+ "town": {
+  "file": "town.i16z",
+  "type": "int16le",
+  "scale": 0.01,
+  "cell": 4.0,
+  "nx": 450,
+  "ny": 675,
+  "e0": -1000.0,
+  "n0": -1000.0,
+  "order": "row-major, rows south to north, cell centres at e0 + (i + 0.5)\u00b7cell",
+  "packing": "i16-gradient-zigzag-planes-gzip/1",
+  "meaning": "Ground (m ODN) over Dartmouth and Kingswear for the picture: the same LIDAR DTM at 4 m (the physics uses the 8 m grid)"
+ },
  "minimap": {
   "file": "minimap.png",
   "cell": 16.0,
@@ -84,7 +97,8 @@
    "source": "Environment Agency LIDAR Composite DTM 2 m via Tilezen terrain tiles (AWS Open Data), z15, resampled to 8 m",
    "licence": "Open Government Licence v3 (\u00a9 Environment Agency copyright and/or database right 2015. All rights reserved.)",
    "notes": [
-    "Tile sources (tile counts): {'uk_lidar': 150, 'eudem': 56, 'srtm': 39, 'gmted': 45, 'etopo1': 43}. Where LIDAR coverage ends (offshore), tiles blend EU-DEM, SRTM, GMTED and ETOPO1."
+    "Tile sources (tile counts): {'uk_lidar': 150, 'eudem': 56, 'srtm': 39, 'gmted': 45, 'etopo1': 43}. Where LIDAR coverage ends (offshore), tiles blend EU-DEM, SRTM, GMTED and ETOPO1.",
+    "Over Dartmouth and Kingswear the picture uses the same LIDAR at 4 m (town.i16z); the physics keeps the 8 m grid."
    ]
   },
   {
@@ -140,7 +154,8 @@
    "source": "OpenStreetMap and Microsoft ML building footprints via Overture Maps 2026-10-21.0",
    "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation); Microsoft ML Buildings ODbL",
    "notes": [
-    "5404 footprints. Heights: 2041 from the data (Microsoft ML estimates or OSM), 392 from floor counts, 2971 estimated by building type (E). Flat roofs."
+    "5404 footprints. Heights: 2041 from the data (Microsoft ML estimates or OSM), 392 from floor counts, 2971 estimated by building type (E).",
+    "Bases on the LIDAR ground (about 3 m in the towns). Roofs: OSM roof:shape where tagged; otherwise inferred (E) - terraces (shared party walls) gabled along the street, detached houses hipped or gabled, large and utility buildings flat ({'f': 626, 'g': 3246, 'h': 1532}; 1050 with party walls). Measured roof shapes need the Environment Agency LIDAR surface model (environment.data.gov.uk, not reachable from the build environment)."
    ]
   },
   {
@@ -151,7 +166,7 @@
    "source": "OSM names and footprints via Overture Maps 2026-10-21.0",
    "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
    "notes": [
-    "Shown as their real footprints with labels; no invented detail (towers, battlements)."
+    "Shown as their real footprints with labels; churches roofed as gables along their length and castles flat (E). No invented towers or battlements."
    ]
   },
   {
