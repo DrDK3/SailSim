@@ -135,8 +135,8 @@ The physics grids are byte-identical to before.
 
 | Item | Change |
 |---|---|
-| Data download | `features.json` grew from 700 to 840 kB (about 220 kB gzipped). `town.i16z` adds 159 kB |
-| Rendering | The water shader does more work: 8 wave trains, per-pixel normals, a 34,000-vertex mesh. Each boat's fixed parts are merged into about 15 meshes. Real-GPU frame times are not measured here (issue 43) |
+| Download | `features.json` grew from 700 to 840 kB (189 → 220 kB gzipped). `town.i16z` adds 159 kB. The app's main bundle grew from 287 to 321 kB (minified) |
+| Rendering | The water shader does more work: 8 wave trains, per-pixel normals, a 34,000-vertex mesh. Each boat's fixed parts are merged into about 15 meshes, and the town ground has a middle level of detail. Under software rendering in this container the frame rate matches the main branch's (0.58 against 0.55 frames a second; it is CPU-bound here). Real-GPU frame times are not measured here (issue 43). The physics cost is unchanged: about 1 ms per frame with 21 boats (`npm run perf`) |
 | External services and paid infrastructure | None new. The EA host (E1) is free; it needs allowing in this environment's network settings |
 
 ## Requests
