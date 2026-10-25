@@ -1,5 +1,6 @@
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
-import { squibParams } from '../sim/boat/squib';
+import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
+import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clamp } from '../sim/math/angles';
 import { optimalSheets } from '../sim/control/trim';
@@ -53,6 +54,8 @@ export interface AppScenario {
   race?: { sequence: 'one-minute' | 'three-minute' | 'five-minute'; startInS: number };
   /** AI boats racing against the user (0 = sail the course alone), their level and the preparatory flag. */
   fleet?: { aiCount: number; level: AiLevel; prepFlag: PrepFlag };
+  /** The user's Squib type (data/boats/squib/variants.json); default the Rondar. AI boats sail the default. */
+  boat?: SquibTypeId;
 }
 
 /** One row of the live fleet ranking or the results. */
@@ -248,6 +251,8 @@ export class SimController {
   tideSources: DataSource[] = [];
   liveIssues: string[] = [];
   dartData?: DartData;
+  /** The river traffic of the current run (ferries, Dart Marina boats). */
+  traffic?: RiverTraffic;
   private dartStatus: UiState['dart']['status'] = 'loading';
   private dartScene?: DartScene;
   private showLabels = true;
@@ -290,6 +295,13 @@ export class SimController {
       opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
     let race: SimController['race'];
     let sim: Simulation;
+    const boatParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
+    // River traffic for this run (its ferries crab in this run's stream): shared by the physics and the picture.
+    const feats = this.dartData?.features;
+    const startMs = built.env.startEpochMs ?? Date.parse(scenario.conditions.startTime);
+    const traffic = feats
+      ? buildRiverTraffic({ ferries: feats.ferries, current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e), geo, moorings: feats.moorings, marinas: feats.marinas?.filter((m) => m.name === 'Dart Marina') })
+      : undefined;
     if (scenario.course) {
       try {
         const w = windFrom(built.env.wind(0, loc.n, loc.e));
@@ -308,10 +320,12 @@ export class SimController {
           human: {
             controller: () => this.sampleInputs(),
             input: startInput,
+            params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             initial: fleet.aiCount > 0 ? undefined : preStartPosition,
           },
           committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
+          traffic,
         });
         const session = created.session;
         race = { course, resolved: session.course, session, warnings: created.warnings };
@@ -324,7 +338,7 @@ export class SimController {
     } else {
       // Free sailing: the user's boat alone in a one-boat fleet, so moored boats and ferries are solid.
       sim = new Simulation({
-        params: squibParams(),
+        params: boatParams,
         env: built.env,
         seabed: geo,
         ownsEnvironment: false,
@@ -335,11 +349,12 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;
     this.scenarioError = undefined;
+    this.traffic = traffic;
     this.scenario = structuredClone(scenario);
     this.built = built;
     this.race = race;
@@ -362,6 +377,7 @@ export class SimController {
     this.fleetPrev = this.fleetCurr;
     this.showResults = false;
     this.resultsShown = false;
+    this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams);
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
@@ -597,7 +613,7 @@ export class SimController {
         id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
         mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
         mainInverted: Math.abs(sn.forces.main.incidence) > Math.PI / 2, jibInverted: Math.abs(sn.forces.jib.incidence) > Math.PI / 2,
-        rudder: sn.rudder, crewY: sn.crewY,
+        rudder: sn.rudder, crewY: sn.crewY, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
       });
     }
     this.fleetCurr = m;
@@ -676,7 +692,7 @@ export class SimController {
     this.dartStatus = data.geo ? 'loaded' : 'unavailable';
     if (data.geo && data.manifest && this.view) {
       try {
-        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape });
+        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
       } catch (err) {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
@@ -695,6 +711,7 @@ export class SimController {
     } catch (err) {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
+    this.view?.setBoatType(isSquibType(this.scenario.boat) ? this.scenario.boat : DEFAULT_SQUIB_TYPE, this.sim.params);
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
@@ -776,11 +793,13 @@ export class SimController {
     this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
       puffs: sim.env.windField?.puffs() ?? [],
       windAgainstTide: info?.windAgainstTide ?? false,
+      sea: sim.env.seaState ? (n, e) => sim.env.seaState!(sim.time, n, e) : undefined,
       dart: this.dartScene
         ? {
             waterLevel: sim.waterLevel(),
             epochMs: (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000,
             stream: (n, e) => sim.env.current(sim.time, n, e),
+            traffic: this.traffic,
             windFromDir: this.currSnap.twdGround,
             showLabels: this.showLabels,
           }

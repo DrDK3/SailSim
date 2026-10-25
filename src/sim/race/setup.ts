@@ -3,6 +3,8 @@ import type { Environment } from '../env/environment';
 import type { DartGeo } from '../geo/dart';
 import { DART_PROJECTION } from '../geo/projection';
 import { squibParams } from '../boat/squib';
+import type { BoatParams } from '../boat/params';
+import type { RiverTraffic } from '../env/traffic';
 import { buildRestrictions } from '../course/restrictions';
 import { DART_LEVELS, validateCourse, type CourseIssue } from '../course/validate';
 import type { Course } from '../course/types';
@@ -37,8 +39,12 @@ export interface RaceSetup {
     input?: Partial<ControlInput>;
     /** Where the user's boat starts (or a function of the resolved course); default: the first starting slot. */
     initial?: InitialConditions | ((r: ResolvedCourse) => InitialConditions);
+    /** The user's Squib type (default: the Rondar type the AI fleet sails). */
+    params?: BoatParams;
   };
   committee: Partial<Omit<CommitteeOptions, 'startAt'>> & { startAt: number };
+  /** River traffic shared with the picture (default: built here from the features' ferry routes). */
+  traffic?: RiverTraffic;
 }
 
 /** Hull colours for AI boats (distinct, readable on water). */
@@ -115,6 +121,7 @@ export function createRace(s: RaceSetup): CreatedRace {
   const session = new RaceSession({
     env,
     params,
+    humanParams: s.human?.params,
     seabed: geo,
     course: s.course,
     resolved: v.resolved,
@@ -124,6 +131,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     humanInput: s.human?.input,
     moored: s.features?.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })),
     ferries: s.features?.ferries,
+    traffic: s.traffic,
     mooringAreas: restrictions?.moorings,
     seed: s.seed,
   });

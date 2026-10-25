@@ -72,8 +72,8 @@ describe('boat data provenance', () => {
     const p = squibProvenance();
     expect(p.classSpec.length).toBeGreaterThan(10);
     expect(p.calibration.length).toBeGreaterThan(40);
-    // Calibration coefficients are estimates by definition.
-    expect(p.calibration.every((r) => r.tag === 'E')).toBe(true);
+    // Calibration coefficients are estimates by definition; the one fact among them is the build's cockpit.
+    expect(p.calibration.filter((r) => r.tag !== 'E').map((r) => `${r.path} ${r.tag}`)).toEqual(['cockpit.selfDraining S']);
   });
 
   it('rejects parameters without provenance', () => {

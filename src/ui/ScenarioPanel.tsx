@@ -7,6 +7,44 @@ import { dataAgeMinutes } from '../sim/env/weather';
 import type { AiLevel } from '../sim/ai/skipper';
 import type { PrepFlag } from '../sim/race/committee';
 import { SKY_PRESETS, type SkyPreset } from '../sim/env/sky';
+import { DEFAULT_SQUIB_TYPE, SQUIB_TYPES, type SquibTypeId } from '../sim/boat/squib';
+
+/** The Squib type: what each build or sail package changes, with the provenance of every difference. */
+function BoatChoice({ value, onChange }: { value: SquibTypeId; onChange: (id: SquibTypeId) => void }) {
+  const t = SQUIB_TYPES.find((x) => x.id === value) ?? SQUIB_TYPES[0]!;
+  return (
+    <>
+      <h4>Boat</h4>
+      <label className="field select-field">
+        <span>Squib type</span>
+        <select value={t.id} onChange={(e) => onChange(e.target.value as SquibTypeId)} data-testid="boat-type">
+          {SQUIB_TYPES.map((x) => (
+            <option key={x.id} value={x.id}>{x.label}</option>
+          ))}
+        </select>
+      </label>
+      <p className="fine">{t.summary}</p>
+      {t.differences.length > 0 && (
+        <details className="boat-diff">
+          <summary>What changes ({t.differences.length})</summary>
+          <table>
+            <tbody>
+              {t.differences.map((d) => (
+                <tr key={d.path}>
+                  <td><code>{d.path}</code></td>
+                  <td>{String(d.value)} {d.unit === '-' ? '' : d.unit}</td>
+                  <td title="Provenance: S secondary source, E estimate">{d.tag}</td>
+                  <td>{d.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+      <p className="fine">Hull: {t.hullLabel}. Sails: {t.sailsLabel}. AI boats sail the Rondar default.</p>
+    </>
+  );
+}
 
 function Num({ label, value, min, max, step, onChange, unit, disabled }: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void; disabled?: boolean }) {
   return (
@@ -76,6 +114,8 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
   return (
     <section className="panel scenario" aria-label="Scenario settings">
       <h3>Scenario</h3>
+      <BoatChoice value={draft.boat ?? DEFAULT_SQUIB_TYPE} onChange={(boat) => setDraft({ ...draft, boat })} />
+      <h4>Start</h4>
       <TimeField label="Start time" iso={c.startTime} onChange={(iso) => setC({ startTime: iso })} />
       <div className="row tight">
         <button onClick={() => setC({ startTime: new Date().toISOString().slice(0, 16) + ':00Z' })}>Now</button>

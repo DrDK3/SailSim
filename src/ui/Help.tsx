@@ -37,6 +37,13 @@ export function Help({ onClose, onTutorial }: { onClose: () => void; onTutorial:
         <table>
           <tbody>{KEYS.map(([k, d]) => <tr key={k}><td className="key">{k}</td><td>{d}</td></tr>)}</tbody>
         </table>
+        <h3>Your Squib</h3>
+        <p>
+          In Scenario → Boat, choose a Rondar (the modern standard: its cockpit drains itself), a classic Hunter or Parker
+          hull (water that comes over the rail stays until your crew bails it, so keep the rail out of the water), or the
+          new Hyde B3 / Batt sails. The burgee at the masthead shows the apparent wind. With wind against tide, as in the
+          harbour entrance on the ebb, expect short, steep waves; More instruments shows the waves.
+        </p>
         <h3>Racing</h3>
         <p>
           In Scenario, choose a course and up to 20 AI boats. Watch the flags: class flag at the warning signal, P (or U,
@@ -48,8 +55,9 @@ export function Help({ onClose, onTutorial }: { onClose: () => void; onTutorial:
         </p>
         <p className="fine">
           On the River Dart: terrain, buildings, piers and the shoreline come from open data; water
-          depths mid-channel, individual moorings, ferry timetables and the tidal stream are provisional estimates (see
-          Layers). You can run aground: the keel stops you in shallow water, and moored boats and ferries are solid. The boat heels dynamically, the boom swings on its own and can gybe
+          depths mid-channel, individual moorings, most ferry timetables, vessel sizes, roof shapes and the tidal stream are
+          provisional estimates (see Layers). You can run aground: the keel stops you in shallow water, and moored boats,
+          ferries and the boats leaving Dart Marina are solid. The boat heels dynamically, the boom swings on its own and can gybe
           unexpectedly by the lee, and the wind has seeded gusts and shifts (dark patches on the water are puffs).
           Boat dimensions are from class sources; hydrodynamic and sail coefficients are estimates awaiting
           calibration. Weather and tide sources are labelled in the instruments. Not for navigation or performance

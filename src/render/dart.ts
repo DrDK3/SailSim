@@ -3,7 +3,9 @@ import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
+import type { RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
+import { TrafficView } from './traffic';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -16,13 +18,14 @@ const FAR_LOD_M = 1400;
 const SUBMERGED_ODN = -3.6; // chunks entirely below this never show (below the lowest tides)
 const FIXED_DECK_ODN = 3.0; // E: deck level of fixed jetties and quays
 const LABEL_RANGE_M = 1600;
-const FERRY_LABEL_RANGE_M = 900;
 
 export interface DartSceneInput {
   manifest: ManifestFull;
   geo: DartGeo;
   features?: DartFeatures;
   drape?: TexImageSource;
+  /** Finer ground over the towns (4 m), drawn in place of the 8 m grid there. */
+  town?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; values: Float32Array };
 }
 
 export interface DartUpdate {
@@ -33,6 +36,8 @@ export interface DartUpdate {
   stream: (n: number, e: number) => NE;
   windFromDir: number;
   showLabels: boolean;
+  /** The run's river traffic (ferries crabbing in its stream, Dart Marina boats); else ferries alone. */
+  traffic?: RiverTraffic;
 }
 
 export class DartScene {
@@ -43,7 +48,7 @@ export class DartScene {
   private readonly mooredMast?: THREE.InstancedMesh;
   private readonly mooredCabin?: THREE.InstancedMesh;
   private readonly buoys?: THREE.InstancedMesh;
-  private readonly ferryMeshes: { mesh: THREE.Group; label?: THREE.Sprite }[] = [];
+  private readonly traffic = new TrafficView();
   private readonly markLights: { mesh: THREE.Mesh; period: number; flashes: number }[] = [];
   private lastMooringUpdate = -Infinity;
   private readonly features?: DartFeatures;
@@ -71,6 +76,87 @@ export class DartScene {
 
   // ------------------------------------------------------------------ terrain
 
+  private get townBox(): { eMin: number; eMax: number; nMin: number; nMax: number } | undefined {
+    const t = this.input.town?.spec;
+    return t ? { eMin: t.e0, eMax: t.e0 + t.nx * t.cell, nMin: t.n0, nMax: t.n0 + t.ny * t.cell } : undefined;
+  }
+
+  /** The towns' finer ground (4 m LIDAR), in chunks with a far LOD and skirts, sharing the drape material. */
+  private buildTownTerrain(material: THREE.Material): void {
+    const town = this.input.town;
+    if (!town) return;
+    const t = town.spec;
+    const d = this.input.manifest.drape;
+    const width = d.nx * d.cell;
+    const height = d.ny * d.cell;
+    const z = (i: number, j: number) => town.values[Math.max(0, Math.min(j, t.ny - 1)) * t.nx + Math.max(0, Math.min(i, t.nx - 1))]!;
+    const C = 64;
+    for (let j0 = 0; j0 < t.ny - 1; j0 += C) {
+      for (let i0 = 0; i0 < t.nx - 1; i0 += C) {
+        const i1 = Math.min(i0 + C, t.nx - 1);
+        const j1 = Math.min(j0 + C, t.ny - 1);
+        const lod = new THREE.LOD();
+        // Full 4 m detail only near the camera; 8 m, then 16 m further off.
+        for (const [step, dist] of [[1, 0], [2, 450], [4, FAR_LOD_M]] as const) {
+          const is: number[] = [];
+          for (let i = i0; i < i1; i += step) is.push(i);
+          is.push(i1);
+          const js: number[] = [];
+          for (let j = j0; j < j1; j += step) js.push(j);
+          js.push(j1);
+          const cols = is.length;
+          const rows = js.length;
+          const count = cols * rows + 2 * (cols + rows);
+          const pos = new Float32Array(count * 3);
+          const nor = new Float32Array(count * 3);
+          const uv = new Float32Array(count * 2);
+          let k = 0;
+          const put = (i: number, j: number, drop: number) => {
+            const e = t.e0 + (i + 0.5) * t.cell;
+            const n = t.n0 + (j + 0.5) * t.cell;
+            const h = z(i, j);
+            pos.set([e, h - drop, -n], k * 3);
+            const nv = new THREE.Vector3(-(z(i + 1, j) - z(i - 1, j)) / (2 * t.cell), 1, (z(i, j + 1) - z(i, j - 1)) / (2 * t.cell)).normalize();
+            nor.set([nv.x, nv.y, nv.z], k * 3);
+            uv.set([(e - d.e0) / width, (n - d.n0) / height], k * 2);
+            return k++;
+          };
+          for (const j of js) for (const i of is) put(i, j, 0);
+          const idx: number[] = [];
+          for (let r = 0; r < rows - 1; r++) {
+            for (let c = 0; c < cols - 1; c++) {
+              const a = r * cols + c;
+              idx.push(a, a + 1, a + cols, a + 1, a + cols + 1, a + cols);
+            }
+          }
+          const skirt = (edge: number[]) => {
+            const start = k;
+            for (const v of edge) put(is[v % cols]!, js[Math.floor(v / cols)]!, 20);
+            for (let q = 0; q < edge.length - 1; q++) {
+              const a = edge[q]!;
+              const b = edge[q + 1]!;
+              idx.push(a, start + q, b, b, start + q, start + q + 1);
+              idx.push(a, b, start + q, b, start + q + 1, start + q);
+            }
+          };
+          skirt(Array.from({ length: cols }, (_, c) => c));
+          skirt(Array.from({ length: cols }, (_, c) => (rows - 1) * cols + c));
+          skirt(Array.from({ length: rows }, (_, r) => r * cols));
+          skirt(Array.from({ length: rows }, (_, r) => r * cols + cols - 1));
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, k * 3), 3));
+          geo.setAttribute('normal', new THREE.BufferAttribute(nor.subarray(0, k * 3), 3));
+          geo.setAttribute('uv', new THREE.BufferAttribute(uv.subarray(0, k * 2), 2));
+          geo.setIndex(idx);
+          geo.computeBoundingSphere();
+          lod.addLevel(new THREE.Mesh(geo, material), dist);
+        }
+        lod.name = 'terrain-town';
+        this.fixed.add(lod);
+      }
+    }
+  }
+
   private buildTerrain(): void {
     const g = this.input.geo.elevation;
     const d = this.input.manifest.drape;
@@ -95,6 +181,15 @@ export class DartScene {
         let max = -Infinity;
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) max = Math.max(max, z(i, j));
         if (max < SUBMERGED_ODN) continue;
+        // Wholly under the town's finer ground: not drawn at all.
+        const tb = this.townBox;
+        if (tb && this.input.drape) {
+          const e0 = g.e0 + (i0 + 0.5) * g.cell;
+          const e1 = g.e0 + (i1 + 0.5) * g.cell;
+          const n0 = g.n0 + (j0 + 0.5) * g.cell;
+          const n1 = g.n0 + (j1 + 0.5) * g.cell;
+          if (e0 > tb.eMin + g.cell && e1 < tb.eMax - g.cell && n0 > tb.nMin + g.cell && n1 < tb.nMax - g.cell) continue;
+        }
         const lod = new THREE.LOD();
         for (const [step, dist] of [[1, 0], [4, FAR_LOD_M]] as const) {
           lod.addLevel(new THREE.Mesh(this.chunkGeometry(i0, j0, i1, j1, step, width, height, !this.input.drape), material), dist);
@@ -103,6 +198,7 @@ export class DartScene {
         this.fixed.add(lod);
       }
     }
+    if (this.input.drape) this.buildTownTerrain(material);
   }
 
   private chunkGeometry(i0: number, j0: number, i1: number, j1: number, step: number, width: number, height: number, colours: boolean): THREE.BufferGeometry {
@@ -124,10 +220,13 @@ export class DartScene {
     const uv = new Float32Array(count * 2);
     const col = colours ? new Float32Array(count * 3) : undefined;
     let k = 0;
+    const tb = this.townBox;
     const put = (i: number, j: number, drop: number) => {
       const e = g.e0 + (i + 0.5) * g.cell;
       const n = g.n0 + (j + 0.5) * g.cell;
-      const h = zi(i, j);
+      // Inside the town the finer ground is drawn instead: sink the coarse surface out of sight there.
+      const under = tb && e > tb.eMin + g.cell && e < tb.eMax - g.cell && n > tb.nMin + g.cell && n < tb.nMax - g.cell ? 60 : 0;
+      const h = zi(i, j) - under;
       pos.set([e, h - drop, -n], k * 3);
       const dzde = (zi(i + 1, j) - zi(i - 1, j)) / (2 * g.cell);
       const dzdn = (zi(i, j + 1) - zi(i, j - 1)) / (2 * g.cell);
@@ -179,8 +278,9 @@ export class DartScene {
   // ---------------------------------------------------------------- buildings
 
   /**
-   * Buildings from the OSM footprints and heights (GEODATA.md). Detail added here is illustrative, not data:
-   * hipped roofs on house-sized footprints, windows drawn by the material on every wall (some lit after dark),
+   * Buildings from the OSM footprints, heights and bases (GEODATA.md), with the roofs the data gives or the
+   * pipeline infers: gables along a terrace with party walls (no windows on those), hips, flat roofs. Detail
+   * added here is illustrative, not data: windows drawn by the material (some lit after dark), chimney stacks,
    * and painted-render wall colours like those of the Dartmouth and Kingswear waterfronts.
    */
   private buildBuildings(f: DartFeatures): void {
@@ -198,6 +298,7 @@ export class DartScene {
     const stone = lin(0x9a948a);
     const v = new THREE.Vector3();
     const w = new THREE.Vector3();
+    const DEG = Math.PI / 180;
     f.buildings.forEach((b, idx) => {
       const ring = b.r;
       if (ring.length < 3) return;
@@ -206,80 +307,175 @@ export class DartScene {
       const key = `${Math.floor(cx / 800)},${Math.floor(cn / 800)}`;
       let t = tiles.get(key);
       if (!t) tiles.set(key, (t = { pos: [], nor: [], col: [], wall: [] }));
+      const T = t;
       const landmark = /castle|church|petrox|saviour|college|chapel/i.test(b.n ?? '') || b.c === 'church' || b.c === 'chapel';
       const wall = landmark ? stone : wallPalette[(idx * 7919) % wallPalette.length]!;
       const roof = landmark ? lin(0x7d786f) : roofPalette[(idx * 104729) % roofPalette.length]!;
       // Windows on ordinary buildings (flag > 0.5; its fraction seeds which windows are lit at night).
       const winFlag = landmark || b.c === 'garage' ? 0 : 1 + ((idx * 37) % 97) / 100;
-      const height = b.t - b.b;
-      // Counter-clockwise check (in e,n) so that wall normals face out.
+      // Counter-clockwise (in e, n) so that wall normals face out; party-wall flags follow the ring.
       let area = 0;
       for (let i = 0; i < ring.length; i++) {
         const [e0, n0] = ring[i]!;
         const [e1, n1] = ring[(i + 1) % ring.length]!;
         area += e0 * n1 - e1 * n0;
       }
-      const pts = area >= 0 ? ring : [...ring].reverse();
-      for (let i = 0; i < pts.length; i++) {
-        const [e0, n0] = pts[i]!;
-        const [e1, n1] = pts[(i + 1) % pts.length]!;
-        const len = Math.hypot(e1 - e0, n1 - n0);
-        if (len < 1e-6) continue;
-        // Outward normal of a CCW ring edge in (e, n) is (dn, −de); in three.js (x = e, z = −n).
-        const nx = (n1 - n0) / len;
-        const nz = (e1 - e0) / len;
-        // Window bays are centred on each wall (a wall narrower than a bay gets one centred window).
+      const ccw = area >= 0;
+      const pts = ccw ? ring : [...ring].reverse();
+      const flags = b.w ? (ccw ? [...b.w] : [...b.w].reverse().slice(1).concat([...b.w].reverse()[0]!)) : [];
+      const party = (i: number) => flags[i] === '1';
+      // Roof: from the data (gable along the ridge bearing, hip, flat), else the older rule (hip on small simple
+      // footprints).
+      const shape = b.s ?? (!landmark && pts.length <= 8 && Math.abs(area) / 2 <= 400 && b.t - b.b >= 3.5 && b.c !== 'garage' ? 'h' : 'f');
+      const eaves = b.s ? (b.e ?? b.t) : b.t;
+      const wallH = eaves - b.b;
+      // Storeys from the data's floor count when there is one: the window grid is scaled to them.
+      const storeyScale = b.f ? STOREY_M / Math.max(2.4, wallH / b.f) : 1;
+
+      const emitWall = (p0: [number, number], p1: [number, number], top0: number, top1: number, windows: boolean) => {
+        const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+        if (len < 1e-6) return;
+        const nx = (p1[1] - p0[1]) / len;
+        const nz = (p1[0] - p0[0]) / len;
         const u0 = len < WINDOW_BAY_M ? (WINDOW_BAY_M - len) / 2 : -(len % WINDOW_BAY_M) / 2;
+        const flag = windows ? winFlag : 0;
         const quad: [number, number, number, number, number][] = [
-          [e0, b.b, -n0, u0, 0], [e1, b.b, -n1, u0 + len, 0], [e1, b.t, -n1, u0 + len, height],
-          [e0, b.b, -n0, u0, 0], [e1, b.t, -n1, u0 + len, height], [e0, b.t, -n0, u0, height],
+          [p0[0], b.b, -p0[1], u0, 0], [p1[0], b.b, -p1[1], u0 + len, 0], [p1[0], top1, -p1[1], u0 + len, top1 - b.b],
+          [p0[0], b.b, -p0[1], u0, 0], [p1[0], top1, -p1[1], u0 + len, top1 - b.b], [p0[0], top0, -p0[1], u0, top0 - b.b],
         ];
         for (const [x, y, z, u, h] of quad) {
-          t.pos.push(x, y, z);
-          t.nor.push(nx, 0, nz);
-          t.col.push(...wall);
-          t.wall.push(u, h, height, winFlag);
+          T.pos.push(x, y, z);
+          T.nor.push(nx, 0, nz);
+          T.col.push(...wall);
+          T.wall.push(u, h * storeyScale, wallH * storeyScale, flag);
         }
-      }
-      const tri = (a: number[], b2: number[], c: number[]) => {
-        // Flat-shaded roof triangle, wound to face up.
+      };
+      const tri = (a: number[], b2: number[], c: number[], colour = roof) => {
+        // Flat-shaded triangle, wound to face up (roofs) or out (vertical faces keep their winding).
         v.set(b2[0]! - a[0]!, b2[1]! - a[1]!, b2[2]! - a[2]!);
         w.set(c[0]! - a[0]!, c[1]! - a[1]!, c[2]! - a[2]!);
         const nrm = v.cross(w);
         if (nrm.lengthSq() < 1e-10) return;
         nrm.normalize();
-        const verts = nrm.y >= 0 ? [a, b2, c] : [a, c, b2];
-        if (nrm.y < 0) nrm.negate();
-        for (const p of verts) {
-          t.pos.push(p[0]!, p[1]!, p[2]!);
-          t.nor.push(nrm.x, nrm.y, nrm.z);
-          t.col.push(...roof);
-          t.wall.push(0, 0, 0, 0);
+        const flip = nrm.y < -1e-6;
+        const verts = flip ? [a, c, b2] : [a, b2, c];
+        if (flip) nrm.negate();
+        for (const q of verts) {
+          T.pos.push(q[0]!, q[1]!, q[2]!);
+          T.nor.push(nrm.x, nrm.y, nrm.z);
+          T.col.push(...colour);
+          T.wall.push(0, 0, 0, 0);
         }
       };
-      const ridge = !landmark && pts.length <= 8 && Math.abs(area) / 2 <= 400 && height >= 3.5 && b.c !== 'garage' ? hipRidge(pts) : undefined;
+      const flatTop = (poly: [number, number][], height: (p: [number, number]) => number) => {
+        const contour = poly.map(([e, n]) => new THREE.Vector2(e, n));
+        for (const tr of THREE.ShapeUtils.triangulateShape(contour, [])) {
+          const [p0, p1, p2] = [poly[tr[0]!]!, poly[tr[1]!]!, poly[tr[2]!]!];
+          tri([p0[0], height(p0), -p0[1]], [p1[0], height(p1), -p1[1]], [p2[0], height(p2), -p2[1]]);
+        }
+      };
+      /** A chimney stack (render or stone, E): a box on the roof with a cap. */
+      const chimney = (p: [number, number], along: [number, number], foot: number, top: number) => {
+        const [ax, an] = along;
+        const [px, pn] = [an, -ax];
+        const hw = 0.3;
+        const hd = 0.5;
+        const c = [
+          [p[0] - ax * hw - px * hd, p[1] - an * hw - pn * hd], [p[0] + ax * hw - px * hd, p[1] + an * hw - pn * hd],
+          [p[0] + ax * hw + px * hd, p[1] + an * hw + pn * hd], [p[0] - ax * hw + px * hd, p[1] - an * hw + pn * hd],
+        ] as [number, number][];
+        for (let i = 0; i < 4; i++) {
+          const q0 = c[i]!;
+          const q1 = c[(i + 1) % 4]!;
+          const a0 = [q0[0], foot, -q0[1]];
+          const a1 = [q1[0], foot, -q1[1]];
+          const b0 = [q0[0], top, -q0[1]];
+          const b1 = [q1[0], top, -q1[1]];
+          // Side faces, both windings (cheap and always visible).
+          for (const [x, y, z] of [a0, a1, b1, a0, b1, b0, a0, b1, a1, a0, b0, b1]) {
+            T.pos.push(x!, y!, z!);
+            T.nor.push(0, 0.2, 0);
+            T.col.push(...wall);
+            T.wall.push(0, 0, 0, 0);
+          }
+        }
+        tri([c[0]![0], top, -c[0]![1]], [c[1]![0], top, -c[1]![1]], [c[2]![0], top, -c[2]![1]], lin(0x3a3633));
+        tri([c[0]![0], top, -c[0]![1]], [c[2]![0], top, -c[2]![1]], [c[3]![0], top, -c[3]![1]], lin(0x3a3633));
+      };
+
+      if (shape === 'g' && b.d !== undefined && eaves < b.t) {
+        // Gable: the ridge runs on the bearing b.d across the middle of the footprint; each side slopes down
+        // to the eaves; the gable ends are walls that rise to the ridge.
+        const d = b.d * DEG;
+        const pv: [number, number] = [Math.cos(d), -Math.sin(d)];
+        const vOf = (q: [number, number]) => q[0] * pv[0] + q[1] * pv[1];
+        const vs = pts.map(vOf);
+        const vMid = (Math.min(...vs) + Math.max(...vs)) / 2;
+        const half = (Math.max(...vs) - Math.min(...vs)) / 2;
+        const rise = b.t - eaves;
+        const h = (q: [number, number]) => eaves + rise * Math.max(0, 1 - Math.abs(vOf(q) - vMid) / half);
+        // The ring with the ridge's two ends inserted on the gable edges.
+        const aug: { p: [number, number]; edge: number; ridge: boolean }[] = [];
+        for (let i = 0; i < pts.length; i++) {
+          const p0 = pts[i]!;
+          const p1 = pts[(i + 1) % pts.length]!;
+          aug.push({ p: p0, edge: i, ridge: Math.abs(vOf(p0) - vMid) < 1e-6 });
+          const a = vOf(p0) - vMid;
+          const c = vOf(p1) - vMid;
+          if (a * c < 0) {
+            const f2 = a / (a - c);
+            aug.push({ p: [p0[0] + (p1[0] - p0[0]) * f2, p0[1] + (p1[1] - p0[1]) * f2], edge: i, ridge: true });
+          }
+        }
+        const ridgePts = aug.filter((x) => x.ridge);
+        if (ridgePts.length === 2) {
+          for (let i = 0; i < aug.length; i++) {
+            const a = aug[i]!;
+            const c = aug[(i + 1) % aug.length]!;
+            emitWall(a.p, c.p, h(a.p), h(c.p), !party(a.edge));
+          }
+          for (const side of [-1, 1]) {
+            const poly = aug.filter((x) => x.ridge || Math.sign(vOf(x.p) - vMid) === side).map((x) => x.p);
+            if (poly.length >= 3) flatTop(poly, h);
+          }
+          // Chimneys at the ridge ends on party walls (terraces), or on one gable of a detached house (E).
+          const along: [number, number] = [Math.sin(d), Math.cos(d)];
+          const [r0, r1] = [ridgePts[0]!, ridgePts[1]!];
+          const span = Math.hypot(r1.p[0] - r0.p[0], r1.p[1] - r0.p[1]);
+          if (span > 3 && !landmark) {
+            const ends = [r0, r1].filter((x, k) => party(x.edge) || (!flags.includes('1') && k === idx % 2));
+            for (const x of ends) {
+              const other = x === r0 ? r1 : r0;
+              const inward: [number, number] = [(other.p[0] - x.p[0]) / span, (other.p[1] - x.p[1]) / span];
+              const at: [number, number] = [x.p[0] + inward[0] * 0.35, x.p[1] + inward[1] * 0.35];
+              chimney(at, along, b.t - 0.6, b.t + 0.9);
+            }
+          }
+          return;
+        }
+      }
+      const ridge = shape === 'h' ? hipRidge(pts) : undefined;
       if (ridge) {
-        // Hipped roof: every eave edge rises to its nearest point on the ridge (E: pitch about 30°).
-        const rise = Math.min(3.5, Math.max(1.0, 0.55 * ridge.halfWidth));
+        // Hipped roof: every eave edge rises to its nearest point on the ridge.
+        const rise = b.s ? Math.max(0.8, b.t - eaves) : Math.min(3.5, Math.max(1.0, 0.55 * ridge.halfWidth));
+        const top = b.s ? eaves : b.t;
+        for (let i = 0; i < pts.length; i++) emitWall(pts[i]!, pts[(i + 1) % pts.length]!, top, top, !party(i));
         for (let i = 0; i < pts.length; i++) {
           const p0 = pts[i]!;
           const p1 = pts[(i + 1) % pts.length]!;
           const r0 = ridge.at(p0);
           const r1 = ridge.at(p1);
-          const a = [p0[0], b.t, -p0[1]];
-          const c = [p1[0], b.t, -p1[1]];
-          const ra = [r0[0], b.t + rise, -r0[1]];
-          const rc = [r1[0], b.t + rise, -r1[1]];
+          const a = [p0[0], top, -p0[1]];
+          const c = [p1[0], top, -p1[1]];
+          const ra = [r0[0], top + rise, -r0[1]];
+          const rc = [r1[0], top + rise, -r1[1]];
           tri(a, c, rc);
           tri(a, rc, ra);
         }
-      } else {
-        const contour = pts.map(([e, n]) => new THREE.Vector2(e, n));
-        for (const tr of THREE.ShapeUtils.triangulateShape(contour, [])) {
-          const [p0, p1, p2] = [pts[tr[0]!]!, pts[tr[1]!]!, pts[tr[2]!]!];
-          tri([p0[0], b.t, -p0[1]], [p1[0], b.t, -p1[1]], [p2[0], b.t, -p2[1]]);
-        }
+        return;
       }
+      for (let i = 0; i < pts.length; i++) emitWall(pts[i]!, pts[(i + 1) % pts.length]!, b.t, b.t, !party(i));
+      flatTop(pts, () => b.t);
     });
     const mat = buildingMaterial(this.buildingUniforms);
     for (const t of tiles.values()) {
@@ -297,6 +493,7 @@ export class DartScene {
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
   setDaylight(day: number): void {
+    this.traffic.setDaylight(day);
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
   }
@@ -397,24 +594,19 @@ export class DartScene {
     for (const im of [this.mooredHull, this.mooredMast, this.mooredCabin, this.buoys]) im.instanceMatrix.needsUpdate = true;
   }
 
+  /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
   private buildFerries(f: DartFeatures): void {
-    const hullMat = new THREE.MeshStandardMaterial({ color: 0x24426b, roughness: 0.6 });
-    const topMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.5 });
-    for (const fr of f.ferries) {
-      for (let u = 0; u < fr.units; u++) {
-        const g = new THREE.Group();
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(fr.beam, 1.4, fr.length), hullMat);
-        hull.position.y = 0.3;
-        const house = new THREE.Mesh(new THREE.BoxGeometry(Math.min(3, fr.beam * 0.5), 2.2, Math.min(4, fr.length * 0.25)), topMat);
-        house.position.set(fr.beam * 0.25, 2.0, 0);
-        g.add(hull, house);
-        g.name = 'ferry';
-        this.floating.add(g);
-        const label = makeLabel(`${fr.label}${fr.ram ? ' · RAM' : ''}`, fr.ram ? '#ffd28a' : '#ffffff');
-        label.position.y = 6;
-        label.userData.priority = 2;
-        g.add(label);
-        this.ferryMeshes.push({ mesh: g, label });
+    this.floating.add(this.traffic.group);
+    const cable = new THREE.MeshStandardMaterial({ color: 0x1c1f22, roughness: 0.6, metalness: 0.4 });
+    for (const fr of f.ferries.filter((x) => /Higher Ferry/.test(x.name))) {
+      const [a, b] = [fr.route[0]!, fr.route[fr.route.length - 1]!];
+      const dx = b[0] - a[0];
+      const dn = b[1] - a[1];
+      const len = Math.hypot(dx, dn);
+      const off = { e: (-dn / len) * 5, n: (dx / len) * 5 };
+      for (const s of [-1, 1]) {
+        const pts = [0, 0.15, 0.5, 0.85, 1].map((t) => new THREE.Vector3(a[0] + dx * t + s * off.e, t === 0 || t === 1 ? 0.2 : -0.08, -(a[1] + dn * t + s * off.n)));
+        this.floating.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.06, 5, false), cable));
       }
     }
   }
@@ -461,13 +653,8 @@ export class DartScene {
       this.updateMoorings(u.stream, u.windFromDir);
     }
     if (this.features) {
-      const states = ferryStates(this.features.ferries, u.epochMs);
-      states.forEach((s, i) => {
-        const fm = this.ferryMeshes[i];
-        if (!fm) return;
-        fm.mesh.position.set(s.e, 0, -s.n);
-        fm.mesh.rotation.y = -s.heading;
-      });
+      const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
+      this.traffic.update(states, u.time, u.camera, u.showLabels);
     }
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {
@@ -478,7 +665,7 @@ export class DartScene {
     const cam = u.camera.position;
     this.labels.visible = u.showLabels;
     for (const l of this.labels.children) l.visible = u.showLabels && l.position.distanceTo(cam) < LABEL_RANGE_M;
-    for (const fm of this.ferryMeshes) if (fm.label) fm.label.visible = u.showLabels && fm.mesh.position.distanceTo(cam) < FERRY_LABEL_RANGE_M;
+
     if (u.showLabels) this.declutter(u.camera);
   }
 
@@ -490,7 +677,7 @@ export class DartScene {
   private declutter(camera: THREE.Camera): void {
     const shown: { x0: number; x1: number; y0: number; y1: number }[] = [];
     const cand: { s: THREE.Object3D; pri: number; d: number; p: THREE.Vector3 }[] = [];
-    const sprites = [...this.labels.children, ...this.ferryMeshes.flatMap((f) => (f.label ? [f.label] : []))];
+    const sprites = [...this.labels.children, ...this.traffic.labels()];
     for (const s of sprites) {
       if (!s.visible) continue;
       const p = s.getWorldPosition(new THREE.Vector3());

@@ -88,7 +88,8 @@ Phenomena that **emerge** rather than being scripted:
 | Tide height | 2–3 | Pluggable `TideSource`: Manual (HW and LW entry), **Live** (EA Dartmouth gauge plus UKHO HW/LW events), Derived (harmonic constants from EA gauge history), Replay. See `LIVE_TIDES.md` | Measured or official data where live, labelled |
 | Current | 2–3 | Phase 2 (implemented): uniform, analytic test fields, and a provisional uniform tidal stream driven by the tide timing. Phase 3 (implemented): channel-following field C = s(t)·f(x,y). f comes from tidal-prism continuity (potential flow weighted by depth) on the River Dart grid, normalised at the entrance (`GEODATA.md`). s(t) follows the tide phase, with separate flood and ebb peaks. A river term has its own pattern; its rate is a scenario setting, because EA Austins Bridge flow is not reachable here. Peaks are scenario parameters (default 2 kn ebb at the entrance, per the DHNA statement) | **Provisional, not measured** |
 | Depth | 3 | A provisional raster (deep channel tapering to the banks, constrained by the OSM shoreline) plus tide height. Grounding below the draft | **Provisional** |
-| Waves | 2/6 | Wind-sea visual parameterised by wind and fetch. A wind-against-current flag raises wave steepness | Visual (E) |
+| Waves | hi-fi | Sea state (`seaState.ts`): JONSWAP fetch-limited growth over the mapped land with the wind relative to the water, an effective fetch over the stream, and wave–current interaction (conserved absolute frequency and wave action, blocking). Drives the water surface and spray coming aboard (PHYSICS.md §19) | Model; limits and open-sea fetch E |
+| River traffic | hi-fi | `traffic.ts`: ferries and Dart Marina's boats as speed profiles over their routes (harbour limit, crabbing into the stream, holding for ferries), the Lower Ferry's tug manoeuvre and published timetable, A* deep-water routes (`fairway.ts`). Solid in the fleet physics (PHYSICS.md §20) | Timetables partly sourced, sizes and speeds E |
 
 ## 5. Data assets
 
@@ -147,10 +148,10 @@ A **course validator** runs in both CI and the editor. It checks that:
 
 ## 7. Rendering (`src/render`)
 
-- **Water:** custom shader with a sum of Gerstner waves driven by wind; sky reflection; wake ribbon and foam trail.
-- **Terrain:** chunked heightmap meshes from EA LIDAR (3 m near, coarser far) with a Sentinel-2 colour drape.
-- **Buildings:** OSM footprints extruded, merged per chunk. Heights come from OSM where present, otherwise estimated by class (labelled). Added detail is illustrative, not data:
-  - hipped roofs on house-sized footprints (ridge along the principal axis);
+- **Water:** custom shader on a dense radial mesh round the camera. Eight Gerstner wave trains, weighted per place by a 32 × 32 field of the modelled sea state (height, peak wavelength, whitecaps, steepness), per-pixel normals, foam on compressed crests; sky reflection; wake ribbon and foam trail.
+- **Terrain:** chunked heightmap meshes from EA LIDAR (8 m grid; 4 m over the towns) with a Sentinel-2 colour drape.
+- **Buildings:** OSM footprints extruded, merged per chunk, on bases from the LIDAR ground. Heights come from OSM where present, otherwise estimated by class (labelled). Roofs from the pipeline (OSM roof:shape, else inferred: terraces gabled along the street with party walls, hips, flat). Added detail is illustrative, not data:
+  - gable-end walls, hips, chimney stacks;
   - windows drawn per fragment from each wall's coordinates, some lit after dark;
   - painted-render colours like the waterfronts'.
   - **Place labels** are decluttered on screen by priority (marks, landmarks, ferries).
@@ -158,7 +159,8 @@ A **course validator** runs in both CI and the editor. It checks that:
 - **Harbour furniture:** pontoons from OSM; trot moorings with instanced moored boats (positions provisional); ferries as kinematic agents on OSM routes.
 - **Watertight boats:** each boat's hull is an open shell sitting in the water. An invisible cap over its deck marks the boat in the stencil buffer, and the water skips marked pixels, so the sea is never drawn inside a hull. The cockpit well is a closed tub.
 - **Crew:** jointed figures (jacket, lifejacket, cap, arms, legs) posed from the crew's lateral position in the physics, from sitting inboard to sitting out and leaning out (`src/render/crew.ts`, illustrative).
-- **Squib:** procedural lofted hull from parametric sections (principal dimensions from class data; shape estimated), keel, rudder, rig and rigging lines. Sails are deformable meshes driven by physics angle, camber and twist, plus a luff-flutter vertex shader. The procedural hull can later be replaced by a modelled glTF file.
+- **Squib:** procedural hull from parametric sections (principal dimensions from class data; shape estimated) with boot top and sheer stripe, foil-section keel and rudder, tapered mast, spreaders, wire rigging, boom, kicker and mainsheet, deck fittings, a cockpit per type (`squibModel.ts`), RDYC on the transom and the RDYC burgee streaming in the apparent wind (`burgee.ts`). Sail cloth is canvas-drawn (`squibTextures.ts`). Sails are deformable meshes driven by physics angle, camber and twist. Static parts are built once per type and shared by every boat.
+- **River traffic:** `traffic.ts` draws the vessels the traffic model places: the Lower Ferry's float and its tug (moved separately), the Higher Ferry and its cables, launches, cruisers, yachts and RIBs, with wakes and navigation lights.
 - **Cameras:** chase, helm/cockpit, free orbit, high-level course view.
 - **Debug overlays:** force vectors (sails, keel, rudder, hull, current, wind) drawn as 3D arrows.
 - **Sky and weather (Phase 6, visual only):** the sun's position for the run's time and place (`src/sim/env/sun.ts`, NOAA algorithm) lights the scene, through twilight to night. A procedural cloud dome drifts with the wind. Fog density follows the visibility (Koschmieder). Rain streaks follow the rain rate. All come from a sky preset or the forecast's hourly sky fields; the physics never reads them.

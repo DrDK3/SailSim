@@ -21,6 +21,9 @@ export interface FleetPose {
   jibInverted: boolean;
   rudder: number;
   crewY: number;
+  awa: number;
+  aws: number;
+  water: number;
 }
 
 interface Entry {
@@ -82,12 +85,17 @@ export class FleetView {
       const [x, , z] = nedToThree(n, ee);
       e.root.position.set(x, waterHeight(x, z) * 0.7, z);
       orientBoat(e.model.group, lerpAngle(a.heading, b.heading, alpha), a.heel + (b.heel - a.heel) * alpha);
+      const heel = a.heel + (b.heel - a.heel) * alpha;
       e.model.update({
         main: { angle: lerpAngle(a.boomMain, b.boomMain, alpha), luff: b.mainLuff, side: b.mainSide, inverted: b.mainInverted },
         jib: { angle: lerpAngle(a.boomJib, b.boomJib, alpha), luff: b.jibLuff, side: b.jibSide, inverted: b.jibInverted },
         rudder: b.rudder,
         crewY: b.crewY,
         time,
+        awa: b.awa,
+        aws: b.aws,
+        heel,
+        water: b.water,
       });
       e.label.visible = showLabels;
     }

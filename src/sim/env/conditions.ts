@@ -48,6 +48,9 @@ export const MEAN_LEVEL_CD = 2.7;
 /** What the River Dart data contributes to the conditions (DartGeo implements it). */
 export interface ConditionsGeo extends StreamPattern {
   cdBelowOdn: number;
+  /** Land and bed (m ODN) and the mapped area: the waves' fetch (src/sim/env/seaState.ts). */
+  bedElevation?(n: number, e: number): number;
+  inDomain?(n: number, e: number): boolean;
 }
 
 export interface BuiltConditions {
@@ -109,6 +112,7 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
 
   sky ??= presetSky('fair');
   const datum = geo ? { cdBelowOdn: geo.cdBelowOdn, meanLevelCd: MEAN_LEVEL_CD } : undefined;
-  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum, sky });
+  const terrain = geo?.bedElevation && geo.inDomain ? { bedElevation: geo.bedElevation.bind(geo), inDomain: geo.inDomain.bind(geo) } : undefined;
+  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum, sky, terrain });
   return { env, weather, tide, current, gusts, sky };
 }

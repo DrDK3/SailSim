@@ -65,6 +65,14 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
           unit={Number.isFinite(s.depthAtKeel) ? 'm' : undefined}
           title="Water depth at the keel (draft 0.99 m). Near the shore from LIDAR; mid-channel from the PROVISIONAL depth estimate. Not for navigation."
         />
+        {s.cockpitWater > 0.5 && (
+          <Cell
+            label="Water aboard"
+            value={(s.cockpitWater / 1.025).toFixed(0)}
+            unit="L"
+            title="Water shipped into the cockpit (over the rail or in spray). A self-draining cockpit (Rondar) lets it out through the transom; older boats keep it until the crew bails. It makes the boat heavier and more tender."
+          />
+        )}
         {more && (
           <>
             <Cell label="SOG" value={kn(s.sog, 2)} unit="kn" title="Speed over ground" />
@@ -140,7 +148,27 @@ function Conditions({ env, waterLevel }: { env: EnvironmentInfo; waterLevel: num
           </span>
         </div>
       )}
-      {env.windAgainstTide && <div className="chip warn" role="status">Wind against tide: short, steep chop</div>}
+      {env.sea && env.sea.hs > 0.02 && (
+        <div
+          className="cond-row"
+          title={`Modelled wind sea: fetch ${(env.sea.fetch / 1000).toFixed(1)} km upwind; the stream along the waves is ${env.sea.currentAlong >= 0 ? 'with' : 'against'} them at ${kn(Math.abs(env.sea.currentAlong))} kn. In slack water the same wind would raise ${env.sea.slack.hs.toFixed(2)} m waves ${env.sea.slack.wavelength.toFixed(1)} m long. Not measured.`}
+        >
+          <span className="cell-label">Waves</span>
+          <span className="cond-value" data-testid="waves">
+            {env.sea.hs.toFixed(2)} m, {env.sea.wavelength.toFixed(1)} m apart
+            <span className="fine-inline">
+              {` · ${env.sea.tp.toFixed(1)} s`}
+              {env.sea.slack.steepness > 0 && Math.abs(env.sea.steepness / env.sea.slack.steepness - 1) > 0.05 && ` · steepness ×${(env.sea.steepness / env.sea.slack.steepness).toFixed(1)} vs slack water`}
+              {env.sea.whitecaps >= 0.005 && ` · whitecaps ${Math.round(env.sea.whitecaps * 100)}%`}
+            </span>
+          </span>
+        </div>
+      )}
+      {env.windAgainstTide && (
+        <div className="chip warn" role="status">
+          Wind against tide: short, steep chop{env.sea?.blocked ? ' — the stream is stopping the waves and they are breaking' : ''}
+        </div>
+      )}
     </div>
   );
 }

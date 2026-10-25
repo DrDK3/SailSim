@@ -46,3 +46,14 @@ Ordered by what it blocks. Uploads can go into this conversation or into `refere
 | D3 | Source control | This repo is **local to an ephemeral cloud container**. Connect GitHub (https://claude.ai/connect-github) and create an empty repo, so I can attach it and push after every phase |
 | D4 | Hosting | Static hosting (GitHub Pages or Cloudflare Pages). No recurring cost unless you want a custom domain or a tidal-API proxy |
 | D5 | Live-weather source | Met Office open data via a scheduled ingest (free, no keys, tested). Add a local station if one exists. Open-Meteo only as a non-commercial fallback |
+
+## E. For the hi-fi models (25 Oct 2026)
+
+| # | Needed | Why |
+|---|---|---|
+| E1 | **Allow `environment.data.gov.uk`** in the environment's network settings | The Environment Agency LIDAR surface model (DSM, 1 m, Open Government Licence) gives every building's measured height and roof shape; it is the only route to "accurate" roofs |
+| E2 | A **photo of an RDYC Squib's transom** and of the **burgee** (or the club's artwork) | To match the lettering style and the crown and dart; both are drawn from the blazon and an estimate now |
+| E3 | **Weights** of a Rondar and an older Hunter or Parker Squib as weighed at events, and how a classic cockpit is bailed (bucket, pump) | The classic type's extra weight and bailing rate are estimates |
+| E4 | Any **comparison of the Hyde B3 / Batt sails with older sails** (pointing angle, speed, from tuning partners or GPS) | The new sails' effects are the maker's claims; their size is estimated |
+| E5 | **Lower and Higher Ferry** details: float and tug lengths and beams, crossing and loading times, the hours of the second Lower Ferry unit, the Higher Ferry's current status | The vessels and their timing are estimates |
+| E6 | **Dart Marina movements**: typical departures and arrivals per day by season | The marina traffic is an estimate |

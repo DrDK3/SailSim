@@ -387,3 +387,51 @@ Boats in a race (or the user's boat alone, in free sailing) are stepped together
 ## 17. AI sail handling (Phase 5, `ai/sheets.ts`)
 
 AI boats use the auto-trim assist. In addition, the main is eased in proportion to heel beyond 24° (full ease at 38°), at most 0.6 of the sheet travel per second, as a crew dumps the main. Without this, the model broaches when reaching in 20 kn or more (rudder saturated, 50–60° of heel). The same rule is used to compute the AI's target-speed table (`ai/polarData.ts`). That table is model output; for example it gives 10.4 kn at 105° in 25 kn of wind, because the estimated residuary-resistance table flattens above Fn 0.55 (OUTSTANDING_ISSUES 37).
+
+## 18. Squib types and water in the cockpit (`boat/squib.ts`, `boat/cockpit.ts`)
+
+The user chooses one of three types (`data/boats/squib/variants.json`, listed in `PARAMETERS.md`):
+
+| Type | Hull | Sails | What changes |
+|---|---|---|---|
+| Rondar (the modern standard, default) | Rondar, Mark 3 mould, 2016–2024 | earlier designs | nothing: the calibrated default |
+| Classic Parker or Hunter | Hunter (sail numbers 158–724) or Parker (1997–2010) | earlier designs | cockpit not self-draining (S: C9, C10); 15 kg over the class minimum (E); a lower cockpit floor (E) |
+| New sail package (Hyde B3 / Batt) | Rondar | 2024 designs | sheets closer to the centreline, a wider groove, a fuller main downwind, a little less profile drag and peak lift (the maker's claims, C11; every size is an estimate) |
+
+The class is a strict one-design: the builders used the same hull form and sail plan (C10). So the hulls differ only in the cockpit and, by estimate, weight; nothing in the hydrodynamics changes.
+
+**Water in the cockpit** is a state of the boat (kg), stepped once per fixed step like the crew position:
+
+```
+in  = green water + spray
+      green water: weir flow C·L·h^1.5 over the leeward cockpit edge once it is under (a knockdown), plus a
+                   fraction (railSlop) of the flow onto the side deck while only the rail is buried
+      spray:       sprayRate · (Hs − sprayStartHs) · (STW / 2 m/s) · cos(waves from ahead)   (older builds only:
+                   a self-draining cockpit sheds spray as fast as it arrives)
+out = self-draining: orifice flow through the transom outlets, ρ·0.61·A·√(2 g depth)
+      otherwise:     the crew bails bailRate once there is more than bailStart
+```
+
+Its effects: the boat is heavier in surge, sway and yaw (the water moves with it); the residuary resistance grows with the extra weight; the hull carries the extra displacement at the same righting arm; and the water's weight acts above the centre of gravity and runs to the low side (a level free surface: a tilted slab, then a wedge against the leeward side), which heels the boat further. Net: a flooded boat is slower and more tender. In 16 kn close-hauled with the crew sitting in and the sheets in, the classic boat ships about 350 kg and loses about 0.2 kn while the Rondar drains to a few kilograms (`tests/sim/variants.test.ts`).
+
+All rates and dimensions are estimates (calibration section `cockpit`). The default Rondar now ships water whenever its rail is under, so the reference race (7 boats, 400 s) has a new determinism hash, `5de2cc60d1e76458` (one boat briefly heeled to 40° and took on 10 kg).
+
+## 19. Waves: wind over tide (`env/seaState.ts`)
+
+The sea state is a pure function of time and place, cached on a 40 m grid in 30 s steps of sim time (each cached value depends only on its cell and step, so who asks first never changes an answer):
+
+1. The wind **relative to the water** (base wind minus the stream; gusts are too short-lived to raise a sea) blows over a **fetch**: open water upwind until land, ray-marched over the elevation grid at the current water level, plus 40 km of open sea where the ray leaves the map over water (E).
+2. **JONSWAP** fetch-limited growth (WV1), capped at the fully developed sea.
+3. Over a stream, waves cross the fetch at cg + U, so against the stream they are driven for longer: effective fetch F·cg/(cg + Ū), with Ū the stream along the waves averaged over the fetch (a kinematic estimate, iterated with the period).
+4. From the fetch to the point the stream changes from Ū to the local U: the **absolute frequency** ω = σ + kU and the **wave action** (H²(cg + U)/σ) are conserved (WV2), so waves running into an opposing stream shorten and grow. If (ω − kU)² = gk·tanh kh has no solution the stream **blocks** them (|U| ≥ gT/8π in deep water) and they break.
+5. Limits: Hs/L ≤ 0.1 and Hs ≤ 0.55 h (estimates). Whitecap cover (WV3) scaled by the square of the steepening.
+
+A stream that is the same all along the fetch only changes the wind over the water: wind-over-tide steepening needs waves to run into a stronger opposing stream, as at the harbour entrance on the ebb with a southerly. There, in 18 kn, the model gives Hs 1.4 m, 27 m long, 5% steep with whitecaps on the ebb, against 0.8 m, 36 m long and 2% on the flood (`tests/sim/seastate.test.ts`).
+
+The physics reads the sea state for spray (older builds). Speed lost to pitching in chop (added resistance in waves) is **not modelled**. The water surface in the picture is drawn from the same sea state (`render/water.ts`).
+
+## 20. River traffic (`env/traffic.ts`, `env/fairway.ts`)
+
+Ferries and Dart Marina's boats are scripted bodies (solid in the fleet physics, §16): their positions are a pure function of the clock and the stream, so the physics and the picture see the same traffic. Each trip is a **speed profile** integrated in 1 s steps: accelerate, cruise (never above the 6 kn harbour limit north of about Castle Ledge, H3), brake to arrive, crab into the cross-stream to hold the track (the speed over the ground is V cos(crab) + the stream along the track), and wait short of a ferry's track while that ferry is under way nearby (marina boats). The Higher Ferry runs on cables: no crab, and the stream does not change its speed.
+
+The Lower Ferry follows the operator's first and last departures (UK local time, with the clock changes) and the manoeuvre described in F3: the tug goes astern for 20 s to clear the float off the slip, then swings end for end about its bow (the head rope) in 35 s, then pushes across; ramps come down at the far slip. A second unit runs opposite the first between 08:00 and 20:00 (E: "when traffic demands"), so they pass mid-stream; during the 29 Oct – 13 Dec 2026 refit only one runs (F2). Dart Marina's boats (numbers per day by month, kinds, speeds: E) follow routes found by A* through deep water (16 m grid, depth at about low water springs, keeping off moorings) to the sea past Castle Ledge or up-river.
