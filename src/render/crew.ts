@@ -179,12 +179,15 @@ class PartBuilder {
 
 const M = new THREE.Matrix4();
 const at = (x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => M.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(sx, sy, sz)).clone();
-const ellipsoid = (rx: number, ry: number, rz: number, seg = 14) => new THREE.SphereGeometry(1, seg, Math.round(seg * 0.75)).scale(rx, ry, rz);
+/** Tessellation scale while a body is built: 1 for the sailors, less for passengers seen from further off. */
+let detail = 1;
+const segs = (n: number) => Math.max(4, Math.round(n * detail));
+const ellipsoid = (rx: number, ry: number, rz: number, seg = 14) => new THREE.SphereGeometry(1, segs(seg), segs(seg * 0.75)).scale(rx, ry, rz);
 
 /** A rounded, tapered limb along +y from 0 to len (radius r0 at the joint, r1 at the far end). */
 function limb(r0: number, r1: number, len: number, seg = 12): THREE.BufferGeometry {
   const pts: THREE.Vector2[] = [];
-  const K = 5;
+  const K = Math.max(2, Math.round(5 * detail));
   for (let i = 0; i <= K; i++) {
     const a = -Math.PI / 2 + (i / K) * (Math.PI / 2);
     pts.push(new THREE.Vector2(Math.max(1e-4, r0 * Math.cos(a)), r0 * 0.6 * Math.sin(a)));
@@ -193,19 +196,28 @@ function limb(r0: number, r1: number, len: number, seg = 12): THREE.BufferGeomet
     const a = (i / K) * (Math.PI / 2);
     pts.push(new THREE.Vector2(Math.max(1e-4, r1 * Math.cos(a)), len + r1 * 0.6 * Math.sin(a)));
   }
-  return new THREE.LatheGeometry(pts, seg);
+  return new THREE.LatheGeometry(pts, segs(seg));
 }
 
 /** A body of revolution from a radius profile [radius, y][], squashed front to back (sz) and widened (sx). */
 function body(profile: [number, number][], sx: number, sz: number, seg = 18): THREE.BufferGeometry {
   const g = new THREE.LatheGeometry(
     profile.map(([r, y]) => new THREE.Vector2(Math.max(1e-4, r), y)),
-    seg,
+    segs(seg),
   );
   return g.scale(sx, 1, sz);
 }
 
-function buildGeometry(role: CrewRole, c: CrewColours): THREE.BufferGeometry {
+function buildGeometry(role: CrewRole, c: CrewColours, tessellation = 1): THREE.BufferGeometry {
+  detail = tessellation;
+  try {
+    return buildParts(role, c);
+  } finally {
+    detail = 1;
+  }
+}
+
+function buildParts(role: CrewRole, c: CrewColours): THREE.BufferGeometry {
   const b = new PartBuilder();
   const dark = 0x15181c;
   // Pelvis and seat (trousers), with a belt line.
@@ -236,11 +248,11 @@ function buildGeometry(role: CrewRole, c: CrewColours): THREE.BufferGeometry {
   }
   if (role === 'helm') {
     b.add(new THREE.BoxGeometry(0.15, 0.028, 0.012), B.head, dark, at(0, 0.123, 0.099)); // sunglasses
-    b.add(new THREE.SphereGeometry(0.093, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.98, 0.85, 1.08), B.head, c.cap, at(0, 0.135, 0.004));
-    b.add(new THREE.CylinderGeometry(0.075, 0.08, 0.008, 18, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 1.05), B.head, c.cap, at(0, 0.142, 0.07));
+    b.add(new THREE.SphereGeometry(0.093, segs(18), segs(9), 0, Math.PI * 2, 0, Math.PI / 2).scale(0.98, 0.85, 1.08), B.head, c.cap, at(0, 0.135, 0.004));
+    b.add(new THREE.CylinderGeometry(0.075, 0.08, 0.008, segs(18), 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 1.05), B.head, c.cap, at(0, 0.142, 0.07));
   } else {
-    b.add(new THREE.SphereGeometry(0.094, 18, 10, 0, Math.PI * 2, 0, Math.PI / 1.9).scale(1, 1.18, 1.08), B.head, c.cap, at(0, 0.12, 0.002));
-    b.add(new THREE.TorusGeometry(0.093, 0.016, 6, 20).rotateX(Math.PI / 2).scale(1, 1, 1.07), B.head, c.cap, at(0, 0.13, 0.004));
+    b.add(new THREE.SphereGeometry(0.094, segs(18), segs(10), 0, Math.PI * 2, 0, Math.PI / 1.9).scale(1, 1.18, 1.08), B.head, c.cap, at(0, 0.12, 0.002));
+    b.add(new THREE.TorusGeometry(0.093, 0.016, segs(6), segs(20)).rotateX(Math.PI / 2).scale(1, 1, 1.07), B.head, c.cap, at(0, 0.13, 0.004));
   }
   // Arms (jacket sleeves with dark cuffs) and gloved hands; the thumb on the inside.
   for (const [ua, fa, hd, s] of [[B.upperArmL, B.forearmL, B.handL, -1], [B.upperArmR, B.forearmR, B.handR, 1]] as const) {
@@ -278,12 +290,14 @@ export class CrewFigure {
   constructor(
     readonly role: CrewRole,
     colours: CrewColours = CREW_COLOURS[role],
+    tessellation = 1,
   ) {
     this.group.name = `crew-${role}`;
-    let geo = colours === CREW_COLOURS[role] ? geometryCache.get(role) : undefined;
+    const shared = colours === CREW_COLOURS[role] && tessellation === 1;
+    let geo = shared ? geometryCache.get(role) : undefined;
     if (!geo) {
-      geo = buildGeometry(role, colours);
-      if (colours === CREW_COLOURS[role]) geometryCache.set(role, geo);
+      geo = buildGeometry(role, colours, tessellation);
+      if (shared) geometryCache.set(role, geo);
     }
     this.bones = BONES.map((n) => {
       const bone = new THREE.Bone();
@@ -299,6 +313,32 @@ export class CrewFigure {
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = true;
     this.group.add(this.mesh);
+  }
+
+  /** The posed figure as static geometry (positions, normals, colours): its skinning applied once. */
+  bake(): THREE.BufferGeometry {
+    const src = this.mesh.geometry;
+    const pos = src.getAttribute('position');
+    const nor = src.getAttribute('normal');
+    const si = src.getAttribute('skinIndex');
+    const mats = this.bones.map((b) => new THREE.Matrix4().compose(b.position, b.quaternion, ONE));
+    const nmats = mats.map((m) => new THREE.Matrix3().getNormalMatrix(m));
+    const p = new Float32Array(pos.count * 3);
+    const n = new Float32Array(pos.count * 3);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      const b = si.getX(i);
+      v.fromBufferAttribute(pos, i).applyMatrix4(mats[b]!);
+      p.set([v.x, v.y, v.z], i * 3);
+      v.fromBufferAttribute(nor, i).applyMatrix3(nmats[b]!).normalize();
+      n.set([v.x, v.y, v.z], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    g.setAttribute('color', src.getAttribute('color').clone());
+    g.setIndex(src.getIndex()!.clone());
+    return g;
   }
 
   /** Bone position (in the parent's frame) after the last pose: for tests and attaching things. */
@@ -373,4 +413,42 @@ export class CrewFigure {
       this.set(i === 0 ? 'footL' : 'footR', ankle, toes, Y);
     }
   }
+}
+
+// ------------------------------------------------------------------ passengers
+
+/** Clothes for people aboard the ferries: jackets, trousers, a few hats (illustrative). */
+const PASSENGER_COLOURS: CrewColours[] = [
+  { jacket: 0x2f4f7f, trousers: 0x2b2f36, lifejacket: 0x2f4f7f, cap: 0x5a4632, skin: 0xd8a47f, boots: 0x3a2f28, gloves: 0xd8a47f },
+  { jacket: 0xb03a2e, trousers: 0x30343b, lifejacket: 0xb03a2e, cap: 0x2a2018, skin: 0xc68d6a, boots: 0x1c1c1c, gloves: 0xc68d6a },
+  { jacket: 0xe0d6c2, trousers: 0x5a6f8a, lifejacket: 0xe0d6c2, cap: 0xc9a46a, skin: 0xe2b590, boots: 0xf0f0ec, gloves: 0xe2b590 },
+  { jacket: 0x3f6b4a, trousers: 0x6b5a45, lifejacket: 0x3f6b4a, cap: 0x2a2018, skin: 0x8d5a3b, boots: 0x2a2520, gloves: 0x8d5a3b },
+  { jacket: 0x7a4b8c, trousers: 0x2b2f36, lifejacket: 0x7a4b8c, cap: 0xd9c08a, skin: 0xd8a47f, boots: 0xf0f0ec, gloves: 0xd8a47f },
+  { jacket: 0xf2c14e, trousers: 0x3b4a5c, lifejacket: 0xf2c14e, cap: 0x1d2b3a, skin: 0xc68d6a, boots: 0x1c1c1c, gloves: 0xc68d6a },
+  { jacket: 0x22262b, trousers: 0x8a7a63, lifejacket: 0x22262b, cap: 0x7a5a3a, skin: 0xe2b590, boots: 0x5a3a28, gloves: 0xe2b590 },
+  { jacket: 0x9fb3c8, trousers: 0x30343b, lifejacket: 0x9fb3c8, cap: 0x30343b, skin: 0x6e4630, boots: 0x1c1c1c, gloves: 0x6e4630 },
+];
+
+const baked = new Map<string, THREE.BufferGeometry>();
+const ONE = new THREE.Vector3(1, 1, 1);
+
+/**
+ * A passenger standing or sitting, as static geometry with vertex colours (the figure posed once and its
+ * skinning applied): feet at the origin, facing -z. Many people aboard cost nothing per frame.
+ */
+export function bakedPerson(seed: number, sitting: boolean): THREE.BufferGeometry {
+  const key = `${seed % PASSENGER_COLOURS.length}:${sitting}`;
+  let g = baked.get(key);
+  if (!g) {
+    const fig = new CrewFigure(seed % 3 === 0 ? 'helm' : 'crew', PASSENGER_COLOURS[seed % PASSENGER_COLOURS.length], 0.45);
+    const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    fig.pose(
+      sitting
+        ? { hip: V(0, 0.5, 0.05), facing: V(0, 0, -1), back: 0.06, feet: [V(-0.12, 0.09, -0.4), V(0.12, 0.09, -0.4)], hands: [V(-0.16, 0.6, -0.32), V(0.16, 0.6, -0.32)], look: V(0, 1.1, -5) }
+        : { hip: V(0, 0.98, 0), facing: V(0, 0, -1), back: -0.02, feet: [V(-0.12, 0.09, 0.02), V(0.12, 0.09, -0.04)], hands: [V(-0.24, 0.78, 0.05), V(0.24, 0.78, 0.0)], look: V(0, 1.6, -5) },
+    );
+    g = fig.bake();
+    baked.set(key, g);
+  }
+  return g.clone();
 }
