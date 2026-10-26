@@ -69,6 +69,8 @@
 | F4 | Tripadvisor reviews of the Lower and Higher Ferries | https://www.tripadvisor.com/Attraction_Review-g1467218-d12845359-Reviews-or20-Lower_Ferry-Kingswear_Dartmouth_Devon_England.html | 2026 | Excerpt | Lower Ferry crossing "about 5 minutes" / "a couple of minutes"; Higher Ferry up to 36 cars (summary) |
 | F5 | Dartmouth Higher Ferry (operator) | https://dkfb.co.uk/ | n.d. | Excerpt | Shuttle service, about a 3-minute crossing; 2009 vessel built by Pendennis; a closure notice of unknown date (current status not confirmed) |
 | F6 | Dartmouth Higher Ferry, secondary descriptions | https://en.wikipedia.org/wiki/Dartmouth_Higher_Ferry | n.d. | Excerpt | Runs on two cables; four thrusters, one at each corner |
+| F7 | Wikipedia, "MV Devon Belle II" (now the Dartmouth Princess), via search excerpt | https://en.wikipedia.org/wiki/MV_Devon_Belle_II | n.d. | Excerpt | The Dartmouth–Kingswear passenger ferry: 60 ft (18 m) LOA, 156 passengers; her red hull painted blue after Dart Pleasure Craft bought the Riddalls fleet in 2000 |
+| F8 | Wikipedia, "MV Cardiff Castle", via search excerpt | https://en.wikipedia.org/wiki/MV_Cardiff_Castle | n.d. | Excerpt | Built 1964; 100 ft (30 m) LOA, 21 ft (6.4 m) beam, three decks, 400 passengers; now mainly on the Dartmouth–Totnes service |
 
 Sizes of the floats, tugs and Higher Ferry, crossing speeds, loading times and the other services' timetables were not found; they are estimates (E) in `src/sim/env/traffic.ts`. Dart Marina's position is OpenStreetMap's (G1).
 

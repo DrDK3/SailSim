@@ -230,13 +230,42 @@ export function heelEquilibrium(p: BoatParams, s: RigidState, a: Actuators, wind
   const f = (phi: number) =>
     aeroHeelMoment(p, s, a, wind, current, fluids, phi) + p.crewMass * G * a.crewY * Math.cos(phi) - (p.weight + w * G) * rightingArm(p, phi) +
     waterHeelMoment(p.cockpit, w, phi);
-  let lo = -Math.PI / 2;
-  let hi = Math.PI / 2;
-  if (f(lo) < 0 && f(hi) < 0) return lo;
-  if (f(lo) > 0 && f(hi) > 0) return hi;
+  // The equilibrium a boat reaches heeling over from upright: the first change of sign from 0 towards the
+  // side the moment heels it. Near ±90° the heeled-plane sail model is outside its range and can balance
+  // spuriously, so a search over the whole range could start a boat on its side (with the crew to leeward).
+  const f0 = f(0);
+  const dir = f0 >= 0 ? 1 : -1;
+  const STEP = 2 * (Math.PI / 180);
+  let xPrev = 0;
+  let fPrev = f0;
+  let bracket: [number, number] | undefined;
+  for (let x1 = dir * STEP; Math.abs(x1) <= Math.PI / 2 + 1e-12; x1 += dir * STEP) {
+    const f1 = f(x1);
+    if (f1 === 0 || Math.sign(f1) !== Math.sign(fPrev)) {
+      bracket = [Math.min(xPrev, x1), Math.max(xPrev, x1)];
+      break;
+    }
+    xPrev = x1;
+    fPrev = f1;
+  }
+  if (!bracket) return (dir * Math.PI) / 2;
+  // The usual case (one equilibrium): the bisection over the whole range, as before, so results are unchanged.
+  const whole = bisect(f, -Math.PI / 2, Math.PI / 2);
+  if (whole !== undefined && whole >= bracket[0] - 1e-9 && whole <= bracket[1] + 1e-9) return whole;
+  return bisect(f, bracket[0], bracket[1]) ?? (bracket[0] + bracket[1]) / 2;
+}
+
+/** A root of f between lo and hi by 40 halvings, or undefined if f has the same sign at both ends. */
+function bisect(f: (x: number) => number, lo: number, hi: number): number | undefined {
+  const flo = f(lo);
+  const fhi = f(hi);
+  if (flo === 0) return lo;
+  if (fhi === 0) return hi;
+  if (Math.sign(flo) === Math.sign(fhi)) return undefined;
+  const up = flo > 0;
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
-    if (f(mid) > 0) lo = mid;
+    if (f(mid) > 0 === up) lo = mid;
     else hi = mid;
   }
   return (lo + hi) / 2;

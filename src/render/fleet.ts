@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { BoatParams } from '../sim/boat/params';
-import { lerpAngle, nedToThree, orientBoat } from './frames';
+import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
 import { SquibModel } from './squibModel';
 
@@ -30,7 +30,11 @@ interface Entry {
   root: THREE.Group;
   model: SquibModel;
   label: THREE.Sprite;
+  ride: WaveRide;
+  rideStarted: boolean;
 }
+
+const RIDE_SCRATCH: WaveRide = { heave: 0, pitch: 0, roll: 0 };
 
 /**
  * The other boats of the fleet (AI Squibs): one procedural Squib each, tinted with the boat's colour, with a
@@ -63,7 +67,7 @@ export class FleetView {
       label.position.set(0, 10.5, 0);
       root.add(label);
       this.group.add(root);
-      this.boats.set(b.id, { root, model, label });
+      this.boats.set(b.id, { root, model, label, ride: { heave: 0, pitch: 0, roll: 0 }, rideStarted: false });
     }
   }
 
@@ -71,7 +75,15 @@ export class FleetView {
     return this.boats.size;
   }
 
-  update(prev: Map<string, FleetPose>, curr: Map<string, FleetPose>, alpha: number, time: number, waterHeight: (x: number, z: number) => number, showLabels: boolean): void {
+  update(
+    prev: Map<string, FleetPose>,
+    curr: Map<string, FleetPose>,
+    alpha: number,
+    time: number,
+    frameDt: number,
+    waterHeight: (x: number, z: number) => number,
+    showLabels: boolean,
+  ): void {
     for (const [id, e] of this.boats) {
       const b = curr.get(id);
       const a = prev.get(id) ?? b;
@@ -83,9 +95,13 @@ export class FleetView {
       const n = a.n + (b.n - a.n) * alpha;
       const ee = a.e + (b.e - a.e) * alpha;
       const [x, , z] = nedToThree(n, ee);
-      e.root.position.set(x, waterHeight(x, z) * 0.7, z);
-      orientBoat(e.model.group, lerpAngle(a.heading, b.heading, alpha), a.heel + (b.heel - a.heel) * alpha);
+      const heading = lerpAngle(a.heading, b.heading, alpha);
       const heel = a.heel + (b.heel - a.heel) * alpha;
+      // Each boat floats on the drawn sea as the user's does (frames.ts).
+      easeRide(e.ride, rideWaves(waterHeight, x, z, heading, RIDE_SCRATCH), frameDt, !e.rideStarted);
+      e.rideStarted = true;
+      e.root.position.set(x, e.ride.heave, z);
+      orientBoat(e.model.group, heading, heel + e.ride.roll, e.ride.pitch);
       e.model.update({
         main: { angle: lerpAngle(a.boomMain, b.boomMain, alpha), luff: b.mainLuff, side: b.mainSide, inverted: b.mainInverted },
         jib: { angle: lerpAngle(a.boomJib, b.boomJib, alpha), luff: b.jibLuff, side: b.jibSide, inverted: b.jibInverted },

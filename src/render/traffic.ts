@@ -1,103 +1,104 @@
 import * as THREE from 'three';
 import type { VesselKind, VesselState } from '../sim/env/traffic';
 import { makeLabel } from './labels';
+import { bakedPerson } from './crew';
+import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn } from './vessels';
 
 /**
- * River traffic as 3D vessels (positions and manoeuvres from src/sim/env/traffic.ts). The Lower Ferry is its
- * float - car deck, rails, hinged ramps at both ends, cars - with the tug lashed alongside, which the model
- * moves on its own (it swings end for end at each slip). The Higher Ferry is a floating bridge on its guide
- * cables. The other ferries and the boats coming in and out of Dart Marina are drawn by type. Shapes, colours
- * and liveries are illustrative (E): no measured drawings or photographs were available here.
+ * River traffic as 3D vessels (positions and manoeuvres from src/sim/env/traffic.ts), modelled with the vessel
+ * kit (vessels.ts): lofted hulls, superstructures with framed windows, rails, fendering, masts and lights,
+ * cars and passengers. The Lower Ferry is its float - car deck, walkways, hinged ramps at both ends, cars -
+ * with the tug (Hauley IV-VI, F1) lashed alongside (F3), which the model moves on its own (it swings end for
+ * end at each slip). The Higher Ferry is a cable ferry (2009, Pendennis, F5) on its two cables (F6). The
+ * passenger ferry is drawn as the Dartmouth Princess (18 m, blue hull, F7) and the Totnes cruise as the Cardiff
+ * Castle (30 m by 6.4 m, three decks, F8). Other shapes, colours and liveries are illustrative (E): no measured drawings were found.
  * Model frame: x = starboard, y = up (0 = waterline), z = aft (bow towards -z), as the Squib's.
  */
 
-const mats = new Map<string, THREE.Material>();
-function mat(key: string, make: () => THREE.Material): THREE.Material {
-  let m = mats.get(key);
-  if (!m) mats.set(key, (m = make()));
-  return m;
-}
-const std = (hex: number, rough = 0.6, metal = 0) => mat(`s${hex}-${rough}-${metal}`, () => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal }));
-const glass = () => mat('glass', () => new THREE.MeshStandardMaterial({ color: 0x1b2833, roughness: 0.15, metalness: 0.4 }));
-const lamp = (hex: number) => mat(`lamp${hex}`, () => new THREE.MeshStandardMaterial({ color: 0x111111, emissive: hex, emissiveIntensity: 0 }));
+const C = {
+  antifouling: 0x6b1d1d,
+  black: 0x18191b,
+  white: 0xf2f1ec,
+  cream: 0xe9e4d6,
+  navy: 0x1f3550,
+  blue: 0x1d4d8a,
+  greyDeck: 0x6e7175,
+  wood: 0x9a7350,
+  teak: 0xa77d52,
+  yellow: 0xe3b21c,
+  hiVis: 0xd7e021,
+};
 
-function box(w: number, h: number, l: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m);
-  b.position.set(x, y, z);
-  return b;
-}
+const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
-/**
- * A hull: plan outline with a pointed (or blunt) bow, extruded from the keel line to the sheer with a rounded
- * edge. bow = fraction of the length that tapers.
- */
-function hull(length: number, beam: number, depth: number, bow: number, m: THREE.Material, blunt = 0.25): THREE.Mesh {
-  const s = new THREE.Shape();
-  const L = length / 2;
-  const B = beam / 2;
-  const taper = length * bow;
-  s.moveTo(-B, L);
-  s.lineTo(B, L);
-  s.lineTo(B, -L + taper);
-  s.quadraticCurveTo(B * 0.95, -L + taper * 0.15, B * blunt, -L);
-  s.lineTo(-B * blunt, -L);
-  s.quadraticCurveTo(-B * 0.95, -L + taper * 0.15, -B, -L + taper);
-  s.closePath();
-  const geo = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: true, bevelThickness: Math.min(0.25, depth * 0.2), bevelSize: Math.min(0.2, beam * 0.04), bevelSegments: 2, steps: 1 });
-  geo.rotateX(Math.PI / 2);
-  // Freeboard about 0.6 of the depth.
-  geo.translate(0, depth * 0.6, 0);
-  const mesh = new THREE.Mesh(geo, m);
-  mesh.name = 'hull';
-  return mesh;
+function addPerson(kit: Kit, x: number, y: number, z: number, yaw: number, seed: number, sitting = false): void {
+  kit.add(bakedPerson(seed, sitting), VMAT.paint, undefined, place(x, y, z, yaw));
 }
 
-/** Railings along a run: posts and two rails (thin boxes). */
-function railing(from: THREE.Vector3, to: THREE.Vector3, height: number, m: THREE.Material): THREE.Group {
-  const g = new THREE.Group();
-  const len = from.distanceTo(to);
-  const dir = to.clone().sub(from).normalize();
-  const posts = Math.max(2, Math.round(len / 1.8));
-  for (let i = 0; i <= posts; i++) {
-    const p = from.clone().addScaledVector(dir, (len * i) / posts);
-    g.add(box(0.05, height, 0.05, m, p.x, p.y + height / 2, p.z));
+/** A bench along z at (x, y, z), length l, with people on it (facing inboard: side ±1 the bench's side). */
+function bench(kit: Kit, x: number, y: number, z: number, l: number, side: number, people: number, seed: number): void {
+  kit.box(0.45, 0.06, l, VMAT.paint, C.wood, x, y + 0.45, z);
+  kit.box(0.4, 0.42, l - 0.1, VMAT.paint, C.white, x, y + 0.21, z);
+  for (let i = 0; i < people; i++) {
+    const pz = z - l / 2 + ((i + 0.5) * l) / people;
+    // Facing the way `side` points (a figure faces -z; turning by -side·90° faces it to +side·x).
+    addPerson(kit, x + side * 0.05, y, pz, (-side * Math.PI) / 2, seed + i * 3, true);
   }
-  for (const h of [height, height * 0.5]) {
-    const r = box(0.04, 0.04, len, m);
-    r.position.copy(from).add(to).multiplyScalar(0.5);
-    r.position.y += h;
-    r.lookAt(r.position.clone().add(dir));
-    g.add(r);
+}
+
+let ensignMat: THREE.MeshStandardMaterial | undefined;
+/** The Red Ensign (the merchant flag British passenger boats wear): red field, the Union Flag in the canton. */
+function ensignMaterial(): THREE.Material {
+  if (ensignMat) return ensignMat;
+  ensignMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.DoubleSide });
+  if (typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = 120;
+    c.height = 60;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#c8102e';
+    g.fillRect(0, 0, 120, 60);
+    // Canton (hoist on the left, top half): blue, white and red saltires, white and red crosses.
+    g.save();
+    g.beginPath();
+    g.rect(0, 0, 60, 30);
+    g.clip();
+    g.fillStyle = '#012169';
+    g.fillRect(0, 0, 60, 30);
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 6;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(60, 30);
+    g.moveTo(60, 0);
+    g.lineTo(0, 30);
+    g.stroke();
+    g.strokeStyle = '#c8102e';
+    g.lineWidth = 2;
+    g.stroke();
+    g.fillStyle = '#ffffff';
+    g.fillRect(25, 0, 10, 30);
+    g.fillRect(0, 10, 60, 10);
+    g.fillStyle = '#c8102e';
+    g.fillRect(27, 0, 6, 30);
+    g.fillRect(0, 12, 60, 6);
+    g.restore();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    ensignMat.map = t;
   }
-  return g;
+  return ensignMat;
 }
 
-/** A car on deck: body and cabin, in one of a few common colours. */
-function car(seed: number): THREE.Group {
-  const colours = [0xd9d9d9, 0x1c1c1c, 0x8a8f96, 0x2a4f8a, 0x9b1c1c, 0xf2f2f2, 0x3b5d3b, 0x5a5f66];
-  const g = new THREE.Group();
-  g.add(box(1.8, 0.7, 4.3, std(colours[seed % colours.length]!, 0.35, 0.3), 0, 0.55, 0));
-  g.add(box(1.6, 0.55, 2.2, glass(), 0, 1.15, 0.2));
-  return g;
-}
-
-/** Navigation lights (red port, green starboard, white masthead and stern): lit at dusk. */
-function navLights(length: number, beam: number, mastY: number, ram: boolean): THREE.Group {
-  const g = new THREE.Group();
-  g.name = 'lights';
-  const s = new THREE.SphereGeometry(0.12, 8, 6);
-  const add = (hex: number, x: number, y: number, z: number) => {
-    const l = new THREE.Mesh(s, lamp(hex));
-    l.position.set(x, y, z);
-    g.add(l);
-  };
-  add(0xff2020, -beam / 2 + 0.2, mastY * 0.5, -length * 0.2);
-  add(0x20ff40, beam / 2 - 0.2, mastY * 0.5, -length * 0.2);
-  add(0xffffff, 0, mastY, -length * 0.1);
-  add(0xffffff, 0, mastY * 0.4, length / 2 - 0.2);
-  // Restricted in her ability to manoeuvre: red, white, red all-round lights in a vertical line.
-  if (ram) for (const [i, hex] of [0xff2020, 0xffffff, 0xff2020].entries()) add(hex, 0.2, mastY + 0.6 + i * 0.6, -length * 0.1);
-  return g;
+/** The ensign on a staff at the stern. */
+function ensign(group: THREE.Group, kit: Kit, x: number, y: number, z: number): void {
+  kit.rod(V(x, y, z), V(x, y + 1.3, z + 0.25), 0.02, VMAT.paint, C.wood, 6);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), ensignMaterial());
+  // Hoist at the staff, flying aft (seen from starboard, the canton is at the upper left).
+  flag.position.set(x, y + 1.08, z + 0.66);
+  flag.rotation.y = -Math.PI / 2;
+  flag.name = 'ensign';
+  group.add(flag);
 }
 
 /** A wake: a V of foam behind the stern, scaled by speed. */
@@ -134,145 +135,419 @@ function wake(beam: number): THREE.Mesh {
   return m;
 }
 
+// ------------------------------------------------------------------ the Lower Ferry
+
+/** Tug of the Lower Ferry (Hauley IV-VI, F1): a round-bilge workboat, heavily fendered, wheelhouse forward of midships. */
 function tugModel(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'tug';
+  const kit = new Kit();
   const L = 9.5;
   const B = 3.6;
-  g.add(hull(L, B, 1.9, 0.35, std(0x1e2124, 0.55), 0.5));
-  // Boot top and the heavy rubber fendering round the bow.
-  g.add(box(B + 0.05, 0.2, L * 0.8, std(0x8f1e1e), 0, 0.05, L * 0.08));
-  const fender = new THREE.Mesh(new THREE.TorusGeometry(B * 0.42, 0.22, 8, 16, Math.PI), std(0x111111, 0.9));
-  fender.rotation.x = Math.PI / 2;
-  fender.position.set(0, 0.9, -L * 0.28);
-  g.add(fender);
-  g.add(box(B * 0.92, 0.08, L * 0.92, std(0x5b5f63, 0.8), 0, 1.25, 0));
-  // Wheelhouse with windows all round, and the mast.
-  g.add(box(2.4, 1.7, 2.8, std(0xf0efe9, 0.5), 0, 2.15, -0.6));
-  g.add(box(2.42, 0.6, 2.82, glass(), 0, 2.55, -0.6));
-  g.add(box(2.6, 0.12, 3.0, std(0xf0efe9, 0.5), 0, 3.05, -0.6));
-  g.add(box(0.12, 2.2, 0.12, std(0xd0d0d0), 0, 4.2, -0.4));
-  g.add(box(0.5, 1.0, 0.5, std(0x1e2124), 0, 2.0, 1.2));
-  g.add(navLights(L, B, 5.2, false));
+  const h = hull(kit, {
+    length: L, beam: B, freeboard: 1.0, draft: 1.2, sheerBow: 0.45, sheerStern: 0.12, stemRake: 0.5, entry: 0.42, transom: 0.62,
+    flare: 0.12, bulwark: 0.5, colours: { bottom: C.antifouling, boot: C.black, topsides: C.navy, deck: C.greyDeck, bulwarkInside: C.cream },
+  });
+  // Rubber D-fender along the sheer, a thick bow fender, tyres down the sides.
+  for (const s of [-1, 1]) fenderLine(kit, h.sheerLine(s, -0.1, 0.06, 1).map((p) => p.setY(p.y - 0.18)), 0.14);
+  fenderLine(kit, [...h.sheerLine(-1, -0.15, 0, 0.12).reverse(), ...h.sheerLine(1, -0.15, 0, 0.12)].map((p) => p.setY(p.y - 0.35)), 0.3);
+  for (const s of [-1, 1]) {
+    for (const z of [-1.8, -0.2, 1.4, 3.0]) {
+      kit.add(new THREE.TorusGeometry(0.32, 0.12, 8, 14), VMAT.rubber, undefined, place(s * (h.half(z) + 0.12), 0.5, z, Math.PI / 2));
+    }
+  }
+  // Wheelhouse with windows all round (the skipper sees both ends of the float), roof, mast with radar.
+  const wz = -0.8;
+  const wy = h.deck(wz);
+  cabin(kit, { z: wz, y: wy, length: 2.8, width: 2.3, height: 2.05, rFront: 0.55, rBack: 0.25, rake: 0.25, tumble: 0.12, colour: C.cream, windows: [0.5, 0.9], front: [0.45, 0.92], roof: { overhang: 0.15, thickness: 0.09, colour: C.cream } });
+  mast(kit, 0, wy + 2.14, wz + 0.3, 2.3, { radar: true });
+  lifebuoy(kit, -1.16, wy + 0.8, wz + 0.6, -1);
+  lifebuoy(kit, 1.16, wy + 0.8, wz + 0.6, 1);
+  // Exhaust stack, towing bitts and the hatch on the after deck.
+  const sz = 1.05;
+  kit.rod(V(0.6, h.deck(sz), sz), V(0.6, h.deck(sz) + 2.4, sz), 0.12, VMAT.paint, C.black, 10);
+  kit.rod(V(0.6, h.deck(sz) + 1.5, sz), V(0.6, h.deck(sz) + 1.75, sz), 0.13, VMAT.paint, C.cream, 10);
+  for (const x of [-0.7, 0.7]) kit.rod(V(x, h.deck(3), 3), V(x, h.deck(3) + 0.55, 3), 0.11, VMAT.paint, C.black);
+  kit.rod(V(-0.7, h.deck(3) + 0.42, 3), V(0.7, h.deck(3) + 0.42, 3), 0.06, VMAT.paint, C.black);
+  kit.box(1.2, 0.12, 1.2, VMAT.paint, C.cream, 0, h.deck(2) + 0.06, 2);
+  addPerson(kit, 0.4, wy, wz + 0.2, 0, 11);
+  g.add(kit.build('tug-hull'));
+  navLights(g, { length: L, beam: B, mastY: wy + 4.4, mastZ: wz + 0.3, sideY: wy + 1.6, ram: true });
   g.add(wake(B));
   return g;
 }
 
+/** Lower Ferry float: a spoon-ended steel pontoon, two car lanes between walkways, ramps at both ends. */
 function floatModel(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
-  const depth = 1.3;
-  const deckY = 0.75;
-  g.add(box(beam, depth, length - 6, std(0x2c3440, 0.6), 0, deckY - depth / 2, 0));
-  g.add(box(beam, 0.08, length - 6, std(0x6d7175, 0.85), 0, deckY + 0.04, 0));
-  // Lane markings.
-  for (const x of [-beam / 4, beam / 4]) g.add(box(0.12, 0.01, length - 8, std(0xd8c04a, 0.7), x, deckY + 0.085, 0));
-  // Side rails and walkways.
-  const railM = std(0xe8e8e2, 0.5, 0.2);
-  for (const s of [-1, 1]) g.add(railing(new THREE.Vector3(s * (beam / 2 - 0.15), deckY, -(length - 6) / 2), new THREE.Vector3(s * (beam / 2 - 0.15), deckY, (length - 6) / 2), 1.1, railM));
-  // Hinged ramps at both ends (pivot at the deck edge): animated from the state.
+  const kit = new Kit();
+  const h = hull(kit, {
+    length, beam, freeboard: 0.85, draft: 0.9, pontoon: true, camber: 0.04,
+    colours: { bottom: 0x3a1414, boot: C.black, topsides: C.black, deck: C.greyDeck },
+  });
+  const deckY = h.deck(0);
+  const deckL = length - 2.5;
+  // Walkways (lighter, non-slip) along each side behind rails; the car lanes with their markings.
+  const walk = 1.3;
+  for (const s of [-1, 1]) {
+    kit.box(walk, 0.04, deckL, VMAT.paint, 0x9a9d9f, s * (beam / 2 - walk / 2 - 0.05), deckY + 0.02, 0);
+    rail(kit, [V(s * (beam / 2 - walk - 0.1), deckY, -deckL / 2 + 0.6), V(s * (beam / 2 - walk - 0.1), deckY, deckL / 2 - 0.6)], 1.05, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
+    rail(kit, [V(s * (beam / 2 - 0.12), deckY, -deckL / 2 + 0.3), V(s * (beam / 2 - 0.12), deckY, deckL / 2 - 0.3)], 1.1, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
+  }
+  for (const x of [-beam / 2 + walk + 0.3, 0, beam / 2 - walk - 0.3]) kit.box(0.12, 0.01, deckL - 3, VMAT.paint, x === 0 ? 0xf2f2ee : C.yellow, x, deckY + 0.045, 0);
+  // Crew shelter on the port walkway, lamp posts at the corners, lifebuoys on the rails.
+  cabin(kit, { x: -(beam / 2 - walk / 2 - 0.05), z: 2, y: deckY, length: 2.6, width: 1.15, height: 2.15, rFront: 0.15, rBack: 0.15, colour: C.cream, windows: [0.5, 0.88], roof: { overhang: 0.12, thickness: 0.08, colour: C.navy } });
+  for (const s of [-1, 1]) {
+    for (const e of [-1, 1]) {
+      const p = V(s * (beam / 2 - 0.25), deckY, e * (deckL / 2 - 1));
+      kit.rod(p, p.clone().setY(deckY + 3.2), 0.05, VMAT.paint, 0x2b2e33);
+      kit.box(0.35, 0.18, 0.25, VMAT.paint, 0xe8e8e2, p.x - s * 0.15, deckY + 3.25, p.z);
+    }
+    lifebuoy(kit, s * (beam / 2 - 0.1), deckY + 0.75, -4, s);
+  }
+  // Cars, two lanes of up to four (8 cars, F1); foot passengers and a deckhand in hi-vis.
+  const n = 3 + (seed % 6);
+  for (let i = 0; i < n; i++) car(kit, (i % 2 ? 1 : -1) * (beam / 2 - walk - 1.55), deckY + 0.04, -deckL / 2 + 4 + Math.floor(i / 2) * 5.4, seed * 7 + i);
+  for (let i = 0; i < 1 + (seed % 3); i++) addPerson(kit, (i % 2 ? 1 : -1) * (beam / 2 - 0.7), deckY + 0.04, -3 + i * 2.5, i % 2 ? Math.PI / 2 : -Math.PI / 2, seed + i);
+  g.add(kit.build('float'));
+  // Hinged ramps at both ends (pivot at the deck edge), animated from the state: steel plates with hazard edges.
   for (const end of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.name = end < 0 ? 'ramp-bow' : 'ramp-stern';
-    pivot.position.set(0, deckY, end * (length - 6) / 2);
-    const ramp = box(beam - 1.2, 0.15, 3.4, std(0x7a7e82, 0.8), 0, 0, end * 1.7);
-    pivot.add(ramp);
-    for (const s of [-1, 1]) pivot.add(box(0.12, 0.5, 3.4, std(0xe8c33a, 0.6), s * (beam / 2 - 0.7), 0.25, end * 1.7));
+    pivot.position.set(0, deckY, (end * deckL) / 2 + end * 0.2);
+    const rk = new Kit();
+    const w = beam - 2 * walk - 0.4;
+    rk.box(w, 0.16, 3.6, VMAT.paint, 0x7a7e82, 0, 0, end * 1.8);
+    for (const s of [-1, 1]) {
+      rk.box(0.14, 0.45, 3.6, VMAT.paint, C.yellow, s * (w / 2 + 0.07), 0.15, end * 1.8);
+      for (let k = 0; k < 6; k++) rk.box(0.15, 0.46, 0.22, VMAT.paint, C.black, s * (w / 2 + 0.07), 0.15, end * (0.3 + k * 0.6));
+    }
+    pivot.add(rk.build('ramp'));
     g.add(pivot);
   }
-  // Cars (two lanes, up to four in each: up to 8 cars, F1).
-  const n = 3 + (seed % 6);
-  for (let i = 0; i < n; i++) {
-    const c = car(seed * 7 + i);
-    c.position.set((i % 2 ? 1 : -1) * (beam / 4), deckY + 0.08, -length / 2 + 6 + Math.floor(i / 2) * 5.2);
-    g.add(c);
-  }
-  // A small control and shelter cabin for the crew and foot passengers.
-  g.add(box(1.6, 2.1, 3.0, std(0xe9e5d8, 0.6), beam / 2 - 1.0, deckY + 1.05, 0));
-  g.add(navLights(length, beam, 4.2, true));
+  navLights(g, { length: deckL, beam, mastY: deckY + 3.4, mastZ: 2, sideY: deckY + 2.4, ram: true });
   return g;
 }
 
+// ------------------------------------------------------------------ the Higher Ferry
+
+/** The Higher Ferry: a cable ferry with three car lanes, a lounge and control cabin to starboard, big ramps. */
 function bridgeModel(length: number, beam: number): THREE.Group {
   const g = new THREE.Group();
-  const deckY = 1.0;
-  g.add(box(beam, 1.8, length - 8, std(0x1f3550, 0.6), 0, deckY - 0.9, 0));
-  g.add(box(beam - 3, 0.08, length - 8, std(0x6a6e72, 0.85), -1.0, deckY + 0.04, 0));
-  for (const x of [-beam / 2 + 2.5, -1.5, 2.0]) g.add(box(0.12, 0.01, length - 10, std(0xd8c04a, 0.7), x, deckY + 0.085, 0));
-  // Side structure: passenger lounge along one side with the control cabin above it.
-  g.add(box(2.6, 2.6, length * 0.55, std(0xf2f1ec, 0.5), beam / 2 - 1.3, deckY + 1.3, 0));
-  g.add(box(2.62, 0.8, length * 0.55 - 0.4, glass(), beam / 2 - 1.3, deckY + 1.9, 0));
-  g.add(box(3.2, 2.0, 5, std(0xf2f1ec, 0.5), beam / 2 - 1.6, deckY + 3.6, 0));
-  g.add(box(3.22, 0.9, 5.02, glass(), beam / 2 - 1.6, deckY + 3.9, 0));
-  g.add(railing(new THREE.Vector3(-beam / 2 + 0.2, deckY, -(length - 8) / 2), new THREE.Vector3(-beam / 2 + 0.2, deckY, (length - 8) / 2), 1.1, std(0xe8e8e2, 0.5, 0.2)));
+  const kit = new Kit();
+  const h = hull(kit, {
+    length, beam, freeboard: 1.2, draft: 1.2, pontoon: true, camber: 0.05,
+    colours: { bottom: 0x3a1414, boot: C.white, topsides: C.navy, deck: 0x6a6e72 }, bootTop: 0.35,
+  });
+  const deckY = h.deck(0);
+  const deckL = length - 3;
+  const sup = 3.2; // width of the starboard superstructure
+  // Lanes and the port walkway.
+  for (const x of [-beam / 2 + 1.6, -beam / 2 + 1.6 + 3.3, -beam / 2 + 1.6 + 6.6, beam / 2 - sup - 0.4]) kit.box(0.12, 0.01, deckL - 4, VMAT.paint, C.yellow, x, deckY + 0.05, 0);
+  rail(kit, [V(-beam / 2 + 0.15, deckY, -deckL / 2 + 0.5), V(-beam / 2 + 0.15, deckY, deckL / 2 - 0.5)], 1.1, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
+  // Lounge along the starboard side, the control cabin above it (windows all round), mast, lifebuoys.
+  const sx = beam / 2 - sup / 2 - 0.1;
+  cabin(kit, { x: sx, z: 0, y: deckY, length: length * 0.52, width: sup, height: 2.6, rFront: 0.3, rBack: 0.3, colour: C.white, windows: [0.42, 0.85], roof: { overhang: 0.15, thickness: 0.12, colour: C.white } });
+  rail(kit, [V(sx - sup / 2 + 0.1, deckY + 2.72, -length * 0.25), V(sx - sup / 2 + 0.1, deckY + 2.72, length * 0.25)], 1.0, { spacing: 1.6 });
+  cabin(kit, { x: sx, z: 0, y: deckY + 2.72, length: 6, width: sup + 0.3, height: 2.1, rFront: 0.5, rBack: 0.5, colour: C.white, windows: [0.4, 0.92], front: [0.35, 0.94], roof: { overhang: 0.25, thickness: 0.12, colour: C.navy } });
+  mast(kit, sx, deckY + 4.95, 0, 2.4, { radar: false });
+  for (const z of [-8, 8]) lifebuoy(kit, beam / 2 - 0.08, deckY + 1.2, z, 1);
+  // Cable sheaves at each end (she runs on two cables, F6).
+  for (const e of [-1, 1]) for (const x of [-beam / 2 + 2.5, beam / 2 - sup - 1.0]) kit.box(0.9, 0.9, 1.4, VMAT.paint, C.navy, x, deckY + 0.3, e * (deckL / 2 - 0.4));
+  // Cars in three lanes; people at the lounge windows and on the walkway.
+  let k = 0;
+  for (let lane = 0; lane < 3; lane++) for (let i = 0; i < 6; i++) {
+    if ((lane * 7 + i * 3) % 5 === 4) continue;
+    car(kit, -beam / 2 + 1.6 + 1.65 + lane * 3.3, deckY + 0.05, -deckL / 2 + 5 + i * 5.6, k++ * 3 + lane);
+  }
+  for (let i = 0; i < 3; i++) addPerson(kit, -beam / 2 + 0.7, deckY + 0.04, -6 + i * 5, -Math.PI / 2, 20 + i);
+  g.add(kit.build('higher-ferry'));
   for (const end of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.name = end < 0 ? 'ramp-bow' : 'ramp-stern';
-    pivot.position.set(-1.0, deckY, end * (length - 8) / 2);
-    pivot.add(box(beam - 3.5, 0.2, 4.0, std(0x7a7e82, 0.8), 0, 0, end * 2.0));
+    pivot.position.set(-sup / 2, deckY, (end * deckL) / 2 + end * 0.3);
+    const rk = new Kit();
+    const w = beam - sup - 1.2;
+    rk.box(w, 0.22, 4.6, VMAT.paint, 0x7a7e82, 0, 0, end * 2.3);
+    for (const s of [-1, 1]) rk.box(0.2, 0.6, 4.6, VMAT.paint, C.navy, s * (w / 2 + 0.1), 0.2, end * 2.3);
+    pivot.add(rk.build('ramp'));
     g.add(pivot);
   }
-  for (let i = 0; i < 10; i++) {
-    const c = car(i * 3 + 1);
-    c.position.set(-beam / 2 + 2.5 + (i % 3) * 3.4, deckY + 0.08, -length / 2 + 8 + Math.floor(i / 3) * 5.5);
-    g.add(c);
-  }
-  g.add(navLights(length, beam, 6.5, true));
+  navLights(g, { length: deckL, beam, mastY: deckY + 7.3, mastZ: 0, sideY: deckY + 4.8, ram: true });
   return g;
 }
 
-function passengerModel(length: number, beam: number, kind: VesselKind): THREE.Group {
+// ------------------------------------------------------------------ passenger vessels
+
+/** The Dartmouth-Kingswear passenger ferry (Dartmouth Princess: 18 m, blue hull): saloon, open upper deck. */
+function passengerFerry(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
-  const white = std(0xf3f2ee, 0.45);
-  g.add(hull(length, beam, 1.6, 0.3, white));
-  g.add(box(beam + 0.04, 0.25, length * 0.75, std(kind === 'river-cruiser' ? 0x1d4d7a : 0x2d6a4f, 0.5), 0, 0.85, length * 0.05));
-  const deckY = 1.15;
-  if (kind === 'river-cruiser') {
-    g.add(box(beam - 0.5, 2.0, length * 0.62, white, 0, deckY + 1.0, length * 0.08));
-    g.add(box(beam - 0.48, 0.9, length * 0.6, glass(), 0, deckY + 1.25, length * 0.08));
-    g.add(railing(new THREE.Vector3(-beam / 2 + 0.3, deckY + 2.0, -length * 0.2), new THREE.Vector3(-beam / 2 + 0.3, deckY + 2.0, length * 0.38), 1.0, std(0xd8d8d2)));
-    g.add(railing(new THREE.Vector3(beam / 2 - 0.3, deckY + 2.0, -length * 0.2), new THREE.Vector3(beam / 2 - 0.3, deckY + 2.0, length * 0.38), 1.0, std(0xd8d8d2)));
-    g.add(box(beam - 0.8, 0.08, length * 0.35, std(0x2a6f97, 0.7), 0, deckY + 4.2, length * 0.18));
-    for (const z of [-0.0, 0.34]) for (const x of [-1, 1]) g.add(box(0.06, 1.2, 0.06, std(0xd8d8d2), x * (beam / 2 - 0.6), deckY + 3.6, length * z));
+  const kit = new Kit();
+  const h = hull(kit, {
+    length, beam, freeboard: 1.15, draft: 1.1, sheerBow: 0.5, sheerStern: 0.2, stemRake: 1.2, entry: 0.4, transom: 0.72, transomRake: 0.15,
+    flare: 0.1, bulwark: 0.85, colours: { bottom: C.antifouling, boot: C.white, topsides: C.blue, deck: C.wood, bulwarkInside: C.white },
+    bootTop: 0.18,
+  });
+  const L = length;
+  // Saloon amidships with big windows; the upper deck on its roof, railed, with benches and people.
+  const sz = -0.07 * L;
+  const sl = 0.5 * L;
+  const sy = h.deck(sz);
+  cabin(kit, { z: sz, y: sy, length: sl, width: beam - 1.1, height: 2.1, rFront: 1.3, rBack: 0.3, rake: 0.3, tumble: 0.08, colour: C.white, windows: [0.42, 0.88], front: [0.38, 0.9], roof: { overhang: 0.1, thickness: 0.1 } });
+  const top = sy + 2.2;
+  const rw = (beam - 1.1) / 2 - 0.1;
+  rail(kit, [V(-rw, top, sz + sl / 2 - 0.2), V(-rw, top, sz - sl / 2 + 2.2), V(0, top, sz - sl / 2 + 0.5), V(rw, top, sz - sl / 2 + 2.2), V(rw, top, sz + sl / 2 - 0.2), V(-rw, top, sz + sl / 2 - 0.2)], 1.0, { spacing: 1.5 });
+  // Small wheelhouse at the front of the upper deck.
+  cabin(kit, { z: sz - sl / 2 + 2.6, y: top, length: 2.2, width: 2.3, height: 1.7, rFront: 0.6, rBack: 0.2, rake: 0.2, colour: C.white, windows: [0.45, 0.92], front: [0.4, 0.94], roof: { overhang: 0.12, thickness: 0.08, colour: C.blue } });
+  mast(kit, 0, top + 1.8, sz - sl / 2 + 2.9, 1.8);
+  for (let i = 0; i < 2; i++) bench(kit, (i ? 1 : -1) * 0.75, top, sz + 1.2, sl * 0.45, i ? -1 : 1, 3, seed + i * 5);
+  // Aft deck: benches along the bulwarks, people; ensign.
+  const az = sz + sl / 2 + (L / 2 - (sz + sl / 2)) / 2;
+  const al = L / 2 - (sz + sl / 2) - 1.2;
+  for (const s of [-1, 1]) bench(kit, s * (h.half(az) - 0.45), h.deck(az), az, al, -s, 3, seed + 10 + s);
+  for (let i = 0; i < 2; i++) addPerson(kit, (i - 0.5) * 0.8, h.deck(az), az + 0.6, i * 0.6, seed + 30 + i);
+  lifebuoy(kit, -(beam / 2 - 0.55), sy + 1.0, sz + sl / 2 - 0.3, -1);
+  lifebuoy(kit, beam / 2 - 0.55, sy + 1.0, sz + sl / 2 - 0.3, 1);
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4);
+  g.add(kit.build('passenger-ferry'));
+  navLights(g, { length: L, beam, mastY: top + 3.5, mastZ: sz - sl / 2 + 2.9, sideY: top + 1.0 });
+  g.add(wake(beam));
+  return g;
+}
+
+/** A small open ferry launch (Castle Ferry, Noss): benches under a canopy, the helm standing aft. */
+function launchModel(length: number, beam: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const kit = new Kit();
+  const h = hull(kit, {
+    length, beam, freeboard: 0.8, draft: 0.7, sheerBow: 0.3, sheerStern: 0.1, stemRake: 0.6, entry: 0.42, transom: 0.68,
+    flare: 0.1, bulwark: 0.55, colours: { bottom: C.antifouling, boot: 0x2d6a4f, topsides: C.white, deck: C.teak, bulwarkInside: C.cream }, bootTop: 0.15,
+  });
+  const L = length;
+  kit.tube(h.sheerLine(-1, 0, 0.02, 1), 0.05, VMAT.paint, C.teak);
+  kit.tube(h.sheerLine(1, 0, 0.02, 1), 0.05, VMAT.paint, C.teak);
+  // Canopy on posts over the benches.
+  const cz0 = -L * 0.22;
+  const cz1 = L * 0.3;
+  const cy = h.deck(0) + 1.95;
+  for (const s of [-1, 1]) for (const z of [cz0, (cz0 + cz1) / 2, cz1]) kit.rod(V(s * (h.half(z) - 0.25), h.sheer(z), z), V(s * (h.half(z) - 0.25), cy, z), 0.03, VMAT.steel);
+  kit.box(beam - 0.3, 0.05, cz1 - cz0 + 0.4, VMAT.canvas, seed % 2 ? 0x1f3550 : 0x2d6a4f, 0, cy + 0.02, (cz0 + cz1) / 2);
+  for (const s of [-1, 1]) bench(kit, s * (h.half((cz0 + cz1) / 2) - 0.5), h.deck(0), (cz0 + cz1) / 2, cz1 - cz0 - 0.4, -s, 2 + (seed % 2), seed + s * 3);
+  // Helm console aft, the skipper standing.
+  kit.box(0.6, 0.9, 0.5, VMAT.paint, C.cream, 0.5, h.deck(L * 0.38) + 0.45, L * 0.36);
+  addPerson(kit, 0.5, h.deck(L * 0.4), L * 0.42, 0, seed + 7);
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.2), L / 2 - 0.3);
+  g.add(kit.build('launch'));
+  navLights(g, { length: L, beam, mastY: cy + 0.6, mastZ: cz0, sideY: cy - 0.4 });
+  g.add(wake(beam));
+  return g;
+}
+
+/** A river ferry or cruise boat: the Totnes cruise as the Cardiff Castle (30 m, three decks); smaller ones shorter. */
+function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const kit = new Kit();
+  const big = length >= 20;
+  const h = hull(kit, {
+    length, beam, freeboard: big ? 1.4 : 1.0, draft: big ? 1.5 : 1.0, sheerBow: big ? 0.6 : 0.4, sheerStern: 0.2, stemRake: big ? 1.8 : 0.9, entry: 0.38, transom: 0.7,
+    transomRake: 0.2, flare: 0.08, bulwark: 0.9, colours: { bottom: C.antifouling, boot: C.navy, topsides: C.white, deck: C.wood, bulwarkInside: C.white, stripe: C.navy },
+    bootTop: 0.25, stripe: [0.35, 0.2],
+  });
+  const L = length;
+  const mz = big ? -0.02 * L : -0.18 * L;
+  const ml = big ? 0.64 * L : 0.36 * L;
+  const my = h.deck(mz);
+  const mw = beam - (big ? 0.9 : 1.2);
+  cabin(kit, { z: mz, y: my, length: ml, width: mw, height: big ? 2.3 : 2.0, rFront: big ? 1.6 : 0.8, rBack: 0.4, rake: 0.3, tumble: 0.06, colour: C.white, windows: [0.35, 0.9], front: [0.32, 0.92], roof: { overhang: 0.12, thickness: 0.12 } });
+  const top = my + (big ? 2.42 : 2.12);
+  if (big) {
+    // Promenade deck: a covered part forward with the wheelhouse, open astern behind rails; funnel and people.
+    const rw = mw / 2 - 0.1;
+    rail(kit, [V(-rw, top, mz + ml / 2 - 0.2), V(-rw, top, mz - ml / 2 + 2.5), V(0, top, mz - ml / 2 + 0.6), V(rw, top, mz - ml / 2 + 2.5), V(rw, top, mz + ml / 2 - 0.2), V(-rw, top, mz + ml / 2 - 0.2)], 1.05, { spacing: 1.5 });
+    const cz = mz - ml * 0.22;
+    cabin(kit, { z: cz, y: top, length: ml * 0.36, width: mw - 0.6, height: 2.0, rFront: 1.2, rBack: 0.3, rake: 0.25, colour: C.white, windows: [0.4, 0.88], front: [0.35, 0.92], roof: { overhang: 0.15, thickness: 0.1, colour: C.navy } });
+    mast(kit, 0, top + 2.1, cz - ml * 0.1, 2.4, { radar: true });
+    const fz = cz + ml * 0.24;
+    kit.add(new THREE.CylinderGeometry(0.45, 0.55, 1.6, 16), VMAT.paint, 0xd9c08a, place(0, top + 0.8, fz));
+    kit.add(new THREE.CylinderGeometry(0.46, 0.46, 0.35, 16), VMAT.paint, C.black, place(0, top + 1.75, fz));
+    for (let i = 0; i < 2; i++) bench(kit, (i ? 1 : -1) * (rw - 0.6), top, mz + ml * 0.3, ml * 0.3, i ? -1 : 1, 4, seed + i * 9);
+    for (let i = 0; i < 3; i++) addPerson(kit, -1 + i, top, mz + ml * 0.46, Math.PI, seed + 40 + i);
+    for (const s of [-1, 1]) kit.add(new THREE.CylinderGeometry(0.3, 0.3, 1.1, 12), VMAT.paint, C.white, place(s * (rw - 0.35), top + 0.35, fz + 1.6, 0, Math.PI / 2));
   } else {
-    g.add(box(beam - 0.8, 1.9, length * (kind === 'launch' ? 0.35 : 0.5), white, 0, deckY + 0.95, -length * 0.05));
-    g.add(box(beam - 0.78, 0.8, length * (kind === 'launch' ? 0.35 : 0.5) - 0.1, glass(), 0, deckY + 1.25, -length * 0.05));
-    if (kind === 'launch') g.add(box(beam - 0.4, 0.06, length * 0.4, std(0x1d4d7a, 0.7), 0, deckY + 2.0, length * 0.25));
+    // A wheelhouse-saloon forward, open well aft under a canopy.
+    const az0 = mz + ml / 2 + 0.3;
+    const az1 = L / 2 - 1;
+    for (const s of [-1, 1]) for (const z of [az0, az1]) kit.rod(V(s * (h.half(z) - 0.3), h.sheer(z), z), V(s * (h.half(z) - 0.3), my + 2.05, z), 0.03, VMAT.steel);
+    kit.box(beam - 0.5, 0.05, az1 - az0 + 0.4, VMAT.canvas, seed % 2 ? 0x2d6a4f : C.navy, 0, my + 2.07, (az0 + az1) / 2);
+    for (const s of [-1, 1]) bench(kit, s * (h.half((az0 + az1) / 2) - 0.5), h.deck(az0), (az0 + az1) / 2, az1 - az0 - 0.3, -s, 3, seed + s * 4);
+    mast(kit, 0, top, mz - ml * 0.1, 1.6);
   }
-  g.add(navLights(length, beam, kind === 'river-cruiser' ? 5.4 : 3.6, false));
+  for (const s of [-1, 1]) lifebuoy(kit, s * (mw / 2 + 0.02), my + 1.2, mz + ml * 0.3, s);
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4);
+  g.add(kit.build(big ? 'river-cruiser' : 'river-ferry'));
+  navLights(g, { length: L, beam, mastY: top + (big ? 4.6 : 1.8), mastZ: mz - ml * (big ? 0.32 : 0.1), sideY: top + 0.8 });
+  g.add(wake(beam));
+  return g;
+}
+
+// ------------------------------------------------------------------ Dart Marina boats
+
+/** A planing motor cruiser: deep-vee hull, raked superstructure, radar arch, bow rail, bathing platform. */
+function motorCruiser(length: number, beam: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const kit = new Kit();
+  const hullColour = seed % 4 === 1 ? 0x2b3a4a : C.white;
+  const h = hull(kit, {
+    length, beam, freeboard: 1.35, draft: 0.75, sheerBow: 0.3, sheerStern: -0.05, stemRake: 1.3, entry: 0.42, transom: 0.95, transomRake: 0.25,
+    deadrise: 0.33, chine: true, flare: 0.14, colours: { bottom: 0x1f2a36, boot: 0x2b2e33, topsides: hullColour, deck: 0xf4f3ef, stripe: 0x2b2e33 },
+    bootTop: 0.1, stripe: [0.75, 0.55],
+  }, VMAT.gloss);
+  const L = length;
+  const cz = -0.04 * L;
+  const cl = 0.44 * L;
+  const cy = h.deck(cz);
+  cabin(kit, { z: cz, y: cy, length: cl, width: beam - 0.7, height: 1.15, rFront: 1.1, rBack: 0.2, rake: 1.0, tumble: 0.22, colour: C.white, windows: [0.22, 0.9], front: [0.12, 0.96], noBackWindows: true, roof: { overhang: 0.06, thickness: 0.06 }, material: VMAT.gloss });
+  // Radar arch over the cockpit, bow rail, bathing platform, cockpit seating; people aboard.
+  const az = cz + cl / 2 + 0.6;
+  const aw = h.half(az) - 0.2;
+  kit.tube([V(-aw, h.deck(az), az + 0.4), V(-aw * 0.8, cy + 1.6, az), V(aw * 0.8, cy + 1.6, az), V(aw, h.deck(az), az + 0.4)], 0.07, VMAT.gloss, C.white);
+  kit.add(new THREE.SphereGeometry(0.28, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), VMAT.paint, C.white, place(0, cy + 1.66, az));
+  rail(kit, h.sheerLine(-1, 0.12, 0.03, 0.4).reverse().concat(h.sheerLine(1, 0.12, 0.03, 0.4)).map((p) => p.setY(h.deck(p.z))), 0.6, { spacing: 1.2, mid: false });
+  kit.box(beam * 0.8, 0.08, 0.9, VMAT.paint, C.teak, 0, 0.35, L / 2 + 0.45);
+  kit.box(beam - 0.9, 0.42, 0.55, VMAT.paint, 0xe9e1cf, 0, h.deck(L * 0.38) + 0.21, L * 0.38);
+  addPerson(kit, -0.4, h.deck(L * 0.3), L * 0.3, Math.PI / 2, seed + 1, true);
+  if (seed % 2) addPerson(kit, 0.5, h.deck(L * 0.25), L * 0.25, 0.4, seed + 2);
+  g.add(kit.build('motor-cruiser'));
+  navLights(g, { length: L, beam, mastY: cy + 1.9, mastZ: az, sideY: cy + 0.6 });
+  g.add(wake(beam));
+  return g;
+}
+
+/** A sloop under engine: low coachroof, sprayhood, mast with furled genoa and sail cover, guard rails. */
+function yachtModel(length: number, beam: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const kit = new Kit();
+  const navy = seed % 3 === 0;
+  const h = hull(kit, {
+    length, beam, freeboard: 1.0, draft: 0.5, sheerBow: 0.18, stemRake: 0.35, entry: 0.45, transom: 0.85, transomRake: -0.35, flare: 0.06,
+    deadrise: 0.35, colours: { bottom: 0x1f2a36, boot: navy ? C.white : C.navy, topsides: navy ? C.navy : C.white, deck: 0xe9e6dc },
+  }, VMAT.gloss);
+  const L = length;
+  kit.tube(h.sheerLine(-1, 0.03, 0.02, 1), 0.035, VMAT.paint, C.teak);
+  kit.tube(h.sheerLine(1, 0.03, 0.02, 1), 0.035, VMAT.paint, C.teak);
+  const cz = -0.06 * L;
+  const cl = 0.4 * L;
+  const cy = h.deck(cz) - 0.03;
+  cabin(kit, { z: cz, y: cy, length: cl, width: beam - 1.1, height: 0.55, rFront: 0.9, rBack: 0.15, rake: 0.3, tumble: 0.15, colour: C.white, windows: [0.35, 0.72], noBackWindows: true, roof: { overhang: 0.03, thickness: 0.05 }, material: VMAT.gloss });
+  // Sprayhood over the companionway.
+  const sprayZ = cz + cl / 2 - 0.15;
+  const hood = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true, -Math.PI / 2, Math.PI);
+  hood.scale((beam - 1.4) / 2, 1, 0.75);
+  kit.add(hood, VMAT.canvas, 0x2b3a4a, place(0, cy + 0.55, sprayZ, 0, Math.PI / 2));
+  // Rig: mast (keel-stepped) through the coachroof, spreaders, forestay, backstay, shrouds; boom with cover.
+  const mz = cz - cl * 0.12;
+  const top = 13.5;
+  kit.add(new THREE.CylinderGeometry(0.07, 0.09, top - cy, 10), VMAT.paint, 0xc8ccd0, place(0, (top + cy) / 2, mz));
+  const stem = V(0, h.sheer(-L / 2 + 0.2) + 0.05, -L / 2 + 0.25);
+  const head = V(0, top - 0.3, mz);
+  kit.rod(stem, head, 0.008, VMAT.steel);
+  kit.rod(V(0, h.sheer(L / 2) + 0.05, L / 2 - 0.1), V(0, top, mz + 0.05), 0.007, VMAT.steel);
+  for (const s of [-1, 1]) {
+    const tip = V(s * 0.85, top * 0.55, mz + 0.15);
+    kit.rod(V(0, top * 0.55, mz), tip, 0.02, VMAT.paint, 0xc8ccd0);
+    const plate = V(s * (h.half(mz) - 0.08), h.sheer(mz), mz + 0.2);
+    kit.rod(plate, tip, 0.006, VMAT.steel);
+    kit.rod(tip, V(0, top - 0.4, mz), 0.006, VMAT.steel);
+  }
+  // Furled genoa round the forestay (blue sacrificial strip), the main under its cover on the boom.
+  const fl = stem.distanceTo(head);
+  const furl = new THREE.CylinderGeometry(0.02, 0.075, fl * 0.92, 10);
+  kit.add(furl, VMAT.canvas, 0xe8e6de, new THREE.Matrix4().compose(stem.clone().lerp(head, 0.48), new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), head.clone().sub(stem).normalize()), V(1, 1, 1)));
+  const boomY = cy + 1.15;
+  kit.add(new THREE.CylinderGeometry(0.06, 0.06, 4.2, 8), VMAT.paint, 0xc8ccd0, place(0, boomY, mz + 2.1, 0, Math.PI / 2));
+  kit.add(new THREE.CapsuleGeometry(0.22, 3.6, 4, 10).scale(0.9, 1, 1.2), VMAT.canvas, 0x24476e, place(0, boomY + 0.25, mz + 2.0, 0, Math.PI / 2));
+  // Pulpit, pushpit and guard wires on stanchions; wheel and helm; ensign.
+  const gw = (side: number) => h.sheerLine(side, 0.1, 0.05, 0.97).map((p) => p.setY(p.y + 0.02));
+  for (const s of [-1, 1]) rail(kit, gw(s), 0.62, { spacing: 1.8, r: 0.014 });
+  const wz = L * 0.33;
+  kit.add(new THREE.TorusGeometry(0.42, 0.025, 6, 20), VMAT.steel, undefined, place(0, h.deck(wz) + 0.75, wz));
+  addPerson(kit, 0, h.deck(wz), wz + 0.55, 0, seed + 3);
+  if (seed % 2) addPerson(kit, 0.6, h.deck(wz - 1), wz - 0.9, Math.PI / 2, seed + 4, true);
+  ensign(g, kit, 0.3, h.sheer(L / 2 - 0.3), L / 2 - 0.3);
+  g.add(kit.build('yacht'));
+  navLights(g, { length: L, beam, mastY: top, mastZ: mz, sideY: h.sheer(-L * 0.4) + 0.3 });
+  g.add(wake(beam));
+  return g;
+}
+
+/** A RIB: deep-vee hull, buoyancy tubes round the sides and bow, centre console, A-frame, outboard. */
+function ribModel(length: number, beam: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const kit = new Kit();
+  const h = hull(kit, {
+    length, beam: beam - 0.5, freeboard: 0.45, draft: 0.45, sheerBow: 0.25, stemRake: 0.4, entry: 0.4, transom: 0.92, deadrise: 0.38, chine: true, flare: 0.1,
+    colours: { bottom: C.white, boot: C.white, topsides: C.white, deck: 0x8f9396 },
+  }, VMAT.gloss);
+  const L = length;
+  const tubeColour = seed % 3 === 0 ? 0xe8541c : 0x3d4246;
+  const ring = [...h.sheerLine(-1, -0.2, 0, 0.97).reverse(), ...h.sheerLine(1, -0.2, 0, 0.97)].map((p) => p.setY(p.y + 0.05));
+  kit.tube(ring, 0.27, VMAT.paint, tubeColour);
+  // Console with windscreen, jockey seat behind, A-frame with the light, outboard.
+  const cz = L * 0.05;
+  kit.box(0.75, 0.95, 0.65, VMAT.gloss, C.white, 0, h.deck(cz) + 0.48, cz);
+  kit.add(new THREE.BoxGeometry(0.8, 0.4, 0.04), VMAT.glass, undefined, place(0, h.deck(cz) + 1.1, cz - 0.3, 0, -0.5));
+  kit.box(0.5, 0.7, 0.6, VMAT.paint, 0x2b2e33, 0, h.deck(cz + 1) + 0.35, cz + 1.0);
+  const fz = L / 2 - 0.35;
+  for (const s of [-1, 1]) kit.rod(V(s * 0.7, h.deck(fz), fz), V(s * 0.45, h.deck(fz) + 1.6, fz - 0.2), 0.03, VMAT.steel);
+  kit.rod(V(-0.45, h.deck(fz) + 1.6, fz - 0.2), V(0.45, h.deck(fz) + 1.6, fz - 0.2), 0.03, VMAT.steel);
+  outboard(kit, 0, h.sheer(L / 2) - 0.1, L / 2 - 0.05);
+  addPerson(kit, 0, h.deck(cz + 0.6), cz + 0.55, 0, seed + 5);
+  if (seed % 2) addPerson(kit, 0, h.deck(cz + 1.1), cz + 1.2, 0, seed + 6);
+  g.add(kit.build('rib'));
+  navLights(g, { length: L, beam, mastY: h.deck(fz) + 1.7, mastZ: fz - 0.2, sideY: h.deck(cz) + 0.9 });
   g.add(wake(beam));
   return g;
 }
 
 function leisureModel(kind: VesselKind, length: number, beam: number, seed: number): THREE.Group {
-  const g = new THREE.Group();
-  if (kind === 'rib') {
-    const tube = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, length - 0.9, 4, 10), std(0x3d4246, 0.8));
-    for (const s of [-1, 1]) {
-      const t = tube.clone();
-      t.rotation.x = Math.PI / 2;
-      t.position.set(s * (beam / 2 - 0.3), 0.45, 0.1);
-      g.add(t);
-    }
-    g.add(hull(length - 0.4, beam - 0.5, 0.7, 0.35, std(0xe6e6e2, 0.5)));
-    g.add(box(0.8, 1.0, 0.7, std(0x2b2e33), 0, 0.95, 0.5));
-    g.add(box(0.5, 0.6, 0.5, std(0x2b2e33), 0, 0.7, length / 2 - 0.4));
-  } else if (kind === 'yacht') {
-    g.add(hull(length, beam, 1.4, 0.45, std(seed % 3 ? 0xf2f2ee : 0x1f3550, 0.4)));
-    g.add(box(beam * 0.55, 0.55, length * 0.38, std(0xf2f2ee, 0.5), 0, 1.25, -length * 0.02));
-    g.add(box(beam * 0.56, 0.22, length * 0.36, glass(), 0, 1.3, -length * 0.02));
-    g.add(box(0.14, 13, 0.14, std(0xc8ccd0, 0.35, 0.6), 0, 7.3, -length * 0.12));
-    // Mainsail stowed on the boom under its cover.
-    g.add(box(0.35, 0.35, length * 0.42, std(0x1d3557, 0.8), 0, 2.4, length * 0.1));
-    g.add(navLights(length, beam, 13.5, false));
-  } else {
-    g.add(hull(length, beam, 1.6, 0.4, std(0xf4f3ef, 0.35)));
-    g.add(box(beam * 0.7, 1.2, length * 0.45, std(0xf4f3ef, 0.4), 0, 1.65, -length * 0.02));
-    g.add(box(beam * 0.71, 0.5, length * 0.44, glass(), 0, 1.85, -length * 0.02));
-    g.add(box(beam * 0.6, 0.1, length * 0.3, std(0xe9e8e2, 0.5), 0, 2.6, length * 0.02));
-    g.add(navLights(length, beam, 3.6, false));
+  if (kind === 'rib') return ribModel(length, beam, seed);
+  if (kind === 'yacht') return yachtModel(length, beam, seed);
+  return motorCruiser(length, beam, seed);
+}
+
+
+function makeModel(kind: VesselKind, length: number, beam: number, seed: number): THREE.Group {
+  switch (kind) {
+    case 'tug-float':
+      return floatModel(length, beam, seed);
+    case 'floating-bridge':
+      return bridgeModel(length, beam);
+    case 'passenger-ferry':
+      return passengerFerry(length, beam, seed);
+    case 'launch':
+      return launchModel(length, beam, seed);
+    case 'river-cruiser':
+      return cruiserModel(length, beam, seed);
+    default:
+      return leisureModel(kind, length, beam, seed);
   }
-  g.add(wake(beam));
-  return g;
+}
+
+/** Liveries, cars and passengers vary over this many versions of each vessel. */
+const MODEL_VARIANTS = 12;
+const models = new Map<string, THREE.Group>();
+/**
+ * A vessel's model, built once and then copied (the copies share geometry and materials, so a boat leaving
+ * the marina costs no rebuild); each copy has its own wake material, whose opacity follows its speed.
+ */
+function instance(key: string, make: () => THREE.Group): THREE.Group {
+  let m = models.get(key);
+  if (!m) models.set(key, (m = make()));
+  const copy = m.clone();
+  copy.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.name === 'wake') o.material = (o.material as THREE.Material).clone();
+  });
+  return copy;
 }
 
 interface Entry {
@@ -301,26 +576,11 @@ export class TrafficView {
     const root = new THREE.Group();
     root.name = `vessel-${s.kind}`;
     const seed = [...s.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
-    let body: THREE.Group;
-    switch (s.kind) {
-      case 'tug-float':
-        body = floatModel(s.length, s.beam, seed);
-        break;
-      case 'floating-bridge':
-        body = bridgeModel(s.length, s.beam);
-        break;
-      case 'passenger-ferry':
-      case 'launch':
-      case 'river-cruiser':
-        body = passengerModel(s.length, s.beam, s.kind);
-        break;
-      default:
-        body = leisureModel(s.kind, s.length, s.beam, seed);
-    }
+    const body = instance(`${s.kind}:${s.length}:${s.beam}:${seed % MODEL_VARIANTS}`, () => makeModel(s.kind, s.length, s.beam, seed % MODEL_VARIANTS));
     root.add(body);
     let tug: THREE.Group | undefined;
     if (s.kind === 'tug-float') {
-      tug = tugModel();
+      tug = instance('tug', tugModel);
       this.group.add(tug);
     }
     let label: THREE.Sprite | undefined;
@@ -338,7 +598,10 @@ export class TrafficView {
         if (o.name.startsWith('ramp-')) ramps.push(o);
         if (o.name === 'wake') wakes.push(o as THREE.Mesh);
         if (o.parent?.name === 'lights') lights.push(o as THREE.Mesh);
-        if (o instanceof THREE.Mesh && o.name !== 'wake') o.castShadow = o.receiveShadow = false;
+        if (o instanceof THREE.Mesh && o.name !== 'wake') {
+          o.castShadow = false;
+          o.receiveShadow = true;
+        }
       });
     }
     this.group.add(root);
@@ -357,7 +620,8 @@ export class TrafficView {
 
   update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean): void {
     const stamp = time;
-    const lightOn = this.day < 0.35 ? 3 : 0;
+    const lit = this.day < 0.35;
+    setLightsOn(lit);
     for (const s of states) {
       let e = this.entries.get(s.id);
       if (!e) {
@@ -374,8 +638,9 @@ export class TrafficView {
         const end = r.name === 'ramp-bow' ? -1 : 1;
         r.rotation.x = end * (0.32 * (s.ramp ?? 1) - 0.12);
       }
+      // Unlit, the lamps are not drawn at all (small housings, not dark balls in the air).
+      for (const l of e.lights) l.visible = lit;
       for (const w of e.wakes) (w.material as THREE.MeshBasicMaterial).opacity = Math.min(0.75, Math.max(0, (s.sog - 0.3) / 3));
-      for (const l of e.lights) (l.material as THREE.MeshStandardMaterial).emissiveIntensity = lightOn;
       if (e.tug && s.tug) {
         e.tug.visible = true;
         e.tug.position.set(s.tug.e, bob, -s.tug.n);

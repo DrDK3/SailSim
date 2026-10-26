@@ -90,6 +90,8 @@ CLASS_HEIGHT = {
     "industrial": 8.0, "farm_auxiliary": 6.0, "hospital": 9.0, "bunker": 3.0,
 }
 DEFAULT_HEIGHT = 6.5
+# A building stands at least this share of its height above the uphill ground round its walls (E).
+UPHILL_SHARE = 0.7
 
 # Provisional moorings: rows inside the mooring-area polygons (positions illustrative, E).
 MOORING_ROW_SPACING = 22.0
@@ -156,12 +158,15 @@ def buildings(extract, elev, mosaic=None):
     """Footprints with base, eaves and top heights (m ODN), roof shape and ridge bearing, party walls, floors.
 
     Base: the lowest ground under the footprint (at most 4 m below the median), from the ~3 m LIDAR terrain in the
-    town box (town.py) and the 8 m grid elsewhere. Top: median ground + height (to the ridge).
+    town box (town.py) and the 8 m grid elsewhere. Top: median ground + height (to the ridge), but at least 70% of
+    the height above the uphill ground (the 90th percentile round the walls): on a steep site a house stands up
+    from its uphill street rather than sinking into the slope (a rule, E; heights are not defined for slopes).
     """
     rows = []
     methods = collections.Counter()
     sources = collections.Counter()
     roofs = collections.Counter()
+    raised = 0
     for r in vector.load(extract, "building"):
         g = vector.local(wkb.loads(r["geometry"]))
         for p in vector.polygons(g):
@@ -198,6 +203,10 @@ def buildings(extract, elev, mosaic=None):
         shape, ridge, rise = town.roof(p, r["class"], name, r.get("roof_shape"), w)
         roofs[shape] += 1
         top = med + h
+        uphill = float(np.percentile(ground, 90))
+        if uphill + UPHILL_SHARE * h > top:
+            top = uphill + UPHILL_SHARE * h
+            raised += 1
         eaves = max(base + 2.4, top - rise) if shape != "f" else top
         rec = dict(b=r1(base), t=r1(top), r=ring(list(p.exterior.coords)[:-1]), n=name, c=r["class"], s=shape)
         if shape != "f":
@@ -207,7 +216,20 @@ def buildings(extract, elev, mosaic=None):
         if r["num_floors"]:
             rec["f"] = int(r["num_floors"])
         out.append(rec)
-    return out, dict(methods=dict(methods), sources=dict(sources), roofs=dict(roofs), partyWalls=sum(1 for w in walls if any(w)), fine=mosaic is not None)
+    return out, dict(methods=dict(methods), sources=dict(sources), roofs=dict(roofs), partyWalls=sum(1 for w in walls if any(w)), fine=mosaic is not None, raisedOnSlopes=raised)
+
+
+def water_distance(wm):
+    """Signed distance (m) to the tidal water outline on the 8 m grid, > 0 in the water: from a 2 m raster of the
+    outline, averaged over each cell. Rows north to south (for the PNG the renderer reads)."""
+    from scipy import ndimage
+    import rasterio.features
+    from rasterio.transform import Affine
+    S = 4
+    tr = Affine(CELL / S, 0, E_MIN, 0, -CELL / S, N_MAX)
+    inside = rasterio.features.rasterize([(wm, 1)], out_shape=(NY * S, NX * S), transform=tr, fill=0, dtype="uint8").astype(bool)
+    d = np.where(inside, ndimage.distance_transform_edt(inside), -ndimage.distance_transform_edt(~inside)) * (CELL / S)
+    return d.reshape(NY, S, NX, S).mean(axis=(1, 3))
 
 
 def marinas(extract):
@@ -377,6 +399,8 @@ def main():
         f.write(pack.pack_grid(q_town, tnx, tny))
     Image.fromarray(rgb).save(os.path.join(OUT, "drape.jpg"), quality=86, optimize=True)
     minimap(cls, elev, blds).save(os.path.join(OUT, "minimap.png"), optimize=True)
+    wd = water_distance(wm)
+    Image.fromarray(np.clip(np.round(128 + 2 * wd), 0, 255).astype(np.uint8), "L").save(os.path.join(OUT, "watermask.png"), optimize=True)
 
     features = dict(
         landmarks=lms,
@@ -410,6 +434,9 @@ def main():
                   order="row-major, rows south to north, cell centres at e0 + (i + 0.5)·cell", packing=pack.PACKING,
                   meaning="Ground (m ODN) over Dartmouth and Kingswear for the picture: the same LIDAR DTM at 4 m (the physics uses the 8 m grid)"),
         minimap=dict(file="minimap.png", cell=CELL * 2, e0=E_MIN, n0=N_MIN, order="image rows north to south"),
+        waterMask=dict(file="watermask.png", cell=CELL, nx=NX, ny=NY, e0=E_MIN, n0=N_MIN, order="image rows north to south, cell centres at e0 + (i + 0.5)·cell",
+                       encoding="signed distance (m) to the tidal water outline (shoreline layer) = (v - 128) / 2, > 0 in the water, clamped to about ±64 m",
+                       meaning="Where the picture may draw the water surface: tidal water and the bank next to it, not low ground inland"),
         features="features.json",
         entrance=dict(a=[r1(a[0]), r1(a[1])], b=[r1(b[0]), r1(b[1])]),
         layers=layer_provenance(terrain_info, binfo, len(blds), len(prs), len(areas), len(moor), len(fer), cls),

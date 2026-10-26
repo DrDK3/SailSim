@@ -174,19 +174,19 @@ const SERVICES: Record<string, ServiceSpec> = {
     // A = Dartmouth (west), B = Kingswear (east): Dartmouth 07:10–22:55, Kingswear 07:00–22:45 (Sundays from 08:10 / 08:00).
     hours: (wd) => ({ a: [wd === 0 ? 8 * 60 + 10 : 7 * 60 + 10, 22 * 60 + 55], b: [wd === 0 ? 8 * 60 : 7 * 60, 22 * 60 + 45] }),
     units: (ms, m) => (ms >= LOWER_REFIT[0] && ms <= LOWER_REFIT[1] ? 1 : m >= 8 * 60 && m <= 20 * 60 ? 2 : 1),
-    notes: 'Float and tug sizes, speed and loading times estimated (E); timetable and refit from the operator (S).',
+    notes: 'Floats of 8 cars worked by the tugs Hauley IV-VI (F1), lashed alongside (F3); float and tug sizes, speed and loading times estimated (E); timetable and refit from the operator (S).',
   },
   'Dartmouth Higher Ferry': {
     kind: 'floating-bridge', label: 'Higher Ferry (floating bridge)', length: 50, beam: 16, ram: true,
     vMax: 2.5, accel: 0.08, decel: 0.1, dwell: [90, 210], cable: true,
     hours: () => ({ a: [6 * 60 + 30, 22 * 60 + 45], b: [6 * 60 + 35, 22 * 60 + 50] }),
-    notes: 'Cable-guided; about a 3-minute crossing (operator, S). Size, hours and loading times estimated (E).',
+    notes: 'A cable ferry (2009, Pendennis, F5; on two cables, F6); about a 3-minute crossing (operator, S). Size, hours and loading times estimated (E).',
   },
   'Dartmouth Pedestrian Ferry': {
-    kind: 'passenger-ferry', label: 'Passenger ferry Dartmouth–Kingswear', length: 14, beam: 5, ram: false,
+    kind: 'passenger-ferry', label: 'Passenger ferry Dartmouth–Kingswear', length: 18, beam: 5.2, ram: false,
     vMax: 2.8, accel: 0.25, decel: 0.3, interval: 7.5,
     hours: () => ({ a: [7 * 60 + 30, 23 * 60], b: [7 * 60 + 34, 23 * 60] }),
-    notes: 'Timetable, size and speed estimated (E).',
+    notes: 'Drawn as the Dartmouth Princess (18 m, 156 passengers, blue hull, F7); beam, timetable and speed estimated (E).',
   },
   'Dartmouth Castle Ferry': {
     kind: 'launch', label: 'Castle Ferry', length: 10, beam: 3.5, ram: false,
@@ -213,10 +213,10 @@ const SERVICES: Record<string, ServiceSpec> = {
     notes: 'Timetable estimated (E).',
   },
   'Totnes to Dartmouth Ferry': {
-    kind: 'river-cruiser', label: 'Totnes river cruise', length: 25, beam: 6, ram: false,
+    kind: 'river-cruiser', label: 'Totnes river cruise', length: 30, beam: 6.4, ram: false,
     vMax: 2.9, accel: 0.15, decel: 0.2, interval: 90,
     hours: (_wd, month) => (month >= 3 && month <= 9 ? { a: [10 * 60, 16 * 60], b: [11 * 60, 17 * 60] } : null),
-    notes: 'Seasonal; timetable estimated (E).',
+    notes: 'Drawn as the Cardiff Castle (30 m by 6.4 m, three decks, F8); seasonal; timetable estimated (E).',
   },
 };
 
