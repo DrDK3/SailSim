@@ -197,7 +197,7 @@ export class DartScene {
           geo.setAttribute('uv', new THREE.BufferAttribute(uv.subarray(0, k * 2), 2));
           geo.setIndex(idx);
           geo.computeBoundingSphere();
-          lod.addLevel(new THREE.Mesh(geo, material), dist);
+          lod.addLevel(shadowed(new THREE.Mesh(geo, material)), dist);
         }
         lod.name = 'terrain-town';
         this.fixed.add(lod);
@@ -241,7 +241,7 @@ export class DartScene {
         }
         const lod = new THREE.LOD();
         for (const [step, dist] of [[1, 0], [4, FAR_LOD_M]] as const) {
-          lod.addLevel(new THREE.Mesh(this.chunkGeometry(i0, j0, i1, j1, step, width, height, !this.input.drape), material), dist);
+          lod.addLevel(shadowed(new THREE.Mesh(this.chunkGeometry(i0, j0, i1, j1, step, width, height, !this.input.drape), material)), dist);
         }
         lod.name = 'terrain';
         this.fixed.add(lod);
@@ -542,6 +542,7 @@ export class DartScene {
       geo.setAttribute('aGround', new THREE.Float32BufferAttribute(t.gnd, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
       mesh.name = 'buildings';
       this.fixed.add(mesh);
     }
@@ -913,4 +914,10 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
         diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.27, 0.24, 0.2), vec3(0.42, 0.39, 0.34), step(0.62, tn)) * (0.8 + 0.4 * tn), mud * 0.8);`,
       );
   };
+}
+
+/** Ground casts and receives the sun's shadows (hills shade the river at a low sun; houses and trees shade it). */
+function shadowed(m: THREE.Mesh): THREE.Mesh {
+  m.castShadow = m.receiveShadow = true;
+  return m;
 }

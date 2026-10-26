@@ -213,6 +213,7 @@ export class Woodland {
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
     m.frustumCulled = true;
+    m.castShadow = m.receiveShadow = true;
     m.computeBoundingSphere();
     return m;
   }

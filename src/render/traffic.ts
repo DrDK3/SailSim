@@ -599,8 +599,7 @@ export class TrafficView {
         if (o.name === 'wake') wakes.push(o as THREE.Mesh);
         if (o.parent?.name === 'lights') lights.push(o as THREE.Mesh);
         if (o instanceof THREE.Mesh && o.name !== 'wake') {
-          o.castShadow = false;
-          o.receiveShadow = true;
+          o.castShadow = o.receiveShadow = true;
         }
       });
     }

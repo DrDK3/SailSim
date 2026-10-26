@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
+import { SunLight, shadowQuality } from './sunlight';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { SquibModel } from './squibModel';
 import type { SquibTypeId } from '../sim/boat/squib';
@@ -40,6 +41,7 @@ const HELM_HEEL_FRACTION = 0.5;
 const SUN_ELEVATION = 38 * (Math.PI / 180);
 const SUN_AZIMUTH = 200 * (Math.PI / 180);
 const FOG = new THREE.Color(0xc4d6e2);
+const SUN_COLOUR = new THREE.Color();
 const FOG_OVERCAST = new THREE.Color(0x8f989e);
 const NIGHT = new THREE.Color(0x0b1016);
 
@@ -72,7 +74,7 @@ export class SceneView {
   private readonly wake: Wake;
   private readonly arrows: ForceArrows;
   private readonly floats: THREE.InstancedMesh;
-  private readonly sun: THREE.DirectionalLight;
+  private readonly sun: SunLight;
   private readonly hemi: THREE.HemisphereLight;
   private readonly skyMesh: Sky;
   private readonly pmrem: THREE.PMREMGenerator;
@@ -134,13 +136,8 @@ export class SceneView {
 
     this.hemi = new THREE.HemisphereLight(0xcfe3f5, 0x31505a, 0.6);
     this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
-    this.sun.position.copy(sunDir).multiplyScalar(60);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
-    const sc = this.sun.shadow.camera;
-    sc.left = -10; sc.right = 10; sc.top = 12; sc.bottom = -4; sc.near = 1; sc.far = 150;
-    this.scene.add(this.sun, this.sun.target);
+    this.sun = new SunLight(this.scene, this.camera, shadowQuality(this.renderer));
+    this.sun.set(sunDir, 2.2, new THREE.Color(0xfff3e0));
 
     this.water = new Water(sunDir, FOG, FOG_DENSITY);
     this.scene.add(this.water.mesh, this.water.farMesh);
@@ -223,10 +220,8 @@ export class SceneView {
     u['rayleigh']!.value = 1.2 - 0.6 * cloud;
     // Direct sun: dimmed by cloud (low cloud most), warmer near the horizon; diffuse sky light grows under cloud.
     const sunVis = day * (1 - 0.75 * cloud - 0.2 * lowCloud) * Math.min(1, Math.max(0, w.sunElevationDeg / 4));
-    this.sun.intensity = 3.0 * Math.max(0, sunVis);
-    this.sun.castShadow = this.sun.intensity > 0.3;
     const warm = Math.min(1, Math.max(0, (12 - w.sunElevationDeg) / 12));
-    this.sun.color.setRGB(1, 0.95 - 0.25 * warm, 0.88 - 0.45 * warm);
+    this.sun.set(this.sunDir, 3.0 * Math.max(0, sunVis), SUN_COLOUR.setRGB(1, 0.95 - 0.25 * warm, 0.88 - 0.45 * warm));
     // The sky's light comes mostly from the environment map; the hemisphere light only lifts the shade a
     // little (together they flattened the scene: buildings and hills washed out to pastels).
     this.hemi.intensity = (0.02 + 0.22 * day) * (1 + 0.8 * cloud);
@@ -287,6 +282,7 @@ export class SceneView {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.sun.resize();
   }
 
   /** Draw one frame, interpolating between the last two physics states (alpha in [0, 1]). */
@@ -335,8 +331,7 @@ export class SceneView {
     this.updateFloats(x, z, time);
     this.updateCamera(heading, frameDt, moved);
 
-    this.sun.target.position.copy(this.boatRoot.position);
-    this.sun.position.copy(this.boatRoot.position).addScaledVector(this.sunDir, 60);
+    this.sun.update(this.boatRoot.position);
     this.water.update(time, this.camera);
     // Clouds and rain drift with the wind (Three.js xz direction the air moves to).
     const windTo = curr.twdGround + Math.PI;
