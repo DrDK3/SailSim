@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { DEG, buildConditions } from '../../src/sim/index';
-import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type VesselState } from '../../src/sim/env/traffic';
+import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type VesselPart, type VesselState } from '../../src/sim/env/traffic';
 import type { FerryRoute } from '../../src/sim/env/ferries';
 import { loadDartGeo } from './helpers';
 
@@ -10,6 +10,23 @@ const ferries = features.ferries;
 const geo = loadDartGeo();
 const lower = (s: VesselState[]) => s.filter((v) => v.name === 'Dartmouth Lower Ferry');
 const ms = (iso: string) => Date.parse(iso);
+
+/** Do two hull outlines (oriented rectangles) overlap? Separating-axis test. */
+function overlap(p: VesselPart, q: VesselPart): boolean {
+  const corners = (r: VesselPart) => {
+    const [c, s] = [Math.cos(r.heading), Math.sin(r.heading)];
+    return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([x, y]) => [r.e + s * x! * r.length / 2 + c * y! * r.beam / 2, r.n + c * x! * r.length / 2 - s * y! * r.beam / 2] as const);
+  };
+  const [A, B] = [corners(p), corners(q)];
+  for (const r of [p, q]) {
+    for (const ax of [[Math.sin(r.heading), Math.cos(r.heading)], [Math.cos(r.heading), -Math.sin(r.heading)]]) {
+      const proj = (P: (readonly [number, number])[]) => P.map(([e, n]) => e * ax[0]! + n * ax[1]!);
+      const [pa, pb] = [proj(A), proj(B)];
+      if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+    }
+  }
+  return true;
+}
 
 describe('UK local time', () => {
   it('British Summer Time from the last Sunday in March to the last Sunday in October (01:00 UTC)', () => {
@@ -32,7 +49,8 @@ describe('the Lower Ferry (tug and float)', () => {
     // Wednesday 15 July 2026, 06:50 BST = 05:50 UTC.
     const [u0] = at('2026-07-15T05:50:00Z');
     expect(u0!.moving).toBe(false);
-    expect(Math.hypot(u0!.e - kingswear[0], u0!.n - kingswear[1])).toBeLessThan(5);
+    // Afloat just off the top of the slip (without the bed: half its length and 2 m).
+    expect(Math.hypot(u0!.e - kingswear[0], u0!.n - kingswear[1])).toBeLessThan(19);
     // 07:00 BST: unit 0 leaves Kingswear (clearing the slip first).
     expect(at('2026-07-15T06:00:10Z')[0]!.phase).toBe('clearing');
     expect(at('2026-07-15T06:00:30Z')[0]!.phase).toBe('swinging');
@@ -66,7 +84,7 @@ describe('the Lower Ferry (tug and float)', () => {
     expect(swingEnd!).toBeLessThan(0.2); // and now facing the far bank
     expect(maxSog).toBeLessThanOrEqual(2.0 + 1e-9);
     // At Dartmouth after the crossing, the ramps start to come down for loading.
-    expect(Math.hypot(arrived!.e - dartmouth[0], arrived!.n - dartmouth[1])).toBeLessThan(5);
+    expect(Math.hypot(arrived!.e - dartmouth[0], arrived!.n - dartmouth[1])).toBeLessThan(19);
     expect(arrived!.ramp).toBe(1);
     expect(loading!.ramp).toBe(0);
   });
@@ -88,6 +106,25 @@ describe('the Lower Ferry (tug and float)', () => {
       const s = lower(traffic.states(ms('2026-11-04T11:00:00Z') + m * 30_000));
       expect(s.filter((v) => v.moving).length).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('two units meeting mid-river each alter to starboard and pass port to port, never touching', () => {
+    let closest = Infinity;
+    let portToPort = 0;
+    for (let s = 0; s < 3 * 3600; s += 2) {
+      const [a, b] = lower(traffic.states(ms('2026-07-15T09:00:00Z') + s * 1000));
+      if (!a || !b) continue;
+      for (const p of a.parts) for (const q of b.parts) expect(overlap(p, q)).toBe(false);
+      const d = Math.hypot(a.e - b.e, a.n - b.n);
+      if (a.moving && b.moving && d < 60) {
+        // Each sees the other on its port hand (bearing relative to the heading is negative).
+        for (const [x, y] of [[a, b], [b, a]] as const) expect(Math.sin(Math.atan2(y.e - x.e, y.n - x.n) - x.heading)).toBeLessThan(0);
+        portToPort++;
+      }
+      closest = Math.min(closest, d);
+    }
+    expect(portToPort).toBeGreaterThan(5);
+    expect(closest).toBeGreaterThan(30);
   });
 
   it('the tug is solid too: two parts for the fleet physics', () => {
@@ -180,6 +217,34 @@ describe('Dart Marina traffic', () => {
     console.log(`[traffic] most marina boats at once: ${seen}; kinds ${[...kinds].join(', ')}; samples holding for a ferry: ${holdingNearFerry}`);
     expect(seen).toBeGreaterThan(0);
     expect(kinds.size).toBeGreaterThan(1);
+  });
+
+  it('the Lower Ferry berths with the tide: further down its slips at low water, its tug always afloat', () => {
+    const lf = buildRiverTraffic({ ferries, current: (t, n, e) => conditions.current((t - start) / 1000, n, e), waterLevel: (t) => conditions.waterLevel!((t - start) / 1000), geo });
+    const dartmouth = ferries.find((f) => f.name === 'Dartmouth Lower Ferry')!.route[0]!;
+    let shallowest = Infinity;
+    const offSlip: { level: number; d: number }[] = [];
+    for (let s = 0; s < 16 * 3600; s += 3) {
+      const now = ms('2026-07-15T06:00:00Z') + s * 1000;
+      const level = conditions.waterLevel!((now - start) / 1000);
+      const units = lower(lf.states(now));
+      for (const v of units) {
+        for (const k of [-0.4, 0, 0.4]) {
+          const n = v.tug!.n + Math.cos(v.tug!.heading) * k * 9.5;
+          const e = v.tug!.e + Math.sin(v.tug!.heading) * k * 9.5;
+          shallowest = Math.min(shallowest, level - geo.bedElevation(n, e));
+        }
+        expect(level - geo.bedElevation(v.n, v.e)).toBeGreaterThan(1.0);
+        if (v.phase === 'berthed' && Math.hypot(v.e - dartmouth[0], v.n - dartmouth[1]) < 60) offSlip.push({ level, d: Math.hypot(v.e - dartmouth[0], v.n - dartmouth[1]) });
+      }
+      if (units.length === 2) for (const p of units[0]!.parts) for (const q of units[1]!.parts) expect(overlap(p, q)).toBe(false);
+    }
+    // The tug (about 1.3 m draft, E) has water under it all day, at the slips and swinging off them.
+    expect(shallowest).toBeGreaterThan(1.3);
+    // Lower water, further out: the berth at low water is well down the slip from the one at high water.
+    const lo = offSlip.reduce((a, b) => (b.level < a.level ? b : a));
+    const hi = offSlip.reduce((a, b) => (b.level > a.level ? b : a));
+    expect(lo.d - hi.d).toBeGreaterThan(8);
   });
 
   it('is deterministic: two models agree at any moment, whatever was asked before', () => {

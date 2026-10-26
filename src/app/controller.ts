@@ -300,7 +300,14 @@ export class SimController {
     const feats = this.dartData?.features;
     const startMs = built.env.startEpochMs ?? Date.parse(scenario.conditions.startTime);
     const traffic = feats
-      ? buildRiverTraffic({ ferries: feats.ferries, current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e), geo, moorings: feats.moorings, marinas: feats.marinas?.filter((m) => m.name === 'Dart Marina') })
+      ? buildRiverTraffic({
+          ferries: feats.ferries,
+          current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e),
+          waterLevel: built.env.waterLevel ? (ms) => built.env.waterLevel!((ms - startMs) / 1000) : undefined,
+          geo,
+          moorings: feats.moorings,
+          marinas: feats.marinas?.filter((m) => m.name === 'Dart Marina'),
+        })
       : undefined;
     if (scenario.course) {
       try {
