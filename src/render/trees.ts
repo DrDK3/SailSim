@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BUMP_GLSL, bumpBlock } from './bump';
 
 /**
  * Woodland and hedgerow trees, where the satellite image (the terrain drape, Sentinel-2, 10 m) shows them: a
@@ -300,9 +301,11 @@ function leafMaterial(): THREE.MeshStandardMaterial {
           vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
           return mix(mix(mix(lHash(i), lHash(i + vec3(1, 0, 0)), f.x), mix(lHash(i + vec3(0, 1, 0)), lHash(i + vec3(1, 1, 0)), f.x), f.y),
                      mix(mix(lHash(i + vec3(0, 0, 1)), lHash(i + vec3(1, 0, 1)), f.x), mix(lHash(i + vec3(0, 1, 1)), lHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
-        }`,
+        }
+        ${BUMP_GLSL}`,
       )
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= 0.62 + 0.5 * (lNoise(vLeaf) * 0.65 + lNoise(vLeaf * 2.7) * 0.35);');
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= 0.62 + 0.5 * (lNoise(vLeaf) * 0.65 + lNoise(vLeaf * 2.7) * 0.35);')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${bumpBlock('lNoise(vLeaf) * 0.65 + lNoise(vLeaf * 2.7) * 0.35', 1.6, 15, 450)}`);
   };
   return m;
 }

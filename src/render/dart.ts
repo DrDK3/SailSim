@@ -7,6 +7,7 @@ import type { RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
 import { Woodland } from './trees';
+import { BUMP_GLSL, bumpBlock } from './bump';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -818,7 +819,32 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
       .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nattribute float aGround;\nvarying vec4 vWall;\nvarying float vGround;\nvarying vec3 vBWorld;\nvarying vec3 vBNormal;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvGround = aGround;\nvBWorld = transformed;\nvBNormal = objectNormal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;\nvarying float vGround;\nvarying vec3 vBWorld;\nvarying vec3 vBNormal;\nfloat bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }')
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform float uNight;
+        varying vec4 vWall;
+        varying float vGround;
+        varying vec3 vBWorld;
+        varying vec3 vBNormal;
+        float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float bNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(bHash(i), bHash(i + vec2(1.0, 0.0)), u.x), mix(bHash(i + vec2(0.0, 1.0)), bHash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        ${BUMP_GLSL}`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        if (vWall.w <= 0.0 && vWall.z <= 0.0 && vBNormal.y > 0.25) {
+          // Slates: each course's lower edge stands proud of the next; joints staggered course to course.
+          ${bumpBlock('fract(vBWorld.y * 4.2) * 0.7 + 0.25 * step(0.9, fract(dot(vBWorld.xz, vec2(0.7071)) * 3.3 + floor(vBWorld.y * 4.2) * 0.5)) + 0.15 * bNoise(vBWorld.xz * 9.0)', 1.0, 25, 220)}
+        } else if (vWall.z > 0.0) {
+          // Rough render (or stone) on the walls.
+          ${bumpBlock('bNoise(vWall.xy * 7.0) * 0.6 + bNoise(vWall.xy * 23.0) * 0.4', 0.6, 15, 160)}
+        }`,
+      )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -895,7 +921,14 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
         float tNoise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
           return mix(mix(tHash(i), tHash(i + vec2(1.0, 0.0)), u.x), mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), u.x), u.y);
-        }`,
+        }
+        ${BUMP_GLSL}`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        // Grass tussocks and bare rock where it is steep.
+        ${bumpBlock('tNoise(vGround.xz * 1.6) * 0.55 + tNoise(vGround.xz * 5.5) * 0.3 + smoothstep(0.8, 0.58, vUpright) * tNoise(vGround.xz * 0.7 + vGround.y) * 1.5', 1.2, 30, 260)}`,
       )
       .replace(
         '#include <map_fragment>',
