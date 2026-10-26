@@ -3,7 +3,9 @@ import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
-import type { RiverTraffic } from '../sim/env/traffic';
+import { berthOccupancy, type Berth } from '../sim/env/marinas';
+import { BerthedFleet } from './berthed';
+import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
 import { Woodland } from './trees';
@@ -54,9 +56,9 @@ export class DartScene {
   readonly fixed = new THREE.Group();
   readonly floating = new THREE.Group();
   readonly labels = new THREE.Group();
-  private readonly mooredHull?: THREE.InstancedMesh;
-  private readonly mooredMast?: THREE.InstancedMesh;
-  private readonly mooredCabin?: THREE.InstancedMesh;
+  /** Boats on the trot moorings (first) and in the marinas and on the pontoons (after). */
+  private readonly boats?: BerthedFleet;
+  private readonly berths: readonly Berth[] = [];
   private readonly buoys?: THREE.InstancedMesh;
   private readonly traffic = new TrafficView();
   private readonly markLights: { mesh: THREE.Mesh; period: number; flashes: number }[] = [];
@@ -87,11 +89,14 @@ export class DartScene {
     if (f) {
       this.buildBuildings(f);
       this.buildPiers(f);
-      const m = this.buildMoorings(f);
-      this.mooredHull = m.hull;
-      this.mooredMast = m.mast;
-      this.mooredCabin = m.cabin;
-      this.buoys = m.buoys;
+      this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
+      this.boats = new BerthedFleet(f.moorings.length + this.berths.length);
+      this.floating.add(this.boats.group);
+      this.buoys = this.buildMoorings(f);
+      const month = new Date().getUTCMonth();
+      this.berths.forEach((b, i) =>
+        this.boats!.set(f.moorings.length + i, { n: b.n, e: b.e, heading: b.heading, length: b.length, kind: b.kind, seed: b.id * 7 + 3, visible: b.u < berthOccupancy(b.style, month) }),
+      );
       this.buildFerries(f);
       this.buildMarks(f);
       this.buildLabels(f);
@@ -597,59 +602,36 @@ export class DartScene {
     }
   }
 
-  private buildMoorings(f: DartFeatures) {
-    const count = f.moorings.length;
-    const hullGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 6, 1);
-    hullGeo.rotateX(Math.PI / 2); // along z
-    hullGeo.scale(0.33, 0.9, 1); // unit length, ~1/3 beam
-    const mastGeo = new THREE.CylinderGeometry(0.04, 0.06, 1, 5);
-    mastGeo.translate(0, 0.5, 0);
-    const cabinGeo = new THREE.BoxGeometry(0.28, 0.25, 0.35);
-    const hull = new THREE.InstancedMesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0xf3f1ea, roughness: 0.5 }), count);
-    const mast = new THREE.InstancedMesh(mastGeo, new THREE.MeshStandardMaterial({ color: 0xc8c8c8, metalness: 0.4, roughness: 0.4 }), count);
-    const cabin = new THREE.InstancedMesh(cabinGeo, new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.5 }), count);
-    const buoys = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.6 }), count);
-    for (const m of [hull, mast, cabin, buoys]) {
-      m.name = 'moorings';
-      m.frustumCulled = false;
-      this.floating.add(m);
-    }
-    return { hull, mast, cabin, buoys };
+  private buildMoorings(f: DartFeatures): THREE.InstancedMesh {
+    const buoys = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.6 }), f.moorings.length);
+    buoys.name = 'moorings';
+    buoys.frustumCulled = false;
+    this.floating.add(buoys);
+    return buoys;
   }
 
   private updateMoorings(stream: (n: number, e: number) => NE, windFromDir: number): void {
     const f = this.features;
-    if (!f || !this.mooredHull || !this.mooredMast || !this.mooredCabin || !this.buoys) return;
+    if (!f || !this.boats || !this.buoys) return;
     const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
-    let masts = 0;
-    let cabins = 0;
     f.moorings.forEach((b, i) => {
       // Boats on a mooring lie head to the stream; in slack water, head to the wind.
       const c = stream(b.n, b.e);
       const sp = Math.hypot(c.n, c.e);
       const bowTo = sp > 0.08 ? Math.atan2(-c.e, -c.n) : windFromDir + ((b.h % 30) - 15) * (Math.PI / 180);
-      q.setFromAxisAngle(up, -bowTo);
       // The buoy is at the bow end of the chain; the boat lies downstream of it.
-      const back = new THREE.Vector3(-Math.sin(bowTo), 0, Math.cos(bowTo)).multiplyScalar(b.l * 0.5 + 2);
-      const pos = new THREE.Vector3(b.e, 0.15, -b.n).add(back);
-      m.compose(pos, q, new THREE.Vector3(b.l, b.l * 0.12, b.l));
-      this.mooredHull!.setMatrixAt(i, m);
-      if (b.k !== 'motor') {
-        m.compose(pos, q, new THREE.Vector3(1, b.l * 1.25, 1));
-        this.mooredMast!.setMatrixAt(masts++, m);
-      } else {
-        const cab = pos.clone().add(new THREE.Vector3(0, b.l * 0.12, 0));
-        m.compose(cab, q, new THREE.Vector3(b.l, b.l, b.l));
-        this.mooredCabin!.setMatrixAt(cabins++, m);
-      }
+      const back = b.l * 0.5 + 2;
+      this.boats!.set(i, { n: b.n - Math.cos(bowTo) * back, e: b.e - Math.sin(bowTo) * back, heading: bowTo, length: b.l, kind: b.k === 'motor' ? 'motor' : 'yacht', seed: b.h, visible: true });
       m.makeTranslation(b.e, 0.05, -b.n);
       this.buoys!.setMatrixAt(i, m);
     });
-    this.mooredMast.count = masts;
-    this.mooredCabin.count = cabins;
-    for (const im of [this.mooredHull, this.mooredMast, this.mooredCabin, this.buoys]) im.instanceMatrix.needsUpdate = true;
+    this.buoys.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Which marina and pontoon berths have a boat in them now (the run's traffic: boats out, visitors in). */
+  private updateBerths(taken: Uint8Array): void {
+    const off = this.features?.moorings.length ?? 0;
+    for (let i = 0; i < this.berths.length && i < taken.length; i++) this.boats?.setVisible(off + i, taken[i] === 1);
   }
 
   /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
@@ -706,10 +688,12 @@ export class DartScene {
   update(u: DartUpdate): void {
     this.fixed.position.y = -u.waterLevel;
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
-    if (u.time - this.lastMooringUpdate > 2) {
+    if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;
       this.updateMoorings(u.stream, u.windFromDir);
+      if (u.traffic && u.traffic.berths.length === this.berths.length) this.updateBerths(u.traffic.berthsTaken(u.epochMs));
     }
+    this.boats?.update(u.camera);
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
       this.traffic.update(states, u.time, u.camera, u.showLabels);

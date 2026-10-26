@@ -2,6 +2,7 @@ import type { NE } from '../boat/forces';
 import { createRng } from '../math/rng';
 import type { FerryRoute } from './ferries';
 import { fairwayRoute, type FairwayInput } from './fairway';
+import { MarinaPlanner, berthOccupancy, layoutBerths, type Berth, type PierFeature } from './marinas';
 
 /**
  * River traffic: the ferries on their OSM routes and boats coming in and out of Dart Marina. Each trip is a
@@ -73,6 +74,10 @@ export interface TrafficOptions {
   fairwayCache?: Map<string, [number, number][] | undefined>;
   /** Water level (m ODN) at real time epochMs: the Lower Ferry berths further down its slips at low water. */
   waterLevel?: (epochMs: number) => number;
+  /** Boats berthed in the marinas and on the pontoons: marina boats leave from and return to theirs. */
+  berths?: readonly Berth[];
+  /** The pontoons (with the berths, for the ways out of the marinas). */
+  piers?: readonly PierFeature[];
 }
 
 // ------------------------------------------------------------------------------------------ clock
@@ -271,8 +276,14 @@ const MARINA_KINDS: { kind: VesselKind; share: number; length: number; beam: num
   { kind: 'rib', share: 0.15, length: 6.5, beam: 2.5, vHarbour: 2.9, vSea: 10, label: 'RIB' },
 ];
 
-/** Marina movements a day (each way counts one), by month (E). */
+/** Marina movements a day (each way counts one), by month (E): for a marina without berths, and per 100 berths. */
 const MARINA_MOVES = [4, 4, 6, 12, 20, 26, 32, 32, 22, 12, 6, 4];
+const MOVES_PER_100_BERTHS = [3, 3, 5, 10, 16, 21, 26, 26, 18, 10, 5, 3];
+/** Inside a marina (E): dead slow, about 2.5 knots; slower still going astern out of a berth. */
+const MARINA_SPEED = 1.3;
+const ASTERN_SPEED = 0.6;
+/** Speeds of berthed boats by kind (E), as for MARINA_KINDS. */
+const BERTH_KIND = { yacht: MARINA_KINDS[1]!, motor: MARINA_KINDS[0]! };
 
 // ------------------------------------------------------------------------------------------ trips
 
@@ -296,6 +307,8 @@ interface Trip {
   mirror?: boolean;
   /** Stand-off to starboard mid-way (m) when meeting another unit. */
   pass?: number;
+  /** Distance at the start of the route made going astern (out of a marina berth). */
+  astern?: number;
 }
 
 interface Crossing {
@@ -311,6 +324,7 @@ function profile(
   v: { cruise: number; sea?: number; accel: number; decel: number; cable?: boolean },
   current: TrafficOptions['current'],
   hold?: (s: number, epochMs: number) => boolean,
+  cap?: (s: number) => number,
 ): Sample[] {
   const dt = 1;
   const out: Sample[] = [{ t: 0, s: 0, v: 0, crab: 0, hold: false }];
@@ -322,7 +336,9 @@ function profile(
     const limit = p.n > HARBOUR_SOUTH_N ? Math.min(v.cruise, HARBOUR_LIMIT) : (v.sea ?? v.cruise);
     const remaining = route.length - s;
     const waiting = hold ? hold(s, t0 + t * 1000) : false;
-    const target = waiting ? 0 : Math.min(limit, Math.sqrt(2 * v.decel * remaining) + 0.25);
+    let target = waiting ? 0 : Math.min(limit, Math.sqrt(2 * v.decel * remaining) + 0.25);
+    // Slow down in time for a slower stretch ahead (a marina, a stop to go from astern to ahead).
+    if (cap && !waiting) for (const d of [0, 4, 10, 20, 40, 80]) target = Math.min(target, cap(s + d) + Math.sqrt(2 * v.decel * d));
     speed = target > speed ? Math.min(target, speed + v.accel * dt) : Math.max(target, speed - v.decel * dt);
     let sog = speed;
     let crab = 0;
@@ -342,6 +358,34 @@ function profile(
     out.push({ t, s, v: sog, crab, hold: waiting });
   }
   return out;
+}
+
+/**
+ * The way a boat faces at s along a trip: the track's direction (reversed while going astern), turning
+ * smoothly through each corner over a few metres either side rather than all at once.
+ */
+function facingAt(trip: Trip, s: number, r = 4): number {
+  const R = trip.route;
+  const n = R.pts.length;
+  const seg = (i: number) => {
+    const [e0, n0] = R.pts[i - 1]!;
+    const [e1, n1] = R.pts[i]!;
+    return Math.atan2(e1 - e0, n1 - n0) + ((trip.astern ?? 0) > 0 && R.cum[i]! <= trip.astern! + 1e-6 ? Math.PI : 0);
+  };
+  const x = Math.min(Math.max(s, 0), R.length);
+  let i = 1;
+  while (i < n - 1 && R.cum[i]! < x) i++;
+  const blend = (a: number, b: number, f: number) => a + angleDiff(b, a) * f * f * (3 - 2 * f);
+  const lenOf = (k: number) => R.cum[k]! - R.cum[k - 1]!;
+  if (i < n - 1) {
+    const rr = Math.min(r, lenOf(i) / 2, lenOf(i + 1) / 2);
+    if (rr > 0 && R.cum[i]! - x < rr) return blend(seg(i), seg(i + 1), 0.5 - (R.cum[i]! - x) / (2 * rr));
+  }
+  if (i > 1) {
+    const rr = Math.min(r, lenOf(i) / 2, lenOf(i - 1) / 2);
+    if (rr > 0 && x - R.cum[i - 1]! < rr) return blend(seg(i - 1), seg(i), 0.5 + (x - R.cum[i - 1]!) / (2 * rr));
+  }
+  return seg(i);
 }
 
 function stateOnTrip(trip: Trip, epochMs: number): { s: number; v: number; crab: number; hold: boolean } {
@@ -413,16 +457,43 @@ interface Leg {
 
 interface MarinaTrip {
   id: string;
+  marina: string;
   kind: (typeof MARINA_KINDS)[number];
   trip: Trip;
   outbound: boolean;
+  length: number;
+  beam: number;
+  /** The berth it leaves or returns to. */
+  berth?: number;
+}
+
+interface MarinaPort {
+  name: string;
+  /** Open water just off the marina, where its lanes come out. */
+  entrance: { n: number; e: number };
+  routes: { name: string; route: Route; crossings: Crossing[] }[];
+  /** Finger berths in it (boats leave from these). */
+  berths: Berth[];
+  planner?: MarinaPlanner;
+  /** Each berth's way out (from its exit to the entrance), found when first needed. */
+  ways: Map<number, [number, number][] | undefined>;
+}
+
+/** Berths empty (their boats out) and taken (visitors in) during a day. */
+interface BerthDay {
+  /** Epoch ms ranges in which the berth's boat is away (berth empty). */
+  away: Map<number, [number, number][]>;
+  /** Berths normally empty that a boat arrives in (from that time). */
+  arrive: Map<number, number>;
 }
 
 export class RiverTraffic {
   private readonly services: FerryService[];
   private readonly legs = new Map<string, Leg[]>();
-  private readonly marinaDays = new Map<number, MarinaTrip[]>();
-  private readonly marinaRoutes: { name: string; route: Route; crossings: Crossing[] }[] = [];
+  private readonly marinaDays = new Map<number, { trips: MarinaTrip[]; berths: BerthDay }>();
+  private readonly ports: MarinaPort[] = [];
+  /** Boats in the marinas and on the pontoons (none without the pontoon data). */
+  readonly berths: readonly Berth[];
   /** Routes the marina boats use (for drawing and tests). */
   readonly fairways: { name: string; route: [number, number][] }[] = [];
 
@@ -433,29 +504,42 @@ export class RiverTraffic {
       if (sv.spec.kind === 'tug-float') sv.slips = this.slipBerths(sv);
       return sv;
     });
+    this.berths = opts.berths ?? [];
     const fw = opts.fairway;
+    // Routes keep clear of moorings and berthed boats.
+    const avoid = [...(fw?.avoid ?? []), ...this.berths.map((b) => ({ n: b.n, e: b.e }))];
     for (const m of fw ? (opts.marinas ?? []) : []) {
+      const berths = this.berths.filter((b) => b.place === m.name && b.style === 'finger');
+      const planner = berths.length && opts.piers ? new MarinaPlanner({ piers: opts.piers, marinas: opts.marinas ?? [], bedElevation: fw!.bedElevation, inDomain: fw!.inDomain }, this.berths, m) : undefined;
+      const entrance = planner?.entrance ?? { n: m.n, e: m.e };
+      const port: MarinaPort = { name: m.name, entrance, routes: [], berths: planner ? berths : [], planner, ways: new Map() };
       // Out to sea past Castle Ledge, and up-river towards Dittisham (E: the destinations).
       for (const [name, to] of [['sea', { n: -2300, e: 1400 }], ['upriver', { n: 3300, e: -560 }]] as const) {
-        const key = `${m.name}|${m.n}|${m.e}|${name}`;
+        const key = `${m.name}|${entrance.n.toFixed(1)}|${entrance.e.toFixed(1)}|${name}|${this.berths.length}`;
         const cache = opts.fairwayCache;
-        const pts = cache?.has(key) ? cache.get(key) : fairwayRoute({ ...fw!, avoid: fw!.avoid, avoidRadius: 10 }, { n: m.n, e: m.e }, to);
+        const pts = cache?.has(key) ? cache.get(key) : fairwayRoute({ ...fw!, avoid, avoidRadius: 10 }, entrance, to);
         cache?.set(key, pts);
         if (!pts || pts.length < 2) continue;
-        const route = makeRoute(pts);
-        const crossings: Crossing[] = [];
-        for (const sv of this.services.filter((x) => x.spec.ram)) {
-          for (let i = 1; i < route.pts.length; i++) {
-            for (let j = 1; j < sv.route.pts.length; j++) {
-              const t = segIntersect(route.pts[i - 1]!, route.pts[i]!, sv.route.pts[j - 1]!, sv.route.pts[j]!);
-              if (t !== undefined) crossings.push({ s: route.cum[i - 1]! + t * (route.cum[i]! - route.cum[i - 1]!), ferry: sv.name });
-            }
-          }
+        const route = makeRoute([[entrance.e, entrance.n], ...pts.slice(1)]);
+        port.routes.push({ name, route, crossings: this.crossingsOf(route) });
+        this.fairways.push({ name: `${m.name} → ${name}`, route: route.pts });
+      }
+      if (port.routes.length) this.ports.push(port);
+    }
+  }
+
+  /** Where a route crosses the tracks of ferries that are restricted in their ability to manoeuvre. */
+  private crossingsOf(route: Route): Crossing[] {
+    const crossings: Crossing[] = [];
+    for (const sv of this.services.filter((x) => x.spec.ram)) {
+      for (let i = 1; i < route.pts.length; i++) {
+        for (let j = 1; j < sv.route.pts.length; j++) {
+          const t = segIntersect(route.pts[i - 1]!, route.pts[i]!, sv.route.pts[j - 1]!, sv.route.pts[j]!);
+          if (t !== undefined) crossings.push({ s: route.cum[i - 1]! + t * (route.cum[i]! - route.cum[i - 1]!), ferry: sv.name });
         }
-        this.marinaRoutes.push({ name: `${m.name}-${name}`, route, crossings });
-        this.fairways.push({ name: `${m.name} → ${name}`, route: pts });
       }
     }
+    return crossings;
   }
 
   /** Notes on where each service's details come from. */
@@ -780,30 +864,114 @@ export class RiverTraffic {
 
   // ---------------------------------------------------------------- Dart Marina
 
-  private marinaTrips(day: ReturnType<typeof localDay>): MarinaTrip[] {
-    let trips = this.marinaDays.get(day.day);
-    if (trips) return trips;
-    trips = [];
-    if (this.marinaRoutes.length) {
-      const rng = createRng(hash(`marina|${day.day}`));
-      const moves = MARINA_MOVES[day.month]!;
-      for (let k = 0; k < moves; k++) {
-        // Daylight hours (E): departures and returns spread between 08:00 and 19:30.
-        const t0 = day.midnight + min(8 * 60 + rng.next() * 11.5 * 60);
-        let x = rng.next();
-        const kind = MARINA_KINDS.find((m) => (x -= m.share) < 0) ?? MARINA_KINDS[0]!;
-        const outbound = rng.next() < 0.5;
-        const mr = this.marinaRoutes[rng.next() < 0.7 ? 0 : Math.min(1, this.marinaRoutes.length - 1)]!;
-        const route = outbound ? mr.route : reversed(mr.route);
-        const crossings = mr.crossings.map((c) => ({ ...c, s: outbound ? c.s : mr.route.length - c.s }));
-        const hold = (s: number, ms: number) => crossings.some((c) => c.s - s > 0 && c.s - s < 45 && this.ferryNear(c.ferry, route, c.s, ms));
-        const samples = profile(route, t0, { cruise: kind.vHarbour, sea: kind.vSea, accel: 0.35, decel: 0.3 }, this.opts.current, hold);
-        trips.push({ id: `marina-${day.day}-${k}`, kind, outbound, trip: { t0, t1: t0 + samples[samples.length - 1]!.t * 1000, route, samples, prelude: 0 } });
+  /**
+   * A day's marina movements (E: numbers by month, times, which boats). From each marina: boats out for the
+   * day (they leave their berth in the morning or early afternoon and come back to it 1.5 to 7 hours later),
+   * a few leaving for longer, and a few visitors arriving in empty berths. A boat's berth is empty while it is
+   * out. Without berths (no pontoon data), boats come and go from the marina's centre.
+   */
+  private marinaDay(day: ReturnType<typeof localDay>): { trips: MarinaTrip[]; berths: BerthDay } {
+    let d = this.marinaDays.get(day.day);
+    if (d) return d;
+    const trips: MarinaTrip[] = [];
+    const away = new Map<number, [number, number][]>();
+    const arrive = new Map<number, number>();
+    const endOfDay = day.midnight + DAY_MS;
+    for (const port of this.ports) {
+      const rng = createRng(hash(`marina|${port.name}|${day.day}`));
+      const used = new Set<number>();
+      const occ = (b: Berth) => b.u < berthOccupancy(b.style, day.month);
+      const pick = (want: boolean): Berth | undefined => {
+        const pool = port.berths.filter((b) => occ(b) === want && !used.has(b.id));
+        if (!pool.length) return undefined;
+        const b = pool[Math.floor(rng.next() * pool.length)]!;
+        used.add(b.id);
+        return b;
+      };
+      const route = () => port.routes[rng.next() < 0.7 ? 0 : port.routes.length - 1]!;
+      if (!port.berths.length) {
+        for (let k = 0; k < MARINA_MOVES[day.month]!; k++) {
+          const t0 = day.midnight + min(8 * 60 + rng.next() * 11.5 * 60);
+          let x = rng.next();
+          const kind = MARINA_KINDS.find((m) => (x -= m.share) < 0) ?? MARINA_KINDS[0]!;
+          const outbound = rng.next() < 0.5;
+          trips.push(this.marinaTrip(`marina-${port.name}-${day.day}-${k}`, port, route(), kind, kind.length, kind.beam, t0, outbound));
+        }
+        continue;
+      }
+      const moves = Math.round((MOVES_PER_100_BERTHS[day.month]! * port.berths.length) / 100);
+      let k = 0;
+      for (let m = 0; m < moves; m += 2) {
+        const r = rng.next();
+        const t0 = day.midnight + min(8 * 60 + rng.next() * 8 * 60);
+        const mr = route();
+        if (r < 0.8) {
+          // Out for the day and back.
+          const b = pick(true);
+          if (!b) continue;
+          const kind = BERTH_KIND[b.kind];
+          const out = this.marinaTrip(`marina-${port.name}-${day.day}-${k++}`, port, mr, kind, b.length, b.beam, t0, true, b);
+          const back = Math.min(day.midnight + min(20 * 60 + 30), out.trip.t1 + min(90 + rng.next() * 330));
+          const ret = this.marinaTrip(`marina-${port.name}-${day.day}-${k++}`, port, mr, kind, b.length, b.beam, back, false, b);
+          trips.push(out, ret);
+          away.set(b.id, [[t0, ret.trip.t1]]);
+        } else if (r < 0.9) {
+          // Leaving for longer (a passage, or the season).
+          const b = pick(true);
+          if (!b) continue;
+          const kind = BERTH_KIND[b.kind];
+          trips.push(this.marinaTrip(`marina-${port.name}-${day.day}-${k++}`, port, mr, kind, b.length, b.beam, t0, true, b));
+          away.set(b.id, [[t0, endOfDay]]);
+        } else {
+          // A visitor arriving in an empty berth.
+          const b = pick(false);
+          if (!b) continue;
+          const kind = BERTH_KIND[b.kind];
+          const ret = this.marinaTrip(`marina-${port.name}-${day.day}-${k++}`, port, mr, kind, b.length, b.beam, t0 + min(120), false, b);
+          trips.push(ret);
+          arrive.set(b.id, ret.trip.t1);
+        }
       }
     }
-    this.marinaDays.set(day.day, trips);
+    d = { trips, berths: { away, arrive } };
+    this.marinaDays.set(day.day, d);
     if (this.marinaDays.size > 4) this.marinaDays.delete(this.marinaDays.keys().next().value!);
-    return trips;
+    return d;
+  }
+
+  /**
+   * One movement: from the berth (astern into the lane, then along it), out through the marina's entrance and
+   * along the route; or the reverse, ending bow-in in the berth. Dead slow inside the marina.
+   */
+  private marinaTrip(id: string, port: MarinaPort, mr: MarinaPort['routes'][number], kind: (typeof MARINA_KINDS)[number], length: number, beam: number, t0: number, outbound: boolean, berth?: Berth): MarinaTrip {
+    let way = berth ? port.ways.get(berth.id) : undefined;
+    if (berth && !port.ways.has(berth.id)) port.ways.set(berth.id, (way = port.planner?.wayOut(berth.exit)));
+    // From the berth astern to its exit, then the way out to the entrance (where the route begins).
+    const inner: [number, number][] = berth && way ? [[berth.e, berth.n], ...way.slice(0, -1)] : [];
+    const out = makeRoute([...inner, ...mr.route.pts]);
+    const route = outbound ? out : reversed(out);
+    const astern = berth ? Math.hypot(berth.exit.e - berth.e, berth.exit.n - berth.n) : 0;
+    // Inside the marina: from the berth to the entrance.
+    const inside = berth ? out.cum[inner.length]! : 0;
+    const L = route.length;
+    const cap = (x: number) => {
+      const fromBerth = outbound ? x : L - x;
+      if (fromBerth < 0 || fromBerth > L) return Infinity;
+      // Stop where going astern turns to going ahead.
+      if (outbound && berth) {
+        if (x < astern) return Math.min(ASTERN_SPEED, Math.sqrt(2 * 0.25 * Math.max(0, astern - x)) + 0.05);
+        if (x < astern + 3) return Math.sqrt(2 * 0.25 * (x - astern)) + 0.1;
+      }
+      return fromBerth < inside ? MARINA_SPEED : Infinity;
+    };
+    const shift = outbound ? inside : 0;
+    const crossings = mr.crossings.map((c) => ({ ...c, s: outbound ? c.s + shift : mr.route.length - c.s }));
+    const hold = (x: number, ms: number) => crossings.some((c) => c.s - x > 0 && c.s - x < 45 && this.ferryNear(c.ferry, route, c.s, ms));
+    const samples = profile(route, t0, { cruise: kind.vHarbour, sea: kind.vSea, accel: 0.35, decel: 0.3 }, this.opts.current, hold, cap);
+    return {
+      id, marina: port.name, kind, outbound, length, beam, berth: berth?.id,
+      trip: { t0, t1: t0 + samples[samples.length - 1]!.t * 1000, route, samples, prelude: 0, astern: outbound && berth ? astern : 0 },
+    };
   }
 
   /** Is a ferry under way within 90 m of where a route crosses its track? (Boats give it room.) */
@@ -819,19 +987,40 @@ export class RiverTraffic {
   }
 
   private marinaStates(epochMs: number): VesselState[] {
-    if (!this.marinaRoutes.length) return [];
+    if (!this.ports.length) return [];
     const day = localDay(epochMs);
     const out: VesselState[] = [];
-    for (const m of this.marinaTrips(day)) {
+    for (const m of this.marinaDay(day).trips) {
       if (epochMs < m.trip.t0 || epochMs > m.trip.t1) continue;
       const q = stateOnTrip(m.trip, epochMs);
       const p = along(m.trip.route, q.s);
-      const heading = p.dir + q.crab;
+      // Going astern out of the berth, the bow points back along the track; corners are turned, not jumped.
+      const heading = facingAt(m.trip, q.s) + q.crab;
       out.push({
-        id: m.id, name: 'Dart Marina', label: `${m.kind.label} ${m.outbound ? 'leaving' : 'returning to'} Dart Marina`, unit: 0, kind: m.kind.kind,
-        n: p.n, e: p.e, heading, moving: true, ram: false, length: m.kind.length, beam: m.kind.beam, sog: q.v, phase: q.hold ? 'holding' : 'underway',
-        parts: [{ n: p.n, e: p.e, heading, length: m.kind.length, beam: m.kind.beam }],
+        id: m.id, name: m.marina, label: `${m.kind.label} ${m.outbound ? 'leaving' : 'returning to'} ${m.marina}`, unit: 0, kind: m.kind.kind,
+        n: p.n, e: p.e, heading, moving: true, ram: false, length: m.length, beam: m.beam, sog: q.v, phase: q.hold ? 'holding' : 'underway',
+        parts: [{ n: p.n, e: p.e, heading, length: m.length, beam: m.beam }],
       });
+    }
+    return out;
+  }
+
+  /**
+   * Which berths have a boat in them at this moment (1) and which are empty (0): let berths, less those whose
+   * boats are out, plus visitors who have arrived. In the order of `berths`.
+   */
+  berthsTaken(epochMs: number): Uint8Array {
+    const out = new Uint8Array(this.berths.length);
+    const day = localDay(epochMs);
+    const d = this.ports.length ? this.marinaDay(day).berths : undefined;
+    for (let i = 0; i < this.berths.length; i++) {
+      const b = this.berths[i]!;
+      let taken = b.u < berthOccupancy(b.style, day.month);
+      const away = d?.away.get(b.id);
+      if (away && away.some(([a, z]) => epochMs >= a && epochMs < z)) taken = false;
+      const arr = d?.arrive.get(b.id);
+      if (arr !== undefined && epochMs >= arr) taken = true;
+      out[i] = taken ? 1 : 0;
     }
     return out;
   }
@@ -849,13 +1038,27 @@ const routeCache = new WeakMap<object, Map<string, [number, number][] | undefine
 /** Level (m ODN) the marina boats' routes are found at: about mean low water springs (E), so they work at most states of tide. */
 const ROUTE_LEVEL_ODN = -2.0;
 
-/** The River Dart's traffic: ferries on their routes, with the stream, and Dart Marina's boats on routes through deep water. */
+const berthCache = new WeakMap<object, Berth[]>();
+
+/** The berths on these pontoons (laid out once per pontoon list: the picture and the traffic share them). */
+export function dartBerths(o: { piers: readonly PierFeature[]; marinas: readonly MarinaSpec[]; geo: { bedElevation(n: number, e: number): number; inDomain(n: number, e: number): boolean } }): Berth[] {
+  let berths = berthCache.get(o.piers);
+  if (!berths) berthCache.set(o.piers, (berths = layoutBerths({ piers: o.piers, marinas: o.marinas, bedElevation: (n, e) => o.geo.bedElevation(n, e), inDomain: (n, e) => o.geo.inDomain(n, e) })));
+  return berths;
+}
+
+/**
+ * The River Dart's traffic: ferries on their routes, with the stream, and the marinas' boats - berthed on
+ * their pontoons, and coming and going on routes through deep water.
+ */
 export function buildRiverTraffic(o: {
   ferries: readonly FerryRoute[];
   current?: (epochMs: number, n: number, e: number) => NE;
   geo?: { bedElevation(n: number, e: number): number; inDomain(n: number, e: number): boolean };
   moorings?: { n: number; e: number }[];
   marinas?: MarinaSpec[];
+  /** Pontoons (features.json): where the berthed boats lie. */
+  piers?: readonly PierFeature[];
   /** Water level (m ODN) at a real time: where the Lower Ferry berths on its slips. */
   waterLevel?: (epochMs: number) => number;
 }): RiverTraffic {
@@ -864,11 +1067,15 @@ export function buildRiverTraffic(o: {
     cache = routeCache.get(o.geo);
     if (!cache) routeCache.set(o.geo, (cache = new Map()));
   }
+  const marinas = o.marinas ?? DART_MARINAS;
+  const berths = o.geo && o.piers ? dartBerths({ piers: o.piers, marinas, geo: o.geo }) : undefined;
   return new RiverTraffic(o.ferries, {
     fairwayCache: cache,
     current: o.current,
     waterLevel: o.waterLevel,
+    berths,
+    piers: o.piers,
     fairway: o.geo ? { bedElevation: (n, e) => o.geo!.bedElevation(n, e), inDomain: (n, e) => o.geo!.inDomain(n, e), waterLevelOdn: ROUTE_LEVEL_ODN, avoid: o.moorings, minDepth: 1.5 } : undefined,
-    marinas: o.marinas ?? DART_MARINAS,
+    marinas,
   });
 }

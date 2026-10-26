@@ -247,6 +247,40 @@ describe('Dart Marina traffic', () => {
     expect(lo.d - hi.d).toBeGreaterThan(8);
   });
 
+  it('every marina: boats leave their berths astern, go out by the lanes, and come back to them; berths empty while they are out', () => {
+    const all = buildRiverTraffic({ ferries, current: (t, n, e) => conditions.current((t - start) / 1000, n, e), geo, moorings: features.moorings, marinas: features.marinas, piers: features.piers });
+    expect(all.fairways.map((f) => f.name.split(' → ')[0])).toEqual(expect.arrayContaining(['Dart Haven Marina', 'Dart Marina', 'Noss on Dart Marina']));
+    const from = new Map<string, number>();
+    let samples = 0;
+    let brushes = 0;
+    let leftEmpty = 0;
+    for (let m = 0; m < 13 * 60; m += 1) {
+      const now = ms('2026-07-15T07:00:00Z') + m * 60_000;
+      const taken = all.berthsTaken(now);
+      for (const v of all.states(now).filter((x) => /Marina/.test(x.name))) {
+        from.set(v.name, (from.get(v.name) ?? 0) + 1);
+        samples++;
+        // Never through a berthed boat (an occasional brush passing close, at most).
+        for (let i = 0; i < all.berths.length; i++) {
+          const b = all.berths[i]!;
+          if (taken[i] && Math.hypot(b.n - v.n, b.e - v.e) < 25 && overlap({ ...b, heading: b.heading }, { n: v.n, e: v.e, heading: v.heading, length: v.length * 0.9, beam: v.beam * 0.9 })) brushes++;
+        }
+      }
+      // A boat that has just left: its berth stands empty.
+      for (const v of all.states(now).filter((x) => /leaving/.test(x.label))) {
+        const b = all.berths.find((x) => Math.hypot(x.n - v.n, x.e - v.e) < 1 && x.length === v.length);
+        if (b) {
+          expect(taken[b.id]).toBe(0);
+          leftEmpty++;
+        }
+      }
+    }
+    console.log(`[traffic] marina boat samples by marina: ${[...from].map(([k, n]) => `${k} ${n}`).join(', ')}; brushes ${brushes}/${samples}; just left ${leftEmpty}`);
+    for (const name of ['Dart Haven Marina', 'Dart Marina', 'Noss on Dart Marina']) expect(from.get(name) ?? 0).toBeGreaterThan(20);
+    expect(brushes / samples).toBeLessThan(0.01);
+    expect(leftEmpty).toBeGreaterThan(0);
+  });
+
   it('is deterministic: two models agree at any moment, whatever was asked before', () => {
     const other = make();
     const t = ms('2026-07-15T14:37:12Z');

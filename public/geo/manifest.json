@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-25T18:26:52Z",
+ "generated": "2026-10-26T11:26:38Z",
  "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
  "origin": {
   "lat": 50.34801,
@@ -222,6 +222,18 @@
    "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
    "notes": [
     "9 route segments. Animation only: not obstacles in the physics yet. Lower and Higher Ferries are shown as restricted in their ability to manoeuvre (DHNA sailing directions, S(p))."
+   ]
+  },
+  {
+   "id": "railway",
+   "label": "Railway and Kingswear station",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap railway lines, platform and station via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "Track level follows the LIDAR ground; the tunnel is inferred from the ground rising far above the line (E).",
+    "Trains and their times: see the timetable notes in the app (docs/SOURCES.md)."
    ]
   },
   {

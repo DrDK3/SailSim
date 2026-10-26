@@ -306,7 +306,8 @@ export class SimController {
           waterLevel: built.env.waterLevel ? (ms) => built.env.waterLevel!((ms - startMs) / 1000) : undefined,
           geo,
           moorings: feats.moorings,
-          marinas: feats.marinas?.filter((m) => m.name === 'Dart Marina'),
+          marinas: feats.marinas,
+          piers: feats.piers,
         })
       : undefined;
     if (scenario.course) {
