@@ -6,7 +6,7 @@ import { BODY, twoBone } from '../../src/render/crew';
 
 /** The sailors' rig (visual only): what they reach, where their feet go, ducking under the boom. */
 
-const sail = { angle: 0.3, luff: 1, side: 1, inverted: false };
+const sail = { angle: 0.3, luff: 1, fill: 1 };
 function posed(crewY: number, opts: { rudder?: number; frames?: { crewY: number; dt: number }[] } = {}) {
   const m = new SquibModel(squibParams());
   let t = 0;

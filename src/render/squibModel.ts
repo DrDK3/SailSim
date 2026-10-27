@@ -23,10 +23,21 @@ export interface SailShapeInput {
   angle: number;
   /** 0 = flogging … 1 = drawing. */
   luff: number;
-  /** +1 if the wind fills the sail from starboard (sail bellies to port), -1 otherwise. */
-  side: number;
-  /** Leech-first flow (by the lee): sail inverts. */
-  inverted: boolean;
+  /**
+   * Which way the air pushes the sail and so which way it bellies: +1 to port, −1 to starboard, near 0 when
+   * the wind runs along it (luffing). From `sailFill`.
+   */
+  fill: number;
+}
+
+/**
+ * How a sail at angle `angle` (rad, > 0 to port) fills in an apparent wind from `awa` (rad, > 0 from starboard,
+ * the sail's own local wind): the air pushes it to the side of sin(awa − angle), whether the flow meets the luff
+ * first (sailing) or the leech (running, by the lee). +1 bellies to port, −1 to starboard; smooth through
+ * zero so a luffing sail goes flat rather than flipping.
+ */
+export function sailFill(awa: number, angle: number): number {
+  return Math.tanh(6 * Math.sin(awa - angle));
 }
 
 export interface SquibModelOptions {
@@ -772,7 +783,7 @@ export class SquibModel {
       const ang = s.angle + Math.sign(s.angle || 1) * (twistDeg * Math.PI / 180) * fv * s.luff;
       const cx = -Math.sin(ang);
       const cz = Math.cos(ang);
-      const belly = (s.inverted ? -1 : 1) * s.side;
+      const belly = s.fill;
       const nx = -cz * belly;
       const nz = cx * belly;
       const camber = (0.11 * s.luff + 0.03) * (1 - 0.3 * fv) * (1 - flatFoot * (1 - smoothstep(0, 0.35, fv)));

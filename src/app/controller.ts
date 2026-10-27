@@ -702,7 +702,7 @@ export class SimController {
       m.set(b.id, {
         id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
         mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
-        mainInverted: Math.abs(sn.forces.main.incidence) > Math.PI / 2, jibInverted: Math.abs(sn.forces.jib.incidence) > Math.PI / 2,
+        mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
         rudder: sn.rudder, crewY: sn.crewY, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
       });
     }

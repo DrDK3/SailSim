@@ -6,7 +6,7 @@ import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
 import { SunLight, shadowQuality } from './sunlight';
 import { cameraFloor, clampHelmLook, easeRide, helmLookDir, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
-import { SquibModel } from './squibModel';
+import { SquibModel, sailFill } from './squibModel';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
 import { Wake } from './wake';
@@ -421,10 +421,12 @@ export class SceneView {
     orientBoat(this.boatRoot, heading, heel + this.ride.roll, this.ride.pitch);
     const moved = prevPos.distanceTo(this.boatRoot.position);
 
+    const mainAngle = lerpAngle(prev.boomMain, curr.boomMain, alpha);
+    const jibAngle = lerpAngle(prev.boomJib, curr.boomJib, alpha);
     const f = curr.forces;
     this.boat.update({
-      main: { angle: lerpAngle(prev.boomMain, curr.boomMain, alpha), luff: f.main.luff, side: curr.mainSide, inverted: Math.abs(f.main.incidence) > Math.PI / 2 },
-      jib: { angle: lerpAngle(prev.boomJib, curr.boomJib, alpha), luff: f.jib.luff, side: curr.jibSide, inverted: Math.abs(f.jib.incidence) > Math.PI / 2 },
+      main: { angle: mainAngle, luff: f.main.luff, fill: sailFill(f.main.aws > 0 ? f.main.awa : curr.awa, mainAngle) },
+      jib: { angle: jibAngle, luff: f.jib.luff, fill: sailFill(f.jib.aws > 0 ? f.jib.awa : curr.awa, jibAngle) },
       rudder: curr.rudder,
       crewY: curr.crewY,
       time,

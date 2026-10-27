@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
-import { SquibModel } from './squibModel';
+import { SquibModel, sailFill } from './squibModel';
 
 /** The state of one fleet boat the renderer needs (two of these are interpolated per frame). */
 export interface FleetPose {
@@ -17,8 +17,9 @@ export interface FleetPose {
   jibSide: number;
   mainLuff: number;
   jibLuff: number;
-  mainInverted: boolean;
-  jibInverted: boolean;
+  /** Each sail's own apparent wind angle (rad, > 0 from starboard): which way it fills. */
+  mainAwa: number;
+  jibAwa: number;
   rudder: number;
   crewY: number;
   awa: number;
@@ -102,9 +103,11 @@ export class FleetView {
       e.rideStarted = true;
       e.root.position.set(x, e.ride.heave, z);
       orientBoat(e.model.group, heading, heel + e.ride.roll, e.ride.pitch);
+      const mainAngle = lerpAngle(a.boomMain, b.boomMain, alpha);
+      const jibAngle = lerpAngle(a.boomJib, b.boomJib, alpha);
       e.model.update({
-        main: { angle: lerpAngle(a.boomMain, b.boomMain, alpha), luff: b.mainLuff, side: b.mainSide, inverted: b.mainInverted },
-        jib: { angle: lerpAngle(a.boomJib, b.boomJib, alpha), luff: b.jibLuff, side: b.jibSide, inverted: b.jibInverted },
+        main: { angle: mainAngle, luff: b.mainLuff, fill: sailFill(b.mainAwa, mainAngle) },
+        jib: { angle: jibAngle, luff: b.jibLuff, fill: sailFill(b.jibAwa, jibAngle) },
         rudder: b.rudder,
         crewY: b.crewY,
         time,
