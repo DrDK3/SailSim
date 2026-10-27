@@ -23,6 +23,7 @@ import {
 import type { BoatParams } from './boat/params';
 import { FLATTEN, flattenedParams } from './boat/flatten';
 import { greenWaterInflow, sprayInflow, stepWater } from './boat/cockpit';
+import { DAMAGE, applyImpact, impactEnergy, newDamage, stepBilge, type Damage, type Impact, type ImpactRegion } from './boat/damage';
 import type { ContactPointState, GroundContext } from './boat/contact';
 import type { Seabed } from './geo/dart';
 import type { Environment, EnvironmentInfo } from './env/environment';
@@ -84,6 +85,19 @@ export const OVERPOWERED = {
   helmHeelFull: 20 * DEG,
 } as const;
 
+/**
+ * In a knockdown the crew let the sheets run (part of the crew assist, autoCrew): beyond `release` of heel the
+ * sheets run out at `runRate` (sheet travel per second) whatever they were set to, and come back to the trim at
+ * `recoverRate` once she is back under `recover`. Without it a boat with cleated sheets lies pinned, or is
+ * knocked down again at every turn through a reach in a blow. Angles and rates are estimates (E).
+ */
+export const KNOCKDOWN = {
+  release: 50 * DEG,
+  recover: 35 * DEG,
+  runRate: 1.5,
+  recoverRate: 0.3,
+} as const;
+
 /** The extra ease the auto main wants at heel `phi` with the rudder at `rudder` (main on `mainSide`). */
 export function overpoweredEaseTarget(phi: number, rudder: number, maxRudder: number, mainSide: 1 | -1): number {
   const o = OVERPOWERED;
@@ -139,14 +153,16 @@ export interface BoomEvent {
 }
 
 /**
- * Force from outside the boat's own model (contact with other boats, marks or moored boats), set by a fleet
- * before each step and held constant over it: world-frame components (N) and yaw moment about the CG (N m,
- * > 0 turns the bow to starboard). It acts in the horizontal plane only (no roll moment).
+ * Force from outside the boat's own model (contact with other boats, marks, moored boats, ferries, piers), set
+ * by a fleet before each step and held constant over it: world-frame components (N), yaw moment about the CG
+ * (N m, > 0 turns the bow to starboard) and roll moment (N m, > 0 heels to starboard: a blow on the topsides
+ * above the waterline heels the boat away from it).
  */
 export interface ExternalForce {
   n: number;
   e: number;
   yaw: number;
+  roll?: number;
 }
 
 export interface InputLogEntry {
@@ -203,6 +219,8 @@ export interface BoatSnapshot {
   crewTo: number;
   /** Water shipped into the cockpit (kg). */
   cockpitWater: number;
+  /** Damage so far (hull, rudder, rig, bilge water). */
+  damage: Damage;
   input: ControlInput;
   forces: ForceBreakdown;
   /** Conditions here: sources, tide, flags (when the environment can describe itself). */
@@ -233,12 +251,19 @@ export class Simulation {
   private autoSheet = { main: 0.3, jib: 0.3 };
   /** Extra main ease the auto main applies when overpowered (0…1 of the remaining sheet travel). */
   private overEase = 0;
+  /** Sheets let run in a knockdown (0 = as trimmed … 1 = fully out), and whether she is knocked down now. */
+  private knockEase = 0;
+  private knockedDown = false;
   /** How flat the sails are now (0…1): follows `input.flatten` at the crew's pace. */
   private flat = 0;
   readonly ownsEnvironment: boolean;
   readonly seabed?: Seabed;
   readonly logInputs: boolean;
   lastBoomEvent: BoomEvent | null = null;
+  /** Damage from collisions and groundings (src/sim/boat/damage.ts), and the impacts so far. */
+  readonly damage: Damage = newDamage();
+  readonly impacts: Impact[] = [];
+  private wasGrounded = false;
   /** Where the crew's weight was last moving to (display only; not part of the state or its hash). */
   private crewTo?: number;
   /** Contact force for the next step (fleet), or null. */
@@ -271,7 +296,7 @@ export class Simulation {
       phi: 0,
       p: 0,
     };
-    this.act = { rudder: 0, boomMain: 0, boomRate: 0, mainInverted: false, mainSide: 1, boomJib: 0, jibSide: 1, crewY: 0, water: 0 };
+    this.act = { rudder: 0, boomMain: 0, boomRate: 0, mainInverted: false, mainSide: 1, boomJib: 0, jibSide: 1, crewY: 0, water: 0, damage: this.damage };
     this.settleActuators();
     this.inputLog.push({ step: 0, input: { ...this.input } });
   }
@@ -354,8 +379,16 @@ export class Simulation {
 
   /** Sheet actually in use for a sail: the assist's choice when auto-trim is on, otherwise the input. */
   currentSheet(sail: 'main' | 'jib'): number {
-    if (sail === 'main') return this.input.autoMain ? this.autoSheet.main + this.overEase * (1 - this.autoSheet.main) : this.input.mainSheet;
-    return this.input.autoJib ? this.autoSheet.jib : this.input.jibSheet;
+    const trimmed = sail === 'main'
+      ? this.input.autoMain ? this.autoSheet.main + this.overEase * (1 - this.autoSheet.main) : this.input.mainSheet
+      : this.input.autoJib ? this.autoSheet.jib : this.input.jibSheet;
+    // Let run in a knockdown (KNOCKDOWN).
+    return trimmed + this.knockEase * (1 - trimmed);
+  }
+
+  /** How far the crew have let the sheets run in a knockdown (0 … 1). */
+  get knockdownEase(): number {
+    return this.knockEase;
   }
 
   /** The parameters the forces are computed with: the boat's, with the sails flattened as set now. */
@@ -469,6 +502,18 @@ export class Simulation {
       this.overEase += clamp(want - this.overEase, -OVERPOWERED.rate * dt, OVERPOWERED.rate * dt);
     } else this.overEase = 0;
 
+    // Knocked down: the crew let the sheets run until she comes back up (crew assist only).
+    const heelNow = Math.abs(this.state.phi);
+    if (this.input.autoCrew) {
+      if (heelNow > KNOCKDOWN.release) this.knockedDown = true;
+      else if (heelNow < KNOCKDOWN.recover) this.knockedDown = false;
+      const want = this.knockedDown ? 1 : 0;
+      this.knockEase += clamp(want - this.knockEase, -KNOCKDOWN.recoverRate * dt, KNOCKDOWN.runRate * dt);
+    } else {
+      this.knockedDown = false;
+      this.knockEase = 0;
+    }
+
     const wasInverted = a.mainInverted;
     const trimForces = this.input.autoMain || this.input.autoJib ? this.updateAutoTrim(dt, wind, cur, ground) : undefined;
     const awa = this.effectiveAwa(wind, cur);
@@ -504,10 +549,33 @@ export class Simulation {
 
     // Water over the rail or in spray; out through the transom (self-draining) or bailed.
     a.water = stepWater(p.cockpit, a.water, this.waterInflow(), dt);
+    // A leak fills the bilge; the crew pump.
+    stepBilge(this.damage, dt);
 
     this.integrate(dt, wind, cur);
+    // Running aground hard (the keel or rudder meeting the bottom at speed) damages her.
+    // (Not on the first step: a boat placed aground has not run aground.)
+    const contact = this.work.forces.contact;
+    const grounded = contact.grounded;
+    if (grounded && !this.wasGrounded && this.step > 0) {
+      const g = this.work.forces.groundVelocity;
+      const speed = Math.hypot(g.n, g.e);
+      const stern = contact.points.some((cp) => cp.name === 'stern' && cp.clearance < 0);
+      if (speed > DAMAGE.groundingSpeed) this.impact('the bottom', stern ? 'stern' : 'keel', speed, impactEnergy(speed, p.mass));
+    }
+    this.wasGrounded = grounded;
     this.time = (this.step + 1) * dt;
     this.step += 1;
+  }
+
+  /**
+   * An impact on the boat (from the fleet's contact, or running aground): damage by its energy and where it
+   * struck. Returns what it did, in words (src/sim/boat/damage.ts).
+   */
+  impact(what: string, region: ImpactRegion, speed: number, energy: number): Impact {
+    const ev: Impact = { t: this.time, what, region, speed, energy, effects: applyImpact(this.damage, region, energy) };
+    this.impacts.push(ev);
+    return ev;
   }
 
   /**
@@ -562,6 +630,7 @@ export class Simulation {
       f.total.x += ext.n * c + ext.e * sn;
       f.total.y += -ext.n * sn + ext.e * c;
       f.total.n += ext.yaw;
+      if (ext.roll) f.roll.total += ext.roll;
     }
     const d = derivatives(p, s, f, cur, out);
     if (this.lockHeading) {
@@ -650,6 +719,7 @@ export class Simulation {
       crewY: a.crewY,
       crewTo: this.crewTo ?? a.crewY,
       cockpitWater: a.water,
+      damage: { ...this.damage },
       input: { ...this.input },
       forces,
       env: detailed ? this.env.describe?.(this.time, s.n, s.e) : undefined,
@@ -696,6 +766,7 @@ export class Simulation {
     if (a.water !== 0) values.push(a.water);
     if (this.flat !== 0) values.push(this.flat);
     if (this.overEase !== 0) values.push(this.overEase);
+    if (this.knockEase !== 0) values.push(this.knockEase);
     return hashNumbers(values);
   }
 }

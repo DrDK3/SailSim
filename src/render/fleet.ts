@@ -23,6 +23,8 @@ export interface FleetPose {
   rudder: number;
   crewY: number;
   crewTo: number;
+  /** The rig has failed (the sails are down). */
+  sailsDown?: boolean;
   awa: number;
   aws: number;
   water: number;
@@ -119,6 +121,7 @@ export class FleetView {
         aws: b.aws,
         heel,
         water: b.water,
+        sailsDown: b.sailsDown,
       });
       e.label.visible = showLabels;
     }

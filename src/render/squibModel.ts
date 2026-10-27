@@ -856,8 +856,11 @@ export class SquibModel {
     /** Heel (rad, > 0 to starboard) and water in the cockpit (kg): the water's surface stays level. */
     heel?: number;
     water?: number;
+    /** The rig has failed (damage): the sails are down. */
+    sailsDown?: boolean;
   }): void {
     const { main, jib, time } = params;
+    for (const o of this.group.children) if (o.name === 'mainsail' || o.name === 'jib' || o.name === 'telltale') o.visible = !params.sailsDown;
     const awa = params.awa ?? 0;
     const aws = params.aws ?? 4;
     const footMain = this.p.main.foot;

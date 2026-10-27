@@ -12,7 +12,7 @@ import { courseFor, type CourseChoice } from './courseLibrary';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { RaceEvent } from '../sim/course/judge';
 import { DART_LEVELS, type CourseIssue } from '../sim/course/validate';
-import { createRace, practiceLineLength } from '../sim/race/setup';
+import { createRace, practiceLineLength, startClearWater, startPositions, type ClearWater } from '../sim/race/setup';
 import { Fleet } from '../sim/race/fleet';
 import type { RaceSession, LogEntry } from '../sim/race/session';
 import type { Flag, PrepFlag, ResultRow } from '../sim/race/committee';
@@ -342,7 +342,8 @@ export class SimController {
             input: startInput,
             params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
-            initial: fleet.aiCount > 0 ? undefined : preStartPosition,
+            // Either way in clear water (not on the mud of a river bank).
+            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) }))) : undefined),
           },
           committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
           traffic,
@@ -369,7 +370,7 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: f.piers });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;
@@ -681,8 +682,13 @@ export class SimController {
       if (this.sim.time - e.t > 8) break;
       if (e.a !== 'you' && e.b !== 'you') continue;
       const other = e.kind === 'boat' ? this.race?.session.fleet.boat(e.a === 'you' ? e.b : e.a)?.name ?? 'another boat' : e.label;
-      return `Contact with ${other} at ${e.speed.toFixed(1)} m/s`;
+      // What it did to the boat (the impact recorded at the same moment).
+      const hit = this.sim.impacts.find((i) => Math.abs(i.t - e.t) < 0.05 && i.effects.length);
+      return `Contact with ${other} at ${e.speed.toFixed(1)} m/s${hit ? `: ${hit.effects.join(', ')}` : ''}`;
     }
+    // Running aground hard.
+    const g = this.sim.impacts[this.sim.impacts.length - 1];
+    if (g && g.what === 'the bottom' && this.sim.time - g.t < 8) return `Ran aground at ${g.speed.toFixed(1)} m/s${g.effects.length ? `: ${g.effects.join(', ')}` : ''}`;
     return undefined;
   }
 
@@ -706,7 +712,7 @@ export class SimController {
         id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
         mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
         mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
-        rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
+        rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, sailsDown: sn.damage.rig >= 1, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
       });
     }
     this.fleetCurr = m;
@@ -1278,7 +1284,7 @@ export class SimController {
  * pre-start side and 160 m along it towards the committee-boat end (the second end), heading along the line
  * towards the pin. From there, turning up to close-hauled on starboard crosses the line near its middle.
  */
-export function preStartPosition(r: ResolvedCourse): { n: number; e: number; headingDeg: number; speedKn: number } {
+export function preStartPosition(r: ResolvedCourse, clear?: ClearWater): { n: number; e: number; headingDeg: number; speedKn: number } {
   const [a, b] = r.start;
   const m = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
   const len = Math.hypot(b.n - a.n, b.e - a.e) || 1;
@@ -1292,7 +1298,11 @@ export function preStartPosition(r: ResolvedCourse): { n: number; e: number; hea
   }
   const heading = (Math.atan2(a.e - b.e, a.n - b.n) * 180) / Math.PI;
   const along = 160;
-  return { n: m.n + nn * 100 + ((b.n - a.n) / len) * along, e: m.e + ne * 100 + ((b.e - a.e) / len) * along, headingDeg: (heading + 360) % 360, speedKn: 3 };
+  const p = { n: m.n + nn * 100 + ((b.n - a.n) / len) * along, e: m.e + ne * 100 + ((b.e - a.e) / len) * along, headingDeg: (heading + 360) % 360, speedKn: 3 };
+  if (!clear || clear(p.n, p.e)) return p;
+  // Not clear there (a river line runs from bank to bank): the first clear starting slot instead.
+  const slot = startPositions(r, 1, clear)[0]!;
+  return { n: slot.n!, e: slot.e!, headingDeg: slot.headingDeg ?? p.headingDeg, speedKn: 3 };
 }
 
 /** A remembered on/off choice in this browser (storage can be unavailable: then the default). */

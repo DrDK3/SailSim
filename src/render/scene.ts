@@ -438,6 +438,7 @@ export class SceneView {
       aws: curr.aws,
       heel,
       water: curr.cockpitWater,
+      sailsDown: (curr.damage?.rig ?? 0) >= 1,
     });
     this.crewSide = curr.crewY >= 0 ? 1 : -1;
 

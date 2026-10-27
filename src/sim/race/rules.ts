@@ -179,7 +179,7 @@ export class PenaltyTracker {
   }
 }
 
-export type IncidentKind = 'boat' | 'mark' | 'moored' | 'ferry';
+export type IncidentKind = 'boat' | 'mark' | 'moored' | 'ferry' | 'pier';
 
 export interface Incident {
   t: number;

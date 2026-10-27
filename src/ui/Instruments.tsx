@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { damageSummary } from '../sim/boat/damage';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { EnvironmentInfo } from '../sim/env/environment';
 import { describeSky } from '../sim/env/sky';
@@ -73,6 +74,13 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
             value={(s.cockpitWater / 1.025).toFixed(0)}
             unit="L"
             title="Water shipped into the cockpit (over the rail or in spray). A self-draining cockpit (Rondar) lets it out through the transom; older boats keep it until the crew bails. It makes the boat heavier and more tender."
+          />
+        )}
+        {damageSummary(s.damage) && (
+          <Cell
+            label="Damage"
+            value={damageSummary(s.damage)}
+            title="From collisions and groundings: the hull leaks into the bilge (heavier, slower; the crew pump), a damaged rudder grips less and a bent one pulls aside, a damaged rig drives less. Thresholds and rates are estimates (E). Restart to repair."
           />
         )}
         {more && (

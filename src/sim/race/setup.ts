@@ -6,20 +6,24 @@ import { squibParams } from '../boat/squib';
 import type { BoatParams } from '../boat/params';
 import type { RiverTraffic } from '../env/traffic';
 import { buildRestrictions } from '../course/restrictions';
+import { pointInPolygon } from '../course/geometry';
 import { DART_LEVELS, validateCourse, type CourseIssue } from '../course/validate';
 import type { Course } from '../course/types';
 import type { ResolvedCourse } from '../course/course';
 import type { FerryRoute } from '../env/ferries';
-import type { ControlInput, InitialConditions, Simulation } from '../simulation';
+import { DEFAULT_WATER_LEVEL_ODN, type ControlInput, type InitialConditions, type Simulation } from '../simulation';
 import type { AiLevel } from '../ai/skipper';
 import type { CommitteeOptions } from './committee';
 import { RaceSession, type EntrySpec } from './session';
+import type { PierInput } from './piers';
 
 /** The parts of the River Dart features the race needs (moored boats, mooring areas, ferries). */
 export interface RaceFeatures {
   moorings: { e: number; n: number; l: number; a: string }[];
   mooringAreas: { name: string; ring: [number, number][] }[];
   ferries: (FerryRoute & { name: string; ram: boolean })[];
+  /** Piers, jetties and pontoons (solid to the fleet); absent from older data. */
+  piers?: readonly PierInput[];
 }
 
 export interface RaceSetup {
@@ -60,11 +64,29 @@ export function aiName(i: number): { name: string; sailNumber: string } {
   return { name: `AI ${i + 1}`, sailNumber: `AI${String(i + 1).padStart(2, '0')}` };
 }
 
+/** Whether a starting boat may be put at a point: water deep enough, clear of moorings (and the like). */
+export type ClearWater = (n: number, e: number) => boolean;
+
 /**
- * Pre-start positions: rows 60, 95, 130 … m behind the starting line, spread along its length,
- * heading along the line towards the first end at 2 kn. Index 0 is the user's place when there is one.
+ * Depth a starting slot needs over the draft (m), the clear run it needs ahead along its heading, how far ahead
+ * is looked, and the least spacing between boats placed off the regular slots (m) (E).
  */
-export function startPositions(r: ResolvedCourse, count: number): InitialConditions[] {
+export const START_CLEARANCE = { depthMarginM: 1.0, runM: 40, lookM: 80, spacingM: 15 };
+
+/** How far (m, up to `max`) a boat can go from (n, e) along a unit direction before the water is not clear. */
+function clearRun(clear: ClearWater, n: number, e: number, dn: number, de: number, max: number): number {
+  for (let d = 10; d <= max; d += 10) if (!clear(n + dn * d, e + de * d)) return d - 10;
+  return max;
+}
+
+/**
+ * Pre-start positions: rows 60, 95, 130 … m behind the starting line, spread along its length, heading along
+ * the line towards the first end at 2 kn. Index 0 is the user's place when there is one. With `clear`, only
+ * slots in clear water with room ahead are used (further rows behind are tried as needed), and a slot whose
+ * way towards the first end runs out heads the other way along the line, or else the clearest way; so no boat
+ * starts on the mud or sails straight into a bank (a river line can run from bank to bank).
+ */
+export function startPositions(r: ResolvedCourse, count: number, clear?: ClearWater): InitialConditions[] {
   const [a, b] = r.start;
   const L = Math.hypot(b.n - a.n, b.e - a.e) || 1;
   const u = { n: (b.n - a.n) / L, e: (b.e - a.e) / L };
@@ -75,16 +97,73 @@ export function startPositions(r: ResolvedCourse, count: number): InitialConditi
   // Slots within the length of the line (not beyond its ends, where the committee boat and pin are).
   const perRow = Math.max(2, Math.min(7, Math.floor((0.85 * L) / 20) + 1, count));
   const span = 0.85 * L;
-  const heading = ((Math.atan2(-u.e, -u.n) * 180) / Math.PI + 360) % 360;
-  const out: InitialConditions[] = [];
-  for (let i = 0; i < count; i++) {
+  const toDeg = (dn: number, de: number) => ((Math.atan2(de, dn) * 180) / Math.PI + 360) % 360;
+  const heading = toDeg(-u.n, -u.e);
+  const slot = (i: number): InitialConditions => {
     const row = Math.floor(i / perRow);
     const k = i % perRow;
     const along = -span / 2 + (span * (k + 0.5 + (row % 2) * 0.5)) / perRow;
     const back = 60 + 35 * row;
-    out.push({ n: m.n + u.n * along + nn.n * back, e: m.e + u.e * along + nn.e * back, headingDeg: heading, speedKn: 2 });
+    return { n: m.n + u.n * along + nn.n * back, e: m.e + u.e * along + nn.e * back, headingDeg: heading, speedKn: 2 };
+  };
+  if (!clear) return Array.from({ length: count }, (_, i) => slot(i));
+  const { runM, lookM, spacingM } = START_CLEARANCE;
+  const out: InitialConditions[] = [];
+  const rejected: InitialConditions[] = [];
+  /** The slot with a heading that has room ahead (along the line towards the first end if it can), or none. */
+  const place = (p: InitialConditions): InitialConditions | undefined => {
+    const n0 = p.n!;
+    const e0 = p.e!;
+    if (!clear(n0, e0)) return undefined;
+    if (clearRun(clear, n0, e0, -u.n, -u.e, lookM) >= runM) return p;
+    if (clearRun(clear, n0, e0, u.n, u.e, lookM) >= runM) return { ...p, headingDeg: toDeg(u.n, u.e) };
+    // Hemmed in along the line: the clearest of eight ways, if that gives room.
+    let best = -1;
+    let bestDeg = heading;
+    for (let k = 0; k < 8; k++) {
+      const t = (k * Math.PI) / 4;
+      const run = clearRun(clear, n0, e0, Math.cos(t), Math.sin(t), lookM);
+      if (run > best) {
+        best = run;
+        bestDeg = (k * 45) % 360;
+      }
+    }
+    return best >= runM ? { ...p, headingDeg: bestDeg } : undefined;
+  };
+  for (let i = 0; out.length < count && i < perRow * 12; i++) {
+    const p = slot(i);
+    const ok = place(p);
+    if (ok) out.push(ok);
+    else rejected.push(p);
   }
+  if (out.length < count) {
+    // Not enough room within the line's width (a narrow channel at low water): clear spots on a wider grid
+    // behind the line, nearest the line first, keeping the boats apart.
+    const spots: InitialConditions[] = [];
+    for (let back = 60; back <= 480; back += 30) {
+      for (let along = -L / 2 - 150; along <= L / 2 + 150; along += 20) spots.push({ n: m.n + u.n * along + nn.n * back, e: m.e + u.e * along + nn.e * back, headingDeg: heading, speedKn: 2 });
+    }
+    const apart = (p: InitialConditions) => out.every((q) => Math.hypot(q.n! - p.n!, q.e! - p.e!) >= spacingM);
+    for (const p of spots) {
+      if (out.length >= count) break;
+      if (!apart(p)) continue;
+      const ok = place(p);
+      if (ok) out.push(ok);
+    }
+  }
+  // Still not enough clear water behind this line for the whole fleet: the rest where the slots fall (aground).
+  for (const p of rejected) if (out.length < count) out.push(p);
   return out;
+}
+
+/**
+ * Clear water for starting slots on the River Dart: inside the data, at least the draft plus a margin deep at
+ * the start's water level (about mean sea level when the run has no tide), and outside the mooring areas.
+ */
+export function startClearWater(geo: DartGeo, waterLevelOdn: number | undefined, draft: number, moorings?: { ring: { n: number; e: number }[] }[]): ClearWater {
+  const level = waterLevelOdn ?? DEFAULT_WATER_LEVEL_ODN;
+  const need = draft + START_CLEARANCE.depthMarginM;
+  return (n, e) => geo.inDomain(n, e) && geo.depth(n, e, level) >= need && !(moorings ?? []).some((a) => pointInPolygon({ n, e }, a.ring));
 }
 
 export interface CreatedRace {
@@ -109,7 +188,7 @@ export function createRace(s: RaceSetup): CreatedRace {
   });
   if (!v.ok || !v.resolved) throw new Error(`course "${s.course.name}" is not valid: ${v.issues.filter((i) => i.severity === 'error').map((i) => i.message).join(' ')}`);
   const total = s.aiCount + (s.human ? 1 : 0);
-  const pos = startPositions(v.resolved, total);
+  const pos = startPositions(v.resolved, total, geo ? startClearWater(geo, env.waterLevel?.(0), params.draft, restrictions?.moorings) : undefined);
   const entries: EntrySpec[] = [];
   let k = 0;
   if (s.human) {
@@ -132,6 +211,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     moored: s.features?.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })),
     ferries: s.features?.ferries,
     traffic: s.traffic,
+    piers: s.features?.piers,
     mooringAreas: restrictions?.moorings,
     seed: s.seed,
   });

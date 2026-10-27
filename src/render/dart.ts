@@ -5,6 +5,7 @@ import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
 import { berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
+import { buildPontoons, type Pontoons } from './pontoons';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
@@ -79,6 +80,7 @@ export class DartScene {
   private readonly woodland?: Woodland;
   private readonly railway?: RailwayView;
   private readonly street?: StreetLife;
+  private pontoons?: Pontoons;
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -658,42 +660,10 @@ export class DartScene {
   // ------------------------------------------------------------- piers etc.
 
   private buildPiers(f: DartFeatures): void {
-    const deck = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.9 });
-    const pontoon = new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 0.8 });
-    const fixedBoxes: THREE.Matrix4[] = [];
-    const floatBoxes: THREE.Matrix4[] = [];
-    for (const p of f.piers) {
-      if ('line' in p) {
-        for (let i = 0; i < p.line.length - 1; i++) {
-          const [e0, n0] = p.line[i]!;
-          const [e1, n1] = p.line[i + 1]!;
-          const len = Math.hypot(e1 - e0, n1 - n0);
-          if (len < 0.5) continue;
-          const m = new THREE.Matrix4().compose(
-            new THREE.Vector3((e0 + e1) / 2, p.floating ? 0.2 : FIXED_DECK_ODN - 0.3, -(n0 + n1) / 2),
-            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(e1 - e0, n1 - n0)),
-            new THREE.Vector3(p.width, p.floating ? 0.5 : 0.6, len + p.width * 0.5),
-          );
-          (p.floating ? floatBoxes : fixedBoxes).push(m);
-        }
-      } else {
-        const shape = new THREE.Shape(p.poly.map(([e, n]) => new THREE.Vector2(e, n)));
-        const geo = new THREE.ExtrudeGeometry(shape, { depth: p.floating ? 0.5 : 0.8, bevelEnabled: false });
-        geo.rotateX(-Math.PI / 2); // (e, n, depth) -> (x = e, y = depth, z = -n)
-        const mesh = new THREE.Mesh(geo, p.floating ? pontoon : deck);
-        mesh.position.y = p.floating ? -0.1 : FIXED_DECK_ODN - 0.8;
-        mesh.name = 'pier';
-        (p.floating ? this.floating : this.fixed).add(mesh);
-      }
-    }
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    for (const [list, mat, group] of [[fixedBoxes, deck, this.fixed], [floatBoxes, pontoon, this.floating]] as const) {
-      if (!list.length) continue;
-      const im = new THREE.InstancedMesh(box, mat, list.length);
-      list.forEach((m, i) => im.setMatrixAt(i, m));
-      im.name = 'pontoons';
-      group.add(im);
-    }
+    // Decks, floats, fenders, cleats and pile hoops float with the water; piles, jetties and gangways are fixed.
+    this.pontoons = buildPontoons(f.piers, (e, n) => this.groundAt(e, n));
+    this.floating.add(this.pontoons.floating);
+    this.fixed.add(this.pontoons.fixed);
   }
 
   private buildMoorings(f: DartFeatures): THREE.InstancedMesh {
@@ -825,6 +795,7 @@ export class DartScene {
 
   update(u: DartUpdate): void {
     this.fixed.position.y = -u.waterLevel;
+    this.pontoons?.update(u.waterLevel);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;
