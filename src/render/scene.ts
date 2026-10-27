@@ -7,6 +7,7 @@ import type { Puff } from '../sim/env/wind';
 import { SunLight, shadowQuality } from './sunlight';
 import { cameraFloor, clampHelmLook, easeRide, helmLookDir, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { SquibModel, sailFill } from './squibModel';
+import type { CrewBuild } from './crew';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
 import { Wake } from './wake';
@@ -187,11 +188,12 @@ export class SceneView {
   }
 
   /** Build the user's boat as another Squib type (data/boats/squib/variants.json). */
-  setBoatType(type: SquibTypeId, params: BoatParams): void {
-    if (this.boat.type === type) return;
+  /** The user's Squib type, and who helms her (drawn as a man or a woman; visual only). */
+  setBoatType(type: SquibTypeId, params: BoatParams, helm: CrewBuild = 'male'): void {
+    if (this.boat.type === type && this.boat.helmBuild === helm) return;
     this.boat.group.remove(this.arrows.bodyGroup);
     this.boatRoot.remove(this.boat.group);
-    this.boat = new SquibModel(params, { type });
+    this.boat = new SquibModel(params, { type, helm });
     this.boatRoot.add(this.boat.group);
     this.boat.group.add(this.arrows.bodyGroup);
   }
@@ -429,6 +431,7 @@ export class SceneView {
       jib: { angle: jibAngle, luff: f.jib.luff, fill: sailFill(f.jib.aws > 0 ? f.jib.awa : curr.awa, jibAngle) },
       rudder: curr.rudder,
       crewY: curr.crewY,
+      crewTo: curr.crewTo,
       time,
       hideHelm: this.mode === 'helm',
       awa: curr.awa,

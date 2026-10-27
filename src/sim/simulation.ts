@@ -199,6 +199,8 @@ export interface BoatSnapshot {
   mainSheetLimit: number;
   jibSheetLimit: number;
   crewY: number;
+  /** Where the crew's weight is moving to (m; display: the renderer crouches the sailors only when crossing). */
+  crewTo: number;
   /** Water shipped into the cockpit (kg). */
   cockpitWater: number;
   input: ControlInput;
@@ -237,6 +239,8 @@ export class Simulation {
   readonly seabed?: Seabed;
   readonly logInputs: boolean;
   lastBoomEvent: BoomEvent | null = null;
+  /** Where the crew's weight was last moving to (display only; not part of the state or its hash). */
+  private crewTo?: number;
   /** Contact force for the next step (fleet), or null. */
   external: ExternalForce | null = null;
   /** Reused within a step (auto-trim, boom, RK4 stages): forces, stage derivatives and the stage state. */
@@ -496,6 +500,7 @@ export class Simulation {
     // heeling moment. Either way they move across at a finite speed.
     const crewTarget = this.input.autoCrew ? this.autoCrewTarget(wind, cur) : a.mainSide * this.crewOffset();
     a.crewY += clamp(crewTarget - a.crewY, -p.crewSpeed * dt, p.crewSpeed * dt);
+    this.crewTo = crewTarget;
 
     // Water over the rail or in spray; out through the transom (self-draining) or bailed.
     a.water = stepWater(p.cockpit, a.water, this.waterInflow(), dt);
@@ -643,6 +648,7 @@ export class Simulation {
       mainSheetLimit: this.mainLimit,
       jibSheetLimit: this.jibLimit,
       crewY: a.crewY,
+      crewTo: this.crewTo ?? a.crewY,
       cockpitWater: a.water,
       input: { ...this.input },
       forces,

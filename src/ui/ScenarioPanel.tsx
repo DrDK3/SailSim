@@ -115,6 +115,14 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
     <section className="panel scenario" aria-label="Scenario settings">
       <h3>Scenario</h3>
       <BoatChoice value={draft.boat ?? DEFAULT_SQUIB_TYPE} onChange={(boat) => setDraft({ ...draft, boat })} />
+      <label className="field select-field">
+        <span>Helm</span>
+        <select value={draft.helm ?? 'male'} onChange={(e) => setDraft({ ...draft, helm: e.target.value === 'female' ? 'female' : 'male' })} data-testid="helm-build">
+          <option value="male">Man</option>
+          <option value="female">Woman</option>
+        </select>
+      </label>
+      <p className="fine">How your helm is drawn (average adult height, 1.75 m or 1.61 m). Appearance only: the boat&apos;s crew weight is an estimate in its calibration.</p>
       <h4>Start</h4>
       <TimeField label="Start time" iso={c.startTime} onChange={(iso) => setC({ startTime: iso })} />
       <div className="row tight">

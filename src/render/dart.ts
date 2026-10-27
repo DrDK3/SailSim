@@ -54,6 +54,8 @@ export interface DartUpdate {
   camera: THREE.Camera;
   stream: (n: number, e: number) => NE;
   windFromDir: number;
+  /** True wind speed at the surface (m/s), for the flags and vanes. */
+  windSpeed?: number;
   showLabels: boolean;
   /** The run's river traffic (ferries crabbing in its stream, Dart Marina boats); else ferries alone. */
   traffic?: RiverTraffic;
@@ -829,12 +831,13 @@ export class DartScene {
       this.updateMoorings(u.stream, u.windFromDir);
       if (u.traffic && u.traffic.berths.length === this.berths.length) this.updateBerths(u.traffic.berthsTaken(u.epochMs));
     }
+    this.boats?.setWind(u.windFromDir);
     this.boats?.update(u.camera);
     // Steam trains: smoke drifts downwind (about 3 m/s, E).
     this.railway?.update(u.epochMs, u.time, { e: -Math.sin(u.windFromDir) * 3, n: -Math.cos(u.windFromDir) * 3 });
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
-      this.traffic.update(states, u.time, u.camera, u.showLabels);
+      this.traffic.update(states, u.time, u.camera, u.showLabels, u.windSpeed !== undefined ? { fromDir: u.windFromDir, speed: u.windSpeed } : undefined);
     }
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {

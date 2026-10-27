@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Kit, VMAT, cabin, hull, place } from './vessels';
+import { vaneYaw, windexGeometry } from './vane';
 
 /**
  * Boats lying still: in the marinas, alongside the river's pontoons and on the trot moorings. Hundreds of
@@ -21,6 +22,8 @@ export interface BoatSlot {
 
 /** All models are built 10 m long and scaled. */
 const REF = 10;
+/** The sloop's mast top (model frame): its wind vane stands here. */
+const MAST_TOP = { y: 13.5, z: -0.06 * REF - 0.4 * REF * 0.12 };
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 function yachtVariant(topsides: number, boot: number, cover: number): THREE.Group {
@@ -37,7 +40,7 @@ function yachtVariant(topsides: number, boot: number, cover: number): THREE.Grou
   cabin(kit, { z: cz, y: cy, length: cl, width: beam - 1.1, height: 0.55, rFront: 0.9, rBack: 0.15, rake: 0.3, tumble: 0.15, colour: 0xffffff, windows: [0.35, 0.72], noBackWindows: true, corner: 2 });
   // Sprayhood folded down, the mast, boom with the mainsail under its cover, furled genoa on the forestay.
   const mz = cz - cl * 0.12;
-  const top = 13.5;
+  const top = MAST_TOP.y;
   kit.add(new THREE.CylinderGeometry(0.07, 0.09, top - cy, 6), VMAT.paint, 0xc8ccd0, place(0, (top + cy) / 2, mz));
   const stem = V(0, h.sheer(-L / 2 + 0.2) + 0.05, -L / 2 + 0.25);
   const head = V(0, top - 0.3, mz);
@@ -120,8 +123,11 @@ export class BerthedFleet {
   /** Per variant: one instanced mesh per material. */
   private readonly near: THREE.InstancedMesh[][] = [];
   private readonly far: Record<'yacht' | 'motor', THREE.InstancedMesh>;
+  /** The sloops' masthead vanes (near ones only), pointing into the wind. */
+  private readonly vanes: THREE.InstancedMesh;
   private readonly lastCam = new THREE.Vector3(Infinity, 0, 0);
   private dirty = true;
+  private windFrom = 0;
 
   /**
    * @param capacity most boats at once; `nearRange` (m): detailed models within it (fewer on a software
@@ -153,6 +159,19 @@ export class BerthedFleet {
       return im;
     };
     this.far = { yacht: farMesh('yacht'), motor: farMesh('motor') };
+    this.vanes = new THREE.InstancedMesh(windexGeometry(), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, side: THREE.DoubleSide }), capacity);
+    this.vanes.count = 0;
+    this.vanes.frustumCulled = false;
+    this.vanes.name = 'berthed-vanes';
+    this.group.add(this.vanes);
+  }
+
+  /** Where the wind comes from (rad, compass); the vanes follow it in steps of a few degrees. */
+  setWind(fromDir: number): void {
+    const d = Math.abs(Math.atan2(Math.sin(fromDir - this.windFrom), Math.cos(fromDir - this.windFrom)));
+    if (d < (3 * Math.PI) / 180) return;
+    this.windFrom = fromDir;
+    this.dirty = true;
   }
 
   /** Set (or add) slot i; drawn on the next update. */
@@ -188,6 +207,11 @@ export class BerthedFleet {
     const up = new THREE.Vector3(0, 1, 0);
     const pos = new THREE.Vector3();
     const scl = new THREE.Vector3();
+    let vaneCount = 0;
+    const qv = new THREE.Quaternion().setFromAxisAngle(up, vaneYaw(this.windFrom));
+    const top = new THREE.Vector3();
+    const one = new THREE.Vector3(1, 1, 1);
+    const mv = new THREE.Matrix4();
     const variantsOf = { yacht: VARIANTS.flatMap((v, i) => (v.kind === 'yacht' ? [i] : [])), motor: VARIANTS.flatMap((v, i) => (v.kind === 'motor' ? [i] : [])) };
     const r2 = this.nearRange * this.nearRange;
     const f2 = this.farRange * this.farRange;
@@ -208,6 +232,10 @@ export class BerthedFleet {
         const v = list[s.seed % list.length]!;
         for (const im of this.near[v]!) im.setMatrixAt(counts[v]!, m);
         counts[v]!++;
+        if (s.kind === 'yacht') {
+          top.set(0, MAST_TOP.y, MAST_TOP.z).applyMatrix4(m);
+          this.vanes.setMatrixAt(vaneCount++, mv.compose(top, qv, one));
+        }
       } else {
         this.far[s.kind].setMatrixAt(farCount[s.kind]++, m);
       }
@@ -222,6 +250,8 @@ export class BerthedFleet {
       this.far[k].count = farCount[k];
       this.far[k].instanceMatrix.needsUpdate = true;
     }
+    this.vanes.count = vaneCount;
+    this.vanes.instanceMatrix.needsUpdate = true;
   }
 
   /** Triangles a full detailed model has (for tests and budgets). */

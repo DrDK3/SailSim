@@ -24,6 +24,7 @@ import { DART_PROJECTION, RDYC_ORIGIN } from '../sim/geo/projection';
 import { sunPosition } from '../sim/env/sun';
 import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
+import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
 import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
 import { TUTORIAL_INPUT, TUTORIAL_SCENARIO, Tutorial, type TutorialState } from './tutorial';
@@ -58,6 +59,8 @@ export interface AppScenario {
   fleet?: { aiCount: number; level: AiLevel; prepFlag: PrepFlag };
   /** The user's Squib type (data/boats/squib/variants.json); default the Rondar. AI boats sail the default. */
   boat?: SquibTypeId;
+  /** Who helms the user's boat, as drawn: a man (default) or a woman. Appearance only (the physics' crew weight is its calibration estimate). */
+  helm?: CrewBuild;
 }
 
 /** One row of the live fleet ranking or the results. */
@@ -396,7 +399,7 @@ export class SimController {
     this.fleetPrev = this.fleetCurr;
     this.showResults = false;
     this.resultsShown = false;
-    this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams);
+    this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
@@ -703,7 +706,7 @@ export class SimController {
         id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
         mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
         mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
-        rudder: sn.rudder, crewY: sn.crewY, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
+        rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
       });
     }
     this.fleetCurr = m;
@@ -801,7 +804,7 @@ export class SimController {
     } catch (err) {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
-    this.view?.setBoatType(isSquibType(this.scenario.boat) ? this.scenario.boat : DEFAULT_SQUIB_TYPE, this.sim.params);
+    this.view?.setBoatType(isSquibType(this.scenario.boat) ? this.scenario.boat : DEFAULT_SQUIB_TYPE, this.sim.params, this.scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setCourse(this.race?.resolved, this.race?.course);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
@@ -891,6 +894,7 @@ export class SimController {
             stream: (n, e) => sim.env.current(sim.time, n, e),
             traffic: this.traffic,
             windFromDir: this.currSnap.twdGround,
+            windSpeed: this.currSnap.twsGround,
             showLabels: this.showLabels,
           }
         : undefined,

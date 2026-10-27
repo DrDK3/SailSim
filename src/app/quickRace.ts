@@ -137,6 +137,7 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
     race: { sequence: o.sequence, startInS },
     fleet: { aiCount: competitors, level: o.level, prepFlag: 'P' },
     boat: current.boat,
+    helm: current.helm,
   };
   const who = competitors === 0 ? 'alone' : `against ${competitors} AI boat${competitors === 1 ? '' : 's'} (${o.level})`;
   return { scenario, summary: `${river ? 'River race' : 'Start Bay race'} ${who}: ${summary}`, note };

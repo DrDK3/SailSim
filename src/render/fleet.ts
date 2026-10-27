@@ -22,6 +22,7 @@ export interface FleetPose {
   jibAwa: number;
   rudder: number;
   crewY: number;
+  crewTo: number;
   awa: number;
   aws: number;
   water: number;
@@ -61,7 +62,9 @@ export class FleetView {
       if (this.boats.has(b.id)) continue;
       const root = new THREE.Group();
       root.name = `fleet-boat-${b.id}`;
-      const model = new SquibModel(this.params);
+      // Helms and crews of both builds across the fleet (picked from the boat's id; illustrative).
+      const h = [...b.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11);
+      const model = new SquibModel(this.params, { helm: h % 3 === 0 ? 'female' : 'male', crew: h % 5 < 2 ? 'female' : 'male' });
       model.setHullColour(b.colour);
       root.add(model.group);
       const label = makeLabel(b.label, '#ffe9a8');
@@ -110,6 +113,7 @@ export class FleetView {
         jib: { angle: jibAngle, luff: b.jibLuff, fill: sailFill(b.jibAwa, jibAngle) },
         rudder: b.rudder,
         crewY: b.crewY,
+        crewTo: b.crewTo,
         time,
         awa: b.awa,
         aws: b.aws,

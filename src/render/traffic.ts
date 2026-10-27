@@ -3,6 +3,7 @@ import type { VesselKind, VesselState } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
 import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn } from './vessels';
+import { flagDroop, flagYaw } from './vane';
 
 /**
  * River traffic as 3D vessels (positions and manoeuvres from src/sim/env/traffic.ts), modelled with the vessel
@@ -90,15 +91,26 @@ function ensignMaterial(): THREE.Material {
   return ensignMat;
 }
 
-/** The ensign on a staff at the stern. */
+let ensignGeo: THREE.PlaneGeometry | undefined;
+/**
+ * The ensign on a staff at the stern: the flag hangs from a pivot at the staff (named 'ensign'), its fly along
+ * the pivot's +x, so turning the pivot flies it with the wind (TrafficView.update); built flying aft.
+ */
 function ensign(group: THREE.Group, kit: Kit, x: number, y: number, z: number): void {
   kit.rod(V(x, y, z), V(x, y + 1.3, z + 0.25), 0.02, VMAT.paint, C.wood, 6);
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), ensignMaterial());
-  // Hoist at the staff, flying aft (seen from starboard, the canton is at the upper left).
-  flag.position.set(x, y + 1.08, z + 0.66);
-  flag.rotation.y = -Math.PI / 2;
-  flag.name = 'ensign';
-  group.add(flag);
+  if (!ensignGeo) {
+    ensignGeo = new THREE.PlaneGeometry(0.8, 0.4);
+    // Hoist (the canton side, u = 0) at the pivot, the fly along +x.
+    ensignGeo.translate(0.4, -0.2, 0);
+  }
+  const pivot = new THREE.Group();
+  pivot.position.set(x, y + 1.28, z + 0.24);
+  pivot.rotation.y = -Math.PI / 2;
+  pivot.name = 'ensign';
+  const flag = new THREE.Mesh(ensignGeo, ensignMaterial());
+  flag.name = 'ensign-flag';
+  pivot.add(flag);
+  group.add(pivot);
 }
 
 /** A wake: a V of foam behind the stern, scaled by speed. */
@@ -556,6 +568,7 @@ interface Entry {
   tug?: THREE.Group;
   label?: THREE.Sprite;
   ramps: THREE.Object3D[];
+  ensigns: THREE.Object3D[];
   wakes: THREE.Mesh[];
   lights: THREE.Mesh[];
   seen: number;
@@ -591,11 +604,13 @@ export class TrafficView {
       root.add(label);
     }
     const ramps: THREE.Object3D[] = [];
+    const ensigns: THREE.Object3D[] = [];
     const wakes: THREE.Mesh[] = [];
     const lights: THREE.Mesh[] = [];
     for (const g of [root, ...(tug ? [tug] : [])]) {
       g.traverse((o) => {
         if (o.name.startsWith('ramp-')) ramps.push(o);
+        if (o.name === 'ensign') ensigns.push(o);
         if (o.name === 'wake') wakes.push(o as THREE.Mesh);
         if (o.parent?.name === 'lights') lights.push(o as THREE.Mesh);
         if (o instanceof THREE.Mesh && o.name !== 'wake') {
@@ -604,7 +619,7 @@ export class TrafficView {
       });
     }
     this.group.add(root);
-    return { root, body, tug, label, ramps, wakes, lights, seen: 0 };
+    return { root, body, tug, label, ramps, ensigns, wakes, lights, seen: 0 };
   }
 
   /** Daylight 0 (night) … 1 (day): navigation lights come on at dusk. */
@@ -617,7 +632,8 @@ export class TrafficView {
     return [...this.entries.values()].flatMap((e) => (e.label ? [e.label] : []));
   }
 
-  update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean): void {
+  /** `wind`: where the true wind comes from (rad, compass) and its speed (m/s), for the ensigns; else they fly aft. */
+  update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean, wind?: { fromDir: number; speed: number }): void {
     const stamp = time;
     const lit = this.day < 0.35;
     setLightsOn(lit);
@@ -636,6 +652,15 @@ export class TrafficView {
         // Down onto the slip (tilted below the deck) when loading; raised for the crossing.
         const end = r.name === 'ramp-bow' ? -1 : 1;
         r.rotation.x = end * (0.32 * (s.ramp ?? 1) - 0.12);
+      }
+      if (wind) {
+        const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, s.heading, s.sog);
+        // A flutter that quickens with the wind (E).
+        const flutter = Math.min(0.12, 0.02 * aws) * Math.sin(time * (2 + aws) + s.e);
+        for (const f of e.ensigns) {
+          f.rotation.y = yaw + flutter;
+          f.children[0]!.rotation.z = -flagDroop(aws);
+        }
       }
       // Unlit, the lamps are not drawn at all (small housings, not dark balls in the air).
       for (const l of e.lights) l.visible = lit;
