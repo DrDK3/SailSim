@@ -103,6 +103,8 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
     await expect(lib.getByRole('button', { name: `Load ${name}` })).toBeEnabled();
   }
   await lib.getByRole('button', { name: 'Load Fog in the harbour' }).click();
+  const more = page.getByRole('button', { name: 'More instruments and conditions' });
+  if (await more.isVisible()) await more.click();
   await expect(page.getByTestId('sky')).toContainText(/fog/i);
   await expect(page.locator('footer')).toContainText('fog');
 

@@ -54,6 +54,27 @@ This is an expert review, not a study with users. Nobody new to sailing has trie
 | 15 | The footer said "Phase 6" (meaningless to users) in 11 px text | Match with the real world | 1 | Removed. The footer keeps the data caveats ("physics estimated · not for navigation"); it is hidden on phones, where Help and the welcome carry the same caveats | — |
 | 16 | Motion | Accessibility | 1 | The pulsing tutorial outline stops when the system asks for reduced motion | CSS `prefers-reduced-motion` |
 
+## Redesign: less clutter (27 Oct 2026)
+
+The owner's review: "The UI is too cluttered and needs to be redesigned using UI/UX best practices." On a 1280 × 800 screen the chrome covered about 40% of the view: an 11-button toolbar, a 340 px instrument panel with 14 readouts and five rows of conditions open by default, a four-row control dock, the minimap and a full-width footer.
+
+| Before | After |
+|---|---|
+| ![Before: 11 toolbar buttons, 14 instruments and the conditions open, a four-row dock](img/round3-ui-before.png) | ![After: seven controls, compact instruments, a two-row dock beside the minimap](img/round3-ui-after.png) |
+| ![The More menu: Learn and plan, Show, Physics tools](img/round3-ui-more.png) | ![Phone](img/round3-ui-phone.png) |
+
+| # | Finding | Principle | Change | Checked by |
+|---|---|---|---|---|
+| R1 | Eleven toolbar buttons of equal weight; Tutorial, Courses and two menus beside the everyday ones | Hick's law (fewer choices, faster decisions); visual hierarchy | **Seven controls:** Pause/Resume as the primary (accented, with an icon), Reset, the camera, Library and Scenario, one **More** menu and Help (?). Tutorial, the course editor, the View items and the physics tools are in More, in three labelled sections | e2e toolbar test (six buttons in the bar; menu sections; Escape) |
+| R2 | The instruments and conditions were open by default on desktop: 14 numbers and five rows of provenance | Progressive disclosure; minimalist design | **Compact by default everywhere:** the compass, speed and tack, then heading, TWA, TWS, heel, VMG and depth. "More instruments and conditions" opens the rest; the choice is remembered | e2e (tests open the conditions where they read them) |
+| R3 | A four-row dock (main, jib, helm, crew), 760 px wide, overlapping the minimap's column | Proximity and grouping; screen economy | **Two rows:** the sails on the left (Ease, sheet, Trim, Auto, status), the boat on the right (helm, Centre, Release sheets, crew). It centres in the space beside the minimap, so nothing overlaps. Hike appears only when the crew is manual | Screenshots at 1280, 820 and 390 px |
+| R4 | Each sail's status always showed a sentence and an angle ("Drawing · well trimmed · α 21°") | Signal over noise: show what needs attention | A word when all is well ("Drawing"); the advice and its key only when something needs doing ("Luffing · trim in (W)"). The angle is in the tooltip | e2e "sail status in plain words" |
+| R5 | Keyboard sailors had no way to clear the dock | User control and freedom | **Hide sailing controls** (▾ on the dock, or More → Sailing controls); a "Show sailing controls" pill brings it back; remembered. The keys keep working | New e2e test |
+| R6 | "Paused" sat in the middle of the screen, over the boat | Don't obscure the primary content | A small pill under the app bar | e2e (text unchanged) |
+| R7 | The footer ran across the whole bottom edge | Minimalist design | One quiet line at the bottom left, ellipsised, full text on hover; the data caveats are unchanged | e2e (footer text) |
+| R8 | The race panel and the dock competed for the bottom left | Consistent placement | The race panel stacks under the instruments in one left-hand column: what the helmsman reads is together | Screenshots |
+| R9 | Inconsistent sizes and spacing | Consistency | Spacing tokens (4, 8, 12, 16 px), 12 px panel radius, 32 px minimum targets, one translucent panel style; the camera selector no longer looks disabled | Screenshots |
+
 ## Not done (recommended next)
 
 - **Testing with real users:** watch three to five people new to sailing take the tutorial. Their goal times and where they stall would tune the step thresholds, which are estimates (E).

@@ -7,15 +7,17 @@ import { bearing, deg, kn, sideAngle } from './format';
 
 const MORE_KEY = 'squib.instruments.more';
 
-/** Show all the instruments (remembered in this browser); by default on screens wide enough for them. */
+/**
+ * Show all the instruments and the conditions (remembered in this browser). By default only the ones a
+ * helmsman watches: the rest is a click away, so the view of the water is not crowded out.
+ */
 function initialMore(): boolean {
   try {
-    const v = localStorage.getItem(MORE_KEY);
-    if (v !== null) return v === '1';
+    return localStorage.getItem(MORE_KEY) === '1';
   } catch {
-    // storage unavailable: use the default
+    // storage unavailable: the default
+    return false;
   }
-  return typeof window === 'undefined' || window.innerWidth >= 700;
 }
 
 function Cell({ label, value, unit, title, tutorial }: { label: string; value: string; unit?: string; title?: string; tutorial?: string }) {
