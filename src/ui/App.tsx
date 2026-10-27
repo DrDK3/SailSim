@@ -143,7 +143,7 @@ export function App({ ctl }: { ctl: SimController }) {
       <div className="hud-left">
         <Instruments s={ui.snapshot} />
         {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
-        </div>
+      </div>
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation">
         <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
           {toolsOpen ? 'Close menu' : 'Menu'}

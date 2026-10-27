@@ -71,7 +71,7 @@ test('toolbar: the More menu (sections, toggles), Escape closes menus and panels
   const errors = await ready(page);
   // Few controls in view: playback, camera, Library and Scenario, More and Help.
   await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(6);
-  const view = page.getByRole('button', { name: /^More/ });
+  const view = page.getByRole('button', { name: 'More', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });
   await expect(labels).toHaveAttribute('aria-checked', 'true');
@@ -84,7 +84,7 @@ test('toolbar: the More menu (sections, toggles), Escape closes menus and panels
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
 
-  await page.getByRole('button', { name: /^More/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   await expect(page.getByRole('region', { name: /polar/i })).toBeVisible();
 
@@ -117,10 +117,10 @@ test('the sailing controls can be put away and brought back (remembered); the ke
   await page.getByRole('button', { name: 'Show sailing controls' }).click();
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toBeVisible();
   // And from the More menu.
-  await page.getByRole('button', { name: /^More/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Sailing controls' }).click();
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toHaveCount(0);
-  await page.getByRole('button', { name: /^More/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Sailing controls' }).click();
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toBeVisible();
   expect(errors).toEqual([]);
@@ -194,7 +194,7 @@ test.describe('on a phone', () => {
     await page.getByRole('button', { name: 'Menu' }).click();
     await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close menu' }).click();
-    await expect(page.getByRole('button', { name: 'More instruments and conditions' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'All instruments and conditions' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Steer to starboard/ })).toBeInViewport();
     expect(await fits()).toBe(true);
     expect(errors).toEqual([]);

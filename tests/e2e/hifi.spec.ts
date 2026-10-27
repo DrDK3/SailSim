@@ -115,7 +115,7 @@ test('wind against tide: the conditions report short, steep waves in the entranc
     if (!c.getState().paused) c.togglePause();
     window.__squib!.advance(2);
   });
-  const more = page.getByRole('button', { name: 'More instruments and conditions' });
+  const more = page.getByRole('button', { name: 'All instruments and conditions' });
   if (await more.isVisible()) await more.click();
   await expect(page.getByTestId('waves')).toContainText(/steepness ×/);
   await expect(page.getByText(/Wind against tide/)).toBeVisible();

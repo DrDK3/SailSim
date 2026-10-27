@@ -89,7 +89,7 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
         )}
       </div>
       <button className="link more-toggle" aria-expanded={more} onClick={toggleMore}>
-        {more ? 'Fewer instruments' : 'More instruments and conditions'}
+        {more ? 'Fewer instruments' : 'All instruments and conditions'}
       </button>
       {s.grounded && <div className="chip bad" role="alert" data-testid="aground">Aground: the keel is on the bottom</div>}
       {more && s.env && <Conditions env={s.env} waterLevel={s.waterLevel} />}

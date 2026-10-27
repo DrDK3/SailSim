@@ -19,9 +19,9 @@ Each point was reproduced first, then fixed. As before, anything not from a sour
 
 ## The Lower Ferry
 
-| Two units meeting mid-river, passing port to port |
+| Two units meeting mid-river, passing port to port, 40 m apart (each tug on its float's south side) |
 |---|
-| See `tests/sim/traffic.test.ts` ("two units meeting mid-river…"); the closest approach in the app's run is 40.0 m |
+| ![The two Lower Ferry units passing](img/round3-ferry-pass.png) |
 
 What was done (`src/sim/env/traffic.ts`):
 - **Berths with the tide.** For every distance of the float from the top of a slip, the lowest water level at which it works: the float's spoon end afloat (0.45 m draft, E), its middle (0.9 m, E), the tug alongside (1.3 m, E), and the tug's swing 12 m off, each with 0.3 m under it. The berth for a level is read off that curve, so the float creeps down the slip as the tide falls and back up as it rises. The bed is the provisional bathymetry near the slips (issue 64).
@@ -87,7 +87,7 @@ What changed and why: UX_REVIEW.md, "Redesign: less clutter". In short:
   - `tests/render/berthed.test.ts`: triangle budgets, near and far models, empty berths;
   - traffic tests: the two Lower Ferry units never touch and pass port to port; the berth follows the tide and the tug is always afloat; every marina's boats leave from and return to their berths.
 - **Reference race hash:** unchanged (`5de2cc60d1e76458`): the physics is untouched.
-- **Browser (Playwright):** updated for the More menu and the compact instruments, plus a new test for hiding and restoring the sailing controls. Results are in the commit's CI run.
+- **Browser (Playwright):** updated for the More menu and the compact instruments, plus a new test for hiding and restoring the sailing controls. All 38 pass locally (software rendering, CI settings). The first run found the new menu and the instruments' "More instruments…" toggle both answering to "More": a real ambiguity for screen-reader users, so the toggle is now "All instruments and conditions".
 
 ## Still open
 

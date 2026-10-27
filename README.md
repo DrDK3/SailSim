@@ -86,7 +86,7 @@ The toolbar keeps to the essentials:
 - **More**: the **Tutorial** and the **course editor**; what is shown (labels, minimap, sailing controls, force arrows, layers and sources); the physics tools (validation dashboard, polar sweep, physics panel);
 - **Help** (?).
 
-The instruments show the essentials; **More instruments and conditions** opens the rest, and the choice is remembered.
+The instruments show the essentials; **All instruments and conditions** opens the rest, and the choice is remembered.
 
 The panels:
 - the **Polar** panel: the model polar, computed in a Web Worker;
