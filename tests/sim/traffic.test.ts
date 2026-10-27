@@ -1,15 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { DEG, buildConditions } from '../../src/sim/index';
-import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type VesselState } from '../../src/sim/env/traffic';
+import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type MarinaSpec, type VesselPart, type VesselState } from '../../src/sim/env/traffic';
+import type { PierFeature } from '../../src/sim/env/marinas';
 import type { FerryRoute } from '../../src/sim/env/ferries';
 import { loadDartGeo } from './helpers';
 
-const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as { ferries: FerryRoute[]; moorings: { n: number; e: number }[] };
+const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as {
+  ferries: FerryRoute[];
+  moorings: { n: number; e: number }[];
+  marinas: MarinaSpec[];
+  piers: PierFeature[];
+};
 const ferries = features.ferries;
 const geo = loadDartGeo();
 const lower = (s: VesselState[]) => s.filter((v) => v.name === 'Dartmouth Lower Ferry');
 const ms = (iso: string) => Date.parse(iso);
+
+/** Do two hull outlines (oriented rectangles) overlap? Separating-axis test. */
+function overlap(p: VesselPart, q: VesselPart): boolean {
+  const corners = (r: VesselPart) => {
+    const [c, s] = [Math.cos(r.heading), Math.sin(r.heading)];
+    return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([x, y]) => [r.e + s * x! * r.length / 2 + c * y! * r.beam / 2, r.n + c * x! * r.length / 2 - s * y! * r.beam / 2] as const);
+  };
+  const [A, B] = [corners(p), corners(q)];
+  for (const r of [p, q]) {
+    for (const ax of [[Math.sin(r.heading), Math.cos(r.heading)], [Math.cos(r.heading), -Math.sin(r.heading)]]) {
+      const proj = (P: (readonly [number, number])[]) => P.map(([e, n]) => e * ax[0]! + n * ax[1]!);
+      const [pa, pb] = [proj(A), proj(B)];
+      if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+    }
+  }
+  return true;
+}
 
 describe('UK local time', () => {
   it('British Summer Time from the last Sunday in March to the last Sunday in October (01:00 UTC)', () => {
@@ -32,7 +55,8 @@ describe('the Lower Ferry (tug and float)', () => {
     // Wednesday 15 July 2026, 06:50 BST = 05:50 UTC.
     const [u0] = at('2026-07-15T05:50:00Z');
     expect(u0!.moving).toBe(false);
-    expect(Math.hypot(u0!.e - kingswear[0], u0!.n - kingswear[1])).toBeLessThan(5);
+    // Afloat just off the top of the slip (without the bed: half its length and 2 m).
+    expect(Math.hypot(u0!.e - kingswear[0], u0!.n - kingswear[1])).toBeLessThan(19);
     // 07:00 BST: unit 0 leaves Kingswear (clearing the slip first).
     expect(at('2026-07-15T06:00:10Z')[0]!.phase).toBe('clearing');
     expect(at('2026-07-15T06:00:30Z')[0]!.phase).toBe('swinging');
@@ -66,7 +90,7 @@ describe('the Lower Ferry (tug and float)', () => {
     expect(swingEnd!).toBeLessThan(0.2); // and now facing the far bank
     expect(maxSog).toBeLessThanOrEqual(2.0 + 1e-9);
     // At Dartmouth after the crossing, the ramps start to come down for loading.
-    expect(Math.hypot(arrived!.e - dartmouth[0], arrived!.n - dartmouth[1])).toBeLessThan(5);
+    expect(Math.hypot(arrived!.e - dartmouth[0], arrived!.n - dartmouth[1])).toBeLessThan(19);
     expect(arrived!.ramp).toBe(1);
     expect(loading!.ramp).toBe(0);
   });
@@ -88,6 +112,25 @@ describe('the Lower Ferry (tug and float)', () => {
       const s = lower(traffic.states(ms('2026-11-04T11:00:00Z') + m * 30_000));
       expect(s.filter((v) => v.moving).length).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('two units meeting mid-river each alter to starboard and pass port to port, never touching', () => {
+    let closest = Infinity;
+    let portToPort = 0;
+    for (let s = 0; s < 3 * 3600; s += 2) {
+      const [a, b] = lower(traffic.states(ms('2026-07-15T09:00:00Z') + s * 1000));
+      if (!a || !b) continue;
+      for (const p of a.parts) for (const q of b.parts) expect(overlap(p, q)).toBe(false);
+      const d = Math.hypot(a.e - b.e, a.n - b.n);
+      if (a.moving && b.moving && d < 60) {
+        // Each sees the other on its port hand (bearing relative to the heading is negative).
+        for (const [x, y] of [[a, b], [b, a]] as const) expect(Math.sin(Math.atan2(y.e - x.e, y.n - x.n) - x.heading)).toBeLessThan(0);
+        portToPort++;
+      }
+      closest = Math.min(closest, d);
+    }
+    expect(portToPort).toBeGreaterThan(5);
+    expect(closest).toBeGreaterThan(30);
   });
 
   it('the tug is solid too: two parts for the fleet physics', () => {
@@ -180,6 +223,68 @@ describe('Dart Marina traffic', () => {
     console.log(`[traffic] most marina boats at once: ${seen}; kinds ${[...kinds].join(', ')}; samples holding for a ferry: ${holdingNearFerry}`);
     expect(seen).toBeGreaterThan(0);
     expect(kinds.size).toBeGreaterThan(1);
+  });
+
+  it('the Lower Ferry berths with the tide: further down its slips at low water, its tug always afloat', () => {
+    const lf = buildRiverTraffic({ ferries, current: (t, n, e) => conditions.current((t - start) / 1000, n, e), waterLevel: (t) => conditions.waterLevel!((t - start) / 1000), geo });
+    const dartmouth = ferries.find((f) => f.name === 'Dartmouth Lower Ferry')!.route[0]!;
+    let shallowest = Infinity;
+    const offSlip: { level: number; d: number }[] = [];
+    for (let s = 0; s < 16 * 3600; s += 3) {
+      const now = ms('2026-07-15T06:00:00Z') + s * 1000;
+      const level = conditions.waterLevel!((now - start) / 1000);
+      const units = lower(lf.states(now));
+      for (const v of units) {
+        for (const k of [-0.4, 0, 0.4]) {
+          const n = v.tug!.n + Math.cos(v.tug!.heading) * k * 9.5;
+          const e = v.tug!.e + Math.sin(v.tug!.heading) * k * 9.5;
+          shallowest = Math.min(shallowest, level - geo.bedElevation(n, e));
+        }
+        expect(level - geo.bedElevation(v.n, v.e)).toBeGreaterThan(1.0);
+        if (v.phase === 'berthed' && Math.hypot(v.e - dartmouth[0], v.n - dartmouth[1]) < 60) offSlip.push({ level, d: Math.hypot(v.e - dartmouth[0], v.n - dartmouth[1]) });
+      }
+      if (units.length === 2) for (const p of units[0]!.parts) for (const q of units[1]!.parts) expect(overlap(p, q)).toBe(false);
+    }
+    // The tug (about 1.3 m draft, E) has water under it all day, at the slips and swinging off them.
+    expect(shallowest).toBeGreaterThan(1.3);
+    // Lower water, further out: the berth at low water is well down the slip from the one at high water.
+    const lo = offSlip.reduce((a, b) => (b.level < a.level ? b : a));
+    const hi = offSlip.reduce((a, b) => (b.level > a.level ? b : a));
+    expect(lo.d - hi.d).toBeGreaterThan(8);
+  });
+
+  it('every marina: boats leave their berths astern, go out by the lanes, and come back to them; berths empty while they are out', () => {
+    const all = buildRiverTraffic({ ferries, current: (t, n, e) => conditions.current((t - start) / 1000, n, e), geo, moorings: features.moorings, marinas: features.marinas, piers: features.piers });
+    expect(all.fairways.map((f) => f.name.split(' → ')[0])).toEqual(expect.arrayContaining(['Dart Haven Marina', 'Dart Marina', 'Noss on Dart Marina']));
+    const from = new Map<string, number>();
+    let samples = 0;
+    let brushes = 0;
+    let leftEmpty = 0;
+    for (let m = 0; m < 13 * 60; m += 1) {
+      const now = ms('2026-07-15T07:00:00Z') + m * 60_000;
+      const taken = all.berthsTaken(now);
+      for (const v of all.states(now).filter((x) => /Marina/.test(x.name))) {
+        from.set(v.name, (from.get(v.name) ?? 0) + 1);
+        samples++;
+        // Never through a berthed boat (an occasional brush passing close, at most).
+        for (let i = 0; i < all.berths.length; i++) {
+          const b = all.berths[i]!;
+          if (taken[i] && Math.hypot(b.n - v.n, b.e - v.e) < 25 && overlap({ ...b, heading: b.heading }, { n: v.n, e: v.e, heading: v.heading, length: v.length * 0.9, beam: v.beam * 0.9 })) brushes++;
+        }
+      }
+      // A boat that has just left: its berth stands empty.
+      for (const v of all.states(now).filter((x) => /leaving/.test(x.label))) {
+        const b = all.berths.find((x) => Math.hypot(x.n - v.n, x.e - v.e) < 1 && x.length === v.length);
+        if (b) {
+          expect(taken[b.id]).toBe(0);
+          leftEmpty++;
+        }
+      }
+    }
+    console.log(`[traffic] marina boat samples by marina: ${[...from].map(([k, n]) => `${k} ${n}`).join(', ')}; brushes ${brushes}/${samples}; just left ${leftEmpty}`);
+    for (const name of ['Dart Haven Marina', 'Dart Marina', 'Noss on Dart Marina']) expect(from.get(name) ?? 0).toBeGreaterThan(20);
+    expect(brushes / samples).toBeLessThan(0.01);
+    expect(leftEmpty).toBeGreaterThan(0);
   });
 
   it('is deterministic: two models agree at any moment, whatever was asked before', () => {

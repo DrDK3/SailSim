@@ -67,9 +67,11 @@ test.describe('first visit', () => {
   });
 });
 
-test('toolbar: View and Tools menus, Escape closes menus and panels, one side panel at a time', async ({ page }) => {
+test('toolbar: the More menu (sections, toggles), Escape closes menus and panels, one side panel at a time', async ({ page }) => {
   const errors = await ready(page);
-  const view = page.getByRole('button', { name: /^View/ });
+  // Few controls in view: playback, camera, Library and Scenario, More and Help.
+  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(6);
+  const view = page.getByRole('button', { name: 'More', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });
   await expect(labels).toHaveAttribute('aria-checked', 'true');
@@ -77,11 +79,12 @@ test('toolbar: View and Tools menus, Escape closes menus and panels, one side pa
   await expect(page.getByRole('menu')).toHaveCount(0); // choosing closes the menu
   expect(await page.evaluate(() => window.__squib!.controller.getState().showLabels)).toBe(false);
   await view.click();
-  await expect(page.getByRole('menu', { name: 'View' })).toBeVisible();
+  await expect(page.getByRole('menu', { name: 'More' })).toBeVisible();
+  await expect(page.getByRole('menu', { name: 'More' })).toContainText('Physics tools');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
 
-  await page.getByRole('button', { name: /^Tools/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   await expect(page.getByRole('region', { name: /polar/i })).toBeVisible();
 
@@ -93,6 +96,37 @@ test('toolbar: View and Tools menus, Escape closes menus and panels, one side pa
   await page.keyboard.press('Escape');
   await expect(page.getByRole('region', { name: 'Scenario settings' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: /polar/i })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('the sailing controls can be put away and brought back (remembered); the keys still sail the boat', async ({ page }) => {
+  // Two full loads of the River Dart (the setting must survive a reload): slow under software rendering.
+  test.setTimeout(240_000 * CI_SLOW);
+  const errors = await ready(page);
+  const dock = page.getByRole('region', { name: 'Sailing controls' });
+  await expect(dock).toBeVisible();
+  await dock.getByRole('button', { name: 'Hide sailing controls' }).click();
+  await expect(dock).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId('stw')).toBeVisible();
+  // The run restarts when the River Dart data arrives: wait for it before sailing.
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
+  await expect(page.getByRole('region', { name: 'Sailing controls' })).toHaveCount(0);
+  // The keys still steer.
+  await page.evaluate(() => window.__squib!.controller.togglePause());
+  await page.keyboard.down('KeyD');
+  await page.evaluate(() => window.__squib!.advance(1));
+  await page.keyboard.up('KeyD');
+  expect(await page.evaluate(() => window.__squib!.controller.sim.input.helm)).not.toBe(0);
+  await page.getByRole('button', { name: 'Show sailing controls' }).click();
+  await expect(page.getByRole('region', { name: 'Sailing controls' })).toBeVisible();
+  // And from the More menu.
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Sailing controls' }).click();
+  await expect(page.getByRole('region', { name: 'Sailing controls' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Sailing controls' }).click();
+  await expect(page.getByRole('region', { name: 'Sailing controls' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -164,7 +198,7 @@ test.describe('on a phone', () => {
     await page.getByRole('button', { name: 'Menu' }).click();
     await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close menu' }).click();
-    await expect(page.getByRole('button', { name: 'More instruments and conditions' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'All instruments and conditions' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Steer to starboard/ })).toBeInViewport();
     expect(await fits()).toBe(true);
     expect(errors).toEqual([]);

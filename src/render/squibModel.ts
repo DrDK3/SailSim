@@ -284,7 +284,7 @@ export class SquibModel {
       masthead: new THREE.Vector3(0, this.mastTopY + 0.4, MAST_Z),
     };
     this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh && o.name !== 'cockpit-water' && o.name !== 'telltale') o.castShadow = true;
+      if (o instanceof THREE.Mesh && o.name !== 'cockpit-water' && o.name !== 'telltale') o.castShadow = o.receiveShadow = true;
     });
     // Added after the shadow pass setup: the mask draws nothing and must cast no shadow.
     this.group.add(this.buildWaterMask());

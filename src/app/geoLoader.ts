@@ -14,8 +14,16 @@ export interface DartFeatures {
   mooringAreas: { name: string; ring: [number, number][] }[];
   /** Provisional moorings: position, boat kind, length (m), initial heading (deg), area name. */
   moorings: { e: number; n: number; k: 'yacht' | 'motor' | 'keelboat'; l: number; h: number; a: string }[];
-  /** Marinas (OSM leisure=marina): name and centre; absent from data built before the hi-fi work. */
+  /** Marinas (OSM leisure=marina, or a named place centred on its pontoons): name and centre; absent from data built before the hi-fi work. */
   marinas?: { name: string; n: number; e: number }[];
+  /**
+   * Railway lines (OSM, clipped to the domain; name, polyline, inferred tunnel) and stations with their
+   * platforms and buildings (rings). Absent from data built before the station work.
+   */
+  railway?: {
+    lines: { name: string; line: [number, number][]; tunnel: boolean }[];
+    stations: { name: string; e: number; n: number; platforms: [number, number][][]; buildings: [number, number][][] }[];
+  };
   ferries: {
     name: string;
     label: string;

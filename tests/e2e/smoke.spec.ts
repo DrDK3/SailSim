@@ -149,6 +149,8 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('tidal');
   await panel.getByRole('button', { name: 'Apply and restart' }).click();
   await expect(panel).toBeHidden();
+  // The conditions are a click away (the instruments start compact).
+  await page.getByRole('button', { name: 'All instruments and conditions' }).click();
   const cond = page.getByTestId('conditions');
   await expect(cond).toContainText('Met Office UKV (replay)');
   await expect(page.getByTestId('tide')).toContainText('m CD');
@@ -160,7 +162,7 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
 test('polar panel sweeps the model in a worker and matches the Node model', async ({ page }) => {
   test.setTimeout(150_000 * CI_SLOW);
   const errors = await open(page);
-  await page.getByRole('button', { name: /^Tools/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   const polar = page.getByRole('region', { name: 'Model polar' });
   await expect(polar).toContainText('not measured Squib performance');
@@ -197,7 +199,7 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   // Depth at the keel is shown, from the provisional depths mid-river.
   await expect(page.locator('.cell', { hasText: 'Depth' })).toContainText('m');
   // Every provisional layer is labelled in the Layers panel.
-  await page.getByRole('button', { name: /^View/ }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Layers and sources/ }).click();
   const list = page.getByTestId('provisional-list');
   for (const label of ['Water depth below the low-water line', 'Individual moorings and moored boats', 'Ferries', 'Tidal stream pattern', 'Navigation marks', 'Chart datum offset', 'Official RDYC courses and marks']) {
@@ -212,6 +214,7 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('dart');
   await expect(panel).toContainText('Provisional model: follows the channel');
   await panel.getByRole('button', { name: 'Apply and restart' }).click();
+  await page.getByRole('button', { name: 'All instruments and conditions' }).click();
   await expect(page.getByTestId('conditions')).toContainText('Tidal stream (modelled, channel-following)');
   expect(errors).toEqual([]);
 });
@@ -303,7 +306,8 @@ test('Phase 4: a practice course from the scenario panel: countdown, start signa
 
 test('Phase 4: course editor: add a mark, live check, import, export', async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole('button', { name: 'Courses' }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Course editor' }).click();
   const ed = page.getByRole('dialog', { name: 'Course editor' });
   await expect(ed).toBeVisible();
   // Add a mark by clicking the map.

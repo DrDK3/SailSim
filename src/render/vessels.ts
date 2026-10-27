@@ -178,6 +178,9 @@ export interface HullSpec {
   stripe?: [number, number];
   /** A barge or pontoon: square sections, flat bottom, raked ends ("spoon" ends) at both ends. */
   pontoon?: boolean;
+  /** Lofting resolution: stations along the hull and points round each half-section (fewer for boats drawn by the hundred). */
+  stations?: number;
+  sections?: number;
 }
 
 export interface Hull {
@@ -292,8 +295,8 @@ export function hull(kit: Kit, s: HullSpec, material: THREE.Material = VMAT.pain
     col.push(COLOUR.r, COLOUR.g, COLOUR.b);
     return pos.length / 3 - 1;
   };
-  const N = STATIONS;
-  const M = SECTION;
+  const N = s.stations ?? STATIONS;
+  const M = s.sections ?? SECTION;
   for (let side = -1; side <= 1; side += 2) {
     const base = pos.length / 3;
     for (let i = 0; i <= N; i++) {
@@ -436,6 +439,8 @@ export interface CabinSpec {
   /** Roof overhang (m), thickness and colour. */
   roof?: { overhang: number; thickness: number; colour?: number };
   material?: THREE.Material;
+  /** Points on each rounded corner of the plan (fewer for boats drawn by the hundred). */
+  corner?: number;
 }
 
 function roundedPlan(w: number, l: number, rf: number, rb: number, n = 6): THREE.Vector2[] {
@@ -460,7 +465,7 @@ function roundedPlan(w: number, l: number, rf: number, rb: number, n = 6): THREE
 
 /** A superstructure: walls lofted from a rounded plan to a raked, inset top, a framed window band, a roof. */
 export function cabin(kit: Kit, s: CabinSpec): void {
-  const P = roundedPlan(s.width, s.length, s.rFront ?? 0.3, s.rBack ?? 0.2);
+  const P = roundedPlan(s.width, s.length, s.rFront ?? 0.3, s.rBack ?? 0.2, s.corner);
   const cx = s.x ?? 0;
   const zMin = -s.length / 2;
   const rake = s.rake ?? 0;

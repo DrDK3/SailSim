@@ -53,6 +53,11 @@ The pattern is faster in the narrows, slack in the creeks and spreads out into S
 - A secondary pilot guide gives "up to about 4 kn in the narrowest part" (S). That is a cross-check, not a calibration.
 - Offshore alongshore streams are not modelled.
 
+### Marinas and the railway (round 3)
+
+- **Marinas:** OSM `leisure=marina` areas (Dart Haven Marina, Dart Marina), plus marinas OSM names only as a place: Noss on Dart Marina (Overture `place` "Noss Marina"), centred on the floating pontoons within 350 m of it. The berths on the pontoons are laid out at run time (`src/sim/env/marinas.ts`).
+- **Railway:** OSM `railway=rail` lines (Overture `segment`, subtype rail) clipped to the domain, each with a `tunnel` flag inferred from the ground: a line over 100 m where the ground stands more than 12 m above the straight line between its ends for most of its length (only the Greenway tunnel, 451 m; 453 m published). Stations (`railway_station` points) with their platforms (`platform` polygons) and station buildings (`train_station`) within 300 m: Kingswear and Greenway Halt. `features.json` → `railway: { lines, stations }`.
+
 ## Files (`public/geo/`)
 
 | File | Content | Size |

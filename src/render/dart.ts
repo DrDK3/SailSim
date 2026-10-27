@@ -3,10 +3,14 @@ import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
-import type { RiverTraffic } from '../sim/env/traffic';
+import { berthOccupancy, type Berth } from '../sim/env/marinas';
+import { BerthedFleet } from './berthed';
+import { RailwayView } from './railway';
+import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
 import { Woodland } from './trees';
+import { BUMP_GLSL, bumpBlock } from './bump';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -29,6 +33,8 @@ export interface DartSceneInput {
   town?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; values: Float32Array };
   /** Signed distance to tidal water (watermask.png): the water surface is drawn only near tidal water. */
   waterMask?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; image: TexImageSource };
+  /** 'low' (a software renderer): detailed boats nearer the camera, sleepers only at the station. */
+  detail?: 'high' | 'low';
 }
 
 /** Where the water surface may be drawn: a distance texture over a box (e0, n0, width, height in m). */
@@ -53,9 +59,9 @@ export class DartScene {
   readonly fixed = new THREE.Group();
   readonly floating = new THREE.Group();
   readonly labels = new THREE.Group();
-  private readonly mooredHull?: THREE.InstancedMesh;
-  private readonly mooredMast?: THREE.InstancedMesh;
-  private readonly mooredCabin?: THREE.InstancedMesh;
+  /** Boats on the trot moorings (first) and in the marinas and on the pontoons (after). */
+  private readonly boats?: BerthedFleet;
+  private readonly berths: readonly Berth[] = [];
   private readonly buoys?: THREE.InstancedMesh;
   private readonly traffic = new TrafficView();
   private readonly markLights: { mesh: THREE.Mesh; period: number; flashes: number }[] = [];
@@ -65,6 +71,7 @@ export class DartScene {
   /** For the water surface (scene.ts): tidal water and its banks, so low ground inland stays dry. */
   readonly waterMask?: WaterMask;
   private readonly woodland?: Woodland;
+  private readonly railway?: RailwayView;
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -86,12 +93,20 @@ export class DartScene {
     if (f) {
       this.buildBuildings(f);
       this.buildPiers(f);
-      const m = this.buildMoorings(f);
-      this.mooredHull = m.hull;
-      this.mooredMast = m.mast;
-      this.mooredCabin = m.cabin;
-      this.buoys = m.buoys;
+      this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
+      const low = input.detail === 'low';
+      this.boats = new BerthedFleet(f.moorings.length + this.berths.length, low ? 150 : 420, low ? 1500 : 3000);
+      this.floating.add(this.boats.group);
+      this.buoys = this.buildMoorings(f);
+      const month = new Date().getUTCMonth();
+      this.berths.forEach((b, i) =>
+        this.boats!.set(f.moorings.length + i, { n: b.n, e: b.e, heading: b.heading, length: b.length, kind: b.kind, seed: b.id * 7 + 3, visible: b.u < berthOccupancy(b.style, month) }),
+      );
       this.buildFerries(f);
+      if (f.railway) {
+        this.railway = new RailwayView(f.railway, (e, n) => this.groundAt(e, n), input.detail);
+        this.fixed.add(this.railway.group);
+      }
       this.buildMarks(f);
       this.buildLabels(f);
     }
@@ -197,7 +212,7 @@ export class DartScene {
           geo.setAttribute('uv', new THREE.BufferAttribute(uv.subarray(0, k * 2), 2));
           geo.setIndex(idx);
           geo.computeBoundingSphere();
-          lod.addLevel(new THREE.Mesh(geo, material), dist);
+          lod.addLevel(shadowed(new THREE.Mesh(geo, material)), dist);
         }
         lod.name = 'terrain-town';
         this.fixed.add(lod);
@@ -241,7 +256,7 @@ export class DartScene {
         }
         const lod = new THREE.LOD();
         for (const [step, dist] of [[1, 0], [4, FAR_LOD_M]] as const) {
-          lod.addLevel(new THREE.Mesh(this.chunkGeometry(i0, j0, i1, j1, step, width, height, !this.input.drape), material), dist);
+          lod.addLevel(shadowed(new THREE.Mesh(this.chunkGeometry(i0, j0, i1, j1, step, width, height, !this.input.drape), material)), dist);
         }
         lod.name = 'terrain';
         this.fixed.add(lod);
@@ -542,6 +557,7 @@ export class DartScene {
       geo.setAttribute('aGround', new THREE.Float32BufferAttribute(t.gnd, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = mesh.receiveShadow = true;
       mesh.name = 'buildings';
       this.fixed.add(mesh);
     }
@@ -595,59 +611,36 @@ export class DartScene {
     }
   }
 
-  private buildMoorings(f: DartFeatures) {
-    const count = f.moorings.length;
-    const hullGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 6, 1);
-    hullGeo.rotateX(Math.PI / 2); // along z
-    hullGeo.scale(0.33, 0.9, 1); // unit length, ~1/3 beam
-    const mastGeo = new THREE.CylinderGeometry(0.04, 0.06, 1, 5);
-    mastGeo.translate(0, 0.5, 0);
-    const cabinGeo = new THREE.BoxGeometry(0.28, 0.25, 0.35);
-    const hull = new THREE.InstancedMesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0xf3f1ea, roughness: 0.5 }), count);
-    const mast = new THREE.InstancedMesh(mastGeo, new THREE.MeshStandardMaterial({ color: 0xc8c8c8, metalness: 0.4, roughness: 0.4 }), count);
-    const cabin = new THREE.InstancedMesh(cabinGeo, new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.5 }), count);
-    const buoys = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.6 }), count);
-    for (const m of [hull, mast, cabin, buoys]) {
-      m.name = 'moorings';
-      m.frustumCulled = false;
-      this.floating.add(m);
-    }
-    return { hull, mast, cabin, buoys };
+  private buildMoorings(f: DartFeatures): THREE.InstancedMesh {
+    const buoys = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.6 }), f.moorings.length);
+    buoys.name = 'moorings';
+    buoys.frustumCulled = false;
+    this.floating.add(buoys);
+    return buoys;
   }
 
   private updateMoorings(stream: (n: number, e: number) => NE, windFromDir: number): void {
     const f = this.features;
-    if (!f || !this.mooredHull || !this.mooredMast || !this.mooredCabin || !this.buoys) return;
+    if (!f || !this.boats || !this.buoys) return;
     const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
-    let masts = 0;
-    let cabins = 0;
     f.moorings.forEach((b, i) => {
       // Boats on a mooring lie head to the stream; in slack water, head to the wind.
       const c = stream(b.n, b.e);
       const sp = Math.hypot(c.n, c.e);
       const bowTo = sp > 0.08 ? Math.atan2(-c.e, -c.n) : windFromDir + ((b.h % 30) - 15) * (Math.PI / 180);
-      q.setFromAxisAngle(up, -bowTo);
       // The buoy is at the bow end of the chain; the boat lies downstream of it.
-      const back = new THREE.Vector3(-Math.sin(bowTo), 0, Math.cos(bowTo)).multiplyScalar(b.l * 0.5 + 2);
-      const pos = new THREE.Vector3(b.e, 0.15, -b.n).add(back);
-      m.compose(pos, q, new THREE.Vector3(b.l, b.l * 0.12, b.l));
-      this.mooredHull!.setMatrixAt(i, m);
-      if (b.k !== 'motor') {
-        m.compose(pos, q, new THREE.Vector3(1, b.l * 1.25, 1));
-        this.mooredMast!.setMatrixAt(masts++, m);
-      } else {
-        const cab = pos.clone().add(new THREE.Vector3(0, b.l * 0.12, 0));
-        m.compose(cab, q, new THREE.Vector3(b.l, b.l, b.l));
-        this.mooredCabin!.setMatrixAt(cabins++, m);
-      }
+      const back = b.l * 0.5 + 2;
+      this.boats!.set(i, { n: b.n - Math.cos(bowTo) * back, e: b.e - Math.sin(bowTo) * back, heading: bowTo, length: b.l, kind: b.k === 'motor' ? 'motor' : 'yacht', seed: b.h, visible: true });
       m.makeTranslation(b.e, 0.05, -b.n);
       this.buoys!.setMatrixAt(i, m);
     });
-    this.mooredMast.count = masts;
-    this.mooredCabin.count = cabins;
-    for (const im of [this.mooredHull, this.mooredMast, this.mooredCabin, this.buoys]) im.instanceMatrix.needsUpdate = true;
+    this.buoys.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Which marina and pontoon berths have a boat in them now (the run's traffic: boats out, visitors in). */
+  private updateBerths(taken: Uint8Array): void {
+    const off = this.features?.moorings.length ?? 0;
+    for (let i = 0; i < this.berths.length && i < taken.length; i++) this.boats?.setVisible(off + i, taken[i] === 1);
   }
 
   /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
@@ -704,10 +697,14 @@ export class DartScene {
   update(u: DartUpdate): void {
     this.fixed.position.y = -u.waterLevel;
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
-    if (u.time - this.lastMooringUpdate > 2) {
+    if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;
       this.updateMoorings(u.stream, u.windFromDir);
+      if (u.traffic && u.traffic.berths.length === this.berths.length) this.updateBerths(u.traffic.berthsTaken(u.epochMs));
     }
+    this.boats?.update(u.camera);
+    // Steam trains: smoke drifts downwind (about 3 m/s, E).
+    this.railway?.update(u.epochMs, u.time, { e: -Math.sin(u.windFromDir) * 3, n: -Math.cos(u.windFromDir) * 3 });
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
       this.traffic.update(states, u.time, u.camera, u.showLabels);
@@ -817,7 +814,32 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
       .replace('#include <common>', '#include <common>\nattribute vec4 aWall;\nattribute float aGround;\nvarying vec4 vWall;\nvarying float vGround;\nvarying vec3 vBWorld;\nvarying vec3 vBNormal;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWall = aWall;\nvGround = aGround;\nvBWorld = transformed;\nvBNormal = objectNormal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec4 vWall;\nvarying float vGround;\nvarying vec3 vBWorld;\nvarying vec3 vBNormal;\nfloat bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }')
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform float uNight;
+        varying vec4 vWall;
+        varying float vGround;
+        varying vec3 vBWorld;
+        varying vec3 vBNormal;
+        float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float bNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(bHash(i), bHash(i + vec2(1.0, 0.0)), u.x), mix(bHash(i + vec2(0.0, 1.0)), bHash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        ${BUMP_GLSL}`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        if (vWall.w <= 0.0 && vWall.z <= 0.0 && vBNormal.y > 0.25) {
+          // Slates: each course's lower edge stands proud of the next; joints staggered course to course.
+          ${bumpBlock('fract(vBWorld.y * 4.2) * 0.7 + 0.25 * step(0.9, fract(dot(vBWorld.xz, vec2(0.7071)) * 3.3 + floor(vBWorld.y * 4.2) * 0.5)) + 0.15 * bNoise(vBWorld.xz * 9.0)', 1.0, 25, 220)}
+        } else if (vWall.z > 0.0) {
+          // Rough render (or stone) on the walls.
+          ${bumpBlock('bNoise(vWall.xy * 7.0) * 0.6 + bNoise(vWall.xy * 23.0) * 0.4', 0.6, 15, 160)}
+        }`,
+      )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -894,7 +916,14 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
         float tNoise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
           return mix(mix(tHash(i), tHash(i + vec2(1.0, 0.0)), u.x), mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), u.x), u.y);
-        }`,
+        }
+        ${BUMP_GLSL}`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        // Grass tussocks and bare rock where it is steep.
+        ${bumpBlock('tNoise(vGround.xz * 1.6) * 0.55 + tNoise(vGround.xz * 5.5) * 0.3 + smoothstep(0.8, 0.58, vUpright) * tNoise(vGround.xz * 0.7 + vGround.y) * 1.5', 1.2, 30, 260)}`,
       )
       .replace(
         '#include <map_fragment>',
@@ -913,4 +942,10 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
         diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.27, 0.24, 0.2), vec3(0.42, 0.39, 0.34), step(0.62, tn)) * (0.8 + 0.4 * tn), mud * 0.8);`,
       );
   };
+}
+
+/** Ground casts and receives the sun's shadows (hills shade the river at a low sun; houses and trees shade it). */
+function shadowed(m: THREE.Mesh): THREE.Mesh {
+  m.castShadow = m.receiveShadow = true;
+  return m;
 }

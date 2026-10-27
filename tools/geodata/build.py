@@ -232,8 +232,13 @@ def water_distance(wm):
     return d.reshape(NY, S, NX, S).mean(axis=(1, 3))
 
 
-def marinas(extract):
-    """Marinas (OSM leisure=marina via Overture land_use): name and centre."""
+# Marinas mapped in OSM only as a named place (no leisure=marina area): the place names it, its pontoons place it.
+MARINA_PLACES = {"Noss Marina": "Noss on Dart Marina"}
+
+
+def marinas(extract, prs):
+    """Marinas (OSM leisure=marina via Overture land_use): name and centre. Plus marinas named only as places,
+    centred on their floating pontoons (OSM) within 350 m of the place."""
     out = []
     for r in vector.load(extract, "land_use"):
         if r["class"] != "marina" or not vector.name_of(r):
@@ -241,7 +246,48 @@ def marinas(extract):
         c = vector.local(wkb.loads(r["geometry"])).centroid
         if E_MIN < c.x < E_MAX and N_MIN < c.y < N_MAX:
             out.append(dict(name=vector.name_of(r), e=r1(c.x), n=r1(c.y)))
+    for r in vector.load(extract, "place"):
+        name = MARINA_PLACES.get(vector.name_of(r))
+        if not name:
+            continue
+        p = vector.local(wkb.loads(r["geometry"]))
+        pts = [q for x in prs if x["floating"] for q in (x.get("line") or x.get("poly")) if np.hypot(q[0] - p.x, q[1] - p.y) < 350]
+        if pts:
+            out.append(dict(name=name, e=r1(np.mean([q[0] for q in pts])), n=r1(np.mean([q[1] for q in pts]))))
     return sorted(out, key=lambda m: m["name"])
+
+
+def railway(extract, elev):
+    """Railway lines (OSM railway=rail via Overture segments), clipped to the domain, and stations with their
+    platforms and buildings. A tunnel is not flagged in the data: the DTM is bare earth, so a line is taken as
+    in tunnel where the ground stands well above a straight line between its ends for most of its length."""
+    lines = []
+    for r in vector.load(extract, "segment"):
+        if r["subtype"] != "rail":
+            continue
+        g = vector.local(wkb.loads(r["geometry"])).intersection(vector.DOMAIN)
+        for ln in [g] if g.geom_type == "LineString" else [x for x in getattr(g, "geoms", []) if x.geom_type == "LineString"]:
+            if ln.length < 5:
+                continue
+            d = np.linspace(0, ln.length, max(3, int(ln.length / 5)))
+            pts = [ln.interpolate(x) for x in d]
+            z = sample_grid(elev, [q.x for q in pts], [q.y for q in pts])
+            above = z - np.linspace(z[0], z[-1], len(z))
+            tunnel = bool(ln.length > 100 and np.mean(above > 12) > 0.6)
+            lines.append(dict(name=vector.name_of(r) or "", line=ring(ln.coords), tunnel=tunnel))
+    stations = []
+    infra = vector.load(extract, "infrastructure")
+    for r in infra:
+        if r.get("class") != "railway_station":
+            continue
+        p = vector.local(wkb.loads(r["geometry"]))
+        if not vector.DOMAIN.contains(p):
+            continue
+        near = lambda g: g.distance(p) < 300
+        platforms = [ring(list(g.exterior.coords)[:-1]) for g in (vector.local(wkb.loads(x["geometry"])) for x in infra if x.get("class") == "platform") if g.geom_type == "Polygon" and near(g)]
+        blds = [ring(list(g.exterior.coords)[:-1]) for g in (vector.local(wkb.loads(x["geometry"])) for x in vector.load(extract, "building") if x.get("class") == "train_station") if g.geom_type == "Polygon" and near(g)]
+        stations.append(dict(name=vector.name_of(r), e=r1(p.x), n=r1(p.y), platforms=platforms, buildings=blds))
+    return dict(lines=lines, stations=stations)
 
 
 def piers(extract, elev):
@@ -378,9 +424,10 @@ def main():
     print("vectors…", file=sys.stderr)
     lms = landmarks(extract)
     blds, binfo = buildings(extract, elev, mosaic)
-    mar = marinas(extract)
     town_grid, tnx, tny = town.detail_grid(mosaic)
     prs = piers(extract, elev)
+    mar = marinas(extract, prs)
+    rail = railway(extract, elev)
     areas = mooring_areas(extract)
     moor = layout_moorings(areas, elev)
     fer = ferries(extract)
@@ -409,6 +456,7 @@ def main():
         mooringAreas=[dict(name=n, ring=ring(list(p.exterior.coords)[:-1])) for n, p in areas],
         moorings=moor,
         marinas=mar,
+        railway=rail,
         ferries=fer,
         marks=mk,
         marksNotPlaced=MARKS_NOT_PLACED,
@@ -444,7 +492,8 @@ def main():
     with open(os.path.join(OUT, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
     sizes = {n: os.path.getsize(os.path.join(OUT, n)) for n in sorted(os.listdir(OUT))}
-    print(json.dumps(dict(sizes=sizes, buildings=binfo, moorings=len(moor), ferries=[x["name"] for x in fer], piers=len(prs)), indent=1), file=sys.stderr)
+    print(json.dumps(dict(sizes=sizes, buildings=binfo, moorings=len(moor), ferries=[x["name"] for x in fer], piers=len(prs), marinas=mar,
+                     railway=dict(lines=[(x["name"], len(x["line"]), x["tunnel"]) for x in rail["lines"]], stations=[(x["name"], len(x["platforms"]), len(x["buildings"])) for x in rail["stations"]])), indent=1), file=sys.stderr)
 
 
 def layer_provenance(terrain_info, binfo, nb, npier, nareas, nmoor, nfer, cls):
@@ -485,6 +534,17 @@ def layer_provenance(terrain_info, binfo, nb, npier, nareas, nmoor, nfer, cls):
              notes=[f"{nmoor} moorings. Positions are illustrative: individual buoy positions are not established (N). They are not obstacles in the physics yet."]),
         dict(id="ferries", label="Ferries", status="provisional", tag="E", source=f"Routes: OpenStreetMap ferry routes via Overture Maps {OVERTURE_RELEASE} (S). Timetables and vessel sizes: estimates (E)", licence=ODBL,
              notes=[f"{nfer} route segments. Animation only: not obstacles in the physics yet. Lower and Higher Ferries are shown as restricted in their ability to manoeuvre (DHNA sailing directions, S(p))."]),
+        dict(id="railway", label="Railway and Kingswear station", status="data", tag="S",
+             source=f"OpenStreetMap railway lines, platform and station via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,
+             notes=["Track level follows the LIDAR ground; the tunnel is inferred from the ground rising far above the line (E).",
+                    "Trains and their times: see the timetable notes in the app (docs/SOURCES.md)."]),
+        dict(id="berths", label="Marina berths and berthed boats", status="provisional", tag="E",
+             source="Laid out in the app on OSM's pontoons (src/sim/env/marinas.ts): finger berths in the marinas, alongside on Dart Harbour's and the visitors' pontoons", licence="—",
+             notes=["Berth spacing, boat sizes, how many berths are let by season and the marinas' daily movements are estimates (E). Published counts: Darthaven over 270 berths, Noss on Dart 155–232 (SOURCES.md F12, F13).",
+                    "Berthed boats and pontoons are not obstacles in the physics yet."]),
+        dict(id="trains", label="Steam trains", status="provisional", tag="E",
+             source="The Dartmouth Steam Railway's published timetable for 25 Oct 2026 (Paignton 10:30, 12:00, 14:00, 15:30; Kingswear 11:10, 12:40, 14:40, 16:10; 30-minute journey), used for every day of the season", licence="—",
+             notes=["Running days, the train's make-up and engine, speeds and the run-round at Kingswear are estimates (E). Visual only."]),
         dict(id="marks", label="Navigation marks", status="partial", tag="S", source="Only marks with a stated position are placed (Castle Ledge buoy, visitmyharbour)", licence="—",
              notes=["Not placed (position not established): Checkstone and Homestone buoys, Kingswear light, RDYC racing marks."]),
         dict(id="current", label="Tidal stream pattern", status="provisional", tag="E",

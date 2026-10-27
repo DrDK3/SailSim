@@ -9,6 +9,9 @@ const chromium = process.env.PW_CHROMIUM ?? (existsSync('/opt/pw-browsers/chromi
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Every test opens its own page: CI shards split by test, not by file (whole files left one shard with 23 tests
+  // and another with none).
+  fullyParallel: true,
   // CI runners draw the 3D scene in software, several times slower than a desktop: allow more time there, run
   // one browser per job, and retry once (a test that passes only on retry is reported as flaky).
   timeout: process.env.CI ? 180_000 : 90_000,

@@ -20,10 +20,11 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | UX review: watertight boat, crew and buildings, tutorial, phone layout | Done, 24 Oct 2026 ([review](docs/UX_REVIEW.md)) |
 | Hi-fi: three Squib types with their physics, detailed Squib with the RDYC burgee and transom, wind over tide, river traffic, town roofs | Done, 25 Oct 2026 ([report](docs/HIFI_REPORT.md)) |
 | Hi-fi, second pass: closed transom and boats riding the waves, sailors posed by inverse kinematics, remodelled river traffic, no flooded streets or buried floors, woodland and terrain detail | Done, 25 Oct 2026 ([report](docs/HIFI2_REPORT.md)) |
+| Round 3: Lower Ferry units pass port to port and berth with the tide, marinas full of boats with traffic from every marina, Kingswear station and steam trains, a decluttered screen | Done, 27 Oct 2026 ([report](docs/HIFI3_REPORT.md)) |
 
-**New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from the toolbar or Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
+**New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from More → Tutorial or from Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
 
-**Choose your Squib** in Scenario → Boat: the Rondar (the modern standard, self-draining), a classic Hunter or Parker hull (keeps the water it ships until it is bailed), or the new Hyde B3 / Batt sail package. Waves follow the wind, the fetch and the tidal stream, so the harbour entrance is short and steep with wind against tide; the ferries and Dart Marina's boats move with the clock and the stream.
+**Choose your Squib** in Scenario → Boat: the Rondar (the modern standard, self-draining), a classic Hunter or Parker hull (keeps the water it ships until it is bailed), or the new Hyde B3 / Batt sail package. Waves follow the wind, the fetch and the tidal stream, so the harbour entrance is short and steep with wind against tide; the ferries and the marinas' boats move with the clock and the stream, and the steam trains come and go at Kingswear on the published timetable.
 
 Physics coefficients are **estimates** awaiting Squib performance data ([calibration workflow](docs/CALIBRATION.md)). Mid-channel depths, individual moorings, ferry timetables and the tidal stream are provisional estimates (the in-app **Layers** panel lists them), and Met Office wind is forecast-model output. This is not for navigation or performance prediction.
 
@@ -77,13 +78,15 @@ npm run dev          # open the printed URL; press H in the app for help
 | L / N | Place labels / minimap |
 | H | Help |
 
-On-screen buttons provide the same controls, with their keys shown on them. The sail status says what to do ("Luffing · trim in (W)"). On a phone the toolbar folds behind a Menu button.
+On-screen buttons provide the same controls, with their keys shown on them. The sail status is one word when all is well and says what to do when not ("Luffing · trim in (W)"). The sailing controls can be put away (▾) when you sail by keyboard. On a phone the toolbar folds behind a Menu button.
 
-The toolbar has:
-- **Pause**, **Reset** and the **camera**;
-- **Tutorial**, **Library**, **Scenario** and **Courses**;
-- a **View** menu (labels, minimap, force arrows, layers and sources) and a **Tools** menu (validation dashboard, polar sweep, physics panel);
-- **Help**.
+The toolbar keeps to the essentials:
+- **Pause** (or **Resume**), **Reset** and the **camera**;
+- **Library** and **Scenario**;
+- **More**: the **Tutorial** and the **course editor**; what is shown (labels, minimap, sailing controls, force arrows, layers and sources); the physics tools (validation dashboard, polar sweep, physics panel);
+- **Help** (?).
+
+The instruments show the essentials; **All instruments and conditions** opens the rest, and the choice is remembered.
 
 The panels:
 - the **Polar** panel: the model polar, computed in a Web Worker;
@@ -132,6 +135,7 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 |---|---|
 | [docs/HIFI_REPORT.md](docs/HIFI_REPORT.md) | Hi-fi pass: Squib types and their physics, the detailed Squib, burgee and transom, wind over tide, river traffic, town roofs; sources, estimates and gaps |
 | [docs/HIFI2_REPORT.md](docs/HIFI2_REPORT.md) | Hi-fi, second pass: the stern, the sailors, the houses, the traffic and the overall look, with what was found and fixed |
+| [docs/HIFI3_REPORT.md](docs/HIFI3_REPORT.md) | Round 3: the Lower Ferry's passing and berths, the marinas and their traffic, Kingswear station and the trains, the redesigned screen |
 | [docs/UX_REVIEW.md](docs/UX_REVIEW.md) | Usability review (heuristics, accessibility, phones): findings, severities, changes, what is not done |
 | [docs/PHASE6_REPORT.md](docs/PHASE6_REPORT.md) | Phase 6: what works, test results, acceptance, decisions, known defects, manual test steps |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Publishing to GitHub Pages, the scheduled live-data jobs, freshness rules, automatic checks, first-run checklist, costs |

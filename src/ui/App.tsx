@@ -23,6 +23,25 @@ const ResultsPanel = lazy(() => import('./ResultsPanel').then((m) => ({ default:
 const CourseEditor = lazy(() => import('./CourseEditor').then((m) => ({ default: m.CourseEditor })));
 const LibraryPanel = lazy(() => import('./LibraryPanel').then((m) => ({ default: m.LibraryPanel })));
 
+const CONTROLS_KEY = 'squib.controls.hidden';
+
+/** A remembered on/off choice (localStorage may be unavailable: then it lasts for the visit). */
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeFlag(key: string, v: boolean): void {
+  try {
+    localStorage.setItem(key, v ? '1' : '0');
+  } catch {
+    // storage unavailable
+  }
+}
+
 function conditionsText(sc: AppScenario): string {
   const c = sc.conditions;
   const wind = c.weather.source === 'manual' ? `wind ${c.weather.twsKn} kn from ${c.weather.twdDeg}°` : `Met Office UKV model wind${c.weather.replay ? ' (replay)' : ''}`;
@@ -45,6 +64,12 @@ export function App({ ctl }: { ctl: SimController }) {
   const [welcome, setWelcome] = useState(shouldWelcome);
   // Small screens: the toolbar folds behind a Menu button (styles.css).
   const [toolsOpen, setToolsOpen] = useState(false);
+  // The sailing controls can be put away (keyboard sailors), remembered in this browser.
+  const [controlsHidden, setControlsHiddenState] = useState(() => readFlag(CONTROLS_KEY));
+  const setControlsHidden = (v: boolean) => {
+    setControlsHiddenState(v);
+    writeFlag(CONTROLS_KEY, v);
+  };
   // One side panel at a time: opening Scenario closes the Library and the other way round.
   const openScenario = (open: boolean) => {
     setScenarioOpen(open);
@@ -79,7 +104,7 @@ export function App({ ctl }: { ctl: SimController }) {
   useEffect(() => {
     const nav = toolbar.current;
     if (!nav) return;
-    const instruments = document.querySelector<HTMLElement>('.instruments');
+    const instruments = document.querySelector<HTMLElement>('.hud-left');
     const place = () => {
       const r = nav.getBoundingClientRect();
       // On tablets the toolbar sits at the bottom (styles.css): keep the default position then.
@@ -111,18 +136,29 @@ export function App({ ctl }: { ctl: SimController }) {
   }, [ctl]);
 
   return (
-    <div className="app">
+    <div className={`app ${ui.showMinimap ? 'has-minimap' : ''}`}>
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
-      <Instruments s={ui.snapshot} />
+      {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
+      <div className="hud-left">
+        <Instruments s={ui.snapshot} />
+        {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
+      </div>
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation">
         <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
         <div className="tb-items">
+          {/* Playback: the commonest actions, first. */}
           <div className="tb-group">
-            <button onClick={() => ctl.togglePause()} data-testid="pause" title="Pause or resume (P)">{ui.paused ? 'Resume' : 'Pause'}</button>
-            <button onClick={() => ctl.requestReset()} title="Reset to the scenario start (R)">Reset</button>
+            <button className="tb-primary" onClick={() => ctl.togglePause()} data-testid="pause" title="Pause or resume (P)">
+              <span className="icon" aria-hidden="true">{ui.paused ? '▶' : '❚❚'}</span>
+              {ui.paused ? 'Resume' : 'Pause'}
+            </button>
+            <button onClick={() => ctl.requestReset()} title="Reset to the scenario start (R)">
+              <span className="icon" aria-hidden="true">↺</span>
+              Reset
+            </button>
             <label className="select">
               <span className="sr-only">Camera</span>
               <select value={ui.camera} onChange={(e) => ctl.setCamera(e.target.value as CameraMode)} title="Camera (C cycles)">
@@ -133,35 +169,32 @@ export function App({ ctl }: { ctl: SimController }) {
               </select>
             </label>
           </div>
+          {/* Setting up a sail: ready-made scenarios, or your own. */}
           <div className="tb-group">
-            <button aria-pressed={!!ui.tutorial} onClick={() => (ui.tutorial ? ctl.endTutorial() : ctl.startTutorial())} title="Learn to sail, step by step" data-tutorial="tutorial">
-              Tutorial
-            </button>
             <button aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
             <button aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
-            <button aria-pressed={ui.showEditor} onClick={() => ctl.toggleEditor()} title="Course editor">Courses</button>
           </div>
+          {/* Everything else, one click further away. */}
           <div className="tb-group">
             <Menu
-              label="View"
-              title="What is shown"
+              label="More"
+              title="Tutorial, course editor, what is shown, and physics tools"
               items={[
-                { label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
+                { section: 'Learn and plan', label: 'Tutorial', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : ctl.startTutorial()) },
+                { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
+                { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
                 { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
+                { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
                 { label: 'Force arrows', keys: 'F', checked: ui.showForces, onSelect: () => ctl.toggleForces() },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
-              ]}
-            />
-            <Menu
-              label="Tools"
-              title="Physics and validation tools"
-              items={[
-                { label: 'Validation dashboard', keys: 'V', checked: ui.showDashboard, onSelect: () => ctl.toggleDashboard() },
+                { section: 'Physics tools', label: 'Validation dashboard', keys: 'V', checked: ui.showDashboard, onSelect: () => ctl.toggleDashboard() },
                 { label: 'Polar sweep', checked: ui.showPolar, onSelect: () => ctl.togglePolar() },
                 { label: 'Physics panel', keys: 'G', checked: ui.showDebug, onSelect: () => ctl.toggleDebug() },
               ]}
             />
-            <button onClick={() => ctl.toggleHelp()} title="Help and keys (H)" data-tutorial="help">Help</button>
+            <button className="tb-help" onClick={() => ctl.toggleHelp()} title="Help and keys (H)" data-tutorial="help" aria-label="Help">
+              <span aria-hidden="true">?</span>
+            </button>
           </div>
         </div>
       </nav>
@@ -173,8 +206,16 @@ export function App({ ctl }: { ctl: SimController }) {
         <Suspense fallback={null}>{ui.showDebug && <DebugPanel ui={ui} />}</Suspense>
       </div>
       <Suspense fallback={null}>{ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}</Suspense>
-      {ui.replay ? <ReplayBar ctl={ctl} ui={ui} /> : <Controls ctl={ctl} ui={ui} />}
-      {ui.paused && <div className="banner">{ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}</div>}
+      {ui.replay ? (
+        <ReplayBar ctl={ctl} ui={ui} />
+      ) : controlsHidden ? (
+        <button className="panel controls-show" onClick={() => setControlsHidden(false)} title="Show the trim, helm and crew controls">
+          Show sailing controls
+        </button>
+      ) : (
+        <Controls ctl={ctl} ui={ui} onHide={() => setControlsHidden(true)} />
+      )}
+      {ui.paused && <div className="banner paused-pill" role="status">{ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}</div>}
       {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
       {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}
       {(ui.dart.issues.length > 0 || ui.dart.status === 'unavailable') && (
@@ -184,12 +225,16 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
-      {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
       <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
-      <footer className="badge">
-        {ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · {conditionsText(ui.scenario)} · physics estimated · not for navigation
-      </footer>
+      {(() => {
+        const text = `${ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · ${conditionsText(ui.scenario)} · physics estimated · not for navigation`;
+        return (
+          <footer className="badge" title={text}>
+            {text}
+          </footer>
+        );
+      })()}
       <Suspense fallback={null}>
         {ui.showHelp && (
           <Help

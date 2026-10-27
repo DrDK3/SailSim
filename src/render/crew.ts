@@ -311,7 +311,7 @@ export class CrewFigure {
     this.mesh.bind(new THREE.Skeleton(this.bones, this.bones.map(() => new THREE.Matrix4())), new THREE.Matrix4());
     // The bounds of the bind pose say nothing about the posed figure.
     this.mesh.frustumCulled = false;
-    this.mesh.castShadow = true;
+    this.mesh.castShadow = this.mesh.receiveShadow = true;
     this.group.add(this.mesh);
   }
 

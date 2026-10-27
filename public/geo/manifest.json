@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-25T18:26:52Z",
+ "generated": "2026-10-27T10:00:06Z",
  "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
  "origin": {
   "lat": 50.34801,
@@ -222,6 +222,41 @@
    "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
    "notes": [
     "9 route segments. Animation only: not obstacles in the physics yet. Lower and Higher Ferries are shown as restricted in their ability to manoeuvre (DHNA sailing directions, S(p))."
+   ]
+  },
+  {
+   "id": "railway",
+   "label": "Railway and Kingswear station",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap railway lines, platform and station via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "Track level follows the LIDAR ground; the tunnel is inferred from the ground rising far above the line (E).",
+    "Trains and their times: see the timetable notes in the app (docs/SOURCES.md)."
+   ]
+  },
+  {
+   "id": "berths",
+   "label": "Marina berths and berthed boats",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Laid out in the app on OSM's pontoons (src/sim/env/marinas.ts): finger berths in the marinas, alongside on Dart Harbour's and the visitors' pontoons",
+   "licence": "\u2014",
+   "notes": [
+    "Berth spacing, boat sizes, how many berths are let by season and the marinas' daily movements are estimates (E). Published counts: Darthaven over 270 berths, Noss on Dart 155\u2013232 (SOURCES.md F12, F13).",
+    "Berthed boats and pontoons are not obstacles in the physics yet."
+   ]
+  },
+  {
+   "id": "trains",
+   "label": "Steam trains",
+   "status": "provisional",
+   "tag": "E",
+   "source": "The Dartmouth Steam Railway's published timetable for 25 Oct 2026 (Paignton 10:30, 12:00, 14:00, 15:30; Kingswear 11:10, 12:40, 14:40, 16:10; 30-minute journey), used for every day of the season",
+   "licence": "\u2014",
+   "notes": [
+    "Running days, the train's make-up and engine, speeds and the run-round at Kingswear are estimates (E). Visual only."
    ]
   },
   {

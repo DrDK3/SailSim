@@ -300,7 +300,15 @@ export class SimController {
     const feats = this.dartData?.features;
     const startMs = built.env.startEpochMs ?? Date.parse(scenario.conditions.startTime);
     const traffic = feats
-      ? buildRiverTraffic({ ferries: feats.ferries, current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e), geo, moorings: feats.moorings, marinas: feats.marinas?.filter((m) => m.name === 'Dart Marina') })
+      ? buildRiverTraffic({
+          ferries: feats.ferries,
+          current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e),
+          waterLevel: built.env.waterLevel ? (ms) => built.env.waterLevel!((ms - startMs) / 1000) : undefined,
+          geo,
+          moorings: feats.moorings,
+          marinas: feats.marinas,
+          piers: feats.piers,
+        })
       : undefined;
     if (scenario.course) {
       try {
@@ -692,7 +700,7 @@ export class SimController {
     this.dartStatus = data.geo ? 'loaded' : 'unavailable';
     if (data.geo && data.manifest && this.view) {
       try {
-        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask });
+        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
       } catch (err) {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
