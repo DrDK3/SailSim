@@ -62,6 +62,11 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
   await page.evaluate(() => window.__squib!.advance(4));
   await library(page).getByLabel('Open replay file').setInputFiles(file);
   const bar = page.getByTestId('replay-bar');
+  // The file is read asynchronously and the run rebuilt; on a slow software renderer a frame can take seconds.
+  // If the app refuses the file, fail with its reason.
+  const refused = library(page).getByTestId('library-message').filter({ hasText: /Cannot play|Not a replay/ });
+  await expect(bar.or(refused)).toBeVisible({ timeout: 60_000 * CI_SLOW });
+  if (await refused.count()) throw new Error(`The replay was refused: ${await refused.textContent()}`);
   await expect(bar).toContainText('Replay: E2E race');
   // The sailing controls are replaced while playing back; keys do nothing.
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toHaveCount(0);
