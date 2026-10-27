@@ -1118,7 +1118,7 @@ function shadowed(m: THREE.Mesh): THREE.Mesh {
  * Where people stand (E): on the quays and jetties and on the pontoons in the two towns, about one person per
  * 60 m² of deck (fewer on long pontoons), never more than 40 on one. Seeded, so the same each time.
  */
-function standingSpots(f: DartFeatures): { e: number; n: number; floating: boolean; deck: number }[] {
+export function standingSpots(f: DartFeatures): { e: number; n: number; floating: boolean; deck: number }[] {
   const out: { e: number; n: number; floating: boolean; deck: number }[] = [];
   let seed = 991;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

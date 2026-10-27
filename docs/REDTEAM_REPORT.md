@@ -27,11 +27,11 @@ Anything not from a source is labelled as an estimate (E). Nothing added in this
 | Panning, drone | Orbit followed the boat and could not pan; nothing flew higher than 400 m | **Drone view**: drag to turn, right-drag or two fingers to pan across the map, wheel to climb to 6 km. Kept above the hills and the water. **Back to boat** (B) and **Follow** |
 | First person | The helm view existed but looked only ahead | **The helm view looks around**: drag over either shoulder (±150°) or up at the sails. Double-click looks ahead again; the wheel zooms like binoculars. The horizon still tilts with half the heel |
 | Race, how many | Racing was in the Scenario panel among 30 other settings; AI boats 0–20 | A **Race** button: competitors 0–20 on a slider, their level, Start Bay or the river, the conditions and the start sequence. **Start race** is one click |
-| Race tips | None | **The coach.** A briefing before the start, from the wind, gusts, line bias, stream and fleet size. Live tips: one minute and twenty seconds to go, over early, overpowered, weather helm, power up, luffing or stalled main, headed by 8° or more, on the layline, gust on the run, penalty owed |
+| Race tips | None | **The coach.** A briefing before the start, from the wind, gusts, line bias, stream and fleet size. Live tips: one minute to go, twenty seconds to go, over early, overpowered, weather helm, power up, luffing or stalled main, headed by 8° or more, on the layline, gust on the run, penalty owed |
 | Feedback on decisions | None | **A debrief** when you finish, retire or the race ends: your start (distance and speed at the gun, favoured end), upwind and downwind VMG against the model polar, time on headers, tacks and gybes with their speed loss, time overpowered and whether you flattened, rules incidents. It ends with the one thing to work on first |
 | Real-time or random | Live and replay Met Office data existed but sat in the Scenario panel; there was no random option | In the quick race: **Random** (seeded, with a wind band: any, light, medium, strong), **Live now** (Met Office, when the site's job runs), or **As set**. **Same conditions again** replays a random draw |
-| River population | No people and no cars. Roads were only colours in the 10 m satellite image | **Roads and footways from OSM** (1,729 segments) are drawn on the ground, with centre lines on the main roads. **About 130 cars drive on the left** and turn at junctions; **about 600 are parked** in the town streets. **About 320 people walk** the footways and pavements, and more stand on the quays and pontoons. Fewer of both at night. All illustrative (E) |
-| Design, lo-fi blocks | Every building was a box with the same windows. Landmarks were flat boxes: BRNC a white slab, the castles white blocks. The "landmark" stone was too bright, and churches had no towers | **Landmarks drawn as themselves**, from listed-building descriptions (below). Every building has **doors**. **Shopfronts** with fascias line the town streets. Churches have **tall windows and west towers**; castles have **slit windows and battlements**. **Trees are clusters of foliage**, not balls. The satellite colours are **graded** |
+| River population | No people and no cars. Roads were only colours in the 10 m satellite image | **Roads and footways from OSM** (1,729 segments) are drawn on the ground, with centre lines on the main roads. **About 130 cars drive on the left** and turn at junctions; **about 600 are parked** in the town streets. **About 320 people walk** the footways and pavements; 43 stand on the town quays (25) and pontoons (18). Fewer of both at night. All illustrative (E) |
+| Design, lo-fi blocks | Every building was a box with the same windows. Landmarks were flat boxes: BRNC a white slab, the castles white blocks. The "landmark" stone was too bright, and churches had no towers | **Landmarks drawn as themselves**, from listed-building descriptions (below). Ground floors get **front doors**. **Shopfronts** with fascias line the town streets. Churches have **tall windows and west towers**; castles have **slit windows and battlements**. **Trees are clusters of foliage**, not balls. The satellite colours are **graded** |
 | BRNC | A white 18 m slab with a flat roof | **Red brick with Portland stone bands and a balustraded cornice**, a **hipped slate roof** round the ranges, and the **central clock tower with clock faces and a lead dome** on the river front |
 | RDYC | A plain block | Painted walls, a cornice and balustrade, and a **flagstaff** on the river front. People on the club pontoon |
 | Ferries and landings | The ferries were already detailed (round 2: the Lower Ferry's floats and tugs with cars aboard, the Higher Ferry's cables, the passenger ferries). The landings were bare ground | **Concrete slipways** at both ends of the Lower and Higher Ferry crossings. **People** on the passenger-ferry pontoons and quays. The Royal Dart Hotel's **listed cast-iron balcony** overlooks the Kingswear landing |
@@ -184,8 +184,8 @@ The previous "landmark stone" was bright enough to read as white; the stones are
 | ![Town](img/redteam-town.png) | ![Embankment](img/redteam-embankment.png) |
 
 - **Roads** (tools/geodata/roads.py, public/geo/roads.json, 190 kB): OSM highways via Overture, simplified to 0.8 m. Drawn as ribbons on the ground (src/render/population.ts) in tarmac (main roads with dashed centre lines) or paving and gravel (paths). Widths by class (E).
-- **Cars**: about 130 drive (50 on a software renderer), more on the main roads and in the towns, at 20–30 mph (E). They **keep left** and take a random road at each junction. About 600 are parked along the town streets, about one space in two (E).
-- **People**: about 320 walk on footways, pedestrian streets, steps and town pavements; others stand on the quays (with the land) and on the pontoons (with the tide).
+- **Cars**: about 130 drive (50 on a software renderer), more on the main roads and in the towns, at 20–30 mph (E). They **keep left** and take a random road at each junction. 600 are parked along the town streets (200 on a software renderer), about one space in two up to that number (E).
+- **People**: about 320 walk on footways, pedestrian streets, steps and town pavements (120 on a software renderer). 43 stand on the town's quays (with the land) and pontoons (with the tide), about one per 60 m² of deck (E).
 - At night only a quarter of the cars and 15% of the walkers are out (E).
 
 ### The whole harbour
@@ -208,7 +208,7 @@ These would add measured detail rather than estimates. All are free, but they ne
 
 ## 6. Tests
 
-- **Unit tests:** 30 files, 258 tests, all passing. New:
+- **Unit tests:** 30 files, 259 tests, all passing. New:
   - `tests/sim/heavyweather.test.ts`:
     - flattening lowers lift and the centre of effort, cached by 1% steps;
     - it follows the control at the crew's pace and cuts heel on a reach at a small cost;
@@ -229,7 +229,8 @@ These would add measured detail rather than estimates. All are free, but they ne
     - the inset, simplify, long-axis and facing helpers;
     - every kind of addition built;
     - roads data and provenance; road surfaces;
-    - cars keep left and face their way; model budgets.
+    - cars keep left and face their way; model budgets;
+    - people stand on the town quays and pontoons, at their decks.
 - **Browser (Playwright):** 41 tests. New (`tests/e2e/redteam.spec.ts`):
   - a quick race with 3 competitors and the coach (off and on again);
   - the drone climbs, pans and comes back; the helm view looks round and back;

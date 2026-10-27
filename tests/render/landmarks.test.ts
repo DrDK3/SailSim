@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { Kit, LANDMARKS, WIN, battlements, buildExtra, facing, insetRing, insetRingAdaptive, insideRing, landmarkFor, longAxisDeg, outward, simplifyRing } from '../../src/render/landmarks';
 import { CAR_SPEED, ROAD_WIDTH, StreetLife, TOWNS, along, buildRoadSurfaces, carGeometry, personGeometry, type RoadsData } from '../../src/render/population';
 import type { DartFeatures } from '../../src/app/geoLoader';
+import { standingSpots } from '../../src/render/dart';
 
 const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as DartFeatures;
 const roads = JSON.parse(readFileSync(new URL('../../public/geo/roads.json', import.meta.url), 'utf8')) as RoadsData;
@@ -147,6 +148,17 @@ describe('roads and street life', () => {
     expect(along(seg, 5)).toMatchObject({ e: 5, n: 0, de: 1, dn: 0 });
     expect(along(seg, 15)).toMatchObject({ e: 10, n: 5, de: 0, dn: 1 });
     expect(along(seg, 99)).toMatchObject({ e: 10, n: 10 });
+  });
+
+  it('people stand on the town quays and pontoons, at their decks', () => {
+    const spots = standingSpots(features);
+    expect(spots.length).toBeGreaterThan(20);
+    expect(spots.some((p) => p.floating)).toBe(true);
+    expect(spots.some((p) => !p.floating)).toBe(true);
+    for (const p of spots) {
+      expect(TOWNS.some((t) => p.e >= t.eMin - 60 && p.e <= t.eMax + 60 && p.n >= t.nMin - 60 && p.n <= t.nMax + 60)).toBe(true);
+      expect(p.deck).toBe(p.floating ? 0.4 : 3);
+    }
   });
 
   it('the towns contain Dartmouth’s and Kingswear’s quays', () => {
