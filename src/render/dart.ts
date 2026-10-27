@@ -6,6 +6,7 @@ import { ferryStates } from '../app/ferrySchedule';
 import { berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
 import { buildPontoons, type Pontoons } from './pontoons';
+import { ClubEnsign } from './clubEnsign';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
@@ -81,6 +82,7 @@ export class DartScene {
   private readonly railway?: RailwayView;
   private readonly street?: StreetLife;
   private pontoons?: Pontoons;
+  private readonly ensigns: ClubEnsign[] = [];
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -101,6 +103,7 @@ export class DartScene {
     const f = input.features;
     if (f) {
       this.buildBuildings(f);
+      for (const en of this.ensigns) this.fixed.add(en.group);
       this.buildPiers(f);
       this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
       const low = input.detail === 'low';
@@ -435,7 +438,13 @@ export class DartScene {
       if (look) {
         const top = b.t;
         if (look.parapet === 'battlements' || look.parapet === 'corbelled-battlements') battlements(kit, ccwRing, top, look.walls, look.parapet === 'corbelled-battlements');
-        if (spec?.extras) for (const x of spec.extras(b0.b, b0.t, ccwRing)) buildExtra(kit, x);
+        if (spec?.extras) {
+          for (const x of spec.extras(b0.b, b0.t, ccwRing)) {
+            buildExtra(kit, x);
+            // The club's ensign flies from its flagstaff's gaff (at colours: ClubEnsign).
+            if (x.kind === 'flagstaff' && spec.id === 'rdyc') this.ensigns.push(new ClubEnsign(x.at, x.fromM, x.height));
+          }
+        }
       }
       // Counter-clockwise (in e, n) so that wall normals face out; party-wall flags follow the ring.
       let area = 0;
@@ -796,6 +805,7 @@ export class DartScene {
   update(u: DartUpdate): void {
     this.fixed.position.y = -u.waterLevel;
     this.pontoons?.update(u.waterLevel);
+    for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;

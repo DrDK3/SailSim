@@ -201,6 +201,10 @@ export function buildPontoons(piers: readonly PontoonPier[], groundAt: (e: numbe
       geo.rotateX(-Math.PI / 2);
       geo.translate(0, top - depth, 0);
       (p.floating ? decks : jettyDecks).push(geo);
+      if (p.floating) {
+        const g = gangwayFromCorner(p.poly, groundAt);
+        if (g) gangways.push(g);
+      }
       if (!p.floating) {
         // Piles round the edge every 5 m.
         for (let i = 0; i < p.poly.length; i++) {
@@ -279,22 +283,52 @@ function gangwayFor(line: [number, number][], half: number, groundAt: (e: number
       if (gnd > 1.0) {
         if (d < bestD) {
           bestD = d;
-          const mesh = new THREE.Group();
-          mesh.name = 'gangway';
-          const steel = new THREE.MeshStandardMaterial({ color: 0x9ea4aa, roughness: 0.5, metalness: 0.6 });
-          const tread = new THREE.MeshStandardMaterial({ color: 0x6d6a64, roughness: 0.9 });
-          // Built along +z from the origin, 1 m long (scaled to the span), 1.1 m wide, with side rails.
-          const deck = new THREE.Mesh(new THREE.BoxGeometry(Math.min(1.1, 2 * half - 0.2), 0.08, 1).translate(0, 0, 0.5), tread);
-          deck.name = 'gangway-deck';
-          mesh.add(deck);
-          for (const s of [-1, 1]) {
-            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 1).translate(s * 0.55, 0.45, 0.5), steel);
-            rail.name = 'gangway-rail';
-            mesh.add(rail);
-          }
-          best = { mesh, from: { e: end[0] - ue * 1.5, n: end[1] - un * 1.5 }, to: { e, n, y: gnd + 0.1 } };
+          best = makeGangway({ e: end[0] - ue * 1.5, n: end[1] - un * 1.5 }, { e, n, y: gnd + 0.1 }, Math.min(1.1, 2 * half - 0.2));
         }
         break;
+      }
+    }
+  }
+  return best;
+}
+
+/** A gangway (1.1 m wide or less, with side rails) from a pontoon end to a point on the bank. */
+function makeGangway(from: { e: number; n: number }, to: { e: number; n: number; y: number }, width = 1.1): Gangway {
+  const mesh = new THREE.Group();
+  mesh.name = 'gangway';
+  const steel = new THREE.MeshStandardMaterial({ color: 0x9ea4aa, roughness: 0.5, metalness: 0.6 });
+  const tread = new THREE.MeshStandardMaterial({ color: 0x6d6a64, roughness: 0.9 });
+  // Built along +z from the origin, 1 m long (scaled to the span), with side rails.
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.08, 1).translate(0, 0, 0.5), tread);
+  deck.name = 'gangway-deck';
+  mesh.add(deck);
+  for (const s of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 1).translate((s * width) / 2, 0.45, 0.5), steel);
+    rail.name = 'gangway-rail';
+    mesh.add(rail);
+  }
+  return { mesh, from, to };
+}
+
+/** The gangway of a floating pontoon drawn as an outline: from the corner nearest the bank (within 25 m), straight to it. */
+function gangwayFromCorner(poly: [number, number][], groundAt: (e: number, n: number) => number): Gangway | undefined {
+  let best: Gangway | undefined;
+  let bestD = Infinity;
+  const ce = poly.reduce((a, q) => a + q[0], 0) / poly.length;
+  const cn = poly.reduce((a, q) => a + q[1], 0) / poly.length;
+  for (const [e0, n0] of poly) {
+    // Look outward from the pontoon (away from its centre) and to either side of that.
+    const out = Math.atan2(e0 - ce, n0 - cn);
+    for (const da of [0, -0.6, 0.6, -1.2, 1.2]) {
+      const ue = Math.sin(out + da);
+      const un = Math.cos(out + da);
+      for (let d = 2; d <= Math.min(25, bestD - 1); d += 1) {
+        const gnd = groundAt(e0 + ue * d, n0 + un * d);
+        if (gnd > 1.0) {
+          bestD = d;
+          best = makeGangway({ e: e0, n: n0 }, { e: e0 + ue * d, n: n0 + un * d, y: gnd + 0.1 });
+          break;
+        }
       }
     }
   }

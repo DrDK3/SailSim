@@ -20,7 +20,9 @@ export type Extra =
   /** A first-floor balcony with a tented canopy on thin columns along the wall from a to b (outward to the right of a→b). */
   | { kind: 'veranda'; a: [number, number]; b: [number, number]; floorM: number; topM: number; depth: number; canopy: number }
   /** Balconies with glass fronts along a wall a→b at these floor levels (m ODN). */
-  | { kind: 'balconies'; a: [number, number]; b: [number, number]; floorsM: number[]; depth: number };
+  | { kind: 'balconies'; a: [number, number]; b: [number, number]; floorsM: number[]; depth: number }
+  /** A paved terrace at `floorM` (m ODN) out from the wall a→b, with a rail along its edge and tables with parasols. */
+  | { kind: 'terrace'; a: [number, number]; b: [number, number]; floorM: number; depth: number; tables: number };
 
 export interface Look {
   /** sRGB colours. */
@@ -116,27 +118,35 @@ export const LANDMARKS: LandmarkSpec[] = [
     walls: 0xf1efe8,
     roof: SLATE,
     win: WIN.sash,
-    parapet: 'cornice-balustrade',
-    // On the river (west) front, 3 m out from the wall.
+    shape: 'g',
+    roofDrop: 2.2,
+    // On the river (west) front: the ground-floor bar and dining room open onto a riverside terrace; upstairs the
+    // dining room and the Quarter Deck behind a large balcony; the flagstaff stands at the terrace's edge.
     extras: (base, _top, ring) => {
       const [a, b] = facing(ring, 225, 315);
       const [oe, on] = outward(a, b);
-      return [{ kind: 'flagstaff', at: [(a[0] + b[0]) / 2 + oe * 3, (a[1] + b[1]) / 2 + on * 3], fromM: base + 0.5, height: 13 }];
+      const depth = 6;
+      return [
+        { kind: 'terrace', a, b, floorM: base + 0.3, depth, tables: Math.max(2, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / 4)) },
+        { kind: 'balconies', a, b, floorsM: [base + 3.3], depth: 2.4 },
+        { kind: 'flagstaff', at: [(a[0] + b[0]) / 2 + oe * (depth - 0.8), (a[1] + b[1]) / 2 + on * (depth - 0.8)], fromM: base + 0.3, height: 11 },
+      ];
     },
-    source: 'Royal Dart Yacht Club clubhouse (purpose-built, 1881; club history). Painted walls and the flagstaff on the river front are from photographs; its size and the colours E.',
+    source: 'Royal Dart Yacht Club clubhouse, Priory Street, Kingswear (purpose-built, 1881): ground-floor bar and dining area opening onto a riverside terrace; upstairs a formal dining room, the Quarter Deck function room and a large balcony overlooking the harbour (Wikipedia, via search); the flagstaff on the river front from photographs. Painted walls and a slate roof; sizes, the roof form and colours E.',
   },
   {
     id: 'royal-dart-hotel',
     at: [12, 54],
     walls: 0xe8dcc0,
-    roof: SLATE,
+    // Re-roofed in zinc in the refurbishment (estate agent's listing, via search).
+    roof: 0x8a9096,
     win: WIN.sash,
     // The river (west) front: "a wide splayed two-storey bay with cast-iron balcony with tented roof on thin iron columns".
     extras: (base, _top, ring) => {
       const [a, b] = facing(ring, 225, 315);
       return [{ kind: 'veranda', a, b, floorM: base + 3.4, topM: base + 7.2, depth: 2.2, canopy: 1.1 }];
     },
-    source: 'Royal Dart Hotel, Kingswear (c. 1850, Italianate, Grade II): river front with a two-storey bay and a cast-iron balcony with a tented roof on thin iron columns (Historic England list entry 1146644, via search). Balcony length and depth E.',
+    source: 'The Royal Dart, Kingswear (c. 1850, Italianate, Grade II; the Royal Dart Hotel until it fell into disrepair, refurbished for Darthaven Marina as five apartments and a commercial unit, with a zinc-clad roof, Hydrock, Gillespie Yunnie Architects and Waterside Properties, via search): river front with a two-storey bay and a cast-iron balcony with a tented roof on thin iron columns (Historic England list entry 1146644, via search). Balcony length and depth E.',
   },
   {
     id: 'dart-marina-hotel',
@@ -513,6 +523,30 @@ export function buildExtra(kit: Kit, x: Extra): void {
         new THREE.Vector3(1, 1, 1),
       );
       kit.add(roof, m, k % 2 ? 0xe8e4da : 0x2f4f6e);
+    }
+    return;
+  }
+  if (x.kind === 'terrace') {
+    const ce = (x.a[0] + x.b[0]) / 2 + oe * (x.depth / 2);
+    const cn = (x.a[1] + x.b[1]) / 2 + on * (x.depth / 2);
+    // The slab, down to the ground below it; a white rail (posts and a top rail) along the outer edge.
+    kit.box(ce, x.floorM - 1.2, cn, x.depth, 1.2, len, brg, 0xb9b3a6);
+    const ee = (x.a[0] + x.b[0]) / 2 + oe * (x.depth - 0.1);
+    const en = (x.a[1] + x.b[1]) / 2 + on * (x.depth - 0.1);
+    kit.box(ee, x.floorM + 0.95, en, 0.07, 0.07, len, brg, 0xf2f2ee);
+    const posts = Math.max(2, Math.round(len / 1.8) + 1);
+    for (let k = 0; k < posts; k++) {
+      const f = k / (posts - 1);
+      kit.box(x.a[0] + dx * f + oe * (x.depth - 0.1), x.floorM, x.a[1] + dn * f + on * (x.depth - 0.1), 0.06, 0.95, 0.06, brg, 0xf2f2ee);
+    }
+    // Tables with parasols (navy and white), set back from the rail.
+    for (let k = 0; k < x.tables; k++) {
+      const f = (k + 0.5) / x.tables;
+      const te = x.a[0] + dx * f + oe * (x.depth * 0.55);
+      const tn = x.a[1] + dn * f + on * (x.depth * 0.55);
+      kit.add(new THREE.CylinderGeometry(0.45, 0.45, 0.05, 10), new THREE.Matrix4().makeTranslation(te, x.floorM + 0.74, -tn), 0xe8e6e0);
+      kit.add(new THREE.CylinderGeometry(0.03, 0.03, 2.3, 5), new THREE.Matrix4().makeTranslation(te, x.floorM + 1.15, -tn), 0xd8d8d4);
+      kit.add(new THREE.ConeGeometry(1.25, 0.45, 8, 1, true), new THREE.Matrix4().makeTranslation(te, x.floorM + 2.2, -tn), k % 2 ? 0x24364e : 0xf1efe8);
     }
     return;
   }
