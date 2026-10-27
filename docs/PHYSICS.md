@@ -384,9 +384,26 @@ Boats in a race (or the user's boat alone, in free sailing) are stepped together
 - puff life envelopes are cached once per step;
 - tide evaluations are memoised (the tide is a pure function of time).
 
-## 17. AI sail handling (Phase 5, `ai/sheets.ts`)
+## 17. Depowering: the auto main in gusts, flattening, and the AI (red-team round)
 
-AI boats use the auto-trim assist. In addition, the main is eased in proportion to heel beyond 24° (full ease at 38°), at most 0.6 of the sheet travel per second, as a crew dumps the main. Without this, the model broaches when reaching in 20 kn or more (rudder saturated, 50–60° of heel). The same rule is used to compute the AI's target-speed table (`ai/polarData.ts`). That table is model output; for example it gives 10.4 kn at 105° in 25 kn of wind, because the estimated residuary-resistance table flattens above Fn 0.55 (OUTSTANDING_ISSUES 37).
+**The auto main eases when overpowered** (`simulation.ts`, `OVERPOWERED`, `overpoweredEaseTarget`), as a helm dumps the main in a gust. The assist's sheet becomes `auto + ease·(1 − auto)`. The ease follows a target at no more than 0.6 of the sheet's travel per second. The target is the larger of:
+- the heel beyond 24°, in proportion (fully eased at 38°);
+- weather helm: smoothstep(0.7, 0.95) of the rudder's travel bearing away (towards the main's side), times smoothstep(10°, 20°) of heel. In light airs, bearing away is just steering.
+
+While the ease is on, the trim loop does not sheet in against the luffing main. The rule was the AI's alone before this round; without it the user's boat heeled to 47° and filled close-hauled in 20 kn, and broached reaching in 25 kn (REDTEAM_REPORT.md §1). With a manual main the user eases (S); the ease is off.
+
+**Flatten** (`boat/flatten.ts`): one control (0–1) for cunningham, outhaul, kicker and twist. It acts on both sails' parameters, cached in 1% steps so that runs stay bit-reproducible. At full flattening (all E):
+- maximum lift × (1 − 0.3);
+- profile drag × (1 − 0.2);
+- centre-of-effort height × (1 − 0.1).
+
+The actuator follows the control at 0.25 per second (a crew needs about 4 s). The forces, heel equilibrium, auto crew and helm balance all use the flattened parameters (`Simulation.forceParams`). Flattening and the gust ease join the state hash once non-zero.
+
+**AI crews** use the auto-trim assist (with the gust ease) and flatten from 0 at 12 kn to fully flat at 20 kn of true wind where they are (`ai/sheets.ts`, E). They also ease the main on request to slow down (the start). The AI's target-speed table (`ai/polarData.ts`) is computed the same way and was regenerated. It is model output: for example, 8.67 kn at 105° in 25 kn, because the estimated residuary-resistance table flattens above Fn 0.55 (OUTSTANDING_ISSUES 37).
+
+**Gusty preset** (`env/wind.ts`): puffs at 3.5 per km² per minute, strength 0.45 of the mean (cores 1.2–1.7×), radius 75 m, life 70 s, direction offsets of 14°, shifts of 12° over 60 s (all E). Over 20 minutes at nine points the 95th-percentile gust factor is about 1.39, against shifty's 1.31.
+
+**Determinism:** these changes moved the reference race's hash from `5de2cc60d1e76458` to `df0d92d410cf27e9` (deliberate; the golden traces never exceed 24° of heel and are unchanged).
 
 ## 18. Squib types and water in the cockpit (`boat/squib.ts`, `boat/cockpit.ts`)
 

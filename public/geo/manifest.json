@@ -177,7 +177,7 @@
    "source": "OSM names and footprints via Overture Maps 2026-10-21.0",
    "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
    "notes": [
-    "Shown as their real footprints with labels; churches roofed as gables along their length and castles flat (E). No invented towers or battlements."
+    "Shown on their real footprints with labels. The app draws the principal landmarks as described in their listing entries and other sources (docs/SOURCES.md L1\u2013L8): BRNC's brick and Portland stone and its central clock tower, the castles' battlements and Kingswear Castle's stair turret, St Petrox's west tower, the Royal Dart Hotel's balcony, RDYC's flagstaff; parish churches get a west tower by rule. Their proportions are estimates (E)."
    ]
   },
   {

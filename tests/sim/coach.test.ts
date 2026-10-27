@@ -95,7 +95,9 @@ describe('the debrief', () => {
     expect(text('Start').some((i) => /pin end was favoured/.test(i.text))).toBe(true);
     expect(text('Upwind')[0]!.verdict).toBe('work');
     expect(text('Boat handling')[0]!.text).toMatch(/1 tack/);
-    expect(text('Heavy air')[0]!.text).toMatch(/not flattened/);
+    expect(text('Heavy air')[0]!.text).toMatch(/s heeled past 30°, mostly with the sails not flattened/);
+    // No shifts in this race: no praise for playing them.
+    expect(text('Upwind').some((i) => /played the shifts/.test(i.text))).toBe(false);
     expect(text('Rules')).toHaveLength(1);
     expect(d.focus).toMatch(/^Start:/);
   });

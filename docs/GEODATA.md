@@ -58,6 +58,10 @@ The pattern is faster in the narrows, slack in the creeks and spreads out into S
 - **Marinas:** OSM `leisure=marina` areas (Dart Haven Marina, Dart Marina), plus marinas OSM names only as a place: Noss on Dart Marina (Overture `place` "Noss Marina"), centred on the floating pontoons within 350 m of it. The berths on the pontoons are laid out at run time (`src/sim/env/marinas.ts`).
 - **Railway:** OSM `railway=rail` lines (Overture `segment`, subtype rail) clipped to the domain, each with a `tunnel` flag inferred from the ground: a line over 100 m where the ground stands more than 12 m above the straight line between its ends for most of its length (only the Greenway tunnel, 451 m; 453 m published). Stations (`railway_station` points) with their platforms (`platform` polygons) and station buildings (`train_station`) within 300 m: Kingswear and Greenway Halt. `features.json` → `railway: { lines, stations }`.
 
+### Roads (red-team round)
+
+- **Roads and footways** (`tools/geodata/roads.py`, kept apart from `build.py` so that adding them does not rebuild the terrain): OSM highways via Overture `segment` (subtype road), classes primary, secondary, tertiary, unclassified, residential, living street, service, pedestrian, footway and steps, clipped to the domain and simplified to 0.8 m. Written to `roads.json` (`{ roads: [{ c, l, n? }] }`, 1,729 segments, 190 kB) and listed in `manifest.json` (`roads` and a layer entry). The app draws the surfaces and, as illustration (E), cars and people (`src/render/population.ts`). Rebuild: `.venv/bin/python tools/geodata/roads.py EXTRACT`.
+
 ## Files (`public/geo/`)
 
 | File | Content | Size |

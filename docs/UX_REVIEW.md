@@ -86,3 +86,14 @@ The owner's review: "The UI is too cluttered and needs to be redesigned using UI
 - **Language and units:** English only; knots and degrees only.
 - **Low-end phones:** frame rate on low-end phones has not been measured (PERFORMANCE.md, issue 43).
 - **Twilight is too dark:** the scene's daylight ramp (sun −6° … +10°) dims faster than real civil twilight, so a few degrees below the horizon already looks like night. Retune it against photographs.
+
+## Red-team round additions (27 Oct 2026)
+
+| # | Change | Why |
+|---|---|---|
+| RT1 | A **Race** button in the app bar opens the quick race: competitors on a slider (with "none (sail the course alone)" spelled out), level, where, conditions, start sequence, **Start race** | Racing was buried among thirty Scenario settings; the owner asked "the option to race, and against how many competitors?" One click to a race (recognition over recall). The app bar now has eight controls |
+| RT2 | The **coach** is a card under the race panel: the briefing is open until the gun, then folds away; the **debrief** opens when you finish, with "Next time, work on" first. Live tips appear as a short toast under the app bar for 10 s, announced politely to screen readers | Feedback where the eye already is, without a modal; tips that interrupt only briefly; one priority to act on |
+| RT3 | The coach can be turned off from its card (**Off**) or **More → Race coach**, and the choice is remembered | User control and freedom |
+| RT4 | **Camera hints**: in the drone view a quiet strip says how to fly, with **Back to boat (B)** and **Follow**; in the helm view it says "drag to look around · double-click to look ahead · wheel to zoom" | The views' gestures are not discoverable otherwise |
+| RT5 | **Flatten** sits in the dock's boat row as a slider with its key (Z) and its value, and in Help | A new control the coach refers to by its key |
+| RT6 | The app bar is now above the minimap and side panels in stacking order | The More menu, one item longer, opened under the minimap at 720 px high (found by the browser test) |

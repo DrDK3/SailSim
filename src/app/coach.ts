@@ -170,7 +170,7 @@ export class RaceCoach {
   private gunT?: number;
   private wasOcs = false;
   // Time totals while racing (s).
-  private tot = { beat: 0, run: 0, reach: 0, headed: 0, over: 0, overFlat: 0, poorTrim: 0, beatEff: 0, runEff: 0, beatN: 0, runN: 0 };
+  private tot = { beat: 0, run: 0, reach: 0, headed: 0, shifted: 0, over: 0, overFlat: 0, poorTrim: 0, beatEff: 0, runEff: 0, beatN: 0, runN: 0 };
 
   constructor(readonly input: BriefingInput, private readonly polar: Polar) {
     this.briefing = briefing(input);
@@ -293,6 +293,7 @@ export class RaceCoach {
       this.tot[leg] += dt;
       if (leg === 'beat') {
         if (headed) this.tot.headed += dt;
+        if (Math.abs(shift) > COACH.headerDeg) this.tot.shifted += dt;
         const target = this.polar.beat(s.tws).vmg;
         if (target > 0.1) {
           this.tot.beatEff += Math.max(0, Math.min(1.5, s.vmg / target)) * dt;
@@ -358,7 +359,8 @@ export class RaceCoach {
       items.push({ area: 'Upwind', verdict: eff > 0.9 ? 'good' : eff > 0.75 ? 'ok' : 'work', text: `Upwind you made ${(100 * eff).toFixed(0)}% of the target VMG (model polar, E). ${eff > 0.9 ? 'Well sailed.' : 'Keep the boat flat, sail the target angle and avoid pinching.'}` });
       const headedPct = (100 * t.headed) / Math.max(1, t.beat);
       if (headedPct > 25) items.push({ area: 'Upwind', verdict: 'work', text: `You sailed ${headedPct.toFixed(0)}% of the beats on a header of ${COACH.headerDeg}° or more: tack on the headers and sail the lifts.` });
-      else if (this.input.gusts !== 'steady') items.push({ area: 'Upwind', verdict: 'good', text: `Only ${headedPct.toFixed(0)}% of the beats on a big header: you played the shifts well.` });
+      // Praise for playing the shifts only when there were shifts to play (a tenth of the beats or more).
+      else if (t.shifted > 0.1 * t.beat) items.push({ area: 'Upwind', verdict: 'good', text: `Only ${headedPct.toFixed(0)}% of the beats on a big header: you played the shifts well.` });
     }
     if (t.runN > 30) {
       const eff = t.runEff / t.runN;
@@ -372,7 +374,7 @@ export class RaceCoach {
     }
     if (t.poorTrim > 20) items.push({ area: 'Boat handling', verdict: 'work', text: `The main was luffing or stalled for ${t.poorTrim.toFixed(0)} s: watch its status and trim to the edge of the luff.` });
     if (t.over > 10) {
-      items.push({ area: 'Heavy air', verdict: t.over > 60 ? 'work' : 'ok', text: `${t.over.toFixed(0)} s heeled past ${COACH.overpoweredHeel / DEG}°${t.overFlat < t.over / 2 ? ', mostly with the sails not flattened: flatten (Z) before the breeze builds' : ': ease the main sooner in the gusts'}.` });
+      items.push({ area: 'Heavy air', verdict: t.over > 60 ? 'work' : 'ok', text: `${t.over.toFixed(0)} s heeled past ${Math.round(COACH.overpoweredHeel / DEG)}°${t.overFlat < t.over / 2 ? ', mostly with the sails not flattened: flatten (Z) before the breeze builds' : ': ease the main sooner in the gusts'}.` });
     } else if (this.input.twsKn >= 15) items.push({ area: 'Heavy air', verdict: 'good', text: 'You kept her on her feet in a breeze.' });
     if (result && result.incidents > 0) items.push({ area: 'Rules', verdict: 'work', text: `${result.incidents} rules incident${result.incidents === 1 ? '' : 's'} (simplified judging, not an adjudication): keep a lookout and give room early.` });
     const work = items.filter((i) => i.verdict === 'work');
