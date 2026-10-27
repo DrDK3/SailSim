@@ -5,6 +5,7 @@ import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
 import { berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
+import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
@@ -68,6 +69,7 @@ export class DartScene {
   /** For the water surface (scene.ts): tidal water and its banks, so low ground inland stays dry. */
   readonly waterMask?: WaterMask;
   private readonly woodland?: Woodland;
+  private readonly railway?: RailwayView;
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -98,6 +100,10 @@ export class DartScene {
         this.boats!.set(f.moorings.length + i, { n: b.n, e: b.e, heading: b.heading, length: b.length, kind: b.kind, seed: b.id * 7 + 3, visible: b.u < berthOccupancy(b.style, month) }),
       );
       this.buildFerries(f);
+      if (f.railway) {
+        this.railway = new RailwayView(f.railway, (e, n) => this.groundAt(e, n));
+        this.fixed.add(this.railway.group);
+      }
       this.buildMarks(f);
       this.buildLabels(f);
     }
@@ -694,6 +700,8 @@ export class DartScene {
       if (u.traffic && u.traffic.berths.length === this.berths.length) this.updateBerths(u.traffic.berthsTaken(u.epochMs));
     }
     this.boats?.update(u.camera);
+    // Steam trains: smoke drifts downwind (about 3 m/s, E).
+    this.railway?.update(u.epochMs, u.time, { e: -Math.sin(u.windFromDir) * 3, n: -Math.cos(u.windFromDir) * 3 });
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
       this.traffic.update(states, u.time, u.camera, u.showLabels);
