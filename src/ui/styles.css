@@ -170,6 +170,7 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 .polar .chart-plot { background: var(--chart-surface); border-radius: 8px; border: 1px solid var(--grid); }
 .select-field { grid-template-columns: 1fr 212px; }
 .field.time { grid-template-columns: 1fr 184px 28px; }
+.field.check-field { grid-template-columns: 20px 1fr; }
 .field.time input { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-border); border-radius: 5px; padding: 3px 5px; }
 .row.tight { margin-top: 0; justify-content: flex-end; }
 h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }

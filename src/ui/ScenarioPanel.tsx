@@ -208,6 +208,10 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         </select>
       </label>
       <Num label="Random seed" value={c.gusts.seed} min={1} max={9999} step={1} unit="" onChange={(v) => setC({ gusts: { ...c.gusts, seed: Math.round(v) } })} />
+      <label className="field check-field" title="Shelter in the lee of the hills and the valley turning the wind along the river (estimated from the terrain; needs the River Dart data)">
+        <input type="checkbox" checked={c.landEffects !== false} onChange={(e) => setC({ landEffects: e.target.checked })} data-testid="land-effects" />
+        <span>The land shapes the wind (shelter, valley)</span>
+      </label>
 
       <h4>Tide (height)</h4>
       <label className="field select-field">

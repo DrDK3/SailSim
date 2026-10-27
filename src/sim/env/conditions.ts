@@ -6,6 +6,8 @@ import { manualTide, memoTide, parseTideSnapshot, snapshotTide, type TideSource 
 import { GUST_PRESETS, WindField, uniformBase, type GustSettings } from './wind';
 import { gustsFromSnapshot, metOfficeBase, metOfficeInfo, parseMetOfficeSnapshot } from './weather';
 import { modelSky, presetSky, SKY_PRESETS, type SkyPreset, type SkySource } from './sky';
+import { TerrainWind } from './terrainWind';
+import { DepthWeight, STREAM_ANOMALIES } from './streamAnomalies';
 
 /**
  * A complete, serialisable description of the conditions for a run. Scenario files, the app's scenario
@@ -33,6 +35,11 @@ export interface ConditionsSettings {
    * them, else the 'fair' preset. Default: 'data' with Met Office weather, otherwise the 'clear' preset.
    */
   sky?: { source: 'preset'; preset: SkyPreset } | { source: 'data' };
+  /**
+   * The land's effect on the wind over the River Dart (shelter, valley steering; src/sim/env/terrainWind.ts).
+   * On unless false; it needs the River Dart data.
+   */
+  landEffects?: boolean;
 }
 
 export const DEFAULT_CONDITIONS: ConditionsSettings = {
@@ -51,6 +58,8 @@ export interface ConditionsGeo extends StreamPattern {
   /** Land and bed (m ODN) and the mapped area: the waves' fetch (src/sim/env/seaState.ts). */
   bedElevation?(n: number, e: number): number;
   inDomain?(n: number, e: number): boolean;
+  /** The mapped area's bounds: with the land, the wind's shelter and steering (src/sim/env/terrainWind.ts). */
+  domain?: { nMin: number; nMax: number; eMin: number; eMax: number };
 }
 
 export interface BuiltConditions {
@@ -107,12 +116,26 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
   } else if (c.current.mode === 'dart') {
     if (!tide) throw new Error('conditions: a tidal stream needs a tide source');
     if (!geo) throw new Error('conditions: the channel-following stream needs the River Dart data');
-    current = dartStream(tide, geo, { ...DEFAULT_TIDAL_STREAM, ...c.current.stream });
+    // Local departures (src/sim/env/streamAnomalies.ts): deep water faster, Start Bay's coastal stream, northerlies.
+    const ent = STREAM_ANOMALIES.entrance;
+    current = dartStream(tide, geo, { ...DEFAULT_TIDAL_STREAM, ...c.current.stream }, {
+      depthWeight: geo.bedElevation && geo.domain ? new DepthWeight(geo.bedElevation.bind(geo), geo.domain) : undefined,
+      offshore: true,
+      windAt: (ms) => {
+        const b = base.at(ent.n, ent.e, (ms - startEpochMs) / 1000);
+        return { fromDir: b.fromDir, speed: b.speed };
+      },
+    });
   }
 
   sky ??= presetSky('fair');
   const datum = geo ? { cdBelowOdn: geo.cdBelowOdn, meanLevelCd: MEAN_LEVEL_CD } : undefined;
   const terrain = geo?.bedElevation && geo.inDomain ? { bedElevation: geo.bedElevation.bind(geo), inDomain: geo.inDomain.bind(geo) } : undefined;
-  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum, sky, terrain });
+  // The land shapes the wind (shelter, valley steering) where the River Dart data covers it; a run can opt out.
+  const terrainWind = geo?.bedElevation && geo.domain && c.landEffects !== false
+    ? new TerrainWind({ bedElevation: geo.bedElevation.bind(geo), domain: geo.domain, axis: (n, e) => geo.streamPattern(n, e).tidal })
+    : undefined;
+  if (terrainWind) weather.notes = [...weather.notes, 'Shaped by the land: shelter in the lee of the hills and the valley turning the wind along the river (estimated, docs/PHYSICS.md).'];
+  const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum, sky, terrain, terrainWind });
   return { env, weather, tide, current, gusts, sky };
 }

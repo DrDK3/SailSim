@@ -132,6 +132,15 @@ function Conditions({ env, waterLevel }: { env: EnvironmentInfo; waterLevel: num
           <span className="fine-inline"> · gust ×{env.gustFactor.toFixed(2)}</span>
         </span>
       </div>
+      {env.landEffect && (
+        <div className="cond-row" title="The hills shelter the water in their lee and the valley turns the wind along the river: estimated from the terrain (docs/PHYSICS.md), not measured.">
+          <span className="cell-label">Land effect</span>
+          <span className="cond-value" data-testid="land-effect">
+            wind {Math.round(env.landEffect.speed * 100)}% of the open-water wind
+            {Math.abs(env.landEffect.turnDeg) >= 1 && <span className="fine-inline"> · turned {Math.abs(env.landEffect.turnDeg).toFixed(0)}° {env.landEffect.turnDeg > 0 ? 'clockwise' : 'anticlockwise'}</span>}
+          </span>
+        </div>
+      )}
       {tide && (
         <div className="cond-row" title={[tide.label, ...tide.notes].join('\n')}>
           <span className="cell-label">Tide</span>
