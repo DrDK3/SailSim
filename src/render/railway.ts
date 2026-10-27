@@ -69,8 +69,8 @@ const MAT = {
   dark: new THREE.MeshBasicMaterial({ color: 0x050505 }),
 };
 
-/** Ballast shoulder, sleepers and rails along a path (not in tunnels). */
-function buildTrack(path: RailPath, prof: TrackProfile, group: THREE.Group, sleepers: THREE.Matrix4[]): void {
+/** Ballast shoulder, sleepers and rails along a path (not in tunnels); sleepers only where `sleepersAt` allows. */
+function buildTrack(path: RailPath, prof: TrackProfile, group: THREE.Group, sleepers: THREE.Matrix4[], sleepersAt: (e: number, n: number) => boolean = () => true): void {
   const pos: number[] = [];
   const idx: number[] = [];
   const railPos: number[] = [];
@@ -120,7 +120,7 @@ function buildTrack(path: RailPath, prof: TrackProfile, group: THREE.Group, slee
     }
     prevRail = [rb];
     // Sleepers every 0.75 m (two to a step and a bit; drawn as instances).
-    for (let k = 0; k < step; k += 0.75) {
+    for (let k = 0; k < step && sleepersAt(p.e, p.n); k += 0.75) {
       const sp = pathPoint(path, Math.min(path.length, x + k));
       sleepers.push(new THREE.Matrix4().compose(new THREE.Vector3(sp.e, top + 0.1, -sp.n), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -h), new THREE.Vector3(1, 1, 1)));
     }
@@ -306,15 +306,18 @@ export class RailwayView {
   private readonly exhaust = new Exhaust();
   private lastTime?: number;
 
-  constructor(features: RailwayFeatures, ground: Ground) {
+  /** `detail` 'low' (a software renderer): sleepers only within 300 m of the station, where trains are seen up close. */
+  constructor(features: RailwayFeatures, ground: Ground, detail: 'high' | 'low' = 'high') {
     this.group.name = 'railway';
     this.railway = new Railway(features);
     const sleepers: THREE.Matrix4[] = [];
+    const st = this.railway.station;
+    const sleepersAt = detail === 'low' && st ? (e: number, n: number) => Math.hypot(e - st.e, n - st.n) < 300 : undefined;
     // Every line, as track; the main path and loop keep their profiles for the trains.
     const r = this.railway;
     if (r.main) {
       this.mainProfile = new TrackProfile(r.main, ground);
-      buildTrack(r.main, this.mainProfile, this.group, sleepers);
+      buildTrack(r.main, this.mainProfile, this.group, sleepers, sleepersAt);
       for (const [a, b] of r.main.tunnels) {
         portal(r.main, this.mainProfile, a, -1, this.group);
         portal(r.main, this.mainProfile, b, 1, this.group);
@@ -331,7 +334,7 @@ export class RailwayView {
         return { pts, cum, length: cum[cum.length - 1]!, tunnels: [] };
       })();
       if (path.length < 4) continue;
-      buildTrack(path, new TrackProfile(path, ground), this.group, sleepers);
+      buildTrack(path, new TrackProfile(path, ground), this.group, sleepers, sleepersAt);
     }
     if (sleepers.length) {
       const im = new THREE.InstancedMesh(new THREE.BoxGeometry(2.6, 0.14, 0.26), MAT.sleeper, sleepers.length);

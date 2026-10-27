@@ -33,6 +33,8 @@ export interface DartSceneInput {
   town?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; values: Float32Array };
   /** Signed distance to tidal water (watermask.png): the water surface is drawn only near tidal water. */
   waterMask?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; image: TexImageSource };
+  /** 'low' (a software renderer): detailed boats nearer the camera, sleepers only at the station. */
+  detail?: 'high' | 'low';
 }
 
 /** Where the water surface may be drawn: a distance texture over a box (e0, n0, width, height in m). */
@@ -92,7 +94,8 @@ export class DartScene {
       this.buildBuildings(f);
       this.buildPiers(f);
       this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
-      this.boats = new BerthedFleet(f.moorings.length + this.berths.length);
+      const low = input.detail === 'low';
+      this.boats = new BerthedFleet(f.moorings.length + this.berths.length, low ? 150 : 420, low ? 1500 : 3000);
       this.floating.add(this.boats.group);
       this.buoys = this.buildMoorings(f);
       const month = new Date().getUTCMonth();
@@ -101,7 +104,7 @@ export class DartScene {
       );
       this.buildFerries(f);
       if (f.railway) {
-        this.railway = new RailwayView(f.railway, (e, n) => this.groundAt(e, n));
+        this.railway = new RailwayView(f.railway, (e, n) => this.groundAt(e, n), input.detail);
         this.fixed.add(this.railway.group);
       }
       this.buildMarks(f);

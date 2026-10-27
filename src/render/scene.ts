@@ -75,6 +75,11 @@ export class SceneView {
   private readonly arrows: ForceArrows;
   private readonly floats: THREE.InstancedMesh;
   private readonly sun: SunLight;
+
+  /** Drawing detail: 'low' on a software renderer (or ?quality=low), for the scenery's heavier parts too. */
+  get quality(): 'high' | 'low' {
+    return this.sun.quality;
+  }
   private readonly hemi: THREE.HemisphereLight;
   private readonly skyMesh: Sky;
   private readonly pmrem: THREE.PMREMGenerator;

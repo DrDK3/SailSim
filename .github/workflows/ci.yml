@@ -39,11 +39,12 @@ jobs:
         run: python -I -m unittest discover -s tools/ingest -p 'test_*.py'
   browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Software WebGL on the runners is slow and the scene keeps growing (marinas, railway): four shards, with room.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -52,8 +53,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Browser tests (shard ${{ matrix.shard }} of 3)
-        run: npx playwright test --shard=${{ matrix.shard }}/3
+      - name: Browser tests (shard ${{ matrix.shard }} of 4)
+        run: npx playwright test --shard=${{ matrix.shard }}/4
         env:
           CI: 'true'
       - if: failure()
