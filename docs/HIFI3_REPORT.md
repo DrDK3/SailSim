@@ -88,6 +88,7 @@ What changed and why: UX_REVIEW.md, "Redesign: less clutter". In short:
   - traffic tests: the two Lower Ferry units never touch and pass port to port; the berth follows the tide and the tug is always afloat; every marina's boats leave from and return to their berths.
 - **Reference race hash:** unchanged (`5de2cc60d1e76458`): the physics is untouched.
 - **Browser (Playwright):** updated for the More menu and the compact instruments, plus a new test for hiding and restoring the sailing controls. All 38 pass locally (software rendering, CI settings). The first run found the new menu and the instruments' "More instruments…" toggle both answering to "More": a real ambiguity for screen-reader users, so the toggle is now "All instruments and conditions".
+- **CI (GitHub Actions):** the browser tests had been split by file, leaving one shard 35–45 minutes long against a 45-minute limit; they now split by test over four shards (9–17 minutes each), and on a software renderer the scenery is lighter (detailed boats within 150 m, sleepers only at the station). Green on 27 Oct 2026. One test new in this round (hiding the controls) was flaky: it pressed a key before the river data had loaded and restarted the run. It now waits for the data.
 
 ## Still open
 

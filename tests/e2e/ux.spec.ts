@@ -107,6 +107,8 @@ test('the sailing controls can be put away and brought back (remembered); the ke
   await expect(dock).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId('stw')).toBeVisible();
+  // The run restarts when the River Dart data arrives: wait for it before sailing.
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toHaveCount(0);
   // The keys still steer.
   await page.evaluate(() => window.__squib!.controller.togglePause());
