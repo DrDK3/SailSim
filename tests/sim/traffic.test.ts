@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { DEG, buildConditions } from '../../src/sim/index';
-import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type VesselPart, type VesselState } from '../../src/sim/env/traffic';
+import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type MarinaSpec, type VesselPart, type VesselState } from '../../src/sim/env/traffic';
+import type { PierFeature } from '../../src/sim/env/marinas';
 import type { FerryRoute } from '../../src/sim/env/ferries';
 import { loadDartGeo } from './helpers';
 
-const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as { ferries: FerryRoute[]; moorings: { n: number; e: number }[] };
+const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as {
+  ferries: FerryRoute[];
+  moorings: { n: number; e: number }[];
+  marinas: MarinaSpec[];
+  piers: PierFeature[];
+};
 const ferries = features.ferries;
 const geo = loadDartGeo();
 const lower = (s: VesselState[]) => s.filter((v) => v.name === 'Dartmouth Lower Ferry');
