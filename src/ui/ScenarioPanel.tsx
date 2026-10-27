@@ -195,6 +195,7 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <option value="steady">Steady</option>
           <option value="moderate">Moderate</option>
           <option value="shifty">Shifty</option>
+          <option value="gusty">Gusty (off the hills)</option>
           {w.source !== 'manual' && <option value="from-data">From data (heuristic)</option>}
         </select>
       </label>

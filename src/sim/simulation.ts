@@ -1,4 +1,4 @@
-import { clamp, DEG, wrap2Pi, wrapPi } from './math/angles';
+import { clamp, DEG, smoothstep, wrap2Pi, wrapPi } from './math/angles';
 import { hashNumbers } from './hash';
 import { hypot2 } from './math/hypot';
 import { G, RHO_AIR, RHO_WATER, knToMs } from './units';
@@ -21,6 +21,7 @@ import {
   type RigidState,
 } from './boat/dynamics';
 import type { BoatParams } from './boat/params';
+import { FLATTEN, flattenedParams } from './boat/flatten';
 import { greenWaterInflow, sprayInflow, stepWater } from './boat/cockpit';
 import type { ContactPointState, GroundContext } from './boat/contact';
 import type { Seabed } from './geo/dart';
@@ -47,6 +48,11 @@ export interface ControlInput {
   crewHike: number;
   /** Assist: crew move athwartships to keep the boat near upright (either side, within the cockpit). */
   autoCrew: boolean;
+  /**
+   * Sails flattened to depower (cunningham, outhaul and kicker on, leech twisted open), 0 = full power …
+   * 1 = as flat as the rig allows (src/sim/boat/flatten.ts). Optional so that older replays still load.
+   */
+  flatten?: number;
 }
 
 export const DEFAULT_INPUT: ControlInput = {
@@ -57,7 +63,36 @@ export const DEFAULT_INPUT: ControlInput = {
   autoJib: true,
   crewHike: 0.6,
   autoCrew: true,
+  flatten: 0,
 };
+
+/**
+ * The auto main eases when the boat is overpowered, as a helm dumps the main in a gust: beyond this heel, in
+ * proportion (full ease 14° further), at a finite rate; and when the rudder is near hard over against weather
+ * helm. The heel limit and rates are estimates (E).
+ */
+export const OVERPOWERED = {
+  heel: 24 * DEG,
+  easePerRad: 1 / (14 * DEG),
+  /** Sheet travel per second. */
+  rate: 0.6,
+  /** Rudder (fraction of its travel, bearing away) from which the main is eased, and fully eased. */
+  helmFrom: 0.7,
+  helmFull: 0.95,
+  /** Heel below which weather helm alone does not ease the main (light airs: bearing away is just steering). */
+  helmHeelFrom: 10 * DEG,
+  helmHeelFull: 20 * DEG,
+} as const;
+
+/** The extra ease the auto main wants at heel `phi` with the rudder at `rudder` (main on `mainSide`). */
+export function overpoweredEaseTarget(phi: number, rudder: number, maxRudder: number, mainSide: 1 | -1): number {
+  const o = OVERPOWERED;
+  const heel = Math.max(0, Math.abs(phi) - o.heel) * o.easePerRad;
+  // Bearing away turns the bow towards the main's side: rudder < 0 with the main to port (starboard tack).
+  const bearAway = Math.max(0, (-rudder * mainSide) / maxRudder);
+  const helm = smoothstep(o.helmFrom, o.helmFull, bearAway) * smoothstep(o.helmHeelFrom, o.helmHeelFull, Math.abs(phi));
+  return clamp(Math.max(heel, helm), 0, 1);
+}
 
 export interface InitialConditions {
   n?: number;
@@ -194,6 +229,10 @@ export class Simulation {
   private jibLimit = 0;
   /** Sheet positions chosen by the auto-trim assist (used only when autoMain/autoJib are on). */
   private autoSheet = { main: 0.3, jib: 0.3 };
+  /** Extra main ease the auto main applies when overpowered (0…1 of the remaining sheet travel). */
+  private overEase = 0;
+  /** How flat the sails are now (0…1): follows `input.flatten` at the crew's pace. */
+  private flat = 0;
   readonly ownsEnvironment: boolean;
   readonly seabed?: Seabed;
   readonly logInputs: boolean;
@@ -235,6 +274,7 @@ export class Simulation {
 
   /** Place sails, crew and heel at their steady positions for the initial state (no start-up transient). */
   private settleActuators(): void {
+    this.flat = clamp(this.input.flatten ?? 0, 0, 1);
     const awa = this.effectiveAwa();
     const side: 1 | -1 = awa >= 0 ? 1 : -1;
     this.act.mainSide = side;
@@ -251,7 +291,7 @@ export class Simulation {
     this.act.boomJib = sailTarget(side, awa, this.jibLimit);
     for (let i = 0; i < 3; i++) {
       this.act.crewY = this.input.autoCrew ? this.autoCrewTarget(this.windHere(), this.currentHere()) : side * this.crewOffset();
-      this.state.phi = heelEquilibrium(this.params, this.state, this.act, this.windHere(), this.currentHere(), this.fluids);
+      this.state.phi = heelEquilibrium(this.forceParams, this.state, this.act, this.windHere(), this.currentHere(), this.fluids);
     }
   }
 
@@ -279,7 +319,7 @@ export class Simulation {
   }
 
   private autoCrewTarget(wind: NE, cur: NE): number {
-    const p = this.params;
+    const p = this.forceParams;
     const m = aeroHeelMoment(p, this.state, this.act, wind, cur, this.fluids, this.state.phi);
     return clamp(-m / (p.crewMass * G * Math.cos(this.state.phi)), -p.crewOut, p.crewOut);
   }
@@ -310,8 +350,23 @@ export class Simulation {
 
   /** Sheet actually in use for a sail: the assist's choice when auto-trim is on, otherwise the input. */
   currentSheet(sail: 'main' | 'jib'): number {
-    if (sail === 'main') return this.input.autoMain ? this.autoSheet.main : this.input.mainSheet;
+    if (sail === 'main') return this.input.autoMain ? this.autoSheet.main + this.overEase * (1 - this.autoSheet.main) : this.input.mainSheet;
     return this.input.autoJib ? this.autoSheet.jib : this.input.jibSheet;
+  }
+
+  /** The parameters the forces are computed with: the boat's, with the sails flattened as set now. */
+  get forceParams(): BoatParams {
+    return flattenedParams(this.params, this.flat);
+  }
+
+  /** How flat the sails are now (0 = full power … 1 = fully flattened); follows the flatten input. */
+  get flattening(): number {
+    return this.flat;
+  }
+
+  /** Extra main ease the auto main is applying because the boat is overpowered (0…1). */
+  get overpoweredEase(): number {
+    return this.overEase;
   }
 
   /**
@@ -325,17 +380,19 @@ export class Simulation {
     cur: NE = this.currentHere(),
     ground: GroundContext | undefined = this.groundAt(this.time),
   ): ForceBreakdown {
-    const f = computeForces(this.params, this.state, this.act, wind, cur, this.fluids, ground, this.work.forces);
-    this.autoSheet.main = this.trimmedSheet(this.autoSheet.main, f.main, this.params.main.autoTrimAlpha, dt);
+    const f = computeForces(this.forceParams, this.state, this.act, wind, cur, this.fluids, ground, this.work.forces);
+    // While the main is eased for a gust, its luff lifts: the assist does not sheet in against that.
+    this.autoSheet.main = this.trimmedSheet(this.autoSheet.main, f.main, this.params.main.autoTrimAlpha, dt, this.overEase > 0.02);
     this.autoSheet.jib = this.trimmedSheet(this.autoSheet.jib, f.jib, this.params.jib.autoTrimAlpha, dt);
     return f;
   }
 
-  /** One auto-trim step for a sail: ease when over-sheeted, trim when luffing. */
-  private trimmedSheet(sheet: number, sf: SailForce, target: number, dt: number): number {
+  /** One auto-trim step for a sail: ease when over-sheeted, trim when luffing (unless `holdIn`). */
+  private trimmedSheet(sheet: number, sf: SailForce, target: number, dt: number, holdIn = false): number {
     const inc = Math.abs(sf.incidence);
     // Leech-first flow (by the lee) or no wind: let the sheet run.
-    const error = inc > Math.PI / 2 || sf.aws < 0.05 ? 1 : (inc - target) / (5 * DEG);
+    let error = inc > Math.PI / 2 || sf.aws < 0.05 ? 1 : (inc - target) / (5 * DEG);
+    if (holdIn) error = Math.max(error, 0);
     return clamp(sheet + clamp(error, -1, 1) * (dt / 3), 0, 1);
   }
 
@@ -347,6 +404,7 @@ export class Simulation {
     next.mainSheet = clamp(next.mainSheet, 0, 1);
     next.jibSheet = clamp(next.jibSheet, 0, 1);
     next.crewHike = clamp(next.crewHike, 0, 1);
+    next.flatten = clamp(next.flatten ?? 0, 0, 1);
     const changed = (Object.keys(next) as (keyof ControlInput)[]).some((k) => next[k] !== this.input[k]);
     if (!changed) return;
     this.input = next;
@@ -369,7 +427,7 @@ export class Simulation {
       const key = k as keyof ControlInput;
       let v = change[key];
       if (key === 'helm') v = clamp(v as number, -1, 1);
-      else if (key === 'mainSheet' || key === 'jibSheet' || key === 'crewHike') v = clamp(v as number, 0, 1);
+      else if (key === 'mainSheet' || key === 'jibSheet' || key === 'crewHike' || key === 'flatten') v = clamp((v as number) ?? 0, 0, 1);
       if (v !== cur[key]) return false;
     }
     return true;
@@ -385,7 +443,6 @@ export class Simulation {
       const change = this.controller(this);
       if (change) this.setInput(change);
     }
-    const p = this.params;
     const a = this.act;
     const dt = DT;
     // Wind, current and water level at the boat for this step (the state does not change until integration).
@@ -393,9 +450,20 @@ export class Simulation {
     const cur = this.currentHere();
     const ground = this.groundAt(this.time);
 
+    // Sails flattened or powered up at the crew's pace; the forces this step use the result.
+    const flatTarget = clamp(this.input.flatten ?? 0, 0, 1);
+    this.flat += clamp(flatTarget - this.flat, -FLATTEN.ratePerS * dt, FLATTEN.ratePerS * dt);
+    const p = this.forceParams;
+
     // Helm: tiller moves at a finite rate towards the demanded angle.
     const rudderTarget = this.input.helm * p.rudder.maxAngle;
     a.rudder += clamp(rudderTarget - a.rudder, -p.rudder.rate * dt, p.rudder.rate * dt);
+
+    // Auto main: eased when overpowered (heel, or weather helm the rudder can barely hold), sheeted back after.
+    if (this.input.autoMain) {
+      const want = overpoweredEaseTarget(this.state.phi, a.rudder, p.rudder.maxAngle, a.mainSide);
+      this.overEase += clamp(want - this.overEase, -OVERPOWERED.rate * dt, OVERPOWERED.rate * dt);
+    } else this.overEase = 0;
 
     const wasInverted = a.mainInverted;
     const trimForces = this.input.autoMain || this.input.autoJib ? this.updateAutoTrim(dt, wind, cur, ground) : undefined;
@@ -479,7 +547,8 @@ export class Simulation {
 
   /** Derivative of the rigid state at (s, t) with the actuators held, written into `out`. */
   private deriv(s: RigidState, t: number, wind: NE, cur: NE, out: RigidState): RigidState {
-    const f = computeForces(this.params, s, this.act, wind, cur, this.fluids, this.groundAt(t), this.work.forces);
+    const p = this.forceParams;
+    const f = computeForces(p, s, this.act, wind, cur, this.fluids, this.groundAt(t), this.work.forces);
     if (this.testThrust !== 0) f.total.x += this.testThrust;
     const ext = this.external;
     if (ext) {
@@ -489,7 +558,7 @@ export class Simulation {
       f.total.y += -ext.n * sn + ext.e * c;
       f.total.n += ext.yaw;
     }
-    const d = derivatives(this.params, s, f, cur, out);
+    const d = derivatives(p, s, f, cur, out);
     if (this.lockHeading) {
       d.psi = 0;
       d.r = 0;
@@ -527,7 +596,7 @@ export class Simulation {
     const a = this.act;
     const wind = this.windHere();
     const cur = this.currentHere();
-    const forces = computeForces(this.params, s, a, wind, cur, this.fluids, this.groundAt(this.time));
+    const forces = computeForces(this.forceParams, s, a, wind, cur, this.fluids, this.groundAt(this.time));
     const ground = forces.groundVelocity;
     const windOverWater = { n: wind.n - cur.n, e: wind.e - cur.e };
     const ww = windFrom(windOverWater);
@@ -561,7 +630,7 @@ export class Simulation {
       current: cur,
       heel: s.phi,
       rollRate: s.p,
-      heelEquilibrium: detailed ? heelEquilibrium(this.params, s, a, wind, cur, this.fluids) : NaN,
+      heelEquilibrium: detailed ? heelEquilibrium(this.forceParams, s, a, wind, cur, this.fluids) : NaN,
       helmBalance: detailed ? this.helmBalance(forces.aw.awa) : NaN,
       rudder: a.rudder,
       boomRate: a.boomRate,
@@ -590,7 +659,7 @@ export class Simulation {
    * Returns NaN when no balancing angle exists within the rudder's travel.
    */
   private helmBalance(awa: number): number {
-    const p = this.params;
+    const p = this.forceParams;
     const wind = this.windHere();
     const cur = this.currentHere();
     const yaw = (d: number) => computeForces(p, this.state, { ...this.act, rudder: d }, wind, cur, this.fluids, this.groundAt(this.time)).total.n;
@@ -616,8 +685,11 @@ export class Simulation {
       this.time, this.step, s.n, s.e, s.psi, s.u, s.v, s.r, s.phi, s.p,
       a.rudder, a.boomMain, a.boomRate, a.mainInverted ? 1 : 0, a.mainSide, a.boomJib, a.jibSide, a.crewY,
     ];
-    // Cockpit water joins the hash once there is some (runs that never ship water keep their old hashes).
+    // Cockpit water joins the hash once there is some (runs that never ship water keep their old hashes);
+    // likewise flattened sails and the auto main's gust ease.
     if (a.water !== 0) values.push(a.water);
+    if (this.flat !== 0) values.push(this.flat);
+    if (this.overEase !== 0) values.push(this.overEase);
     return hashNumbers(values);
   }
 }

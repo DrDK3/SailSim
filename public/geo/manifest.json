@@ -280,6 +280,33 @@
    "notes": [
     "Not measured current data. The pattern depends on the provisional depths. Offshore (Start Bay) streams are not modelled."
    ]
+  },
+  {
+   "id": "roads",
+   "label": "Roads and footways",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap highways via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "1729 segments. Road widths are estimates by class (E).",
+    "Cars on the roads and people on the footways and quays are illustrative (E): their numbers and movements are not data."
+   ]
   }
- ]
+ ],
+ "roads": {
+  "file": "roads.json",
+  "classes": {
+   "p": "primary",
+   "s": "secondary",
+   "t": "tertiary",
+   "u": "unclassified",
+   "r": "residential",
+   "l": "living_street",
+   "v": "service",
+   "w": "pedestrian",
+   "f": "footway",
+   "x": "steps"
+  }
+ }
 }

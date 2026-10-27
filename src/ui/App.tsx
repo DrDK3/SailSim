@@ -4,6 +4,7 @@ import { Instruments } from './Instruments';
 import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
+import { CoachCard, CoachTip } from './Coach';
 import { SKY_PRESETS } from '../sim/env/sky';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
@@ -22,6 +23,7 @@ const LayersPanel = lazy(() => import('./LayersPanel').then((m) => ({ default: m
 const ResultsPanel = lazy(() => import('./ResultsPanel').then((m) => ({ default: m.ResultsPanel })));
 const CourseEditor = lazy(() => import('./CourseEditor').then((m) => ({ default: m.CourseEditor })));
 const LibraryPanel = lazy(() => import('./LibraryPanel').then((m) => ({ default: m.LibraryPanel })));
+const QuickRacePanel = lazy(() => import('./QuickRacePanel').then((m) => ({ default: m.QuickRacePanel })));
 
 const CONTROLS_KEY = 'squib.controls.hidden';
 
@@ -61,6 +63,7 @@ export function App({ ctl }: { ctl: SimController }) {
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [raceOpen, setRaceOpen] = useState(false);
   const [welcome, setWelcome] = useState(shouldWelcome);
   // Small screens: the toolbar folds behind a Menu button (styles.css).
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -70,14 +73,27 @@ export function App({ ctl }: { ctl: SimController }) {
     setControlsHiddenState(v);
     writeFlag(CONTROLS_KEY, v);
   };
-  // One side panel at a time: opening Scenario closes the Library and the other way round.
+  // One side panel at a time: opening one of Race, Library and Scenario closes the others.
   const openScenario = (open: boolean) => {
     setScenarioOpen(open);
-    if (open) setLibraryOpen(false);
+    if (open) {
+      setLibraryOpen(false);
+      setRaceOpen(false);
+    }
   };
   const openLibrary = (open: boolean) => {
     setLibraryOpen(open);
-    if (open) setScenarioOpen(false);
+    if (open) {
+      setScenarioOpen(false);
+      setRaceOpen(false);
+    }
+  };
+  const openRace = (open: boolean) => {
+    setRaceOpen(open);
+    if (open) {
+      setScenarioOpen(false);
+      setLibraryOpen(false);
+    }
   };
   const closeWelcome = (then?: () => void) => {
     markWelcomed();
@@ -91,6 +107,7 @@ export function App({ ctl }: { ctl: SimController }) {
       if (e.key !== 'Escape') return;
       setScenarioOpen(false);
       setLibraryOpen(false);
+      setRaceOpen(false);
       setToolsOpen(false);
       ctl.toggleEditor(false);
       ctl.toggleDashboard(false);
@@ -143,6 +160,7 @@ export function App({ ctl }: { ctl: SimController }) {
       <div className="hud-left">
         <Instruments s={ui.snapshot} />
         {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
+        {ui.race && <CoachCard ctl={ctl} ui={ui} />}
       </div>
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation">
         <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
@@ -163,14 +181,16 @@ export function App({ ctl }: { ctl: SimController }) {
               <span className="sr-only">Camera</span>
               <select value={ui.camera} onChange={(e) => ctl.setCamera(e.target.value as CameraMode)} title="Camera (C cycles)">
                 <option value="chase">Chase view</option>
-                <option value="helm">Helm view</option>
-                <option value="orbit">Orbit (drag)</option>
+                <option value="helm">Helm (first person)</option>
+                <option value="orbit">Orbit the boat</option>
+                <option value="drone">Drone (fly and pan)</option>
                 <option value="top">Top-down</option>
               </select>
             </label>
           </div>
           {/* Setting up a sail: ready-made scenarios, or your own. */}
           <div className="tb-group">
+            <button aria-pressed={raceOpen} onClick={() => openRace(!raceOpen)} title="Quick race: choose how many AI boats, where, and random or live conditions">Race</button>
             <button aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
             <button aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
           </div>
@@ -182,6 +202,7 @@ export function App({ ctl }: { ctl: SimController }) {
               items={[
                 { section: 'Learn and plan', label: 'Tutorial', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : ctl.startTutorial()) },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
+                { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
                 { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
@@ -202,6 +223,7 @@ export function App({ ctl }: { ctl: SimController }) {
         {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} />}
         <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => openScenario(false)} />}</Suspense>
         <Suspense fallback={null}>{libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => openLibrary(false)} />}</Suspense>
+        <Suspense fallback={null}>{raceOpen && <QuickRacePanel ctl={ctl} ui={ui} onClose={() => openRace(false)} />}</Suspense>
         <Suspense fallback={null}>{ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}</Suspense>
         <Suspense fallback={null}>{ui.showDebug && <DebugPanel ui={ui} />}</Suspense>
       </div>
@@ -215,6 +237,22 @@ export function App({ ctl }: { ctl: SimController }) {
       ) : (
         <Controls ctl={ctl} ui={ui} onHide={() => setControlsHidden(true)} />
       )}
+      {ui.camera === 'drone' && (
+        <div className="camera-bar panel" role="group" aria-label="Drone view">
+          <span className="fine">Drag to turn · right-drag or two fingers to pan · wheel to climb</span>
+          <button onClick={() => ctl.centreDrone()} title="Fly back to the boat (B)">Back to boat <kbd className="key-hint" aria-hidden="true">B</kbd></button>
+          <label className="toggle" title="Carry the view along with the boat">
+            <input type="checkbox" checked={ui.droneFollow} onChange={(e) => ctl.setDroneFollow(e.target.checked)} />
+            Follow
+          </label>
+        </div>
+      )}
+      {ui.camera === 'helm' && (
+        <div className="camera-bar panel" role="note" aria-label="Helm view">
+          <span className="fine">Drag to look around · double-click to look ahead · wheel to zoom</span>
+        </div>
+      )}
+      <CoachTip ui={ui} />
       {ui.paused && <div className="banner paused-pill" role="status">{ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}</div>}
       {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
       {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}

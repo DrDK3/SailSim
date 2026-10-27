@@ -20,7 +20,7 @@ export function optimalSheets(sim: Simulation, steps = 100): { mainSheet: number
       // Judge each candidate at steady state: the sail settled at its angle (no swing, not inverted).
       const act = { ...sim.act, boomRate: 0, mainInverted: false, [sail === 'main' ? 'boomMain' : 'boomJib']: angle };
       const s = sim.state;
-      const f = computeForces(sim.params, s, act, sim.env.wind(sim.time, s.n, s.e), sim.env.current(sim.time, s.n, s.e), sim.fluids);
+      const f = computeForces(sim.forceParams, s, act, sim.env.wind(sim.time, s.n, s.e), sim.env.current(sim.time, s.n, s.e), sim.fluids);
       const drive = sail === 'main' ? f.main.x : f.jib.x;
       if (drive > bestDrive + 1e-9) {
         bestDrive = drive;

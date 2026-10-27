@@ -28,6 +28,8 @@ import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '.
 import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
 import { TUTORIAL_INPUT, TUTORIAL_SCENARIO, Tutorial, type TutorialState } from './tutorial';
 import { sailState } from './sailStatus';
+import { RaceCoach, type Debrief, type Tip } from './coach';
+import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
 
 /**
  * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
@@ -143,6 +145,10 @@ export interface UiState {
   snapshot: BoatSnapshot;
   paused: boolean;
   camera: CameraMode;
+  /** Drone view: carried along with the boat. */
+  droneFollow: boolean;
+  /** The race coach (races only): its briefing, latest tips and, after the finish, the debrief. */
+  coach?: { on: boolean; briefing: string[]; tips: readonly Tip[]; debrief?: Debrief; now: number };
   showForces: boolean;
   showDebug: boolean;
   showHelp: boolean;
@@ -191,7 +197,7 @@ const MAX_STEPS_PER_FRAME = 12;
 /** Identifies the build in recordings (Vite's mode and the package version; a commit id when CI provides one). */
 const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
 /** Fills a partial starting input to a full one for the recording. */
-const DEFAULT_INPUT_FOR_RECORD: ControlInput = { helm: 0, mainSheet: 0.3, jibSheet: 0.3, autoMain: false, autoJib: true, crewHike: 0.6, autoCrew: true };
+const DEFAULT_INPUT_FOR_RECORD: ControlInput = { helm: 0, mainSheet: 0.3, jibSheet: 0.3, autoMain: false, autoJib: true, crewHike: 0.6, autoCrew: true, flatten: 0 };
 
 /** The list of live and replay data files served next to the app (public/live/README.md). */
 const LIVE_INDEX = 'live/index.json';
@@ -236,6 +242,9 @@ export class SimController {
   private confirmReset = false;
   private lastRecordT = -Infinity;
   private frames = 0;
+  private coach?: RaceCoach;
+  private debrief?: Debrief;
+  private coachOn = readFlag('squib.coach', true);
   private fpsT0 = 0;
   private fps = 0;
   private physMs = 0;
@@ -367,6 +376,8 @@ export class SimController {
     this.built = built;
     this.race = race;
     this.sim = sim;
+    this.coach = race ? this.makeCoach(race, built, scenario) : undefined;
+    this.debrief = undefined;
     // Start with sensible manual sheet settings for the starting point of sail.
     if (!startInput) this.sim.setInput(optimalSheets(this.sim));
     this.initialInput = startInput ? { ...DEFAULT_INPUT_FOR_RECORD, ...startInput } : null;
@@ -425,6 +436,77 @@ export class SimController {
     else this.sim.stepOnce();
     if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
     if (this.tutorial && this.sim.step % 10 === 0) this.updateTutorial();
+    if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
+  }
+
+  /** The coach for a race: the line, the first mark and the conditions at the line when the run begins. */
+  private makeCoach(race: NonNullable<SimController['race']>, built: BuiltConditions, scenario: AppScenario): RaceCoach {
+    const [a, b] = race.resolved.start;
+    const mid = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    const w = windFrom(built.env.wind(0, mid.n, mid.e));
+    const c = built.env.current(0, mid.n, mid.e);
+    const kindOf = (id: string) => race.course.marks.find((m) => m.id === id)?.kind;
+    const label = (id: string) => (kindOf(id) === 'committee-boat' ? 'committee boat' : kindOf(id) === 'pin' ? 'pin' : (race.course.marks.find((m) => m.id === id)?.name ?? id));
+    const ends = race.course.start.ends;
+    return new RaceCoach(
+      {
+        twsKn: w.speed / 0.514444,
+        twdDeg: (w.fromDir * 180) / Math.PI,
+        gusts: scenario.conditions.gusts.preset,
+        current: Math.hypot(c.n, c.e) > 0.05 ? { setDeg: ((Math.atan2(c.e, c.n) * 180) / Math.PI + 360) % 360, rateKn: Math.hypot(c.n, c.e) / 0.514444 } : undefined,
+        line: { a, b },
+        endLabels: [label(ends[0]), label(ends[1])],
+        firstMark: race.resolved.legs[0]?.target ?? mid,
+        sequence: race.session.committee.opts.sequence,
+        competitors: race.session.fleet.boats.length - 1,
+      },
+      race.session.polar,
+    );
+  }
+
+  /** Every half second of a race: what the coach sees of your boat; the debrief once you are done. */
+  private updateCoach(): void {
+    const r = this.race;
+    const coach = this.coach;
+    if (!r || !coach) return;
+    const s = this.sim.snapshot(false);
+    const t = s.t;
+    const session = r.session;
+    const st = session.judgeOf('you').state(t);
+    const leg = r.resolved.legs[st.legIndex];
+    coach.update({
+      t, n: s.n, e: s.e, stw: s.stw, vmg: s.vmg, tws: s.tws, twd: s.twd, twa: s.twa, heel: s.heel,
+      rudderFrac: s.rudder / this.sim.params.rudder.maxAngle,
+      mainLuff: s.forces.main.luff, mainStall: s.forces.main.stall, autoMain: s.input.autoMain, flatten: s.input.flatten ?? 0,
+      race: { phase: st.phase, toStart: session.committee.startTime - t, ocs: st.ocs, mark: leg?.target, penaltyOwed: session.owesPenalty('you') },
+    });
+    const done = st.phase === 'finished' || session.outOfRace('you') || session.committee.finished || session.committee.abandoned;
+    if (done && !this.debrief) {
+      const row = session.results().find((x) => x.id === 'you');
+      this.debrief = coach.debrief({ place: row?.place ?? undefined, fleet: session.fleet.boats.length, incidents: session.incidents.filter((i) => i.atFault === 'you').length });
+      this.publish(true);
+    }
+  }
+
+  /** Whether the race coach is shown (in races). */
+  get coachEnabled(): boolean {
+    return this.coachOn;
+  }
+
+  /** Show or hide the race coach's briefing and tips (remembered in this browser). */
+  toggleCoach(force?: boolean): void {
+    this.coachOn = force ?? !this.coachOn;
+    writeFlag('squib.coach', this.coachOn);
+    this.publish(true);
+  }
+
+  /** Start a quick race (one step: competitors, level, venue and conditions). Returns a summary, or undefined. */
+  startQuickRace(o: QuickRaceOptions): { summary: string; note?: string } | undefined {
+    const live = this.weatherSources.find((w) => w.kind === 'live');
+    const q = quickRaceScenario(o, this.scenario, live);
+    if (!this.restart(q.scenario)) return undefined;
+    if (this.paused) this.togglePause();
+    return { summary: q.summary, note: q.note };
   }
 
   /**
@@ -700,7 +782,7 @@ export class SimController {
     this.dartStatus = data.geo ? 'loaded' : 'unavailable';
     if (data.geo && data.manifest && this.view) {
       try {
-        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, detail: this.view.quality });
+        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
       } catch (err) {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
@@ -931,6 +1013,24 @@ export class SimController {
     this.publish(true);
   }
 
+  /** The camera's pose (Three.js coordinates) and the helm view's look direction: for tests and screenshots. */
+  cameraInfo(): { position: [number, number, number]; target: [number, number, number]; helm: { yaw: number; pitch: number; fov: number } } | undefined {
+    return this.view ? { ...this.view.cameraPose(), helm: this.view.helmView } : undefined;
+  }
+
+  /** Drone view: fly back to the boat (B). */
+  centreDrone(): void {
+    this.view?.centreDrone();
+  }
+
+  /** Drone view: follow the boat, or stay where it was flown. */
+  setDroneFollow(on: boolean): void {
+    if (!this.view) return;
+    this.view.droneFollow = on;
+    if (on) this.view.centreDrone();
+    this.publish(true);
+  }
+
   toggleForces(): void {
     this.showForces = !this.showForces;
     if (this.view) this.view.showForces = this.showForces;
@@ -998,9 +1098,11 @@ export class SimController {
       case 'KeyJ': this.setInput({ autoJib: !this.sim.input.autoJib }); break;
       case 'KeyM': this.setInput({ autoMain: !this.sim.input.autoMain }); break;
       case 'KeyK': this.setInput({ autoCrew: !this.sim.input.autoCrew }); break;
+      case 'KeyZ': this.setInput({ flatten: Math.round(((this.sim.input.flatten ?? 0) + (ev.shiftKey ? -0.25 : 0.25)) * 4) / 4 }); break;
       case 'KeyP': this.togglePause(); break;
       case 'KeyR': this.requestReset(); break;
       case 'KeyC': this.cycleCamera(); break;
+      case 'KeyB': this.centreDrone(); break;
       case 'KeyF': this.toggleForces(); break;
       case 'KeyG': this.toggleDebug(); break;
       case 'KeyV': this.toggleDashboard(); break;
@@ -1060,6 +1162,8 @@ export class SimController {
           }
         : undefined,
       camera: this.view?.cameraMode ?? 'chase',
+      droneFollow: this.view?.droneFollow ?? false,
+      coach: this.coach ? { on: this.coachOn, briefing: this.coach.briefing, tips: this.coach.recent, debrief: this.debrief, now: this.sim.time } : undefined,
       showForces: this.showForces,
       showDebug: this.showDebug,
       showHelp: this.showHelp,
@@ -1185,4 +1289,22 @@ export function preStartPosition(r: ResolvedCourse): { n: number; e: number; hea
   const heading = (Math.atan2(a.e - b.e, a.n - b.n) * 180) / Math.PI;
   const along = 160;
   return { n: m.n + nn * 100 + ((b.n - a.n) / len) * along, e: m.e + ne * 100 + ((b.e - a.e) / len) * along, headingDeg: (heading + 360) % 360, speedKn: 3 };
+}
+
+/** A remembered on/off choice in this browser (storage can be unavailable: then the default). */
+function readFlag(key: string, def: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? def : v === '1';
+  } catch {
+    return def;
+  }
+}
+
+function writeFlag(key: string, on: boolean): void {
+  try {
+    localStorage.setItem(key, on ? '1' : '0');
+  } catch {
+    // Not remembered: storage is unavailable.
+  }
 }

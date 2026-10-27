@@ -11,6 +11,8 @@ import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
+import { StreetLife, TOWNS, buildRoadSurfaces, type RoadsData } from './population';
+import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -35,6 +37,8 @@ export interface DartSceneInput {
   waterMask?: { spec: { cell: number; nx: number; ny: number; e0: number; n0: number }; image: TexImageSource };
   /** 'low' (a software renderer): detailed boats nearer the camera, sleepers only at the station. */
   detail?: 'high' | 'low';
+  /** Roads and footways: their surfaces, and cars and people on them (illustrative). */
+  roads?: RoadsData;
 }
 
 /** Where the water surface may be drawn: a distance texture over a box (e0, n0, width, height in m). */
@@ -72,6 +76,7 @@ export class DartScene {
   readonly waterMask?: WaterMask;
   private readonly woodland?: Woodland;
   private readonly railway?: RailwayView;
+  private readonly street?: StreetLife;
 
   constructor(private readonly input: DartSceneInput) {
     this.fixed.name = 'dart-fixed';
@@ -110,6 +115,12 @@ export class DartScene {
       this.buildMarks(f);
       this.buildLabels(f);
     }
+    if (input.roads) {
+      this.fixed.add(buildRoadSurfaces(input.roads, (e, n) => this.groundAt(e, n)));
+      this.street = new StreetLife({ roads: input.roads, groundAt: (e, n) => this.groundAt(e, n), standing: f ? standingSpots(f) : [], detail: input.detail });
+      this.fixed.add(this.street.fixed);
+      this.floating.add(this.street.floating);
+    }
     const pixels = input.drape ? drapePixels(input.drape) : undefined;
     if (pixels) {
       this.woodland = new Woodland({ pixels, drape: input.manifest.drape, groundAt: (e, n) => this.groundAt(e, n), buildings: f?.buildings.map((b) => b.r) });
@@ -120,7 +131,7 @@ export class DartScene {
   // ------------------------------------------------------------------ terrain
 
   /** Ground (m ODN) as the picture draws it: the towns' 4 m grid where there is one, else the 8 m grid. */
-  private groundAt(e: number, n: number): number {
+  groundAt(e: number, n: number): number {
     const town = this.input.town;
     if (town) {
       const t = town.spec;
@@ -359,11 +370,12 @@ export class DartScene {
     // otherwise drive pale render to white.
     const wallPalette = [0xe4ddcc, 0xddc394, 0xd4a49b, 0xa3bccf, 0xdcc56f, 0xafc39b, 0xc4ae90, 0xd2cbbc, 0x9ea4a6, 0xe8e3d8].map((h) => lin(h).map((c) => c * 0.72));
     const roofPalette = [0x2f3338, 0x363a41, 0x3d4148, 0x2b2e33, 0x7f4532, 0x45403c].map(lin);
-    const stone = lin(0x9a948a);
     const v = new THREE.Vector3();
     const w = new THREE.Vector3();
     const DEG = Math.PI / 180;
-    f.buildings.forEach((b, idx) => {
+    const kit = new Kit();
+    f.buildings.forEach((b0, idx) => {
+      let b = b0;
       const ring = b.r;
       if (ring.length < 3) return;
       const cx = ring.reduce((a, p) => a + p[0], 0) / ring.length;
@@ -372,11 +384,55 @@ export class DartScene {
       let t = tiles.get(key);
       if (!t) tiles.set(key, (t = { pos: [], nor: [], col: [], wall: [], gnd: [] }));
       const T = t;
-      const landmark = /castle|church|petrox|saviour|college|chapel/i.test(b.n ?? '') || b.c === 'church' || b.c === 'chapel';
-      const wall = landmark ? stone : wallPalette[(idx * 7919) % wallPalette.length]!;
-      const roof = landmark ? lin(0x7d786f) : roofPalette[(idx * 104729) % roofPalette.length]!;
-      // Windows on ordinary buildings (flag > 0.5; its fraction seeds which windows are lit at night).
-      const winFlag = landmark || b.c === 'garage' ? 0 : 1 + ((idx * 37) % 97) / 100;
+      // Landmarks as themselves (src/render/landmarks.ts); churches and chapels in stone with tall windows; the
+      // marina buildings at Noss; shopfronts on the named buildings of the town streets.
+      const spec = landmarkFor(ring);
+      const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
+      const chapel = !spec && !church && (b.c === 'chapel' || /chapel/i.test(b.n ?? ''));
+      const ce0 = ring.reduce((a, p) => a + p[0], 0) / ring.length;
+      const cn0 = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+      const noss = !spec && Math.hypot(ce0 - NOSS.centre[0], cn0 - NOSS.centre[1]) < NOSS.radius && b.b < 8;
+      const town = TOWNS.some((t) => ce0 >= t.eMin && ce0 <= t.eMax && cn0 >= t.nMin && cn0 <= t.nMax);
+      const shop = !spec && !church && !chapel && !!b.n && town && b.b < 8 && (b.c === null || b.c === 'retail' || b.c === 'commercial');
+      const look: Look | undefined = spec ?? (noss ? NOSS.look : church || chapel ? { walls: 0x8a8378, roof: 0x3d4148, win: WIN.tall, shape: 'g' } : undefined);
+      const landmark = !!look;
+      const wall = look ? lin(look.walls).map((c) => c * 0.72) : wallPalette[(idx * 7919) % wallPalette.length]!;
+      const roof = look ? lin(look.roof) : roofPalette[(idx * 104729) % roofPalette.length]!;
+      // Windows (the integer part is the style, src/render/landmarks.ts WIN; the fraction seeds which are lit).
+      const style = look ? look.win : b.c === 'garage' ? WIN.none : shop ? WIN.shopfront : WIN.sash;
+      const winFlag = style === WIN.none ? 0 : style + ((idx * 37) % 97) / 100;
+      // Roof overrides: a gable along the long axis (churches, chapels: low walls, steep roof, the data's top
+      // kept for a tower), flat (castles, modern buildings), or slopes round a flat top (BRNC's ranges).
+      const ccwRing = (() => {
+        let a = 0;
+        for (let i = 0; i < ring.length; i++) a += ring[i]![0] * ring[(i + 1) % ring.length]![1] - ring[(i + 1) % ring.length]![0] * ring[i]![1];
+        return (a >= 0 ? [...ring] : [...ring].reverse()) as [number, number][];
+      })();
+      if (look?.shape === 'g' && b0.t - b0.b > 3) {
+        const bearing = longAxisDeg(ring);
+        const t = (bearing * Math.PI) / 180;
+        const across = ring.map(([e, n]) => e * Math.cos(t) - n * Math.sin(t));
+        const width = Math.max(...across) - Math.min(...across);
+        const eavesG = b0.b + Math.min(8, Math.max(4, 0.45 * (b0.t - b0.b)));
+        b = { ...b0, s: 'g', d: bearing, e: eavesG, t: Math.min(b0.t, eavesG + 0.35 * width) };
+        if (church && b0.r.length >= 4) {
+          // A tower at the west end, as most parish churches have (E: position and size).
+          const along = ring.map(([e, n]) => e * Math.sin(t) + n * Math.cos(t));
+          const lo = Math.min(...along);
+          const hi = Math.max(...along);
+          const westIsLo = Math.sin(t) > 0;
+          const endAlong = westIsLo ? lo + 3 : hi - 3;
+          const mid = across.reduce((a, x) => a + x, 0) / across.length;
+          const at: [number, number] = [endAlong * Math.sin(t) + mid * Math.cos(t), endAlong * Math.cos(t) - mid * Math.sin(t)];
+          const top = b0.b + Math.min(30, Math.max(b0.t - b0.b, 2.2 * (eavesG - b0.b)));
+          buildExtra(kit, { kind: 'tower', at, w: 5, d: 5, bearingDeg: bearing, fromM: b0.b, toM: top, top: 'battlements', walls: 0x8a8378, dressing: 0x9d978b });
+        }
+      } else if (look?.shape === 'f') b = { ...b0, s: 'f' };
+      if (look) {
+        const top = b.t;
+        if (look.parapet === 'battlements' || look.parapet === 'corbelled-battlements') battlements(kit, ccwRing, top, look.walls, look.parapet === 'corbelled-battlements');
+        if (spec?.extras) for (const x of spec.extras(b0.b, b0.t, ccwRing)) buildExtra(kit, x);
+      }
       // Counter-clockwise (in e, n) so that wall normals face out; party-wall flags follow the ring.
       let area = 0;
       for (let i = 0; i < ring.length; i++) {
@@ -473,6 +529,31 @@ export class DartScene {
         tri([c[0]![0], top, -c[0]![1]], [c[2]![0], top, -c[2]![1]], [c[3]![0], top, -c[3]![1]], lin(0x3a3633));
       };
 
+      if (look?.shape === 'p') {
+        // Walls to the eaves, then slopes up and in to a flat top at the data's height.
+        const drop = look.roofDrop ?? 3;
+        const eavesP = b.t - drop;
+        // The roof follows the footprint without its small jogs (the walls keep them; the cornice hides the join).
+        const outer = simplifyRing(pts);
+        let inner: [number, number][] | undefined;
+        for (const d of [6, 4, 2.5]) if ((inner = insetRingAdaptive(outer, d))) break;
+        for (let i = 0; i < pts.length; i++) emitWall(pts[i]!, pts[(i + 1) % pts.length]!, eavesP, eavesP, !party(i));
+        if (look.parapet === 'cornice-balustrade') corniceBalustrade(kit, pts as [number, number][], eavesP, 0xe6e0d0);
+        if (inner) {
+          flatTop(pts as [number, number][], () => eavesP - 0.05);
+          for (let i = 0; i < outer.length; i++) {
+            const p0 = outer[i]!;
+            const p1 = outer[(i + 1) % outer.length]!;
+            const q0 = inner[i]!;
+            const q1 = inner[(i + 1) % outer.length]!;
+            tri([p0[0], eavesP, -p0[1]], [p1[0], eavesP, -p1[1]], [q1[0], b.t, -q1[1]]);
+            tri([p0[0], eavesP, -p0[1]], [q1[0], b.t, -q1[1]], [q0[0], b.t, -q0[1]]);
+          }
+          flatTop(inner, () => b.t);
+        } else flatTop(pts as [number, number][], () => eavesP);
+        return;
+      }
+      if (look?.parapet === 'cornice-balustrade') corniceBalustrade(kit, pts as [number, number][], b.s ? (b.e ?? b.t) : b.t, 0xe6e0d0);
       if (shape === 'g' && b.d !== undefined && eaves < b.t) {
         // Gable: the ridge runs on the bearing b.d across the middle of the footprint; each side slopes down
         // to the eaves; the gable ends are walls that rise to the ridge.
@@ -561,11 +642,13 @@ export class DartScene {
       mesh.name = 'buildings';
       this.fixed.add(mesh);
     }
+    if (kit.pos.length) this.fixed.add(kit.mesh('landmark-details'));
   }
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
   setDaylight(day: number): void {
     this.traffic.setDaylight(day);
+    this.street?.setDaylight(day);
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
   }
@@ -658,6 +741,50 @@ export class DartScene {
         this.floating.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.06, 5, false), cable));
       }
     }
+    this.fixed.add(this.buildSlipways(f));
+  }
+
+  /**
+   * The vehicle ferries' slipways: a concrete ramp down the last 50 m of each end of the Lower and Higher
+   * Ferry routes (OSM), on the ground and into the water, kerbed at the sides. Widths E (Lower 9 m, Higher 12 m).
+   */
+  private buildSlipways(f: DartFeatures): THREE.Mesh {
+    const pos: number[] = [];
+    const idx: number[] = [];
+    for (const fr of f.ferries.filter((x) => /Lower Ferry|Higher Ferry/.test(x.name))) {
+      const w = (/Higher/.test(fr.name) ? 12 : 9) / 2;
+      for (const fromStart of [true, false]) {
+        const r = fromStart ? fr.route : [...fr.route].reverse();
+        const a = r[0]!;
+        const b = r[Math.min(r.length - 1, 1)]!;
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const ue = (b[0] - a[0]) / len;
+        const un = (b[1] - a[1]) / len;
+        const base = pos.length / 3;
+        const steps = 10;
+        for (let k = 0; k <= steps; k++) {
+          // From 6 m behind the route's end (the top of the slip) to 50 m out, towards the water.
+          const d = -6 + (56 * k) / steps;
+          const e = a[0] + ue * d;
+          const n = a[1] + un * d;
+          // Never above the ground there (a ramp laid on it) and on down below low water.
+          const y = Math.min(this.groundAt(e, n) + 0.15, 3.2 - 0.12 * Math.max(0, d));
+          for (const side of [-1, 1]) pos.push(e - un * w * side, y, -(n + ue * w * side));
+          if (k > 0) {
+            const i0 = base + (k - 1) * 2;
+            idx.push(i0, i0 + 2, i0 + 1, i0 + 1, i0 + 2, i0 + 3);
+          }
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x9c988e, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+    mesh.name = 'slipways';
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   private buildMarks(f: DartFeatures): void {
@@ -720,6 +847,7 @@ export class DartScene {
     for (const l of this.labels.children) l.visible = u.showLabels && l.position.distanceTo(cam) < LABEL_RANGE_M;
 
     this.woodland?.update(u.camera);
+    this.street?.update(u.time, u.camera);
     if (u.showLabels) this.declutter(u.camera);
   }
 
@@ -845,18 +973,51 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
         `#include <color_fragment>
         float winLit = 0.0;
         if (vWall.w > 0.5) {
+          // Window style (src/render/landmarks.ts WIN): 1 sash, 2 tall (churches), 3 slits (castles),
+          // 4 brick with stone bands (BRNC), 5 glazed (modern), 6 shopfront on the ground floor.
+          float wstyle = floor(vWall.w);
           float bay = floor(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
           float storey = floor(vWall.y / ${STOREY_M.toFixed(1)});
           float fu = fract(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
           float fv = fract(vWall.y / ${STOREY_M.toFixed(1)});
+          float seed = fract(vWall.w) * 61.0;
+          vec4 r = vec4(0.3, 0.7, 0.3, 0.8);
+          float fw = 0.03;
+          if (wstyle > 1.5 && wstyle < 2.5) { r = vec4(0.4, 0.6, 0.12, 0.92); fw = 0.025; }
+          else if (wstyle > 2.5 && wstyle < 3.5) { r = vec4(0.47, 0.53, 0.35, 0.72); fw = 0.0; }
+          else if (wstyle > 4.5 && wstyle < 5.5) { r = vec4(0.06, 0.94, 0.12, 0.92); fw = 0.015; }
+          bool shopFloor = wstyle > 5.5 && storey < 0.5;
+          if (shopFloor) { r = vec4(0.08, 0.92, 0.08, 0.66); fw = 0.02; }
           // Whole windows only, starting at least 0.4 m above the ground along the wall (hillside walls).
           float sill = (storey + 0.3) * ${STOREY_M.toFixed(1)};
-          float inWin = step(0.3, fu) * step(fu, 0.7) * step(0.3, fv) * step(fv, 0.8) * step(0.7, vWall.y) * step(vWall.y, vWall.z - 0.5) * step(vGround + 0.4, sill);
-          float frame = inWin * (1.0 - step(0.33, fu) * step(fu, 0.67) * step(0.34, fv) * step(fv, 0.76));
+          float lowest = shopFloor ? 0.2 : 0.7;
+          float inWin = step(r.x, fu) * step(fu, r.y) * step(r.z, fv) * step(fv, r.w) * step(lowest, vWall.y) * step(vWall.y, vWall.z - 0.5) * step(vGround + (shopFloor ? 0.0 : 0.4), sill);
+          float frame = fw > 0.0 ? inWin * (1.0 - step(r.x + fw, fu) * step(fu, r.y - fw) * step(r.z + fw * 1.4, fv) * step(fv, r.w - fw * 1.4)) : 0.0;
+          // A door on some ground-floor bays where the ground is level (painted: blue, green, red, black).
+          float doorHash = fract(sin(dot(vec2(bay + seed * 3.1, seed), vec2(41.3, 289.1))) * 43758.5453);
+          float door = (wstyle < 1.5 || wstyle > 3.5 && wstyle < 4.5) ? step(doorHash, 0.16) * step(storey, 0.5) * step(abs(vGround), 0.35) * step(0.36, fu) * step(fu, 0.64) * step(fv, 0.72) * step(vWall.y, vWall.z - 0.5) : 0.0;
+          inWin *= 1.0 - door;
+          frame *= 1.0 - door;
+          vec3 stoneCol = vec3(0.62, 0.6, 0.55);
+          vec3 frameCol = wstyle > 3.5 && wstyle < 4.5 ? stoneCol : (wstyle > 4.5 && wstyle < 5.5 ? vec3(0.18, 0.19, 0.2) : vec3(0.92, 0.92, 0.9));
+          // BRNC: stone string courses at each floor and a stone band at the eaves.
+          if (wstyle > 3.5 && wstyle < 4.5) {
+            float band = (1.0 - step(0.07, fv)) + step(vWall.z - 0.6, vWall.y);
+            diffuseColor.rgb = mix(diffuseColor.rgb, stoneCol, clamp(band, 0.0, 1.0) * step(0.5, vWall.y));
+          }
+          // Shopfront: a painted fascia board over the window, in one of a few colours.
+          if (shopFloor) {
+            float fascia = step(0.72, fv) * step(fv, 0.9);
+            vec3 board = mix(vec3(0.12, 0.2, 0.32), vec3(0.45, 0.12, 0.12), step(0.5, fract(seed * 7.3)));
+            board = mix(board, vec3(0.16, 0.28, 0.2), step(0.75, fract(seed * 3.7)));
+            diffuseColor.rgb = mix(diffuseColor.rgb, board, fascia);
+          }
+          vec3 doorCol = mix(vec3(0.09, 0.16, 0.3), vec3(0.32, 0.07, 0.07), step(0.5, fract(doorHash * 13.0)));
+          doorCol = mix(doorCol, vec3(0.08, 0.2, 0.12), step(0.7, fract(doorHash * 29.0)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, doorCol, door);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.085, 0.1), inWin - frame);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.92, 0.9), frame);
-          float seed = fract(vWall.w) * 61.0;
-          winLit = (inWin - frame) * step(0.6, fract(sin(dot(vec2(bay + seed, storey + seed * 1.7), vec2(12.9898, 78.233))) * 43758.5453));
+          diffuseColor.rgb = mix(diffuseColor.rgb, frameCol, frame);
+          winLit = (inWin - frame) * step(shopFloor ? 0.2 : 0.6, fract(sin(dot(vec2(bay + seed, storey + seed * 1.7), vec2(12.9898, 78.233))) * 43758.5453));
         }`,
       )
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * 1.6 * winLit * uNight;')
@@ -929,6 +1090,9 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
         '#include <map_fragment>',
         `#include <map_fragment>
         float tn = tNoise(vGround.xz * 0.21) * 0.55 + tNoise(vGround.xz * 0.9) * 0.3 + tNoise(vGround.xz * 3.1) * 0.15;
+        // Satellite colour is hazy and flat: a little more saturation and depth, as the eye sees fields (a grade).
+        float tl = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        diffuseColor.rgb = max(mix(vec3(tl), diffuseColor.rgb, 1.4) * 0.9, 0.0);
         diffuseColor.rgb *= 0.84 + 0.32 * tn;
         float rock = smoothstep(0.8, 0.58, vUpright);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.19, 0.17) * (0.75 + 0.5 * tn), rock * 0.7);
@@ -948,4 +1112,75 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
 function shadowed(m: THREE.Mesh): THREE.Mesh {
   m.castShadow = m.receiveShadow = true;
   return m;
+}
+
+/**
+ * Where people stand (E): on the quays and jetties and on the pontoons in the two towns, about one person per
+ * 60 m² of deck (fewer on long pontoons), never more than 40 on one. Seeded, so the same each time.
+ */
+function standingSpots(f: DartFeatures): { e: number; n: number; floating: boolean; deck: number }[] {
+  const out: { e: number; n: number; floating: boolean; deck: number }[] = [];
+  let seed = 991;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const town = (e: number, n: number) => TOWNS.some((t) => e >= t.eMin && e <= t.eMax && n >= t.nMin && n <= t.nMax);
+  const deck = (floating: boolean) => (floating ? 0.4 : FIXED_DECK_ODN);
+  for (const p of f.piers) {
+    if ('line' in p) {
+      const [a, b] = [p.line[0]!, p.line[p.line.length - 1]!];
+      if (!town(a[0], a[1])) continue;
+      let len = 0;
+      for (let i = 1; i < p.line.length; i++) len += Math.hypot(p.line[i]![0] - p.line[i - 1]![0], p.line[i]![1] - p.line[i - 1]![1]);
+      const count = Math.min(40, Math.floor((len * p.width) / 60 * (p.floating ? 0.5 : 1)));
+      for (let k = 0; k < count; k++) {
+        const t = rnd();
+        // Along the line at a random point, within its width.
+        let s = t * len;
+        for (let i = 1; i < p.line.length; i++) {
+          const q0 = p.line[i - 1]!;
+          const q1 = p.line[i]!;
+          const l = Math.hypot(q1[0] - q0[0], q1[1] - q0[1]);
+          if (s <= l || i === p.line.length - 1) {
+            const f2 = l > 0 ? Math.min(1, s / l) : 0;
+            const w = (rnd() - 0.5) * p.width * 0.6;
+            const ue = l > 0 ? (q1[0] - q0[0]) / l : 0;
+            const un = l > 0 ? (q1[1] - q0[1]) / l : 0;
+            out.push({ e: q0[0] + (q1[0] - q0[0]) * f2 - un * w, n: q0[1] + (q1[1] - q0[1]) * f2 + ue * w, floating: p.floating, deck: deck(p.floating) });
+            break;
+          }
+          s -= l;
+        }
+      }
+      void b;
+    } else {
+      const xs = p.poly.map((q) => q[0]);
+      const ys = p.poly.map((q) => q[1]);
+      const [e0, e1, n0, n1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+      if (!town((e0 + e1) / 2, (n0 + n1) / 2)) continue;
+      let area = 0;
+      for (let i = 0; i < p.poly.length; i++) {
+        const [x0, y0] = p.poly[i]!;
+        const [x1, y1] = p.poly[(i + 1) % p.poly.length]!;
+        area += x0 * y1 - x1 * y0;
+      }
+      const count = Math.min(40, Math.floor(Math.abs(area / 2) / 60 * (p.floating ? 0.5 : 1)));
+      for (let k = 0, tries = 0; k < count && tries < count * 20; tries++) {
+        const e = e0 + (e1 - e0) * rnd();
+        const n = n0 + (n1 - n0) * rnd();
+        if (!insideRing(p.poly, e, n)) continue;
+        out.push({ e, n, floating: p.floating, deck: deck(p.floating) });
+        k++;
+      }
+    }
+  }
+  return out;
+}
+
+function insideRing(ring: [number, number][], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]!;
+    const [xj, yj] = ring[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
