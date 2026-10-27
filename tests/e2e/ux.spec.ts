@@ -100,6 +100,8 @@ test('toolbar: the More menu (sections, toggles), Escape closes menus and panels
 });
 
 test('the sailing controls can be put away and brought back (remembered); the keys still sail the boat', async ({ page }) => {
+  // Two full loads of the River Dart (the setting must survive a reload): slow under software rendering.
+  test.setTimeout(240_000 * CI_SLOW);
   const errors = await ready(page);
   const dock = page.getByRole('region', { name: 'Sailing controls' });
   await expect(dock).toBeVisible();
