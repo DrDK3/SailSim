@@ -5,7 +5,7 @@ import type { BoatSnapshot } from '../sim/simulation';
 import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
 import { SunLight, shadowQuality } from './sunlight';
-import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
+import { cameraFloor, clampHelmLook, easeRide, helmLookDir, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { SquibModel } from './squibModel';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
@@ -20,7 +20,7 @@ import type { SkyState } from '../sim/env/sky';
 import { daylight } from '../sim/env/sun';
 import { CloudDome, Rain } from './weather';
 
-export type CameraMode = 'chase' | 'helm' | 'orbit' | 'top' | 'free';
+export type CameraMode = 'chase' | 'helm' | 'orbit' | 'drone' | 'top' | 'free';
 
 /** Environment state the scene shows (read-only from the simulation). */
 export interface SceneEnvironment {
@@ -34,10 +34,17 @@ export interface SceneEnvironment {
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
 }
-export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'top'];
+export const CAMERA_MODES: CameraMode[] = ['chase', 'helm', 'orbit', 'drone', 'top'];
 
 /** Helm view: how much of the boat's heel tilts the view (0 = horizon level, 1 = fixed to the boat). */
 const HELM_HEEL_FRACTION = 0.5;
+/** Field of view (deg): the usual, the helm view's wider one (as the eye sees from a cockpit), its zoom range. */
+const FOV = 55;
+const HELM_FOV = 68;
+const HELM_FOV_MIN = 20;
+/** Drone: highest it flies (m from its target) and how far it starts behind and above the boat. */
+const DRONE_MAX_DISTANCE = 6000;
+const DRONE_START = { back: 140, up: 95 };
 const SUN_ELEVATION = 38 * (Math.PI / 180);
 const SUN_AZIMUTH = 200 * (Math.PI / 180);
 const FOG = new THREE.Color(0xc4d6e2);
@@ -98,6 +105,13 @@ export class SceneView {
   private lastWind = { tws: -1, twd: -1, wat: false };
   private crewSide = 1;
   private dart?: DartScene;
+  /** Helm view: where the head is turned (rad, yaw > 0 to starboard, pitch > 0 up) and the zoom. */
+  private helmLook = { yaw: 0, pitch: 0 };
+  private helmFov = HELM_FOV;
+  private dragLook?: { x: number; y: number };
+  /** Drone: carry the view along with the boat (otherwise it stays where it was flown). */
+  droneFollow = false;
+  private lastBoat = new THREE.Vector3();
   private course?: CourseScene;
   private depthAt?: (n: number, e: number) => number;
   private readonly fleet: FleetView;
@@ -121,6 +135,9 @@ export class SceneView {
     this.controls.maxPolarAngle = Math.PI * 0.49;
     this.controls.minDistance = 4;
     this.controls.maxDistance = 400;
+    // Drone panning moves across the map (not the screen), as a map does.
+    this.controls.screenSpacePanning = false;
+    this.listenForHelmLook(this.renderer.domElement);
 
     // Sky and lighting (setWeather moves the sun and changes them with the weather)
     const sunDir = this.sunDir;
@@ -262,12 +279,101 @@ export class SceneView {
   }
 
   setCameraMode(mode: CameraMode): void {
+    const was = this.mode;
     this.mode = mode;
-    this.controls.enabled = mode === 'orbit';
+    this.controls.enabled = mode === 'orbit' || mode === 'drone';
+    this.controls.enablePan = mode === 'drone';
+    this.controls.minDistance = mode === 'drone' ? 10 : 4;
+    this.controls.maxDistance = mode === 'drone' ? DRONE_MAX_DISTANCE : 400;
+    this.controls.maxPolarAngle = mode === 'drone' ? Math.PI * 0.495 : Math.PI * 0.49;
     if (mode === 'orbit') {
       this.controls.target.copy(this.boatRoot.position).add(new THREE.Vector3(0, 2, 0));
       this.camera.position.copy(this.boatRoot.position).add(new THREE.Vector3(10, 7, 12));
+    } else if (mode === 'drone' && was !== 'drone') {
+      // Take off behind the boat, looking down at it.
+      const back = new THREE.Vector3(-Math.sin(this.chaseHeading), 0, Math.cos(this.chaseHeading));
+      this.controls.target.copy(this.boatRoot.position);
+      this.camera.position.copy(this.boatRoot.position).addScaledVector(back, DRONE_START.back).add(new THREE.Vector3(0, DRONE_START.up, 0));
     }
+    if (mode !== 'helm') {
+      this.helmLook = { yaw: 0, pitch: 0 };
+      this.helmFov = HELM_FOV;
+    }
+    this.lastBoat.copy(this.boatRoot.position);
+    this.setFov(mode === 'helm' ? this.helmFov : FOV);
+  }
+
+  /** Drone: fly back to the boat, keeping the height and angle the view had. */
+  centreDrone(): void {
+    if (this.mode !== 'drone') return;
+    const offset = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
+    this.controls.target.copy(this.boatRoot.position);
+    this.camera.position.copy(this.boatRoot.position).add(offset);
+    this.controls.update();
+  }
+
+  /** Helm view: look straight ahead again (also a double-click on the view). */
+  resetHelmLook(): void {
+    this.helmLook = { yaw: 0, pitch: 0 };
+    this.helmFov = HELM_FOV;
+    if (this.mode === 'helm') this.setFov(this.helmFov);
+  }
+
+  /** Helm view: turn the head by (yaw, pitch) radians, as a drag does. */
+  turnHelmLook(dYaw: number, dPitch: number): void {
+    this.helmLook = clampHelmLook(this.helmLook.yaw + dYaw, this.helmLook.pitch + dPitch);
+  }
+
+  /** Where the helm is looking (rad) and the field of view (deg). */
+  get helmView(): { yaw: number; pitch: number; fov: number } {
+    return { ...this.helmLook, fov: this.helmFov };
+  }
+
+  /** The camera's position and target in Three.js coordinates (for tests and screenshots). */
+  cameraPose(): { position: [number, number, number]; target: [number, number, number] } {
+    const p = this.camera.position;
+    const t = this.controls.target;
+    return { position: [p.x, p.y, p.z], target: [t.x, t.y, t.z] };
+  }
+
+  private setFov(fov: number): void {
+    if (this.camera.fov === fov) return;
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Helm view: drag to turn the head, double-click to look ahead, the wheel zooms (binoculars). */
+  private listenForHelmLook(el: HTMLElement): void {
+    el.addEventListener('pointerdown', (ev) => {
+      if (this.mode !== 'helm' || ev.button !== 0) return;
+      this.dragLook = { x: ev.clientX, y: ev.clientY };
+      try {
+        el.setPointerCapture(ev.pointerId);
+      } catch {
+        // Synthetic pointers cannot be captured; dragging still works.
+      }
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!this.dragLook || this.mode !== 'helm') return;
+      // A drag across the whole view turns the head by about the field of view.
+      const k = ((this.helmFov * Math.PI) / 180) / Math.max(1, el.clientHeight);
+      this.turnHelmLook((ev.clientX - this.dragLook.x) * k, -(ev.clientY - this.dragLook.y) * k);
+      this.dragLook = { x: ev.clientX, y: ev.clientY };
+    });
+    const end = () => (this.dragLook = undefined);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('dblclick', () => this.mode === 'helm' && this.resetHelmLook());
+    el.addEventListener(
+      'wheel',
+      (ev) => {
+        if (this.mode !== 'helm') return;
+        ev.preventDefault();
+        this.helmFov = Math.max(HELM_FOV_MIN, Math.min(HELM_FOV, this.helmFov * Math.exp(ev.deltaY * 0.001)));
+        this.setFov(this.helmFov);
+      },
+      { passive: false },
+    );
   }
 
   /** Debug and screenshot aid: a fixed viewpoint (three.js coordinates) that does not follow the boat. */
@@ -363,7 +469,9 @@ export class SceneView {
       const side = this.crewSide;
       const eye = new THREE.Vector3(side * 0.8, 1.5, 2.15).applyQuaternion(this.boatRoot.quaternion).add(b);
       this.camera.position.copy(eye);
-      const ahead = new THREE.Vector3(side * 0.2, 0.9, -25).applyQuaternion(this.boatRoot.quaternion).add(b);
+      // Looking where the head is turned (ahead by default), from the boat's frame.
+      const [lx, ly, lz] = helmLookDir(this.helmLook.yaw, this.helmLook.pitch);
+      const ahead = new THREE.Vector3(side * 0.2 + lx * 25, 0.9 + ly * 25, lz * 25).applyQuaternion(this.boatRoot.quaternion).add(b);
       // The horizon tilts with part of the heel, as it does on board: a sailor's head stays nearer upright
       // than the boat (the fraction is a visual choice, E).
       const boatUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.boatRoot.quaternion);
@@ -377,6 +485,19 @@ export class SceneView {
       this.camera.up.set(0, 1, 0);
     } else if (this.mode === 'free') {
       this.controls.update();
+    } else if (this.mode === 'drone') {
+      // Free flight; following carries the view along with the boat.
+      if (this.droneFollow && moved < 50) {
+        const delta = new THREE.Vector3().subVectors(b, this.lastBoat);
+        this.camera.position.add(delta);
+        this.controls.target.add(delta);
+      }
+      this.controls.update();
+      // Never into the hills or the water.
+      const t = this.controls.target;
+      const floor = cameraFloor(this.dart ? this.dart.groundAt(this.camera.position.x, -this.camera.position.z) : 0);
+      if (this.camera.position.y < floor) this.camera.position.y = floor;
+      if (this.dart) t.y = Math.max(0, Math.min(t.y, this.dart.groundAt(t.x, -t.z) + 30));
     } else {
       // Orbit: keep the user's viewpoint relative to the boat while it sails.
       const delta = new THREE.Vector3().subVectors(b, this.controls.target).add(new THREE.Vector3(0, 2, 0));
@@ -386,6 +507,7 @@ export class SceneView {
       }
       this.controls.update();
     }
+    this.lastBoat.copy(b);
   }
 
   /** The 16 puffs nearest the boat, with their life envelope, as water-shader uniforms. */

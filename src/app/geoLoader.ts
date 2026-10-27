@@ -1,5 +1,6 @@
 import { DartGeo, type DartManifest } from '../sim/geo/dart';
 import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
+import type { RoadsData } from '../render/population';
 
 /** public/geo/features.json (written by tools/geodata/build.py); local metres, rounded to 0.1 m. */
 export interface DartFeatures {
@@ -60,6 +61,8 @@ export interface ManifestFull extends DartManifest {
   minimap: { file: string; cell: number; e0: number; n0: number };
   /** Signed distance to the tidal water outline, for where the picture draws the water (watermask.png). */
   waterMask?: WaterMaskSpec;
+  /** Roads and footways (roads.json); absent from data built before the street-life work. */
+  roads?: { file: string; classes: Record<string, string> };
 }
 
 export interface WaterMaskSpec {
@@ -82,6 +85,8 @@ export interface DartData {
   minimapUrl?: string;
   /** Where the water may be drawn (decoded: distance in m = (value - 128) / 2, > 0 in the water). */
   waterMask?: { spec: WaterMaskSpec; image: HTMLImageElement };
+  /** Roads and footways (roads.json, written by tools/geodata/roads.py), when the data has them. */
+  roads?: RoadsData;
   issues: { asset: string; message: string; effect: string }[];
 }
 
@@ -132,13 +137,14 @@ export async function loadDartData(base = BASE): Promise<DartData> {
     return out;
   }
   const m = out.manifest;
-  const [elev, cur, feat, drape, town, mask] = await Promise.allSettled([
+  const [elev, cur, feat, drape, town, mask, roads] = await Promise.allSettled([
     fetchGrid(base, m.elevation),
     fetchGrid(base, m.current),
     fetchOk(base + 'features.json').then((r) => r.json() as Promise<DartFeatures>),
     loadImage(base + m.drape.file),
     m.town ? fetchGrid(base, m.town) : Promise.resolve(undefined),
     m.waterMask ? loadImage(base + m.waterMask.file) : Promise.resolve(undefined),
+    m.roads ? fetchOk(base + m.roads.file).then((r) => r.json() as Promise<RoadsData>) : Promise.resolve(undefined),
   ]);
   if (elev.status === 'rejected') {
     issue(m.elevation.file, elev.reason, 'No terrain or depths: sailing on open water.');
@@ -166,6 +172,8 @@ export async function loadDartData(base = BASE): Promise<DartData> {
   } else if (town.status === 'rejected' && m.town) issue(m.town.file, town.reason, 'Town ground drawn from the 8 m grid.');
   if (mask.status === 'fulfilled' && mask.value && m.waterMask) out.waterMask = { spec: m.waterMask, image: mask.value };
   else if (mask.status === 'rejected' && m.waterMask) issue(m.waterMask.file, mask.reason, 'Water drawn wherever the ground is below the tide, inland hollows included.');
+  if (roads.status === 'fulfilled') out.roads = roads.value;
+  else if (m.roads) issue(m.roads.file, roads.reason, 'No roads, cars or people.');
   out.minimapUrl = base + m.minimap.file;
   return out;
 }

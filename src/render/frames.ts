@@ -72,3 +72,28 @@ export function easeRide(ride: WaveRide, to: WaveRide, dt: number, first: boolea
   ride.roll += (to.roll - ride.roll) * k;
   ride.heave = to.heave;
 }
+
+/** Where the helm view may look: yaw ±150° (over either shoulder), pitch from the cockpit floor to the masthead. */
+export const HELM_LOOK = { maxYaw: (150 * Math.PI) / 180, minPitch: (-50 * Math.PI) / 180, maxPitch: (60 * Math.PI) / 180 };
+
+/** Clamp a helm-view look direction (yaw > 0 to starboard, pitch > 0 up) to what a seated helm can see. */
+export function clampHelmLook(yaw: number, pitch: number): { yaw: number; pitch: number } {
+  return {
+    yaw: Math.max(-HELM_LOOK.maxYaw, Math.min(HELM_LOOK.maxYaw, yaw)),
+    pitch: Math.max(HELM_LOOK.minPitch, Math.min(HELM_LOOK.maxPitch, pitch)),
+  };
+}
+
+/**
+ * Unit look direction in the boat model's frame (x starboard, y up, z aft) for a head turned by `yaw`
+ * (> 0 towards starboard) and tilted by `pitch` (> 0 up): straight ahead is (0, 0, -1).
+ */
+export function helmLookDir(yaw: number, pitch: number): [number, number, number] {
+  const c = Math.cos(pitch);
+  return [Math.sin(yaw) * c, Math.sin(pitch), -Math.cos(yaw) * c];
+}
+
+/** The lowest a free camera may fly over ground of height `ground` (m): never below the water or a hilltop. */
+export function cameraFloor(ground: number, waterLevel = 0): number {
+  return Math.max(waterLevel, ground) + 6;
+}

@@ -72,7 +72,9 @@ npm run dev          # open the printed URL; press H in the app for help
 | Space | Centre the helm |
 | P / R | Pause / reset (in a race that has started, reset asks first) |
 | Esc | Close the open panels and menus |
-| C | Cycle camera |
+| C | Cycle camera: chase, helm (drag to look round), orbit, drone (drag, right-drag to pan, wheel to climb), top |
+| B | Drone view: back to the boat |
+| Z / Shift+Z | Flatten the sails to depower / power them up, a quarter at a time |
 | F / G | Force arrows / physics panel |
 | V | Validation dashboard (live charts, table, CSV export) |
 | L / N | Place labels / minimap |
@@ -82,6 +84,7 @@ On-screen buttons provide the same controls, with their keys shown on them. The 
 
 The toolbar keeps to the essentials:
 - **Pause** (or **Resume**), **Reset** and the **camera**;
+- **Race**: a quick race in one step (0–20 AI boats, their level, Start Bay or the river, random, live or as-set conditions), with the **race coach** (briefing, tips, debrief);
 - **Library** and **Scenario**;
 - **More**: the **Tutorial** and the **course editor**; what is shown (labels, minimap, sailing controls, force arrows, layers and sources); the physics tools (validation dashboard, polar sweep, physics panel);
 - **Help** (?).
@@ -136,6 +139,7 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 | [docs/HIFI_REPORT.md](docs/HIFI_REPORT.md) | Hi-fi pass: Squib types and their physics, the detailed Squib, burgee and transom, wind over tide, river traffic, town roofs; sources, estimates and gaps |
 | [docs/HIFI2_REPORT.md](docs/HIFI2_REPORT.md) | Hi-fi, second pass: the stern, the sailors, the houses, the traffic and the overall look, with what was found and fixed |
 | [docs/HIFI3_REPORT.md](docs/HIFI3_REPORT.md) | Round 3: the Lower Ferry's passing and berths, the marinas and their traffic, Kingswear station and the trains, the redesigned screen |
+| [docs/REDTEAM_REPORT.md](docs/REDTEAM_REPORT.md) | Red-team round: overpowered and gusts (depowering), drone and first-person views, the quick race and the coach, random and live conditions, landmarks, streets and people |
 | [docs/UX_REVIEW.md](docs/UX_REVIEW.md) | Usability review (heuristics, accessibility, phones): findings, severities, changes, what is not done |
 | [docs/PHASE6_REPORT.md](docs/PHASE6_REPORT.md) | Phase 6: what works, test results, acceptance, decisions, known defects, manual test steps |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Publishing to GitHub Pages, the scheduled live-data jobs, freshness rules, automatic checks, first-run checklist, costs |

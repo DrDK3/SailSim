@@ -34,40 +34,56 @@ function hash(x: number, y: number, k: number): number {
 }
 
 /**
- * A unit tree (height 1, crown 1 across): trunk and a lumpy crown with soft (radial) normals, darker towards
- * its underside where the leaves shade each other.
+ * A unit tree (height 1, crown 1 across): trunk and a crown. Near trees have a crown of several overlapping
+ * lobes (a cloud of foliage rather than a ball), far ones a single lumpy ball. Normals point out from the
+ * crown's centre, so the crown shades softly as a whole; it is darker towards its underside where the leaves
+ * shade each other.
  */
 function broadleaf(detail: number): THREE.BufferGeometry {
-  const crown = new THREE.IcosahedronGeometry(0.5, detail);
-  const p = crown.getAttribute('position');
-  const nrm = new Float32Array(p.count * 3);
-  const shade = new Float32Array(p.count);
-  for (let i = 0; i < p.count; i++) {
-    const v = new THREE.Vector3().fromBufferAttribute(p, i);
-    const dir = v.clone().normalize();
-    nrm.set([dir.x, dir.y * 1.2, dir.z], i * 3);
-    shade[i] = 0.62 + 0.38 * (0.5 + 0.5 * dir.y);
-    const bump = 1 + 0.3 * (hash(Math.round(v.x * 50), Math.round(v.y * 50), Math.round(v.z * 50)) - 0.5);
-    v.multiplyScalar(bump).multiply(new THREE.Vector3(1, 0.8, 1));
-    p.setXYZ(i, v.x, v.y + 0.6, v.z);
+  const centre = new THREE.Vector3(0, 0.62, 0);
+  // Lobes: centre (x, y, z) and radius; one ball when far.
+  const lobes: [number, number, number, number][] = detail >= 1
+    ? [[0, 0.62, 0, 0.34], [0.2, 0.56, 0.07, 0.27], [-0.18, 0.58, 0.11, 0.26], [0.04, 0.55, -0.21, 0.27], [-0.1, 0.78, -0.06, 0.24], [0.12, 0.76, 0.12, 0.22]]
+    : [[0, 0.62, 0, 0.5]];
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const col: number[] = [];
+  const leaf = new THREE.Color().setHex(0x34502a, THREE.SRGBColorSpace);
+  lobes.forEach(([lx, ly, lz, r], li) => {
+    const g = new THREE.IcosahedronGeometry(r, 0).toNonIndexed();
+    const p = g.getAttribute('position');
+    for (let i = 0; i < p.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(p, i);
+      const bump = 1 + 0.25 * (hash(Math.round(v.x * 50) + li * 7, Math.round(v.y * 50), Math.round(v.z * 50)) - 0.5);
+      v.multiplyScalar(bump).multiply(new THREE.Vector3(1, detail >= 1 ? 0.9 : 0.8, 1));
+      v.add(new THREE.Vector3(lx, ly - (detail >= 1 ? 0 : 0.02), lz));
+      const dir = v.clone().sub(centre).normalize();
+      // Lobes vary a little in tone (sunlit and shaded clumps).
+      const tone = 0.9 + 0.2 * hash(li, 3, 9);
+      const shade = (0.6 + 0.4 * (0.5 + 0.5 * dir.y)) * tone;
+      pos.push(v.x, v.y, v.z);
+      nor.push(dir.x, dir.y * 1.2, dir.z);
+      col.push(leaf.r * shade, leaf.g * shade, leaf.b * shade);
+    }
+  });
+  const trunk = new THREE.CylinderGeometry(0.035, 0.05, 0.42, 5).translate(0, 0.21, 0).toNonIndexed();
+  const bark = new THREE.Color().setHex(0x45372a, THREE.SRGBColorSpace);
+  const tp = trunk.getAttribute('position');
+  const tn = trunk.getAttribute('normal');
+  for (let i = 0; i < tp.count; i++) {
+    pos.push(tp.getX(i), tp.getY(i), tp.getZ(i));
+    nor.push(tn.getX(i), tn.getY(i), tn.getZ(i));
+    col.push(bark.r, bark.g, bark.b);
   }
-  crown.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-  crown.getAttribute('normal').needsUpdate = true;
-  const trunk = new THREE.CylinderGeometry(0.035, 0.05, 0.42, 5);
-  trunk.translate(0, 0.21, 0);
-  const g = coloured([
-    [crown, 0x34502a],
-    [trunk, 0x45372a],
-  ]);
-  // Self-shading of the crown (the trunk's vertices follow it in order, unshaded).
-  const col = g.getAttribute('color');
-  const idx = crown.index;
-  const order = idx ? Array.from({ length: idx.count }, (_, k) => idx.getX(k)) : Array.from({ length: p.count }, (_, k) => k);
-  order.forEach((vi, k) => col.setXYZ(k, col.getX(k) * shade[vi]!, col.getY(k) * shade[vi]!, col.getZ(k) * shade[vi]!));
-  for (let k = 0; k < g.getAttribute('normal').count; k++) {
-    const n = new THREE.Vector3().fromBufferAttribute(g.getAttribute('normal'), k).normalize();
-    g.getAttribute('normal').setXYZ(k, n.x, n.y, n.z);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const nv = new THREE.Float32BufferAttribute(nor, 3);
+  for (let k = 0; k < nv.count; k++) {
+    const n = new THREE.Vector3().fromBufferAttribute(nv, k).normalize();
+    nv.setXYZ(k, n.x, n.y, n.z);
   }
+  g.setAttribute('normal', nv);
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
 

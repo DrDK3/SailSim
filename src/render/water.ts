@@ -171,8 +171,11 @@ void main() {
   vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5) * uLight;
   // Light through the thin crest of a steep wave.
   body += uShallow * uLight * 0.6 * smoothstep(0.2, 0.9, h / max(f.r * 0.5, 0.02)) * steep;
-  vec3 col = mix(body, skyCol, fres * (1.0 - 0.45 * puff));
-  col *= 1.0 - 0.18 * puff;
+  // In a puff the surface is rougher, so it reflects less sky and reads darker; the edge of a puff is darker
+  // still, as sailors see a gust line coming (strengths chosen for the eye, E).
+  float edge = smoothstep(0.15, 0.45, puff) * (1.0 - smoothstep(0.55, 0.9, puff));
+  vec3 col = mix(body, skyCol, fres * (1.0 - 0.6 * puff));
+  col *= 1.0 - 0.3 * puff - 0.08 * edge;
   vec3 hv = normalize(uSunDir + viewDir);
   col += vec3(1.0, 0.96, 0.85) * pow(max(dot(n, hv), 0.0), 220.0) * 1.6 * (0.25 + 0.75 * near) * uGlint;
   // Whitecaps: foam on compressed crests, as much as the modelled cover, broken up and streaked downwind.

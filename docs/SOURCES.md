@@ -80,6 +80,24 @@
 
 Sizes of the floats, tugs and Higher Ferry, crossing speeds, loading times and the other services' timetables were not found; they are estimates (E) in `src/sim/env/traffic.ts`. Dart Marina's position is OpenStreetMap's (G1).
 
+## Landmarks and heavy weather (red-team round, 27 Oct 2026)
+
+| # | Source | URL | Date | Access | Used for |
+|---|---|---|---|---|---|
+| L1 | Historic England, list entry 1208626, "Britannia Royal Naval College, main complex and attached walls" (via search excerpts) | https://historicengland.org.uk/listing/the-list/list-entry/1208626 | listed 1972 | Excerpt (host blocked) | 1899–1905, Sir Aston Webb; Flemish-bond brick with Portland ashlar dressings, slate roofs; central entrance block flanked by long wings ending in asymmetrical pavilions, each with a tower; the entrance block's deep hipped slate roof, balustraded parapet, stone-banded chimneys |
+| L2 | Slow Travel UK, "Visiting the Britannia Royal Naval College in Dartmouth" (photograph caption, via search excerpt) | https://www.slow-travel.uk/post/visiting-the-britannia-royal-naval-college-in-dartmouth | n.d. | Excerpt | The central clock tower |
+| L3 | Listed-building description of the Church of St Petrox (britishlistedbuildings, via search excerpt); Historic England photograph captions DP149122, DP149139; Wikipedia "Dartmouth Castle" (via search excerpts) | https://britishlistedbuildings.co.uk/101297086-church-of-st-petrox-dartmouth | n.d. | Excerpt (hosts blocked) | St Petrox: present building 1641, two-stage west tower, semicircular arched windows; gun tower 1481, north gun platform 1539–44 |
+| L4 | Historic England, list entry 1108543, "Kingswear Castle" (via search excerpt); Landmark Trust history sheet | https://historicengland.org.uk/listing/the-list/list-entry/1108543 | n.d. | Excerpt (host blocked) | Square on plan, slightly battered walls, corbelled embattled parapet, octagonal stair turret at the north-west corner; slate rubble with red sandstone dressings; 1491–1502 |
+| L5 | Royal Dart Yacht Club, club history; Wikipedia "Royal Dart Yacht Club" (via search excerpts) | https://royaldart.co.uk/?p=353 | n.d. | Excerpt (host blocked) | Founded 1866; purpose-built clubhouse completed 1881 |
+| L6 | Historic England, list entry 1146644, "Royal Dart Hotel" (via search excerpt) | https://historicengland.org.uk/listing/the-list/list-entry/1146644 | listed 1985 | Excerpt | c. 1850, Italianate, Grade II; river front with a wide splayed two-storey bay and a cast-iron balcony with a tented roof on thin iron columns; the club's rooms before 1881 |
+| L7 | Overture Maps places (2026-10-21.0): "Dart Marina Hotel" at 50.35719, -3.57733; venue listing (Cvent) and Hotel Designs (via search excerpts) | https://cvent.com/venues/-/hotel/dart-marina/venue-b1d0281a-1679-46e6-a10d-17273e5000d6 | n.d. | Direct (Overture); excerpts | Its position (and so its building); rooms with river views, some with balconies |
+| L8 | Yachting Monthly / PBO / Marine Industry News on the Noss on Dart redevelopment (via search excerpts) | https://www.pbo.co.uk/news/redevelopment-plans-noss-dart-marina-unveiled-43942 | 2018–2023 | Excerpt | Premier Marinas since 2016; 232-berth marina, boatyard, café, commercial units (the buildings' materials are not described) |
+| L9 | Yachting World, "Sail faster, sail safer: broaching"; RS200 heavy-weather notes; general tuning guides (North Sails, Doyle) (via search excerpts) | https://www.yachtingworld.com/sail-faster-sail-safer/sail-faster-sail-safer-advanced-techniques-series-part-2-broaching-76169 | n.d. | Excerpt | Ease the kicker and mainsheet as a broach starts; flatten (backstay, cunningham, outhaul, kicker); jib leads aft. Not Squib-specific |
+| L10 | keelindex.com, "Squib performance" (velocity prediction, via search excerpt) | https://keelindex.com/boat/squib/performance | n.d. | Excerpt | Model predictions, not measurements: about 7.1 kn at 110–120° in 20 kn; hull speed about 5.5 kn |
+| L11 | Yachts & Yachting, Squib Inlands at Rutland (via search excerpt) | https://www.yachtsandyachting.com/news/149068/Squib-Inlands-at-Rutland | 2009 | Excerpt | "Squibs will race in force 7 gusts": the wind range the simulation should handle |
+
+No photograph of a landmark could be viewed: the image and listing hosts are refused by the network policy. What the app draws from these descriptions, and what is estimated, is in REDTEAM_REPORT.md §4.
+
 ## Waves (wind over tide)
 
 | # | Source | Used for |

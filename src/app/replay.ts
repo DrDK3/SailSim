@@ -13,8 +13,11 @@ export const REPLAY_SCHEMA = 'squib-replay/1';
 /** Hash the state every 1000 steps (10 s simulated). */
 export const CHECKPOINT_STEPS = 1000;
 
-/** One input-log row: [step, helm, mainSheet, jibSheet, crewHike, flags] with flags autoMain 1 | autoJib 2 | autoCrew 4. */
-export type InputRow = [number, number, number, number, number, number];
+/**
+ * One input-log row: [step, helm, mainSheet, jibSheet, crewHike, flags, flatten] with flags autoMain 1 | autoJib 2 |
+ * autoCrew 4. Recordings made before the flatten control have six columns (flatten 0).
+ */
+export type InputRow = [number, number, number, number, number, number] | [number, number, number, number, number, number, number];
 
 export interface Recording {
   schema: string;
@@ -35,13 +38,16 @@ export interface Recording {
 }
 
 export function encodeInputs(log: readonly InputLogEntry[]): InputRow[] {
-  return log.map(({ step, input: i }) => [step, i.helm, i.mainSheet, i.jibSheet, i.crewHike, (i.autoMain ? 1 : 0) | (i.autoJib ? 2 : 0) | (i.autoCrew ? 4 : 0)]);
+  return log.map(({ step, input: i }): InputRow => {
+    const row: InputRow = [step, i.helm, i.mainSheet, i.jibSheet, i.crewHike, (i.autoMain ? 1 : 0) | (i.autoJib ? 2 : 0) | (i.autoCrew ? 4 : 0)];
+    return i.flatten === undefined ? row : [...row, i.flatten] as InputRow;
+  });
 }
 
 export function decodeInputs(rows: readonly InputRow[]): InputLogEntry[] {
-  return rows.map(([step, helm, mainSheet, jibSheet, crewHike, f]) => ({
+  return rows.map(([step, helm, mainSheet, jibSheet, crewHike, f, flatten]) => ({
     step,
-    input: { helm, mainSheet, jibSheet, crewHike, autoMain: (f & 1) !== 0, autoJib: (f & 2) !== 0, autoCrew: (f & 4) !== 0 },
+    input: { helm, mainSheet, jibSheet, crewHike, autoMain: (f & 1) !== 0, autoJib: (f & 2) !== 0, autoCrew: (f & 4) !== 0, ...(flatten === undefined ? {} : { flatten }) },
   }));
 }
 
@@ -56,7 +62,7 @@ export function parseRecording(json: unknown): Recording {
   if (!Array.isArray(r.inputs)) throw new Error('replay: missing inputs');
   let prev = -1;
   for (const row of r.inputs) {
-    if (!Array.isArray(row) || row.length !== 6 || !row.every(isNum)) throw new Error('replay: bad input row');
+    if (!Array.isArray(row) || (row.length !== 6 && row.length !== 7) || !row.every(isNum)) throw new Error('replay: bad input row');
     if (row[0] <= prev && !(row[0] === 0 && prev === -1)) throw new Error('replay: input steps must increase');
     prev = row[0];
   }

@@ -90,6 +90,11 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
               <input type="range" min={0} max={1} step={0.05} value={s.input.crewHike} onChange={(e) => ctl.setInput({ crewHike: Number(e.target.value) })} />
             </label>
           )}
+          <label className="slider" title="Flatten the sails to depower in a breeze: cunningham, outhaul and kicker on, leech twisted open. Less heel and weather helm, less power (Z flatter, Shift+Z fuller)" data-tutorial="flatten">
+            Flatten <Key k="Z" />
+            <input type="range" min={0} max={1} step={0.05} value={s.input.flatten ?? 0} aria-valuetext={pct(s.input.flatten ?? 0)} onChange={(e) => ctl.setInput({ flatten: Number(e.target.value) })} />
+            <span className="slider-value">{pct(s.input.flatten ?? 0)}</span>
+          </label>
         </div>
       </div>
       {onHide && (

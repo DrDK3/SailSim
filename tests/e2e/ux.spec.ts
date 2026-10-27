@@ -69,8 +69,8 @@ test.describe('first visit', () => {
 
 test('toolbar: the More menu (sections, toggles), Escape closes menus and panels, one side panel at a time', async ({ page }) => {
   const errors = await ready(page);
-  // Few controls in view: playback, camera, Library and Scenario, More and Help.
-  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(6);
+  // Few controls in view: playback, camera, Race, Library and Scenario, More and Help.
+  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(7);
   const view = page.getByRole('button', { name: 'More', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });

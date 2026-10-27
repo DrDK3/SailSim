@@ -33,7 +33,7 @@ export interface GustSettings {
   puffLifetimeS: number;
 }
 
-export const GUST_PRESETS: Record<'steady' | 'moderate' | 'shifty', GustSettings> = {
+export const GUST_PRESETS: Record<'steady' | 'moderate' | 'shifty' | 'gusty', GustSettings> = {
   steady: {
     seed: 1, shiftSdDeg: 0, shiftPeriodS: 120, trendDegPerMin: 0, speedSdFrac: 0, speedPeriodS: 40,
     puffsPerKm2PerMin: 0, puffStrengthFrac: 0, puffRadiusM: 100, puffDirSdDeg: 0, puffLifetimeS: 100,
@@ -45,6 +45,14 @@ export const GUST_PRESETS: Record<'steady' | 'moderate' | 'shifty', GustSettings
   shifty: {
     seed: 1, shiftSdDeg: 10, shiftPeriodS: 90, trendDegPerMin: 0, speedSdFrac: 0.15, speedPeriodS: 30,
     puffsPerKm2PerMin: 1.5, puffStrengthFrac: 0.35, puffRadiusM: 90, puffDirSdDeg: 10, puffLifetimeS: 90,
+  },
+  /**
+   * Off the hills: frequent, strong, small gusts that arrive quickly and veer or back hard, as in a westerly
+   * coming down the valley sides above the harbour. Gusts of about 1.2–1.7 times the mean in their cores (E).
+   */
+  gusty: {
+    seed: 1, shiftSdDeg: 12, shiftPeriodS: 60, trendDegPerMin: 0, speedSdFrac: 0.18, speedPeriodS: 20,
+    puffsPerKm2PerMin: 3.5, puffStrengthFrac: 0.45, puffRadiusM: 75, puffDirSdDeg: 14, puffLifetimeS: 70,
   },
 };
 

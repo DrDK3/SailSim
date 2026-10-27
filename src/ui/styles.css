@@ -367,7 +367,8 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .icon { font-size: 0.9em; line-height: 1; opacity: 0.9; }
 
 /* App bar */
-.toolbar { gap: var(--s2); padding: 6px; max-width: calc(100% - 340px); }
+/* Above the HUD, the side panels and the minimap, so its menus open over them (backdrop-filter makes it a stacking context). */
+.toolbar { gap: var(--s2); padding: 6px; max-width: calc(100% - 340px); z-index: 6; }
 .tb-group + .tb-group { padding-left: var(--s2); }
 .tb-primary { min-width: 96px; background: rgba(79, 179, 255, 0.22); border-color: rgba(79, 179, 255, 0.55); font-weight: 600; }
 .tb-primary:hover { background: rgba(79, 179, 255, 0.34); }
@@ -448,3 +449,37 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 }
 .toolbar .select select { color: var(--text); min-height: 32px; }
 .minimap-bar { font-size: 11px; }
+.misc-row .slider-value { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Camera hints (helm look-around, drone): a quiet strip under the app bar, out of the boat's way. */
+.camera-bar { position: absolute; top: 64px; right: 12px; display: flex; align-items: center; gap: var(--s2); padding: 4px 10px; border-radius: 99px; font-size: 12px; z-index: 1; }
+.camera-bar .fine { margin: 0; }
+.camera-bar button { padding: 3px 10px; }
+@media (max-width: 700px) {
+  .camera-bar .fine { display: none; }
+}
+
+/* Race coach: a card under the race panel, and a tip toast near the top. */
+.panel.coach { max-width: 340px; font-size: 13px; }
+.coach-head { justify-content: flex-start; gap: var(--s2); align-items: baseline; }
+.coach-head h3 { margin: 0 auto 0 0; font-size: 14px; }
+.coach-list { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; line-height: 1.35; }
+.coach-list.debrief { list-style: none; padding-left: 0; }
+.coach-list.debrief li { display: grid; grid-template-columns: 18px 1fr; gap: 4px; }
+.coach-list .mark { font-weight: 700; text-align: center; }
+.coach-list .v-good .mark { color: var(--good); }
+.coach-list .v-ok .mark { color: var(--muted); }
+.coach-list .v-work .mark { color: var(--warn); }
+.coach-focus { margin: 6px 0 4px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); line-height: 1.35; }
+.coach-tip {
+  position: absolute; top: 112px; left: 50%; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px));
+  padding: 8px 14px; border-radius: 12px; background: var(--panel-strong); border: 1px solid var(--panel-border);
+  font-size: 13px; line-height: 1.35; z-index: 2; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+.coach-tip-label { font-weight: 700; margin-right: 6px; color: var(--accent); }
+.coach-tip.tone-warn .coach-tip-label { color: var(--warn); }
+.coach-tip.tone-good .coach-tip-label { color: var(--good); }
+.coach-head button.link { font-size: 12px; }
+.quick-race .qr-count { display: flex; align-items: center; gap: var(--s2); }
+.quick-race .qr-count input { flex: 1; min-width: 120px; }
+.quick-race .qr-count output { min-width: 11em; font-variant-numeric: tabular-nums; }
