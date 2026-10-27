@@ -66,7 +66,7 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
   - time limits are doubled on CI;
   - a test is retried once, and one that passes only on retry is reported as **flaky**;
   - failures appear as annotations on the run (Playwright's GitHub reporter).
-- **The scene keeps growing:** with the marinas and the railway (27 Oct 2026) the slowest of three shards took 35–45 minutes, against a 45-minute limit. Now four shards with a 60-minute limit, and on a software renderer the app draws the berthed boats' detailed models only within 150 m and the sleepers only at Kingswear station (`?quality=low` does the same on a real GPU).
+- **The scene keeps growing:** with the marinas and the railway (27 Oct 2026) the slowest of three shards took 35–45 minutes, against a 45-minute limit. Now four shards split by test (`fullyParallel`; by file, one shard had 23 tests and another none) with a 60-minute limit, and on a software renderer the app draws the berthed boats' detailed models only within 150 m and the sleepers only at Kingswear station (`?quality=low` does the same on a real GPU).
 
 **How the live-data job pushes:**
 - **Commits:** consecutive data commits are squashed into one ("Live data", amended and force-pushed with a lease), so `gh-pages` does not grow by 48 commits a day.

@@ -44,7 +44,7 @@ What was done (`src/sim/env/traffic.ts`):
   - 10% are visitors arriving in an empty berth.
 
   A boat goes astern out of its berth into the lane, then follows a way out found on a 2 m grid round the pontoons and berthed boats (Dijkstra from the marina's entrance, straightened in clear water), dead slow (2.5 kn, E), then the deep-water route to sea or up-river as before. It holds for the chain ferries and turns corners rather than jumping.
-- **Drawing them** (`src/render/berthed.ts`). Hundreds of boats, so a few reduced-detail models (sloops with covered mainsails, furled genoas and fenders; motor cruisers, some with flybridges; 800–1,100 triangles each), instanced and scaled to each boat. Plain hulls are drawn beyond 420 m. The trot moorings now use the same models instead of the old primitive shapes.
+- **Drawing them** (`src/render/berthed.ts`). Hundreds of boats, so a few reduced-detail models (sloops with covered mainsails, furled genoas and fenders; motor cruisers, some with flybridges; 800–1,100 triangles each), instanced and scaled to each boat. Plain hulls are drawn beyond 420 m (150 m on a software renderer, where the sleepers are also drawn only at the station). The trot moorings now use the same models instead of the old primitive shapes.
 
 ## Kingswear station and the trains
 
