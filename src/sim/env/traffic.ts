@@ -18,7 +18,7 @@ import { MarinaPlanner, berthOccupancy, layoutBerths, type Berth, type PierFeatu
  * published times (F2). Vessel sizes, speeds, dwell times and the hours of the other services are estimates (E).
  */
 
-export type VesselKind = 'tug-float' | 'floating-bridge' | 'passenger-ferry' | 'launch' | 'river-cruiser' | 'motor-cruiser' | 'yacht' | 'rib';
+export type VesselKind = 'tug-float' | 'floating-bridge' | 'passenger-ferry' | 'launch' | 'river-cruiser' | 'paddle-steamer' | 'motor-cruiser' | 'yacht' | 'rib';
 export type VesselPhase = 'berthed' | 'clearing' | 'swinging' | 'underway' | 'holding';
 
 /** A box the fleet physics treats as solid (centre, heading, size). */
@@ -254,10 +254,10 @@ const SERVICES: Record<string, ServiceSpec> = {
     notes: 'Timetable estimated (E).',
   },
   'Totnes to Dartmouth Ferry': {
-    kind: 'river-cruiser', label: 'Totnes river cruise', length: 30, beam: 6.4, ram: false,
+    kind: 'river-cruiser', label: 'MV Cardiff Castle (Totnes river boat)', length: 30.5, beam: 6.4, ram: false,
     vMax: 2.9, accel: 0.15, decel: 0.2, interval: 90,
     hours: (_wd, month) => (month >= 3 && month <= 9 ? { a: [10 * 60, 16 * 60], b: [11 * 60, 17 * 60] } : null),
-    notes: 'Drawn as the Cardiff Castle (30 m by 6.4 m, three decks, F8); seasonal; timetable estimated (E).',
+    notes: 'The MV Cardiff Castle (1964, Bolson of Poole; 100 ft by 21 ft, 30.5 m by 6.4 m; 400 passengers on three decks; now mainly on the Totnes service: F8, F15). Seasonal; timetable estimated (E).',
   },
 };
 
@@ -487,6 +487,58 @@ interface BerthDay {
   arrive: Map<number, number>;
 }
 
+/**
+ * PS Kingswear Castle (1924, Philip & Son, Dartmouth): the last coal-fired paddle steamer in service in the UK,
+ * 34.7 m long, 5.3 m in the hull and 8.5 m over the paddle boxes, 8 kn in service (Paddle Steamer Preservation
+ * Society, docs/SOURCES.md F16). Her river cruises leave the South Embankment at 11:15, 12:30, 13:45 and 15:30,
+ * about an hour, from mid-May to mid-September and not on Fridays (the operator's 2025 leaflet, F17: 2026
+ * assumed the same, E), down past the castles and up towards Greenway; on 8 September 2026 she runs to Totnes
+ * instead at 15:30, back at Dartmouth at 19:30 (F18). Where she lies at the embankment, the turning points and
+ * the dates the season starts and ends are estimates (E). Inside the harbour she keeps to its 6 kn limit.
+ */
+export const PADDLE_STEAMER = {
+  label: 'PS Kingswear Castle (paddle steamer)',
+  length: 34.7,
+  beam: 8.5,
+  hullBeam: 5.3,
+  vMax: 8 * 1852 / 3600,
+  accel: 0.06,
+  decel: 0.08,
+  /** Alongside the South Embankment, bow downriver (E). */
+  berth: { e: -262, n: 300, heading: (200 * Math.PI) / 180 },
+  /** Where she turns: off Dartmouth Castle, and up-river towards Greenway (E). */
+  turnDown: { e: 380, n: -520 },
+  turnUp: { e: -1000, n: 3560 },
+  /** Departures (local minutes after midnight) and the time on station (E). */
+  departures: [11 * 60 + 15, 12 * 60 + 30, 13 * 60 + 45, 15 * 60 + 30],
+  onStation: [10 * 60, 17 * 60] as [number, number],
+  /** Season (month index 0–11, day): 15 May to 15 September (E for the exact dates); no sailings on Fridays. */
+  season: { from: [4, 15] as [number, number], to: [8, 15] as [number, number] },
+  noSailingWeekday: 5,
+  /** Special sailings: the Totnes trip (date, departure, back at Dartmouth). */
+  specials: [{ date: '2026-09-08', dep: 15 * 60 + 30, back: 19 * 60 + 30 }],
+  /** Without the depth data: down the Castle Ferry's track and back, then up the Greenway Ferry's (E). */
+  fallback: [[-262, 300], [-224, 224], [-201, 59], [-128, -232], [65, -358], [358, -454], [380, -520], [213, -400], [-75, -273], [-190, -109], [-205, 158], [-156, 378], [-81, 688], [-141, 1214], [-366, 1750], [-352, 2279], [-394, 2837], [-558, 3111], [-829, 3369], [-1000, 3560], [-829, 3369], [-474, 2978], [-352, 2687], [-387, 1953], [-250, 1486], [-73, 933], [-133, 402], [-262, 300]] as [number, number][],
+};
+
+/** The steamer's sailings on a local date ('YYYY-MM-DD'), weekday (0 = Sunday) and month (0–11). */
+export function steamerSailings(date: string, weekday: number, month: number): { dep: number; to: 'cruise' | 'totnes'; back?: number }[] {
+  const P = PADDLE_STEAMER;
+  const d = Number(date.slice(8, 10));
+  const after = (m: number, dd: number, [fm, fd]: [number, number]) => m > fm || (m === fm && dd >= fd);
+  const before = (m: number, dd: number, [tm, td]: [number, number]) => m < tm || (m === tm && dd <= td);
+  const special = P.specials.find((x) => x.date === date);
+  const inSeason = after(month, d, P.season.from) && before(month, d, P.season.to) && weekday !== P.noSailingWeekday;
+  if (!inSeason && !special) return [];
+  const out: { dep: number; to: 'cruise' | 'totnes'; back?: number }[] = inSeason ? P.departures.map((dep) => ({ dep, to: 'cruise' as const })) : [];
+  if (special) {
+    const i = out.findIndex((x) => x.dep === special.dep);
+    if (i >= 0) out.splice(i, 1);
+    out.push({ dep: special.dep, to: 'totnes', back: special.back });
+  }
+  return out.sort((a, b) => a.dep - b.dep);
+}
+
 export class RiverTraffic {
   private readonly services: FerryService[];
   private readonly legs = new Map<string, Leg[]>();
@@ -558,7 +610,94 @@ export class RiverTraffic {
       }
     }
     out.push(...this.marinaStates(epochMs));
+    const ps = this.steamerState(epochMs);
+    if (ps) out.push(ps);
     return out;
+  }
+
+  // ---------------------------------------------------------------- the paddle steamer
+
+  private steamerRoutes?: { cruise: Route; totnes?: Route };
+
+  /** Her cruise (berth → off the castle → up towards Greenway → berth) and her Totnes trip, found once. */
+  private steamer(): { cruise: Route; totnes?: Route } {
+    if (this.steamerRoutes) return this.steamerRoutes;
+    const P = PADDLE_STEAMER;
+    const fw = this.opts.fairway;
+    const legs: [number, number][] = [[P.berth.e, P.berth.n]];
+    const stops = [P.turnDown, P.turnUp, { e: P.berth.e, n: P.berth.n }];
+    let from = { n: P.berth.n, e: P.berth.e };
+    let ok = !!fw;
+    for (const to of stops) {
+      if (!ok) break;
+      const key = `steamer|${from.n}|${from.e}|${to.n}|${to.e}`;
+      const cache = this.opts.fairwayCache;
+      const pts = cache?.has(key) ? cache.get(key) : fairwayRoute({ ...fw!, avoid: fw!.avoid, avoidRadius: 14 }, from, to);
+      cache?.set(key, pts);
+      if (!pts || pts.length < 2) ok = false;
+      else legs.push(...pts.slice(1));
+      from = { n: to.n, e: to.e };
+    }
+    const cruise = ok ? makeRoute(legs) : makeRoute(P.fallback);
+    const ferry = this.services.find((x) => x.name === 'Totnes to Dartmouth Ferry');
+    // Totnes is the route's first end: going there is the route reversed, from the berth.
+    const totnes = ferry ? makeRoute([[P.berth.e, P.berth.n], ...ferry.back.pts]) : undefined;
+    this.steamerRoutes = { cruise, totnes };
+    return this.steamerRoutes;
+  }
+
+  /** The paddle steamer at this moment: berthed at the embankment between cruises, under way on one, or away. */
+  private steamerState(epochMs: number): VesselState | undefined {
+    const P = PADDLE_STEAMER;
+    const day = localDay(epochMs);
+    const sailings = steamerSailings(day.date, day.weekday, day.month);
+    if (!sailings.length) return undefined;
+    const base = { id: 'steamer#0', name: 'Kingswear Castle', label: P.label, unit: 0, kind: 'paddle-steamer' as const, ram: false, length: P.length, beam: P.beam };
+    const at = (n: number, e: number, heading: number, moving: boolean, sog: number): VesselState => ({ ...base, n, e, heading, moving, sog, phase: moving ? 'underway' : 'berthed', parts: [{ n, e, heading, length: P.length, beam: P.beam }] });
+    const minute = (epochMs - day.midnight) / 60_000;
+    const routes = this.steamer();
+    // On station at the embankment from before the first sailing until after the last.
+    if (minute < P.onStation[0] || minute > Math.max(P.onStation[1], ...sailings.map((x) => x.back ?? 0)) + 10) return undefined;
+    for (const sl of sailings) {
+      const out = sl.to === 'totnes' ? routes.totnes : routes.cruise;
+      if (!out) continue;
+      const trip = this.steamerTrip(out, day.midnight + min(sl.dep));
+      if (epochMs >= trip.t0 && epochMs < trip.t1) {
+        const q = stateOnTrip(trip, epochMs);
+        const p = along(out, q.s);
+        // Beyond the map up-river (Totnes): away until she comes back.
+        if (sl.to === 'totnes' && q.s > out.length - 30) return undefined;
+        return at(p.n, p.e, facingAt(trip, q.s, 12) + q.crab, true, q.v);
+      }
+      if (sl.to === 'totnes' && sl.back !== undefined && out) {
+        // Back down the river, timed to be alongside at the embankment at `back`.
+        const home = reversed(out);
+        const probe = this.steamerTrip(home, day.midnight);
+        const dur = probe.t1 - probe.t0;
+        const ret = this.steamerTrip(home, day.midnight + min(sl.back) - dur);
+        if (epochMs >= trip.t1 && epochMs < ret.t0) return undefined;
+        if (epochMs >= ret.t0 && epochMs < ret.t1) {
+          const q = stateOnTrip(ret, epochMs);
+          const p = along(home, q.s);
+          if (q.s < 30) return undefined;
+          return at(p.n, p.e, facingAt(ret, q.s, 12) + q.crab, true, q.v);
+        }
+      }
+    }
+    return at(P.berth.n, P.berth.e, P.berth.heading, false, 0);
+  }
+
+  private steamerTrip(route: Route, t0: number): Trip {
+    const key = `steamer|${route.length.toFixed(1)}|${t0}`;
+    let trip = this.tripCache.get(key);
+    if (!trip) {
+      const P = PADDLE_STEAMER;
+      const samples = profile(route, t0, { cruise: P.vMax, accel: P.accel, decel: P.decel }, this.opts.current);
+      trip = { t0, t1: t0 + samples[samples.length - 1]!.t * 1000, route, samples, prelude: 0 };
+      this.tripCache.set(key, trip);
+      if (this.tripCache.size > 256) this.tripCache.delete(this.tripCache.keys().next().value!);
+    }
+    return trip;
   }
 
   // ---------------------------------------------------------------- shuttles (Lower and Higher Ferries)

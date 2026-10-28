@@ -4,6 +4,7 @@ import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
 import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn } from './vessels';
 import { flagDroop, flagYaw } from './vane';
+import { Exhaust } from './railway';
 
 /**
  * River traffic as 3D vessels (positions and manoeuvres from src/sim/env/traffic.ts), modelled with the vessel
@@ -402,6 +403,102 @@ function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
   return g;
 }
 
+// ------------------------------------------------------------------ the paddle steamer
+
+/** Where the steamer's funnel top is in the model's frame (for her smoke). */
+export const STEAMER_FUNNEL_TOP = new THREE.Vector3(0, 8.6, -2.3);
+
+/**
+ * The paddle steamer Kingswear Castle (1924): 34.7 m long, 5.3 m in the hull and 8.5 m over the paddle boxes,
+ * paddle wheels 3 m across (F16). Drawn as a Dart river paddler: a black hull with a gold line, white upperworks,
+ * the paddle boxes amidships with the bridge across them, a tall raked buff funnel with a black top just ahead
+ * of the paddle shaft, a mast forward, saloons below an open promenade deck with passengers. The livery and the
+ * layout are estimates (E): no photograph or drawing of her could be viewed.
+ */
+function paddleSteamerModel(length: number, beamOver: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const kit = new Kit();
+  const hb = Math.min(5.3, beamOver * 0.62);
+  const h = hull(kit, {
+    length, beam: hb, freeboard: 1.25, draft: 1.2, sheerBow: 0.75, sheerStern: 0.35, stemRake: 0.35, entry: 0.42, transom: 0.6, transomRake: 0.3, flare: 0.04, bulwark: 0.85,
+    colours: { bottom: C.antifouling, boot: C.black, topsides: C.black, deck: C.wood, bulwarkInside: C.white, stripe: 0xd8b04a },
+    bootTop: 0.2, stripe: [0.12, 0.05],
+  });
+  const L = length;
+  const deck = h.deck(0);
+  const white = C.white;
+  // Paddle boxes: half-discs (radius 1.9) outboard of the hull either side, amidships, white with a gold rim and
+  // dark vents; sponsons at deck level fore and aft of each.
+  const R = 1.9;
+  const axle = 0.75;
+  const outer = beamOver / 2;
+  const boxW = outer - hb / 2 + 0.1;
+  for (const side of [-1, 1]) {
+    const shape = new THREE.Shape();
+    shape.moveTo(-R, 0);
+    shape.absarc(0, 0, R, Math.PI, 0, true);
+    shape.lineTo(-R, 0);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: boxW, bevelEnabled: false, curveSegments: 20 });
+    geo.rotateY(Math.PI / 2);
+    // After the turn the extrusion runs along +x from 0 to boxW; shift it to its side.
+    const x0 = side > 0 ? hb / 2 - 0.1 : -outer;
+    kit.add(geo, VMAT.paint, white, place(x0, axle, 0));
+    const xo = side * (outer + 0.01);
+    const arc: THREE.Vector3[] = [];
+    for (let k = 0; k <= 16; k++) {
+      const a = Math.PI - (k / 16) * Math.PI;
+      arc.push(V(xo, axle + Math.sin(a) * R, Math.cos(a) * R));
+    }
+    kit.tube(arc, 0.06, VMAT.paint, 0xd8b04a);
+    for (let k = 1; k <= 5; k++) {
+      const a = (k / 6) * Math.PI;
+      kit.rod(V(xo, axle + Math.sin(a) * 0.5, Math.cos(a) * 0.5), V(xo, axle + Math.sin(a) * (R - 0.25), Math.cos(a) * (R - 0.25)), 0.07, VMAT.paint, 0x2a2c2f, 6);
+    }
+    // Sponsons fore and aft of the box, with a rail.
+    for (const z of [-R - 1.2, R + 1.2]) kit.box(boxW, 0.12, 2.4, VMAT.paint, C.wood, side * (hb / 2 + boxW / 2 - 0.1), deck, z);
+    rail(kit, [V(side * (outer - 0.05), deck, -R - 2.4), V(side * (outer - 0.05), deck, R + 2.4)], 1.0, { spacing: 1.2, colour: white });
+  }
+  // The bridge across the paddle boxes: an open platform with rails, the wheel and a helmsman.
+  const by = axle + R + 0.08;
+  kit.box(beamOver, 0.12, 1.4, VMAT.paint, C.wood, 0, by, 0.1);
+  rail(kit, [V(-outer, by, -0.6), V(outer, by, -0.6), V(outer, by, 0.8), V(-outer, by, 0.8), V(-outer, by, -0.6)], 1.0, { spacing: 1.0, colour: white });
+  kit.add(new THREE.TorusGeometry(0.45, 0.04, 6, 16), VMAT.paint, C.wood, place(0, by + 1.0, 0.1, 0, 0, 0));
+  addPerson(kit, 0, by + 0.06, 0.55, 0, seed + 3);
+  // Saloons forward and aft of the boxes, white with windows, the promenade deck on their roofs.
+  const fz = -L * 0.2;
+  const fl = L * 0.26;
+  const az = L * 0.19;
+  const al = L * 0.24;
+  for (const [z, l] of [[fz, fl], [az, al]] as const) cabin(kit, { z, y: deck, length: l, width: hb - 0.9, height: 2.1, rFront: 0.4, rBack: 0.4, colour: white, windows: [0.38, 0.88], roof: { overhang: 0.2, thickness: 0.1, colour: C.wood } });
+  const top = deck + 2.2;
+  for (const [z, l] of [[fz, fl], [az, al]] as const) {
+    const w = (hb - 0.9) / 2;
+    rail(kit, [V(-w, top, z - l / 2), V(w, top, z - l / 2), V(w, top, z + l / 2), V(-w, top, z + l / 2), V(-w, top, z - l / 2)], 1.0, { spacing: 1.3, colour: white });
+    for (const s of [-1, 1]) bench(kit, s * (w - 0.5), top, z, l - 1.2, -s, 3 + ((seed + z) % 2 ? 1 : 0), seed + Math.round(z) * 3 + s);
+  }
+  // The funnel: buff with a black top, raked aft, just ahead of the paddle shaft; a steam pipe beside it.
+  const fy0 = deck + 0.3;
+  const top2 = STEAMER_FUNNEL_TOP;
+  const rake = (6 * Math.PI) / 180;
+  const fh = top2.y - fy0;
+  const fzc = top2.z - Math.tan(rake) * (fh / 2);
+  kit.add(new THREE.CylinderGeometry(0.58, 0.62, fh - 0.9, 18), VMAT.paint, 0xd2ae62, place(0, fy0 + (fh - 0.9) / 2, fzc + 0.05, 0, -rake));
+  kit.add(new THREE.CylinderGeometry(0.58, 0.58, 0.9, 18), VMAT.paint, C.black, place(0, top2.y - 0.45, top2.z + 0.04, 0, -rake));
+  kit.rod(V(0.7, deck + 0.3, fzc + 0.4), V(0.7, top2.y - 0.6, top2.z + 0.45), 0.07, VMAT.steel);
+  // The mast forward with a yard, and lifebuoys.
+  mast(kit, 0, top, fz - fl * 0.25, 6.5);
+  kit.box(3.2, 0.08, 0.08, VMAT.paint, white, 0, top + 4.6, fz - fl * 0.25);
+  for (const s of [-1, 1]) lifebuoy(kit, s * (hb / 2 - 0.42), deck + 1.3, fz + fl * 0.3, s);
+  // A few people on the open decks forward and aft.
+  for (let i = 0; i < 4; i++) addPerson(kit, -1.2 + i * 0.8, h.deck(-L * 0.42), -L * 0.4 + (i % 2) * 0.6, Math.PI, seed + 20 + i);
+  for (let i = 0; i < 3; i++) addPerson(kit, -0.9 + i * 0.9, h.deck(L * 0.42), L * 0.4, 0, seed + 30 + i);
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4);
+  g.add(kit.build('paddle-steamer'));
+  navLights(g, { length: L, beam: beamOver, mastY: top + 6.3, mastZ: fz - fl * 0.25, sideY: by + 0.6 });
+  g.add(wake(beamOver));
+  return g;
+}
+
 // ------------------------------------------------------------------ Dart Marina boats
 
 /** A planing motor cruiser: deep-vee hull, raked superstructure, radar arch, bow rail, bathing platform. */
@@ -540,6 +637,8 @@ function makeModel(kind: VesselKind, length: number, beam: number, seed: number)
       return launchModel(length, beam, seed);
     case 'river-cruiser':
       return cruiserModel(length, beam, seed);
+    case 'paddle-steamer':
+      return paddleSteamerModel(length, beam, seed);
     default:
       return leisureModel(kind, length, beam, seed);
   }
@@ -580,9 +679,13 @@ export class TrafficView {
   readonly group = new THREE.Group();
   private readonly entries = new Map<string, Entry>();
   private day = 1;
+  /** The paddle steamer's coal smoke. */
+  private readonly smoke = new Exhaust();
+  private lastTime?: number;
 
   constructor() {
     this.group.name = 'traffic';
+    this.group.add(this.smoke.group);
   }
 
   private build(s: VesselState): Entry {
@@ -597,7 +700,7 @@ export class TrafficView {
       this.group.add(tug);
     }
     let label: THREE.Sprite | undefined;
-    if (s.kind === 'tug-float' || s.kind === 'floating-bridge' || s.kind === 'passenger-ferry' || s.kind === 'river-cruiser' || s.kind === 'launch') {
+    if (s.kind === 'tug-float' || s.kind === 'floating-bridge' || s.kind === 'passenger-ferry' || s.kind === 'river-cruiser' || s.kind === 'paddle-steamer' || s.kind === 'launch') {
       label = makeLabel(`${s.label}${s.ram ? ' · RAM' : ''}`, s.ram ? '#ffd28a' : '#ffffff');
       label.position.y = 7;
       label.userData.priority = 2;
@@ -672,6 +775,18 @@ export class TrafficView {
       }
       if (e.label) e.label.visible = showLabels && e.root.position.distanceTo(camera.position) < LABEL_RANGE_M;
     }
+    // The paddle steamer smokes from her funnel: thickly under way, a wisp alongside; it drifts downwind.
+    const dt = this.lastTime === undefined ? 0 : Math.min(0.25, Math.max(0, time - this.lastTime));
+    this.lastTime = time;
+    const steamer = states.find((s) => s.kind === 'paddle-steamer');
+    const se = steamer ? this.entries.get(steamer.id) : undefined;
+    let funnel: THREE.Vector3 | undefined;
+    if (se) {
+      se.root.updateMatrix();
+      funnel = STEAMER_FUNNEL_TOP.clone().applyMatrix4(se.root.matrix);
+    }
+    const drift = wind ? new THREE.Vector3(-Math.sin(wind.fromDir) * wind.speed * 0.25, 0, Math.cos(wind.fromDir) * wind.speed * 0.25) : new THREE.Vector3();
+    this.smoke.update(dt, funnel, steamer?.moving ? 3 : 0.6, true, drift);
     for (const [id, e] of this.entries) {
       if (e.seen === stamp) continue;
       // Gone (a marina boat that has arrived, a seasonal ferry off service): remove it.
