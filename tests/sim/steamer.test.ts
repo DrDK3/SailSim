@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildConditions } from '../../src/sim/index';
 import { HARBOUR_LIMIT, PADDLE_STEAMER, buildRiverTraffic, steamerSailings } from '../../src/sim/env/traffic';
+import { Fleet } from '../../src/sim/race/fleet';
 import { loadDartGeo } from './helpers';
 import { readFileSync } from 'node:fs';
 
@@ -85,5 +86,18 @@ describe('the paddle steamer', () => {
     const home = at('2026-09-08T18:32:00Z')!;
     expect(home.moving).toBe(false);
     expect(Math.hypot(home.e - PADDLE_STEAMER.berth.e, home.n - PADDLE_STEAMER.berth.n)).toBeLessThan(1);
+  });
+
+  it('is solid to the fleet wherever she goes: her whole track is inside the area the fleet checks for traffic', () => {
+    const fleet = new Fleet(conditions);
+    fleet.setObstacles({ ferries: features.ferries, traffic });
+    const track = traffic.steamerTrack();
+    expect(track.length).toBeGreaterThan(10);
+    for (const [e, n] of track) expect(fleet.nearFerries(n, e), `${e.toFixed(0)}, ${n.toFixed(0)}`).toBe(true);
+    // And she is among the vessels the fleet meets, under way and alongside.
+    for (const iso of ['2026-07-15T10:05:00Z', '2026-07-15T10:30:00Z']) {
+      const t = (ms(iso) - start) / 1000;
+      expect(fleet.ferriesAt(t).some((v) => v.kind === 'paddle-steamer'), iso).toBe(true);
+    }
   });
 });

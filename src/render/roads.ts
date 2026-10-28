@@ -448,7 +448,8 @@ export class RoadNetwork {
               diffuseColor.rgb *= 1.0 + 0.12 * track;
               // Markings, worn a little, clear of junctions.
               float m = vKind.y;
-              float flags = vKind.z;
+              // Rounded: interpolated, a constant 13 can arrive as 12.99999 and flip the bits pixel by pixel.
+              float flags = floor(vKind.z + 0.5);
               float wear = 0.75 + 0.25 * rNoise(xz * 3.0);
               vec3 white = vec3(0.82, 0.82, 0.78);
               vec3 yellow = vec3(0.85, 0.66, 0.12);

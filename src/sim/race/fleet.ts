@@ -144,7 +144,7 @@ export class Fleet {
     return boat;
   }
 
-  /** Bounding box of all ferry routes, grown by 150 m (no ferry can be outside it). */
+  /** Bounding box of all ferry, marina and steamer routes, grown by 150 m (no vessel can be outside it). */
   private ferryBox?: { nMin: number; nMax: number; eMin: number; eMax: number };
 
   /**
@@ -157,7 +157,7 @@ export class Fleet {
     if (o.traffic || o.ferries) {
       const start = this.startEpochMs;
       this.traffic = o.traffic ?? new RiverTraffic(o.ferries!, { current: (ms, n, e) => this.env.current((ms - start) / 1000, n, e) });
-      const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route)];
+      const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route), ...this.traffic.steamerTrack()];
       this.ferryBox = pts.length
         ? { nMin: Math.min(...pts.map((p) => p[1])) - 150, nMax: Math.max(...pts.map((p) => p[1])) + 150, eMin: Math.min(...pts.map((p) => p[0])) - 150, eMax: Math.max(...pts.map((p) => p[0])) + 150 }
         : undefined;

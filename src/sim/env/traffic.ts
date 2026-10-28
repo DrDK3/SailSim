@@ -646,6 +646,12 @@ export class RiverTraffic {
     return this.steamerRoutes;
   }
 
+  /** Every point of the steamer's routes ([e, n]): the fleet keeps its traffic checks to the area they cover. */
+  steamerTrack(): [number, number][] {
+    const r = this.steamer();
+    return [...r.cruise.pts, ...(r.totnes?.pts ?? [])];
+  }
+
   /** The paddle steamer at this moment: berthed at the embankment between cruises, under way on one, or away. */
   private steamerState(epochMs: number): VesselState | undefined {
     const P = PADDLE_STEAMER;
