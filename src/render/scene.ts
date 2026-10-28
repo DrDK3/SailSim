@@ -457,7 +457,10 @@ export class SceneView {
     this.clouds.update(this.camera, frameDt, wx, wz);
     this.rain.update(this.camera, frameDt, wx, wz);
     if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
-    if (this.course && env?.course) this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+    if (this.course && env?.course) {
+      this.course.setWind(curr.twdGround);
+      this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+    }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.renderer.render(this.scene, this.camera);
   }

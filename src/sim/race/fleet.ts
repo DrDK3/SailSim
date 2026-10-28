@@ -78,11 +78,15 @@ export const CONTACT = {
   friction: 0.3,
 };
 
-/** Physical radius of a course mark by kind (m): E. Virtual marks (lane posts) are not physical. */
+/**
+ * Physical radius of a course mark by kind (m): E. Turning marks and the pin are robotic marks (an inflatable on
+ * twin pontoons 1.5 m long: src/render/robotMark.ts), taken as a circle round the pontoons. Virtual marks (lane
+ * posts) are not physical.
+ */
 export function markRadius(kind: string): number | null {
   switch (kind) {
-    case 'inflatable': return 0.75;
-    case 'pin': return 0.4;
+    case 'inflatable': return 0.9;
+    case 'pin': return 0.9;
     case 'nav-buoy': return 0.9;
     case 'fixed': return 0.4;
     case 'committee-boat': return 2.5;
