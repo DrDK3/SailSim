@@ -254,7 +254,8 @@ function materials(): Record<Key, THREE.MeshStandardMaterial> {
 }
 
 function makeMaterials(): Record<Key, THREE.MeshStandardMaterial> {
-  const m =(color: number, opts: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts });
+  // A modest share of the sky's reflection (as the other buildings), so the brick reads red, not pink.
+  const m = (color: number, opts: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, envMapIntensity: 0.4, ...opts });
   const tex = (t: THREE.Texture | undefined, fallback: number, opts: THREE.MeshStandardMaterialParameters = {}) => (t ? m(0xffffff, { map: t, ...opts }) : m(fallback, opts));
   return {
     brick: tex(brickTex(), 0x9b4a37),

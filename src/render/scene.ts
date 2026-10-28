@@ -218,8 +218,14 @@ export class SceneView {
   private rebuildEnvironment(): void {
     const skyScene = new THREE.Scene();
     skyScene.add(this.skyMesh.clone());
+    // The sky's light without the sun's disc: the sun is the directional light. With the disc in it, the image
+    // lighting counted the sun a second time, many times over, and washed every colour out to pastel.
+    const disc = this.skyMesh.material.uniforms['showSunDisc'];
+    const shown = disc?.value;
+    if (disc) disc.value = 0;
     const old = this.envMap;
     this.envMap = this.pmrem.fromScene(skyScene, 0.02).texture;
+    if (disc) disc.value = shown;
     this.scene.environment = this.envMap;
     old?.dispose();
   }
@@ -250,7 +256,8 @@ export class SceneView {
     // little (together they flattened the scene: buildings and hills washed out to pastels).
     this.hemi.intensity = (0.02 + 0.22 * day) * (1 + 0.8 * cloud);
     this.hemi.color.setRGB(0.81 - 0.25 * cloud, 0.89 - 0.3 * cloud, 0.96 - 0.32 * cloud);
-    this.scene.environmentIntensity = (0.04 + 0.66 * day) * (1 - 0.45 * cloud);
+    // The sky's share of the light: on a clear day roughly a fifth of the sun's on open ground (more under cloud).
+    this.scene.environmentIntensity = (0.04 + 0.4 * day) * (1 - 0.3 * cloud);
     // Fog: the visibility (σ = 3.912 / V; exp² fog reaches 98% at V when d = 1.978 / V), never thinner than
     // the scene's own haze; grey under cloud, dark at night.
     const density = Math.max(this.baseFogDensity, 1.978 / Math.max(visibilityM, 50));

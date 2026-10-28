@@ -13,7 +13,8 @@ import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
-import { StreetLife, TOWNS, buildRoadSurfaces, type RoadsData } from './population';
+import { StreetLife, TOWNS, type RoadsData } from './population';
+import { RoadNetwork } from './roads';
 import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
@@ -64,6 +65,24 @@ export interface DartUpdate {
   traffic?: RiverTraffic;
 }
 
+
+/** The towns' 4 m ground (bilinear, m ODN) at (e, n), or undefined outside it. */
+function townGround(input: DartSceneInput, e: number, n: number): number | undefined {
+  const town = input.town;
+  if (!town) return undefined;
+  const t = town.spec;
+  const x = (e - t.e0) / t.cell - 0.5;
+  const y = (n - t.n0) / t.cell - 0.5;
+  if (!(x >= 0 && y >= 0 && x < t.nx - 1 && y < t.ny - 1)) return undefined;
+  const i = Math.floor(x);
+  const j = Math.floor(y);
+  const fx = x - i;
+  const fy = y - j;
+  const v = town.values;
+  const k = j * t.nx + i;
+  return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
+}
+
 export class DartScene {
   readonly fixed = new THREE.Group();
   readonly floating = new THREE.Group();
@@ -85,7 +104,20 @@ export class DartScene {
   private pontoons?: Pontoons;
   private readonly ensigns: ClubEnsign[] = [];
 
-  constructor(private readonly input: DartSceneInput) {
+  private readonly input: DartSceneInput;
+  /** The roads (src/render/roads.ts): their surfaces, and the town ground cut and filled to them. */
+  private readonly roadNet?: RoadNetwork;
+
+  constructor(input0: DartSceneInput) {
+    // The roads first: they cut and fill the town ground the terrain, buildings and everything else stand on.
+    let input = input0;
+    if (input0.roads) {
+      const t = input0.town;
+      const raw = (e: number, n: number) => rdycPlatformAt(e, n) ?? townGround(input0, e, n) ?? input0.geo.bedElevation(n, e);
+      this.roadNet = new RoadNetwork(input0.roads, raw, t?.spec ? { e0: t.spec.e0, n0: t.spec.n0, cell: t.spec.cell, nx: t.spec.nx, ny: t.spec.ny } : undefined);
+      if (t) input = { ...input0, town: { ...t, values: this.roadNet.carve(t.values) } };
+    }
+    this.input = input;
     this.fixed.name = 'dart-fixed';
     this.floating.name = 'dart-floating';
     this.features = input.features;
@@ -123,9 +155,17 @@ export class DartScene {
       this.buildMarks(f);
       this.buildLabels(f);
     }
-    if (input.roads) {
-      this.fixed.add(buildRoadSurfaces(input.roads, (e, n) => this.groundAt(e, n)));
-      this.street = new StreetLife({ roads: input.roads, groundAt: (e, n) => this.groundAt(e, n), standing: f ? standingSpots(f) : [], queues: f ? ferryQueues(f) : [], detail: input.detail });
+    if (input.roads && this.roadNet) {
+      const net = this.roadNet;
+      this.fixed.add(net.mesh((e, n) => this.groundAt(e, n)));
+      this.street = new StreetLife({
+        roads: input.roads,
+        groundAt: (e, n) => this.groundAt(e, n),
+        surfaceAt: (e, n) => net.surfaceAt(e, n),
+        standing: f ? standingSpots(f) : [],
+        queues: f ? ferryQueues(f) : [],
+        detail: input.detail,
+      });
       this.fixed.add(this.street.fixed);
       this.floating.add(this.street.floating);
     }
@@ -143,21 +183,8 @@ export class DartScene {
     // The Royal Dart Yacht Club's terrace, on its sea wall (src/render/rdyc.ts).
     const terrace = rdycPlatformAt(e, n);
     if (terrace !== undefined) return terrace;
-    const town = this.input.town;
-    if (town) {
-      const t = town.spec;
-      const x = (e - t.e0) / t.cell - 0.5;
-      const y = (n - t.n0) / t.cell - 0.5;
-      if (x >= 0 && y >= 0 && x < t.nx - 1 && y < t.ny - 1) {
-        const i = Math.floor(x);
-        const j = Math.floor(y);
-        const fx = x - i;
-        const fy = y - j;
-        const v = town.values;
-        const k = j * t.nx + i;
-        return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
-      }
-    }
+    const g = townGround(this.input, e, n);
+    if (g !== undefined) return g;
     return this.input.geo.bedElevation(n, e);
   }
 

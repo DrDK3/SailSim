@@ -61,89 +61,6 @@ export function along(seg: Seg, s: number): { e: number; n: number; de: number; 
   return { e: p0[0] + (p1[0] - p0[0]) * f, n: p0[1] + (p1[1] - p0[1]) * f, de: (p1[0] - p0[0]) / l, dn: (p1[1] - p0[1]) / l };
 }
 
-// ------------------------------------------------------------------ road surfaces
-
-/**
- * The road surfaces: a ribbon for each segment at the ground (resampled every 4 m so it follows the slope),
- * tarmac for roads with dashed centre lines on the main ones, paving or gravel for paths. Steps are left to
- * the ground picture.
- */
-export function buildRoadSurfaces(data: RoadsData, groundAt: (e: number, n: number) => number): THREE.Mesh {
-  const pos: number[] = [];
-  const col: number[] = [];
-  const road: number[] = [];
-  const idx: number[] = [];
-  const lin = (hex: number) => {
-    const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
-    return [c.r, c.g, c.b];
-  };
-  const TARMAC = lin(0x3d4043);
-  const PAVING = lin(0x8f8b84);
-  const GRAVEL = lin(0x9a8e76);
-  for (const r of data.roads) {
-    if (r.c === 'x' || r.l.length < 2) continue;
-    const w = (ROAD_WIDTH[r.c] ?? 3) / 2;
-    const isPath = r.c === 'f' || r.c === 'w';
-    const colour = isPath ? (inTown(r.l[0]![0], r.l[0]![1]) ? PAVING : GRAVEL) : TARMAC;
-    const dashed = r.c === 'p' || r.c === 's' || r.c === 't' ? 1 : 0;
-    // Resample every 4 m.
-    const seg = makeSeg(r.c, r.l);
-    const steps = Math.max(1, Math.ceil(seg.len / 4));
-    const base = pos.length / 3;
-    for (let k = 0; k <= steps; k++) {
-      const s = (seg.len * k) / steps;
-      const p = along(seg, s);
-      // Mitred joins: average the directions either side of a vertex.
-      const q = along(seg, Math.min(seg.len, s + 0.5));
-      const o = along(seg, Math.max(0, s - 0.5));
-      let de = q.e - o.e;
-      let dn = q.n - o.n;
-      const dl = Math.hypot(de, dn) || 1;
-      de /= dl;
-      dn /= dl;
-      const le = -dn;
-      const ln = de;
-      for (const side of [-1, 1]) {
-        const e = p.e + le * w * side;
-        const n = p.n + ln * w * side;
-        pos.push(e, groundAt(e, n) + 0.12, -n);
-        col.push(...colour);
-        road.push(s, side, dashed);
-      }
-      if (k > 0) {
-        const i0 = base + (k - 1) * 2;
-        idx.push(i0, i0 + 2, i0 + 1, i0 + 1, i0 + 2, i0 + 3);
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(road, 3));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-  mat.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aRoad;\nvarying vec3 vRoad;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRoad = aRoad;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRoad;')
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        // Dashed white centre line on the main roads (4 m dash, 5 m gap); worn edges.
-        float dash = vRoad.z * step(abs(vRoad.y), 0.035) * step(fract(vRoad.x / 9.0), 0.45);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.85, 0.8), dash);
-        diffuseColor.rgb *= 0.9 + 0.1 * smoothstep(1.0, 0.8, abs(vRoad.y));`,
-      );
-  };
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.name = 'roads';
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
 // ------------------------------------------------------------------ models
 
 function merge(parts: { geo: THREE.BufferGeometry; colour: number }[]): THREE.BufferGeometry {
@@ -203,6 +120,8 @@ interface Mover {
 export interface StreetLifeOptions {
   roads: RoadsData;
   groundAt: (e: number, n: number) => number;
+  /** The road surface at (e, n) (carriageway or pavement top), where there is a road: cars and walkers stand on it. */
+  surfaceAt?: (e: number, n: number) => number | undefined;
   /** Places people stand: quays (fixed, at their deck) and pontoons (floating). */
   standing?: { e: number; n: number; floating: boolean; deck: number }[];
   /** Ferry landings: where a queue forms (e, n, m) and the way to the boat (unit de, dn). */
@@ -282,7 +201,7 @@ export class StreetLife {
         const e = p.e - p.dn * side;
         const n = p.n + p.de * side;
         this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(p.de, p.dn));
-        parked.push(new THREE.Matrix4().compose(new THREE.Vector3(e, o.groundAt(e, n) + 0.05, -n), this.q.clone(), this.sc));
+        parked.push(new THREE.Matrix4().compose(new THREE.Vector3(e, (o.surfaceAt?.(e, n) ?? o.groundAt(e, n)) + 0.05, -n), this.q.clone(), this.sc));
       }
     }
     const maxParked = low ? 200 : 600;
@@ -433,8 +352,13 @@ export class StreetLife {
     }
     // The models face -z: a turn of -atan2(de, dn) about y points them along (de, dn).
     this.q.setFromAxisAngle(this.v.set(0, 1, 0), -Math.atan2(de, dn));
-    this.m.compose(this.v.set(e, this.o.groundAt(e, n) + lift, -n), this.q, this.sv.set(scale, scale, scale));
+    this.m.compose(this.v.set(e, this.heightAt(e, n) + lift, -n), this.q, this.sv.set(scale, scale, scale));
     mesh.setMatrixAt(i, this.m);
+  }
+
+  /** Where a car or walker stands: the road's surface if there is one, else the ground. */
+  private heightAt(e: number, n: number): number {
+    return this.o.surfaceAt?.(e, n) ?? this.o.groundAt(e, n);
   }
 
   get counts(): { cars: number; parked: number; walkers: number; standing: number; activities: Record<string, number> } {

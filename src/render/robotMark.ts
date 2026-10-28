@@ -93,7 +93,7 @@ export function robotMark(colour: number, sponsor: Sponsor, flag?: number): THRE
   const g = new THREE.Group();
   g.name = 'robot-mark';
   const hullMat = new THREE.MeshStandardMaterial({ color: 0x34383d, roughness: 0.7 });
-  const markMat = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.5 });
+  const markMat = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.5, envMapIntensity: 0.5 });
   const metal = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: 0.4, metalness: 0.6 });
   // The pontoons, a frame across them, and the thruster pod between them (just below the water).
   for (const s of [-1, 1]) {
