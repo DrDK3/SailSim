@@ -247,7 +247,8 @@ function puffTexture(): THREE.Texture {
   return new THREE.CanvasTexture(c);
 }
 
-class Exhaust {
+/** Puffs of smoke or steam from a chimney or funnel (the trains, the paddle steamer). */
+export class Exhaust {
   readonly group = new THREE.Group();
   private readonly puffs: { s: THREE.Sprite; age: number; life: number; v: THREE.Vector3; grow: number }[] = [];
   private acc = 0;

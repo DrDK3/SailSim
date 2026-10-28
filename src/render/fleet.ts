@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
-import { SquibModel } from './squibModel';
+import { SquibModel, sailFill } from './squibModel';
 
 /** The state of one fleet boat the renderer needs (two of these are interpolated per frame). */
 export interface FleetPose {
@@ -17,10 +17,14 @@ export interface FleetPose {
   jibSide: number;
   mainLuff: number;
   jibLuff: number;
-  mainInverted: boolean;
-  jibInverted: boolean;
+  /** Each sail's own apparent wind angle (rad, > 0 from starboard): which way it fills. */
+  mainAwa: number;
+  jibAwa: number;
   rudder: number;
   crewY: number;
+  crewTo: number;
+  /** The rig has failed (the sails are down). */
+  sailsDown?: boolean;
   awa: number;
   aws: number;
   water: number;
@@ -60,7 +64,9 @@ export class FleetView {
       if (this.boats.has(b.id)) continue;
       const root = new THREE.Group();
       root.name = `fleet-boat-${b.id}`;
-      const model = new SquibModel(this.params);
+      // Helms and crews of both builds across the fleet (picked from the boat's id; illustrative).
+      const h = [...b.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11);
+      const model = new SquibModel(this.params, { helm: h % 3 === 0 ? 'female' : 'male', crew: h % 5 < 2 ? 'female' : 'male' });
       model.setHullColour(b.colour);
       root.add(model.group);
       const label = makeLabel(b.label, '#ffe9a8');
@@ -102,16 +108,20 @@ export class FleetView {
       e.rideStarted = true;
       e.root.position.set(x, e.ride.heave, z);
       orientBoat(e.model.group, heading, heel + e.ride.roll, e.ride.pitch);
+      const mainAngle = lerpAngle(a.boomMain, b.boomMain, alpha);
+      const jibAngle = lerpAngle(a.boomJib, b.boomJib, alpha);
       e.model.update({
-        main: { angle: lerpAngle(a.boomMain, b.boomMain, alpha), luff: b.mainLuff, side: b.mainSide, inverted: b.mainInverted },
-        jib: { angle: lerpAngle(a.boomJib, b.boomJib, alpha), luff: b.jibLuff, side: b.jibSide, inverted: b.jibInverted },
+        main: { angle: mainAngle, luff: b.mainLuff, fill: sailFill(b.mainAwa, mainAngle) },
+        jib: { angle: jibAngle, luff: b.jibLuff, fill: sailFill(b.jibAwa, jibAngle) },
         rudder: b.rudder,
         crewY: b.crewY,
+        crewTo: b.crewTo,
         time,
         awa: b.awa,
         aws: b.aws,
         heel,
         water: b.water,
+        sailsDown: b.sailsDown,
       });
       e.label.visible = showLabels;
     }

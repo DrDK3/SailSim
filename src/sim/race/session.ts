@@ -15,6 +15,7 @@ import { AiSkipper, aiSkill, type AiLevel, type AiWorld } from '../ai/skipper';
 import { Polar } from '../ai/polar';
 import { AI_POLAR } from '../ai/polarData';
 import { CONTACT, Fleet, markRadius, type CircleObstacle, type ContactEvent, type FleetBoat, type MooredBoat } from './fleet';
+import type { PierInput } from './piers';
 import { placeOutline } from './hull';
 import { DEFAULT_COMMITTEE, RaceCommittee, type BoatRaceStatus, type CommitteeOptions, type ResultRow, type Signal } from './committee';
 import { PenaltyTracker, rightOfWay, TackTracker, type Incident, type RulesBoat } from './rules';
@@ -51,6 +52,8 @@ export interface RaceSessionOptions {
   moored?: MooredBoat[];
   ferries?: FerryRoute[];
   traffic?: RiverTraffic;
+  /** Piers, jetties and pontoons (solid). */
+  piers?: readonly PierInput[];
   mooringAreas?: MooringArea[];
   seed?: number;
 }
@@ -110,7 +113,7 @@ export class RaceSession implements AiWorld {
         stiffness: hard ? CONTACT.hardStiffness : CONTACT.softStiffness, damping: hard ? CONTACT.hardDamping : CONTACT.softDamping,
       });
     }
-    this.fleet.setObstacles({ marks: this.obstacles, moored: opts.moored, ferries: opts.ferries, traffic: opts.traffic });
+    this.fleet.setObstacles({ marks: this.obstacles, moored: opts.moored, ferries: opts.ferries, traffic: opts.traffic, piers: opts.piers });
     const aiCount = opts.entries.filter((e) => e.kind === 'ai').length;
     let aiIndex = 0;
     for (const e of opts.entries) {
@@ -370,7 +373,7 @@ export class RaceSession implements AiWorld {
       } else inc.summary += ' (not a mark of her current leg, or not racing: no rule 31 penalty).';
     } else {
       inc.summary = `${A.name} hit ${c.label} at ${c.speed.toFixed(1)} m/s`;
-      inc.notes.push('A collision with a non-racing vessel: outside the racing-rules subset; counted as a collision.');
+      inc.notes.push(c.kind === 'pier' ? 'A collision with a pier or pontoon: outside the racing-rules subset; counted as a collision.' : 'A collision with a non-racing vessel: outside the racing-rules subset; counted as a collision.');
     }
     this.incidents.push(inc);
     this.log.push({ t, boat: c.a, kind: 'incident', text: inc.summary });

@@ -5,13 +5,17 @@ import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
 import { berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
+import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
+import { ClubEnsign } from './clubEnsign';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { TrafficView } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
-import { StreetLife, TOWNS, buildRoadSurfaces, type RoadsData } from './population';
+import { StreetLife, TOWNS, type RoadsData } from './population';
+import { RoadNetwork } from './roads';
+import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt, type RdycClub } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -54,9 +58,29 @@ export interface DartUpdate {
   camera: THREE.Camera;
   stream: (n: number, e: number) => NE;
   windFromDir: number;
+  /** True wind speed at the surface (m/s), for the flags and vanes. */
+  windSpeed?: number;
   showLabels: boolean;
   /** The run's river traffic (ferries crabbing in its stream, Dart Marina boats); else ferries alone. */
   traffic?: RiverTraffic;
+}
+
+
+/** The towns' 4 m ground (bilinear, m ODN) at (e, n), or undefined outside it. */
+function townGround(input: DartSceneInput, e: number, n: number): number | undefined {
+  const town = input.town;
+  if (!town) return undefined;
+  const t = town.spec;
+  const x = (e - t.e0) / t.cell - 0.5;
+  const y = (n - t.n0) / t.cell - 0.5;
+  if (!(x >= 0 && y >= 0 && x < t.nx - 1 && y < t.ny - 1)) return undefined;
+  const i = Math.floor(x);
+  const j = Math.floor(y);
+  const fx = x - i;
+  const fy = y - j;
+  const v = town.values;
+  const k = j * t.nx + i;
+  return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
 }
 
 export class DartScene {
@@ -77,8 +101,25 @@ export class DartScene {
   private readonly woodland?: Woodland;
   private readonly railway?: RailwayView;
   private readonly street?: StreetLife;
+  private pontoons?: Pontoons;
+  private readonly ensigns: ClubEnsign[] = [];
+  /** The yacht club (src/render/rdyc.ts). */
+  private club?: RdycClub;
 
-  constructor(private readonly input: DartSceneInput) {
+  private readonly input: DartSceneInput;
+  /** The roads (src/render/roads.ts): their surfaces, and the town ground cut and filled to them. */
+  private readonly roadNet?: RoadNetwork;
+
+  constructor(input0: DartSceneInput) {
+    // The roads first: they cut and fill the town ground the terrain, buildings and everything else stand on.
+    let input = input0;
+    if (input0.roads) {
+      const t = input0.town;
+      const raw = (e: number, n: number) => rdycPlatformAt(e, n) ?? townGround(input0, e, n) ?? input0.geo.bedElevation(n, e);
+      this.roadNet = new RoadNetwork(input0.roads, raw, t?.spec ? { e0: t.spec.e0, n0: t.spec.n0, cell: t.spec.cell, nx: t.spec.nx, ny: t.spec.ny } : undefined);
+      if (t) input = { ...input0, town: { ...t, values: this.roadNet.carve(t.values) } };
+    }
+    this.input = input;
     this.fixed.name = 'dart-fixed';
     this.floating.name = 'dart-floating';
     this.features = input.features;
@@ -97,6 +138,7 @@ export class DartScene {
     const f = input.features;
     if (f) {
       this.buildBuildings(f);
+      for (const en of this.ensigns) this.fixed.add(en.group);
       this.buildPiers(f);
       this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
       const low = input.detail === 'low';
@@ -115,9 +157,17 @@ export class DartScene {
       this.buildMarks(f);
       this.buildLabels(f);
     }
-    if (input.roads) {
-      this.fixed.add(buildRoadSurfaces(input.roads, (e, n) => this.groundAt(e, n)));
-      this.street = new StreetLife({ roads: input.roads, groundAt: (e, n) => this.groundAt(e, n), standing: f ? standingSpots(f) : [], detail: input.detail });
+    if (input.roads && this.roadNet) {
+      const net = this.roadNet;
+      this.fixed.add(net.mesh((e, n) => this.groundAt(e, n), input.detail === 'low' ? 'low' : 'high'));
+      this.street = new StreetLife({
+        roads: input.roads,
+        groundAt: (e, n) => this.groundAt(e, n),
+        surfaceAt: (e, n) => net.surfaceAt(e, n),
+        standing: f ? standingSpots(f) : [],
+        queues: f ? ferryQueues(f) : [],
+        detail: input.detail,
+      });
       this.fixed.add(this.street.fixed);
       this.floating.add(this.street.floating);
     }
@@ -132,21 +182,11 @@ export class DartScene {
 
   /** Ground (m ODN) as the picture draws it: the towns' 4 m grid where there is one, else the 8 m grid. */
   groundAt(e: number, n: number): number {
-    const town = this.input.town;
-    if (town) {
-      const t = town.spec;
-      const x = (e - t.e0) / t.cell - 0.5;
-      const y = (n - t.n0) / t.cell - 0.5;
-      if (x >= 0 && y >= 0 && x < t.nx - 1 && y < t.ny - 1) {
-        const i = Math.floor(x);
-        const j = Math.floor(y);
-        const fx = x - i;
-        const fy = y - j;
-        const v = town.values;
-        const k = j * t.nx + i;
-        return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
-      }
-    }
+    // The Royal Dart Yacht Club's terrace, on its sea wall (src/render/rdyc.ts).
+    const terrace = rdycPlatformAt(e, n);
+    if (terrace !== undefined) return terrace;
+    const g = townGround(this.input, e, n);
+    if (g !== undefined) return g;
     return this.input.geo.bedElevation(n, e);
   }
 
@@ -374,10 +414,14 @@ export class DartScene {
     const w = new THREE.Vector3();
     const DEG = Math.PI / 180;
     const kit = new Kit();
-    f.buildings.forEach((b0, idx) => {
-      let b = b0;
-      const ring = b.r;
+    f.buildings.forEach((bData, idx) => {
+      const ring = bData.r;
       if (ring.length < 3) return;
+      // A landmark may correct the data's heights where photographs show them wrong (src/render/landmarks.ts).
+      const spec = landmarkFor(ring);
+      const hSpec = spec?.heights;
+      const b0 = hSpec ? { ...bData, b: hSpec.base, t: hSpec.top, e: hSpec.eaves } : bData;
+      let b = b0;
       const cx = ring.reduce((a, p) => a + p[0], 0) / ring.length;
       const cn = ring.reduce((a, p) => a + p[1], 0) / ring.length;
       const key = `${Math.floor(cx / 800)},${Math.floor(cn / 800)}`;
@@ -386,7 +430,8 @@ export class DartScene {
       const T = t;
       // Landmarks as themselves (src/render/landmarks.ts); churches and chapels in stone with tall windows; the
       // marina buildings at Noss; shopfronts on the named buildings of the town streets.
-      const spec = landmarkFor(ring);
+      // The yacht club is modelled as itself (src/render/rdyc.ts), added after the loop.
+      if (spec?.id === 'rdyc') return;
       const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
       const chapel = !spec && !church && (b.c === 'chapel' || /chapel/i.test(b.n ?? ''));
       const ce0 = ring.reduce((a, p) => a + p[0], 0) / ring.length;
@@ -413,7 +458,7 @@ export class DartScene {
         const t = (bearing * Math.PI) / 180;
         const across = ring.map(([e, n]) => e * Math.cos(t) - n * Math.sin(t));
         const width = Math.max(...across) - Math.min(...across);
-        const eavesG = b0.b + Math.min(8, Math.max(4, 0.45 * (b0.t - b0.b)));
+        const eavesG = hSpec?.eaves ?? b0.b + Math.min(8, Math.max(4, 0.45 * (b0.t - b0.b)));
         b = { ...b0, s: 'g', d: bearing, e: eavesG, t: Math.min(b0.t, eavesG + 0.35 * width) };
         if (church && b0.r.length >= 4) {
           // A tower at the west end, as most parish churches have (E: position and size).
@@ -431,7 +476,9 @@ export class DartScene {
       if (look) {
         const top = b.t;
         if (look.parapet === 'battlements' || look.parapet === 'corbelled-battlements') battlements(kit, ccwRing, top, look.walls, look.parapet === 'corbelled-battlements');
-        if (spec?.extras) for (const x of spec.extras(b0.b, b0.t, ccwRing)) buildExtra(kit, x);
+        if (spec?.extras) {
+          for (const x of spec.extras(b0.b, b0.t, ccwRing)) buildExtra(kit, x);
+        }
       }
       // Counter-clockwise (in e, n) so that wall normals face out; party-wall flags follow the ring.
       let area = 0;
@@ -643,6 +690,13 @@ export class DartScene {
       this.fixed.add(mesh);
     }
     if (kit.pos.length) this.fixed.add(kit.mesh('landmark-details'));
+    // The Royal Dart Yacht Club as itself, with its terrace and sea wall; its ensign flies from the flagstaff.
+    if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'rdyc')) {
+      const club = buildRdycClub();
+      this.club = club;
+      this.fixed.add(club.group);
+      this.ensigns.push(new ClubEnsign(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
+    }
   }
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
@@ -651,46 +705,22 @@ export class DartScene {
     this.street?.setDaylight(day);
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
+    this.club?.setNight(x * x * (3 - 2 * x));
   }
 
   // ------------------------------------------------------------- piers etc.
 
   private buildPiers(f: DartFeatures): void {
-    const deck = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.9 });
-    const pontoon = new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 0.8 });
-    const fixedBoxes: THREE.Matrix4[] = [];
-    const floatBoxes: THREE.Matrix4[] = [];
-    for (const p of f.piers) {
-      if ('line' in p) {
-        for (let i = 0; i < p.line.length - 1; i++) {
-          const [e0, n0] = p.line[i]!;
-          const [e1, n1] = p.line[i + 1]!;
-          const len = Math.hypot(e1 - e0, n1 - n0);
-          if (len < 0.5) continue;
-          const m = new THREE.Matrix4().compose(
-            new THREE.Vector3((e0 + e1) / 2, p.floating ? 0.2 : FIXED_DECK_ODN - 0.3, -(n0 + n1) / 2),
-            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(e1 - e0, n1 - n0)),
-            new THREE.Vector3(p.width, p.floating ? 0.5 : 0.6, len + p.width * 0.5),
-          );
-          (p.floating ? floatBoxes : fixedBoxes).push(m);
-        }
-      } else {
-        const shape = new THREE.Shape(p.poly.map(([e, n]) => new THREE.Vector2(e, n)));
-        const geo = new THREE.ExtrudeGeometry(shape, { depth: p.floating ? 0.5 : 0.8, bevelEnabled: false });
-        geo.rotateX(-Math.PI / 2); // (e, n, depth) -> (x = e, y = depth, z = -n)
-        const mesh = new THREE.Mesh(geo, p.floating ? pontoon : deck);
-        mesh.position.y = p.floating ? -0.1 : FIXED_DECK_ODN - 0.8;
-        mesh.name = 'pier';
-        (p.floating ? this.floating : this.fixed).add(mesh);
-      }
-    }
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    for (const [list, mat, group] of [[fixedBoxes, deck, this.fixed], [floatBoxes, pontoon, this.floating]] as const) {
-      if (!list.length) continue;
-      const im = new THREE.InstancedMesh(box, mat, list.length);
-      list.forEach((m, i) => im.setMatrixAt(i, m));
-      im.name = 'pontoons';
-      group.add(im);
+    // Decks, floats, fenders, cleats and pile hoops float with the water; piles, jetties and gangways are fixed.
+    this.pontoons = buildPontoons(f.piers, (e, n) => this.groundAt(e, n));
+    this.floating.add(this.pontoons.floating);
+    this.fixed.add(this.pontoons.fixed);
+    // The yacht club's dinghy racks, its RIB and the pontoon's guide piles.
+    const club = f.piers.find((p) => p.name === 'Royal Dart Yacht Club pontoon');
+    if (club && 'poly' in club) {
+      const gear = buildRdycPontoonGear(club.poly, PONTOON.floatDeck);
+      this.floating.add(gear.floating);
+      this.fixed.add(gear.fixed);
     }
   }
 
@@ -823,18 +853,21 @@ export class DartScene {
 
   update(u: DartUpdate): void {
     this.fixed.position.y = -u.waterLevel;
+    this.pontoons?.update(u.waterLevel);
+    for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;
       this.updateMoorings(u.stream, u.windFromDir);
       if (u.traffic && u.traffic.berths.length === this.berths.length) this.updateBerths(u.traffic.berthsTaken(u.epochMs));
     }
+    this.boats?.setWind(u.windFromDir);
     this.boats?.update(u.camera);
     // Steam trains: smoke drifts downwind (about 3 m/s, E).
     this.railway?.update(u.epochMs, u.time, { e: -Math.sin(u.windFromDir) * 3, n: -Math.cos(u.windFromDir) * 3 });
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
-      this.traffic.update(states, u.time, u.camera, u.showLabels);
+      this.traffic.update(states, u.time, u.camera, u.showLabels, u.windSpeed !== undefined ? { fromDir: u.windFromDir, speed: u.windSpeed } : undefined);
     }
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {
@@ -1118,6 +1151,27 @@ function shadowed(m: THREE.Mesh): THREE.Mesh {
  * Where people stand (E): on the quays and jetties and on the pontoons in the two towns, about one person per
  * 60 m² of deck (fewer on long pontoons), never more than 40 on one. Seeded, so the same each time.
  */
+/**
+ * Where foot passengers queue: at each end of the ferry routes that carry them (every route but the vehicle-only
+ * floats), a few metres back from the landing, facing the way the boat leaves (each end once).
+ */
+export function ferryQueues(f: DartFeatures): { e: number; n: number; de: number; dn: number }[] {
+  const out: { e: number; n: number; de: number; dn: number }[] = [];
+  const seen: [number, number][] = [];
+  for (const r of f.ferries) {
+    if (r.route.length < 2) continue;
+    for (const [end, next] of [[r.route[0]!, r.route[1]!], [r.route[r.route.length - 1]!, r.route[r.route.length - 2]!]] as const) {
+      if (seen.some(([e, n]) => Math.hypot(e - end[0], n - end[1]) < 15)) continue;
+      seen.push([end[0], end[1]]);
+      const L = Math.hypot(next[0] - end[0], next[1] - end[1]) || 1;
+      const de = (next[0] - end[0]) / L;
+      const dn = (next[1] - end[1]) / L;
+      out.push({ e: end[0] - de * 4, n: end[1] - dn * 4, de, dn });
+    }
+  }
+  return out;
+}
+
 export function standingSpots(f: DartFeatures): { e: number; n: number; floating: boolean; deck: number }[] {
   const out: { e: number; n: number; floating: boolean; deck: number }[] = [];
   let seed = 991;

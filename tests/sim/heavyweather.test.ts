@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEG,
   GUST_PRESETS,
+  KNOCKDOWN,
   OVERPOWERED,
   Simulation,
   WindField,
@@ -15,6 +16,7 @@ import {
   buildConditions,
   knToMs,
   overpoweredEaseTarget,
+  rudderGrip,
   squibParams,
   uniformBase,
   type ControlInput,
@@ -153,5 +155,51 @@ describe('replays carry the flatten control', () => {
     expect(decodeInputs([[0, 0, 0.3, 0.3, 0.6, 7]])[0]!.input.flatten).toBeUndefined();
     const rec = { schema: 'squib-replay/1', scenario: { conditions: {} }, inputs: [[0, 0, 0.3, 0.3, 0.6, 7], [5, 0, 0.3, 0.3, 0.6, 7, 0.5]], checkpoints: [], endStep: 10, dart: 'none' };
     expect(() => parseRecording(rec)).not.toThrow();
+  });
+});
+
+describe('knockdowns: the rudder lets go, the crew let the sheets run, and she comes up', () => {
+  it('the rudder keeps all its grip to 45° of heel and little of it by 80°, either way', () => {
+    const r = squibParams().rudder;
+    expect(rudderGrip(r, 0)).toBe(1);
+    expect(rudderGrip(r, -44 * DEG)).toBe(1);
+    expect(rudderGrip(r, 60 * DEG)).toBeGreaterThan(r.ventResidual);
+    expect(rudderGrip(r, 60 * DEG)).toBeLessThan(1);
+    expect(rudderGrip(r, 62 * DEG)).toBeCloseTo(rudderGrip(r, -62 * DEG), 12);
+    expect(rudderGrip(r, 85 * DEG)).toBeCloseTo(r.ventResidual, 12);
+  });
+
+  it('sheets cleated hard in at 32 kn, the helm fighting it: the crew let the sheets run and she comes up', () => {
+    // Before: pinned at 70-84° for the whole minute, the cockpit full (the rudder held her off at any heel and
+    // the sheets stayed cleated).
+    const run = (autoCrew: boolean) => {
+      const { sim } = sail(32, 45, { autoMain: false, autoJib: false, mainSheet: 0, jibSheet: 0, autoCrew, crewHike: 1 }, 0, 'gusty');
+      let over = 0;
+      let longest = 0;
+      for (let k = 0; k < 6000; k++) {
+        sim.stepOnce();
+        over = Math.abs(sim.state.phi) > 60 * DEG ? over + 0.01 : 0;
+        longest = Math.max(longest, over);
+      }
+      return { longest, sim };
+    };
+    const assisted = run(true);
+    expect(assisted.longest).toBeLessThan(6);
+    expect(Math.abs(assisted.sim.state.phi)).toBeLessThan(45 * DEG);
+    // Without the crew assist the sheets stay cleated: knocked flat and pinned for most of the minute.
+    expect(run(false).longest).toBeGreaterThan(20);
+  });
+
+  it('the sheets run only past 50° of heel and come back once she is under 35°', () => {
+    expect(KNOCKDOWN.release).toBeCloseTo(50 * DEG, 12);
+    expect(KNOCKDOWN.recover).toBeLessThan(KNOCKDOWN.release);
+    // A 20 kn beat with the crew assist: never knocked down, so the trim is untouched.
+    const { sim } = sail(20, 45, { autoMain: true, autoJib: true, autoCrew: true }, 0, 'gusty');
+    let most = 0;
+    for (let k = 0; k < 4000; k++) {
+      sim.stepOnce();
+      most = Math.max(most, sim.knockdownEase);
+    }
+    expect(most).toBe(0);
   });
 });

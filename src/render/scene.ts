@@ -6,7 +6,8 @@ import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
 import { SunLight, shadowQuality } from './sunlight';
 import { cameraFloor, clampHelmLook, easeRide, helmLookDir, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
-import { SquibModel } from './squibModel';
+import { SquibModel, sailFill } from './squibModel';
+import type { CrewBuild } from './crew';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
 import { Wake } from './wake';
@@ -187,11 +188,12 @@ export class SceneView {
   }
 
   /** Build the user's boat as another Squib type (data/boats/squib/variants.json). */
-  setBoatType(type: SquibTypeId, params: BoatParams): void {
-    if (this.boat.type === type) return;
+  /** The user's Squib type, and who helms her (drawn as a man or a woman; visual only). */
+  setBoatType(type: SquibTypeId, params: BoatParams, helm: CrewBuild = 'male'): void {
+    if (this.boat.type === type && this.boat.helmBuild === helm) return;
     this.boat.group.remove(this.arrows.bodyGroup);
     this.boatRoot.remove(this.boat.group);
-    this.boat = new SquibModel(params, { type });
+    this.boat = new SquibModel(params, { type, helm });
     this.boatRoot.add(this.boat.group);
     this.boat.group.add(this.arrows.bodyGroup);
   }
@@ -216,8 +218,14 @@ export class SceneView {
   private rebuildEnvironment(): void {
     const skyScene = new THREE.Scene();
     skyScene.add(this.skyMesh.clone());
+    // The sky's light without the sun's disc: the sun is the directional light. With the disc in it, the image
+    // lighting counted the sun a second time, many times over, and washed every colour out to pastel.
+    const disc = this.skyMesh.material.uniforms['showSunDisc'];
+    const shown = disc?.value;
+    if (disc) disc.value = 0;
     const old = this.envMap;
     this.envMap = this.pmrem.fromScene(skyScene, 0.02).texture;
+    if (disc) disc.value = shown;
     this.scene.environment = this.envMap;
     old?.dispose();
   }
@@ -248,7 +256,8 @@ export class SceneView {
     // little (together they flattened the scene: buildings and hills washed out to pastels).
     this.hemi.intensity = (0.02 + 0.22 * day) * (1 + 0.8 * cloud);
     this.hemi.color.setRGB(0.81 - 0.25 * cloud, 0.89 - 0.3 * cloud, 0.96 - 0.32 * cloud);
-    this.scene.environmentIntensity = (0.04 + 0.66 * day) * (1 - 0.45 * cloud);
+    // The sky's share of the light: on a clear day roughly a fifth of the sun's on open ground (more under cloud).
+    this.scene.environmentIntensity = (0.04 + 0.4 * day) * (1 - 0.3 * cloud);
     // Fog: the visibility (σ = 3.912 / V; exp² fog reaches 98% at V when d = 1.978 / V), never thinner than
     // the scene's own haze; grey under cloud, dark at night.
     const density = Math.max(this.baseFogDensity, 1.978 / Math.max(visibilityM, 50));
@@ -421,18 +430,22 @@ export class SceneView {
     orientBoat(this.boatRoot, heading, heel + this.ride.roll, this.ride.pitch);
     const moved = prevPos.distanceTo(this.boatRoot.position);
 
+    const mainAngle = lerpAngle(prev.boomMain, curr.boomMain, alpha);
+    const jibAngle = lerpAngle(prev.boomJib, curr.boomJib, alpha);
     const f = curr.forces;
     this.boat.update({
-      main: { angle: lerpAngle(prev.boomMain, curr.boomMain, alpha), luff: f.main.luff, side: curr.mainSide, inverted: Math.abs(f.main.incidence) > Math.PI / 2 },
-      jib: { angle: lerpAngle(prev.boomJib, curr.boomJib, alpha), luff: f.jib.luff, side: curr.jibSide, inverted: Math.abs(f.jib.incidence) > Math.PI / 2 },
+      main: { angle: mainAngle, luff: f.main.luff, fill: sailFill(f.main.aws > 0 ? f.main.awa : curr.awa, mainAngle) },
+      jib: { angle: jibAngle, luff: f.jib.luff, fill: sailFill(f.jib.aws > 0 ? f.jib.awa : curr.awa, jibAngle) },
       rudder: curr.rudder,
       crewY: curr.crewY,
+      crewTo: curr.crewTo,
       time,
       hideHelm: this.mode === 'helm',
       awa: curr.awa,
       aws: curr.aws,
       heel,
       water: curr.cockpitWater,
+      sailsDown: (curr.damage?.rig ?? 0) >= 1,
     });
     this.crewSide = curr.crewY >= 0 ? 1 : -1;
 
@@ -451,7 +464,10 @@ export class SceneView {
     this.clouds.update(this.camera, frameDt, wx, wz);
     this.rain.update(this.camera, frameDt, wx, wz);
     if (this.dart && env?.dart) this.dart.update({ ...env.dart, camera: this.camera, time });
-    if (this.course && env?.course) this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+    if (this.course && env?.course) {
+      this.course.setWind(curr.twdGround);
+      this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+    }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.renderer.render(this.scene, this.camera);
   }

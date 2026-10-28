@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ACT, gaitRate, peopleMesh, peopleTime, setMotion, statureScale } from './people';
 import { createRng } from '../sim/math/rng';
 
 /**
@@ -60,89 +61,6 @@ export function along(seg: Seg, s: number): { e: number; n: number; de: number; 
   return { e: p0[0] + (p1[0] - p0[0]) * f, n: p0[1] + (p1[1] - p0[1]) * f, de: (p1[0] - p0[0]) / l, dn: (p1[1] - p0[1]) / l };
 }
 
-// ------------------------------------------------------------------ road surfaces
-
-/**
- * The road surfaces: a ribbon for each segment at the ground (resampled every 4 m so it follows the slope),
- * tarmac for roads with dashed centre lines on the main ones, paving or gravel for paths. Steps are left to
- * the ground picture.
- */
-export function buildRoadSurfaces(data: RoadsData, groundAt: (e: number, n: number) => number): THREE.Mesh {
-  const pos: number[] = [];
-  const col: number[] = [];
-  const road: number[] = [];
-  const idx: number[] = [];
-  const lin = (hex: number) => {
-    const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
-    return [c.r, c.g, c.b];
-  };
-  const TARMAC = lin(0x3d4043);
-  const PAVING = lin(0x8f8b84);
-  const GRAVEL = lin(0x9a8e76);
-  for (const r of data.roads) {
-    if (r.c === 'x' || r.l.length < 2) continue;
-    const w = (ROAD_WIDTH[r.c] ?? 3) / 2;
-    const isPath = r.c === 'f' || r.c === 'w';
-    const colour = isPath ? (inTown(r.l[0]![0], r.l[0]![1]) ? PAVING : GRAVEL) : TARMAC;
-    const dashed = r.c === 'p' || r.c === 's' || r.c === 't' ? 1 : 0;
-    // Resample every 4 m.
-    const seg = makeSeg(r.c, r.l);
-    const steps = Math.max(1, Math.ceil(seg.len / 4));
-    const base = pos.length / 3;
-    for (let k = 0; k <= steps; k++) {
-      const s = (seg.len * k) / steps;
-      const p = along(seg, s);
-      // Mitred joins: average the directions either side of a vertex.
-      const q = along(seg, Math.min(seg.len, s + 0.5));
-      const o = along(seg, Math.max(0, s - 0.5));
-      let de = q.e - o.e;
-      let dn = q.n - o.n;
-      const dl = Math.hypot(de, dn) || 1;
-      de /= dl;
-      dn /= dl;
-      const le = -dn;
-      const ln = de;
-      for (const side of [-1, 1]) {
-        const e = p.e + le * w * side;
-        const n = p.n + ln * w * side;
-        pos.push(e, groundAt(e, n) + 0.12, -n);
-        col.push(...colour);
-        road.push(s, side, dashed);
-      }
-      if (k > 0) {
-        const i0 = base + (k - 1) * 2;
-        idx.push(i0, i0 + 2, i0 + 1, i0 + 1, i0 + 2, i0 + 3);
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(road, 3));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
-  mat.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aRoad;\nvarying vec3 vRoad;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRoad = aRoad;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRoad;')
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        // Dashed white centre line on the main roads (4 m dash, 5 m gap); worn edges.
-        float dash = vRoad.z * step(abs(vRoad.y), 0.035) * step(fract(vRoad.x / 9.0), 0.45);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.85, 0.8), dash);
-        diffuseColor.rgb *= 0.9 + 0.1 * smoothstep(1.0, 0.8, abs(vRoad.y));`,
-      );
-  };
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.name = 'roads';
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
 // ------------------------------------------------------------------ models
 
 function merge(parts: { geo: THREE.BufferGeometry; colour: number }[]): THREE.BufferGeometry {
@@ -185,16 +103,6 @@ export function carGeometry(): THREE.BufferGeometry {
   ]);
 }
 
-/** A person (1.75 m): legs, body in the instance colour (the shirt), head; facing -z. */
-export function personGeometry(): THREE.BufferGeometry {
-  return merge([
-    { geo: box(0.14, 0.82, 0.16, -0.1, 0.41, 0), colour: 0x2b3442 },
-    { geo: box(0.14, 0.82, 0.16, 0.1, 0.41, 0), colour: 0x2b3442 },
-    { geo: box(0.42, 0.62, 0.24, 0, 1.13, 0), colour: 0xffffff },
-    { geo: new THREE.IcosahedronGeometry(0.12, 1).translate(0, 1.58, 0), colour: 0xd9a888 },
-  ]);
-}
-
 // ------------------------------------------------------------------ cars and people
 
 interface Mover {
@@ -205,13 +113,19 @@ interface Mover {
   /** Sideways offset from the centreline, metres to the left of travel. */
   side: number;
   phase: number;
+  /** Stature (of 1.68 m), for walkers. */
+  scale?: number;
 }
 
 export interface StreetLifeOptions {
   roads: RoadsData;
   groundAt: (e: number, n: number) => number;
+  /** The road surface at (e, n) (carriageway or pavement top), where there is a road: cars and walkers stand on it. */
+  surfaceAt?: (e: number, n: number) => number | undefined;
   /** Places people stand: quays (fixed, at their deck) and pontoons (floating). */
   standing?: { e: number; n: number; floating: boolean; deck: number }[];
+  /** Ferry landings: where a queue forms (e, n, m) and the way to the boat (unit de, dn). */
+  queues?: { e: number; n: number; de: number; dn: number }[];
   detail?: 'high' | 'low';
   seed?: number;
 }
@@ -229,6 +143,9 @@ export class StreetLife {
   private readonly carMesh: THREE.InstancedMesh;
   private readonly parkedMesh: THREE.InstancedMesh;
   private readonly walkerMesh: THREE.InstancedMesh;
+  private readonly walkerMeshes: THREE.InstancedMesh[];
+  private readonly sv = new THREE.Vector3(1, 1, 1);
+  private counts0: { activities: Record<string, number> } = { activities: {} };
   private readonly standMeshes: THREE.InstancedMesh[] = [];
   private readonly rng;
   private readonly m = new THREE.Matrix4();
@@ -284,7 +201,7 @@ export class StreetLife {
         const e = p.e - p.dn * side;
         const n = p.n + p.de * side;
         this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(p.de, p.dn));
-        parked.push(new THREE.Matrix4().compose(new THREE.Vector3(e, o.groundAt(e, n) + 0.05, -n), this.q.clone(), this.sc));
+        parked.push(new THREE.Matrix4().compose(new THREE.Vector3(e, (o.surfaceAt?.(e, n) ?? o.groundAt(e, n)) + 0.05, -n), this.q.clone(), this.sc));
       }
     }
     const maxParked = low ? 200 : 600;
@@ -296,38 +213,60 @@ export class StreetLife {
       this.parkedMesh.setColorAt(i, new THREE.Color(CAR_COLOURS[Math.floor(this.rng.next() * CAR_COLOURS.length)]!));
     });
     this.parkedMesh.count = parked.length;
-    // Walkers on the footways and the town pavements.
-    const personGeo = personGeometry();
-    const personMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+    // Walkers on the footways and the town pavements: three looks (skin, hair, trousers), shirts in the
+    // instance colour, heights 1.55-1.80 m, striding at their own pace (the shader animates the gait).
     const nWalk = low ? 120 : 320;
     const walkWeight = (i: number) => this.segs[i]!.len * (inTown(this.segs[i]!.pts[0]![0], this.segs[i]!.pts[0]![1]) ? 6 : 1);
     for (let k = 0; k < nWalk && this.walk.length; k++) {
       const seg = this.pick(this.walk, walkWeight);
       const s = this.segs[seg]!;
       const pave = PAVEMENT.has(s.c) ? ROAD_WIDTH[s.c]! / 2 + 0.7 : 0.3;
-      this.walkers.push({ seg, dir: this.rng.next() < 0.5 ? 1 : -1, s: this.rng.next() * s.len, v: 1.1 + 0.5 * this.rng.next(), side: (this.rng.next() < 0.5 ? 1 : -1) * pave, phase: this.rng.next() * 6.28 });
+      this.walkers.push({ seg, dir: this.rng.next() < 0.5 ? 1 : -1, s: this.rng.next() * s.len, v: 1.1 + 0.5 * this.rng.next(), side: (this.rng.next() < 0.5 ? 1 : -1) * pave, phase: this.rng.next() * 6.28, scale: statureScale(this.rng.next()) });
     }
-    this.walkerMesh = new THREE.InstancedMesh(personGeo, personMat, Math.max(1, this.walkers.length));
-    this.walkerMesh.name = 'walkers';
-    this.walkers.forEach((_, i) => this.walkerMesh.setColorAt(i, new THREE.Color(SHIRT_COLOURS[Math.floor(this.rng.next() * SHIRT_COLOURS.length)]!)));
-    // People standing on the quays (with the land) and the pontoons (floating with the tide).
+    const looks = 3;
+    this.walkerMeshes = Array.from({ length: looks }, (_, v) => peopleMesh(Math.ceil(this.walkers.length / looks), v, 'walkers'));
+    this.walkers.forEach((w, i) => {
+      const mesh = this.walkerMeshes[i % looks]!;
+      const j = Math.floor(i / looks);
+      mesh.setColorAt(j, new THREE.Color(SHIRT_COLOURS[Math.floor(this.rng.next() * SHIRT_COLOURS.length)]!));
+      setMotion(mesh, j, w.phase, gaitRate(w.v, w.scale), ACT.walk, this.rng.next());
+    });
+    this.walkerMesh = this.walkerMeshes[0]!;
+    // People standing about on the quays (with the land) and the pontoons (floating with the tide), doing
+    // things: chatting in twos and threes, watching the river from the rail, sitting on benches facing it,
+    // or just standing; and queues at the ferry landings.
+    const placed = placePeople(o, this.rng);
     for (const floating of [false, true]) {
-      const st = (o.standing ?? []).filter((p) => p.floating === floating);
-      if (!st.length) continue;
-      const mesh = new THREE.InstancedMesh(personGeo, personMat, st.length);
-      mesh.name = floating ? 'people-on-pontoons' : 'people-on-quays';
-      st.forEach((p, i) => {
-        this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.rng.next() * 6.28);
-        mesh.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(p.e, p.deck, -p.n), this.q.clone(), this.sc));
-        mesh.setColorAt(i, new THREE.Color(SHIRT_COLOURS[Math.floor(this.rng.next() * SHIRT_COLOURS.length)]!));
+      const list = placed.people.filter((x) => x.floating === floating);
+      if (!list.length) continue;
+      const meshes = Array.from({ length: looks }, (_, v) => peopleMesh(Math.ceil(list.length / looks), v + 1, floating ? 'people-on-pontoons' : 'people-on-quays'));
+      list.forEach((x, i) => {
+        const mesh = meshes[i % looks]!;
+        const j = Math.floor(i / looks);
+        this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -x.facing);
+        mesh.setMatrixAt(j, new THREE.Matrix4().compose(new THREE.Vector3(x.e, x.y, -x.n), this.q.clone(), new THREE.Vector3(x.scale, x.scale, x.scale)));
+        mesh.setColorAt(j, new THREE.Color(SHIRT_COLOURS[Math.floor(this.rng.next() * SHIRT_COLOURS.length)]!));
+        setMotion(mesh, j, 0, 0, x.act, this.rng.next());
       });
-      mesh.frustumCulled = false;
-      (floating ? this.floating : this.fixed).add(mesh);
-      this.standMeshes.push(mesh);
+      for (const m of meshes) {
+        (floating ? this.floating : this.fixed).add(m);
+        this.standMeshes.push(m);
+      }
     }
-    for (const mesh of [this.carMesh, this.parkedMesh, this.walkerMesh]) {
+    if (placed.benches.length) {
+      const bench = new THREE.InstancedMesh(benchGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }), placed.benches.length);
+      bench.name = 'benches';
+      placed.benches.forEach((b, i) => {
+        this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -b.facing);
+        bench.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(b.e, b.y, -b.n), this.q.clone(), this.sc));
+      });
+      bench.receiveShadow = true;
+      this.fixed.add(bench);
+    }
+    this.counts0 = { activities: placed.activities };
+    for (const mesh of [this.carMesh, this.parkedMesh, ...this.walkerMeshes]) {
       mesh.frustumCulled = false;
-      mesh.castShadow = !low && mesh !== this.walkerMesh;
+      mesh.castShadow = !low && !this.walkerMeshes.includes(mesh);
       this.fixed.add(mesh);
     }
   }
@@ -360,12 +299,13 @@ export class StreetLife {
     });
     this.carMesh.instanceMatrix.needsUpdate = true;
     const activeWalk = Math.round(this.walkers.length * (0.15 + 0.85 * this.daylight));
+    const looks = this.walkerMeshes.length;
     this.walkers.forEach((w, i) => {
       this.advance(w, dt, false);
-      w.phase += dt * w.v * 5.5;
-      this.place(this.walkerMesh, i, w, Math.abs(Math.sin(w.phase)) * 0.04, i < activeWalk, cam, 700);
+      this.place(this.walkerMeshes[i % looks]!, Math.floor(i / looks), w, 0, i < activeWalk, cam, 450, w.scale);
     });
-    this.walkerMesh.instanceMatrix.needsUpdate = true;
+    for (const m of this.walkerMeshes) m.instanceMatrix.needsUpdate = true;
+    peopleTime.value = time;
   }
 
   /** On along the segment; at its end, on to a connected road (cars) or back the way they came (walkers). */
@@ -396,7 +336,7 @@ export class StreetLife {
     x.side = Math.min(1.6, ROAD_WIDTH[ns.c]! / 4);
   }
 
-  private place(mesh: THREE.InstancedMesh, i: number, x: Mover, lift: number, active: boolean, cam: THREE.Vector3, range: number): void {
+  private place(mesh: THREE.InstancedMesh, i: number, x: Mover, lift: number, active: boolean, cam: THREE.Vector3, range: number, scale = 1): void {
     const seg = this.segs[x.seg]!;
     const p = along(seg, x.s);
     const de = p.de * x.dir;
@@ -412,11 +352,115 @@ export class StreetLife {
     }
     // The models face -z: a turn of -atan2(de, dn) about y points them along (de, dn).
     this.q.setFromAxisAngle(this.v.set(0, 1, 0), -Math.atan2(de, dn));
-    this.m.compose(this.v.set(e, this.o.groundAt(e, n) + lift, -n), this.q, this.sc);
+    this.m.compose(this.v.set(e, this.heightAt(e, n) + lift, -n), this.q, this.sv.set(scale, scale, scale));
     mesh.setMatrixAt(i, this.m);
   }
 
-  get counts(): { cars: number; parked: number; walkers: number; standing: number } {
-    return { cars: this.cars.length, parked: this.parkedMesh.count, walkers: this.walkers.length, standing: this.standMeshes.reduce((a, m) => a + m.count, 0) };
+  /** Where a car or walker stands: the road's surface if there is one, else the ground. */
+  private heightAt(e: number, n: number): number {
+    return this.o.surfaceAt?.(e, n) ?? this.o.groundAt(e, n);
   }
+
+  get counts(): { cars: number; parked: number; walkers: number; standing: number; activities: Record<string, number> } {
+    return { cars: this.cars.length, parked: this.parkedMesh.count, walkers: this.walkers.length, standing: this.standMeshes.reduce((a, m) => a + m.count, 0), activities: this.counts0.activities };
+  }
+}
+
+// ------------------------------------------------------------------ people about the quays
+
+/** One person placed: where (m; y in its group's frame), which way they face (rad, compass), height, activity. */
+interface Placed {
+  e: number;
+  n: number;
+  y: number;
+  floating: boolean;
+  facing: number;
+  scale: number;
+  act: number;
+}
+
+/**
+ * The compass direction from (e, n) towards the water (the lowest ground around it), for someone standing at
+ * height `standY` (m ODN: a jetty's deck, or the ground), or undefined in the middle of a flat quay.
+ */
+function towardsWater(groundAt: (e: number, n: number) => number, e: number, n: number, standY = -Infinity): number | undefined {
+  let best: number | undefined;
+  let low = Infinity;
+  for (let k = 0; k < 16; k++) {
+    const a = (k * Math.PI) / 8;
+    let sum = 0;
+    for (const d of [3, 6, 10]) sum += groundAt(e + Math.sin(a) * d, n + Math.cos(a) * d);
+    if (sum < low) {
+      low = sum;
+      best = a;
+    }
+  }
+  // Only where the water is clearly lower than here (an edge, or out on a jetty), not in the middle of a quay.
+  return low / 3 < Math.max(groundAt(e, n), standY) - 1.5 ? best : undefined;
+}
+
+/**
+ * What the people standing about do, from the standing spots and the ferry landings (seeded): chatting groups
+ * of two or three facing each other, watchers at the edge facing the water (leaning on the rail on a quay),
+ * sitters on benches facing the water (quays), others standing about; queues at the ferry landings facing the
+ * boat. Illustrative (E).
+ */
+export function placePeople(o: Pick<StreetLifeOptions, 'standing' | 'queues' | 'groundAt'>, rng: { next(): number }): { people: Placed[]; benches: { e: number; n: number; y: number; facing: number }[]; activities: Record<string, number> } {
+  const people: Placed[] = [];
+  const benches: { e: number; n: number; y: number; facing: number }[] = [];
+  const activities: Record<string, number> = { chatting: 0, watching: 0, sitting: 0, standing: 0, queueing: 0 };
+  for (const p of o.standing ?? []) {
+    const r = rng.next();
+    const water = p.floating ? undefined : towardsWater(o.groundAt, p.e, p.n, p.deck);
+    if (r < 0.32) {
+      // A group of two or three, facing the middle.
+      const k = rng.next() < 0.5 ? 2 : 3;
+      const turn = rng.next() * Math.PI * 2;
+      for (let i = 0; i < k; i++) {
+        const a = turn + (i * 2 * Math.PI) / k;
+        const rad = k === 2 ? 0.45 : 0.55;
+        people.push({ e: p.e + Math.sin(a) * rad, n: p.n + Math.cos(a) * rad, y: p.deck, floating: p.floating, facing: a + Math.PI, scale: statureScale(rng.next()), act: ACT.chat });
+        activities.chatting!++;
+      }
+    } else if (r < 0.62 && (water !== undefined || p.floating)) {
+      const facing = water ?? rng.next() * Math.PI * 2;
+      people.push({ e: p.e, n: p.n, y: p.deck, floating: p.floating, facing, scale: statureScale(rng.next()), act: p.floating ? ACT.idle : ACT.lean });
+      activities.watching!++;
+    } else if (r < 0.74 && !p.floating && water !== undefined) {
+      // A bench facing the water, with one or two on it.
+      benches.push({ e: p.e, n: p.n, y: p.deck, facing: water });
+      const two = rng.next() < 0.5;
+      for (const off of two ? [-0.35, 0.35] : [0]) {
+        people.push({ e: p.e + Math.cos(water) * off, n: p.n - Math.sin(water) * off, y: p.deck, floating: false, facing: water, scale: statureScale(rng.next()), act: ACT.sit });
+        activities.sitting!++;
+      }
+    } else {
+      people.push({ e: p.e, n: p.n, y: p.deck, floating: p.floating, facing: rng.next() * Math.PI * 2, scale: statureScale(rng.next()), act: ACT.idle });
+      activities.standing!++;
+    }
+  }
+  for (const q of o.queues ?? []) {
+    const k = 3 + Math.floor(rng.next() * 5);
+    const facing = Math.atan2(q.de, q.dn);
+    for (let i = 0; i < k; i++) {
+      const e = q.e - q.de * (i * 0.8);
+      const n = q.n - q.dn * (i * 0.8);
+      const y = o.groundAt(e, n);
+      // Only on dry land (not on the water beyond a slip's end).
+      if (y < 0.8) continue;
+      people.push({ e: e + (rng.next() - 0.5) * 0.2, n: n + (rng.next() - 0.5) * 0.2, y, floating: false, facing: facing + (rng.next() - 0.5) * 0.4, scale: statureScale(rng.next()), act: ACT.idle });
+      activities.queueing!++;
+    }
+  }
+  return { people, benches, activities };
+}
+
+/** A slatted bench (1.6 m) with a back, seat at 0.45 m, facing -z (the sitters' way). */
+export function benchGeometry(): THREE.BufferGeometry {
+  return merge([
+    { geo: box(1.6, 0.05, 0.42, 0, 0.45, 0.02), colour: 0x8a6a48 },
+    { geo: box(1.6, 0.36, 0.04, 0, 0.72, 0.24), colour: 0x8a6a48 },
+    { geo: box(0.06, 0.45, 0.4, -0.7, 0.225, 0.03), colour: 0x2a2c2e },
+    { geo: box(0.06, 0.45, 0.4, 0.7, 0.225, 0.03), colour: 0x2a2c2e },
+  ]);
 }

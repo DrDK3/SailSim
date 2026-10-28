@@ -6,17 +6,19 @@ import { RiverTraffic, type VesselState } from '../env/traffic';
 import type { Environment } from '../env/environment';
 import { boxOutline, circleContact, placeOutline, polygonContact, squibOutline, type Contact, type Outline, type Vec } from './hull';
 import { hypot2 } from '../math/hypot';
+import { PIER_CONTACT, PierGrid, pierPieces, type PierInput } from './piers';
+import { impactEnergy } from '../boat/damage';
 
 /**
  * Several boats sharing one environment, stepped together at the fixed 10 ms step, with contact between
- * hulls and with marks, moored boats and ferries.
+ * hulls and with marks, moored boats, ferries, piers and pontoons.
  *
  * Contact model (penalty method, ESTIMATED coefficients): where two outlines overlap, a normal force
  * k·depth + c·closing speed (never pulling) and Coulomb friction μ·N act at the contact point, equal and
  * opposite on the two bodies. Forces are computed from the states at the start of the step and held over it
  * (like the actuators), so the order of the boats does not matter and runs stay deterministic. Marks, moored
- * boats and ferries do not move in response (fixed or scripted bodies). Contact acts in the horizontal plane
- * only: no roll, no damage.
+ * boats, ferries, piers and pontoons do not move in response (fixed or scripted bodies). Contact acts in the
+ * horizontal plane; what an impact does to the boat (damage) is in src/sim/boat/damage.ts.
  */
 export interface FleetBoat {
   id: string;
@@ -48,7 +50,7 @@ export interface MooredBoat {
   area: string;
 }
 
-export type ContactKind = 'boat' | 'mark' | 'committee-boat' | 'moored' | 'ferry';
+export type ContactKind = 'boat' | 'mark' | 'committee-boat' | 'moored' | 'ferry' | 'pier';
 
 /** Start of a contact (a pair that was not touching at the previous step). */
 export interface ContactEvent {
@@ -63,6 +65,9 @@ export interface ContactEvent {
   point: Vec;
 }
 
+/** Height (m above the waterline) at which contact forces act, for the heel they cause: topsides, fenders, piles (E). */
+export const CONTACT_HEIGHT = { boat: 0.55, mark: 0.3, pontoon: 0.35, jetty: 0.25 };
+
 export const CONTACT = {
   /** Hull–hull and hull–hard-object stiffness (N/m) and damping (N s/m): E. */
   hardStiffness: 2e5,
@@ -73,11 +78,15 @@ export const CONTACT = {
   friction: 0.3,
 };
 
-/** Physical radius of a course mark by kind (m): E. Virtual marks (lane posts) are not physical. */
+/**
+ * Physical radius of a course mark by kind (m): E. Turning marks and the pin are robotic marks (an inflatable on
+ * twin pontoons 1.5 m long: src/render/robotMark.ts), taken as a circle round the pontoons. Virtual marks (lane
+ * posts) are not physical.
+ */
 export function markRadius(kind: string): number | null {
   switch (kind) {
-    case 'inflatable': return 0.75;
-    case 'pin': return 0.4;
+    case 'inflatable': return 0.9;
+    case 'pin': return 0.9;
     case 'nav-buoy': return 0.9;
     case 'fixed': return 0.4;
     case 'committee-boat': return 2.5;
@@ -115,6 +124,8 @@ export class Fleet {
   private readonly startEpochMs: number;
   private touching = new Set<string>();
   private readonly mooredOutline = new Map<number, Outline>();
+  private piers?: PierGrid;
+  private readonly nearPiers: number[] = [];
   readonly events: ContactEvent[] = [];
   time = 0;
   step = 0;
@@ -133,19 +144,20 @@ export class Fleet {
     return boat;
   }
 
-  /** Bounding box of all ferry routes, grown by 150 m (no ferry can be outside it). */
+  /** Bounding box of all ferry, marina and steamer routes, grown by 150 m (no vessel can be outside it). */
   private ferryBox?: { nMin: number; nMax: number; eMin: number; eMax: number };
 
   /**
    * Fixed and moving obstacles. River traffic: a prebuilt model (the app's, so the physics and the picture are
    * the same traffic), or one built here from the ferry routes with this environment's stream.
    */
-  setObstacles(o: { marks?: CircleObstacle[]; moored?: MooredBoat[]; ferries?: FerryRoute[]; traffic?: RiverTraffic }): void {
+  setObstacles(o: { marks?: CircleObstacle[]; moored?: MooredBoat[]; ferries?: FerryRoute[]; traffic?: RiverTraffic; piers?: readonly PierInput[] }): void {
     if (o.marks) this.marks = o.marks;
+    if (o.piers) this.piers = new PierGrid(pierPieces(o.piers));
     if (o.traffic || o.ferries) {
       const start = this.startEpochMs;
       this.traffic = o.traffic ?? new RiverTraffic(o.ferries!, { current: (ms, n, e) => this.env.current((ms - start) / 1000, n, e) });
-      const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route)];
+      const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route), ...this.traffic.steamerTrack()];
       this.ferryBox = pts.length
         ? { nMin: Math.min(...pts.map((p) => p[1])) - 150, nMax: Math.max(...pts.map((p) => p[1])) + 150, eMin: Math.min(...pts.map((p) => p[0])) - 150, eMax: Math.max(...pts.map((p) => p[0])) + 150 }
         : undefined;
@@ -218,7 +230,7 @@ export class Fleet {
     }
     this.env.step?.(this.time, DT);
     const bodies = this.boats.map((b) => this.body(b));
-    const ext = bodies.map(() => ({ n: 0, e: 0, yaw: 0 }));
+    const ext = bodies.map(() => ({ n: 0, e: 0, yaw: 0, roll: 0 }));
     const now = new Set<string>();
     const started: ContactEvent[] = [];
     const touch = (key: string, ev: Omit<ContactEvent, 't'>) => {
@@ -229,11 +241,14 @@ export class Fleet {
         this.events.push(e);
       }
     };
-    const apply = (i: number, f: NE, p: Vec) => {
+    /** Force f at point p on boat i, applied `h` m above the waterline (it heels her too). */
+    const apply = (i: number, f: NE, p: Vec, h: number) => {
       const B = bodies[i]!;
       ext[i]!.n += f.n;
       ext[i]!.e += f.e;
       ext[i]!.yaw += (p.n - B.n) * f.e - (p.e - B.e) * f.n;
+      const psi = this.boats[i]!.sim.state.psi;
+      ext[i]!.roll += (-f.n * Math.sin(psi) + f.e * Math.cos(psi)) * h;
     };
     const pointVel = (B: Body, p: Vec): NE => ({ n: B.vn - B.r * (p.e - B.e), e: B.ve + B.r * (p.n - B.n) });
     /** Force on body "b" side (along +normal) for a contact; `vRel` = velocity of B's point minus A's. */
@@ -264,8 +279,8 @@ export class Fleet {
         const vb = pointVel(B, c.point);
         const vRel = { n: vb.n - va.n, e: vb.e - va.e };
         const f = force(c, vRel, CONTACT.hardStiffness, CONTACT.hardDamping);
-        apply(j, f, c.point);
-        apply(i, { n: -f.n, e: -f.e }, c.point);
+        apply(j, f, c.point, CONTACT_HEIGHT.boat);
+        apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.boat);
         touch(pairKey(oa.id, ob.id), { kind: 'boat', a: oa.id, b: ob.id, label: `${oa.name} and ${ob.name}`, speed: Math.max(0, -(vRel.n * c.normal.n + vRel.e * c.normal.e)), point: c.point });
       }
     }
@@ -281,7 +296,7 @@ export class Fleet {
         if (!c) continue;
         const va = pointVel(A, c.point);
         const f = force(c, { n: -va.n, e: -va.e }, m.stiffness, m.damping);
-        apply(i, { n: -f.n, e: -f.e }, c.point);
+        apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.mark);
         touch(pairKey(oa.id, m.id), { kind: m.kind, a: oa.id, b: m.id, label: m.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point });
       }
       // Moored boats near this boat (spatial hash on the buoys, 25 m cells).
@@ -303,10 +318,25 @@ export class Fleet {
               if (!c) continue;
               const va = pointVel(A, c.point);
               const f = force(c, { n: -va.n, e: -va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
-              apply(i, { n: -f.n, e: -f.e }, c.point);
+              apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.boat);
               touch(pairKey(oa.id, `moored-${k}`), { kind: 'moored', a: oa.id, b: `moored-${k}`, label: `a moored boat (${mb.area})`, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point });
             }
           }
+        }
+      }
+      // Piers, jetties and pontoons (convex pieces in a 25 m grid): fixed, or floating on fenders.
+      if (this.piers) {
+        for (const k of this.piers.near(A.n, A.e, oa.outline.radius, this.nearPiers)) {
+          const pc = this.piers.pieces[k]!;
+          const rr = oa.outline.radius + pc.radius;
+          if ((A.n - pc.n) ** 2 + (A.e - pc.e) ** 2 > rr * rr) continue;
+          const c = polygonContact(A.pts, pc.pts);
+          if (!c) continue;
+          const va = pointVel(A, c.point);
+          const kc = pc.floating ? PIER_CONTACT.floating : PIER_CONTACT.fixed;
+          const f = force(c, { n: -va.n, e: -va.e }, kc.stiffness, kc.damping);
+          apply(i, { n: -f.n, e: -f.e }, c.point, pc.floating ? CONTACT_HEIGHT.pontoon : CONTACT_HEIGHT.jetty);
+          touch(pairKey(oa.id, `pier-${pc.pier}`), { kind: 'pier', a: oa.id, b: `pier-${pc.pier}`, label: pc.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point });
         }
       }
     }
@@ -331,7 +361,7 @@ export class Fleet {
             if (!c) continue;
             const va = pointVel(A, c.point);
             const f = force(c, { n: v.n - va.n, e: v.e - va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
-            apply(i, { n: -f.n, e: -f.e }, c.point);
+            apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.boat);
             const key = `ferry-${fy.id}`;
             touch(pairKey(oa.id, key), { kind: 'ferry', a: oa.id, b: key, label: pi > 0 ? `${fy.label} (tug)` : fy.label, speed: Math.max(0, -((v.n - va.n) * c.normal.n + (v.e - va.e) * c.normal.e)), point: c.point });
           }
@@ -339,11 +369,13 @@ export class Fleet {
       }
     }
 
+    // Damage from the impacts that began this step (by their closing speed and where they struck).
+    for (const ev of started) this.damageFrom(ev);
     this.touching = now;
     this.lastForces.clear();
     this.boats.forEach((b, i) => {
       const f = ext[i]!;
-      const any = f.n !== 0 || f.e !== 0 || f.yaw !== 0;
+      const any = f.n !== 0 || f.e !== 0 || f.yaw !== 0 || f.roll !== 0;
       b.sim.external = any ? f : null;
       if (any) this.lastForces.set(b.id, f);
     });
@@ -351,6 +383,27 @@ export class Fleet {
     this.step += 1;
     this.time = this.step * DT;
     return started;
+  }
+
+  /**
+   * Damage to the boats in a contact that has just begun: the impact energy of its closing speed, against the
+   * boat's mass for a fixed or scripted object, or the two boats' reduced mass when two meet; inflatable marks
+   * give way and do no harm (src/sim/boat/damage.ts).
+   */
+  private damageFrom(ev: ContactEvent): void {
+    const A = this.boat(ev.a);
+    if (!A) return;
+    const soft = ev.kind === 'mark' && this.marks.find((m) => m.id === ev.b)?.stiffness === CONTACT.softStiffness;
+    if (soft) return;
+    const B = ev.kind === 'boat' ? this.boat(ev.b) : undefined;
+    const mass = B ? (A.sim.params.mass * B.sim.params.mass) / (A.sim.params.mass + B.sim.params.mass) : A.sim.params.mass;
+    const energy = impactEnergy(ev.speed, mass);
+    for (const [boat, what] of B ? ([[A, B.name], [B, A.name]] as const) : ([[A, ev.label]] as const)) {
+      const s = boat.sim.state;
+      const along = (ev.point.n - s.n) * Math.cos(s.psi) + (ev.point.e - s.e) * Math.sin(s.psi);
+      const L = boat.sim.params.loa;
+      boat.sim.impact(what, along > 0.25 * L ? 'bow' : along < -0.25 * L ? 'stern' : 'side', ev.speed, energy);
+    }
   }
 
   /** Pairs (or boat–obstacle pairs) in contact after the last step, as "a|b" keys. */

@@ -145,7 +145,11 @@ export interface BoatParams {
   residuary: [number, number][];
   heelResistance: number;
   lateral: FoilParams;
-  rudder: FoilParams & { maxAngle: number; rate: number; flowStraightening: number };
+  /**
+   * The rudder, with its ventilation at large heel: grip fades from `ventStart` to `ventEnd` (rad of heel), down to
+   * `ventResidual` of its force (E).
+   */
+  rudder: FoilParams & { maxAngle: number; rate: number; flowStraightening: number; ventStart: number; ventEnd: number; ventResidual: number };
   hullCrossFlowCd: number;
   hullDraft: number;
   yawLinearDamping: number;
@@ -286,6 +290,9 @@ export function buildBoatParams(spec: Doc, cal: Doc): BoatParams {
       maxAngle: num(cal, 'hydro.rudderMaxDeg') * DEG,
       rate: num(cal, 'hydro.rudderRateDegS') * DEG,
       flowStraightening: num(cal, 'hydro.rudderFlowStraightening'),
+      ventStart: num(cal, 'hydro.rudderVentStartDeg') * DEG,
+      ventEnd: num(cal, 'hydro.rudderVentEndDeg') * DEG,
+      ventResidual: num(cal, 'hydro.rudderVentResidual'),
     },
     hullCrossFlowCd: num(cal, 'hydro.hullCrossFlowCd'),
     hullDraft: num(cal, 'hydro.hullDraft'),

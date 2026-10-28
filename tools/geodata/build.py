@@ -52,8 +52,37 @@ EXTRA_LANDMARKS = [
     ("Dart Lifeboat Station", "building", "Dart Lifeboat Station", None),
     ("Royal Castle Hotel", "building", "Royal Castle Hotel", None),
     ("Dartmouth Yacht Club", "building", "Dartmouth Yacht Club", None),
-    ("Royal Dart Hotel", "building", "Royal Dart Hotel", None),
+    # The Royal Dart Hotel closed and was refurbished as apartments (Hydrock, Gillespie Yunnie Architects; SOURCES.md).
+    ("The Royal Dart (former hotel, now apartments)", "building", "Royal Dart Hotel", None),
 ]
+
+# Piers OpenStreetMap leaves unnamed or without a floating tag, identified from other sources (docs/SOURCES.md):
+# the feature whose centroid is within `within` m of `near` (local e, n) gets this name and floating flag.
+PIER_CORRECTIONS = [
+    dict(near=(-31.0, -18.0), within=15.0, name="Royal Dart Yacht Club pontoon", floating=True,
+         why="The club's main pontoon in front of the clubhouse (RDYC RYA training centre manual 2024; RDYC water-based facilities 2023); floating assumed (E)",
+         # OSM draws the pontoon's head and its 20 m arm to the clubhouse as one outline; the owner's photographs
+         # show the arm is a gangway from the terrace on the sea wall. Head outline as OSM's; the gangway's ends E.
+         poly=[(-44.0, -10.8), (-37.8, -8.7), (-27.8, -37.3), (-34.0, -39.5)],
+         gangway=dict(shore=(-17.1, -8.1), pontoon=(-35.9, -14.05))),
+    dict(near=(-7.6, -76.0), within=10.0, name="Moody Island (RDYC dinghy pontoon)", floating=True,
+         why="OSM 'Moody Island Pontoon': RDYC's dinghy pontoon (RDYC RYA training centre manual 2024)"),
+]
+
+
+def correct_pier(name, floating, pts):
+    """Name, floating, and any shape and gangway overrides for a pier near a correction."""
+    ce = sum(p[0] for p in pts) / len(pts)
+    cn = sum(p[1] for p in pts) / len(pts)
+    for c in PIER_CORRECTIONS:
+        if np.hypot(ce - c["near"][0], cn - c["near"][1]) < c["within"]:
+            extra = {}
+            if "poly" in c:
+                extra["poly"] = [list(p) for p in c["poly"]]
+            if "gangway" in c:
+                extra["gangway"] = dict(shore=list(c["gangway"]["shore"]), pontoon=list(c["gangway"]["pontoon"]))
+            return c["name"], c["floating"], extra
+    return name, floating, {}
 
 # Navigation marks: ONLY positions with a stated source are placed.
 MARKS = [
@@ -307,7 +336,10 @@ def piers(extract, elev):
             shape = dict(poly=ring(list(g.exterior.coords)[:-1]))
         else:
             continue
-        out.append(dict(name=name or None, floating=floating, **shape))
+        name, floating, extra = correct_pier(name, floating, shape.get("line") or shape.get("poly"))
+        if "poly" in extra:
+            shape = dict(poly=extra.pop("poly"))
+        out.append(dict(name=name or None, floating=floating, **shape, **extra))
     return out
 
 
@@ -526,7 +558,7 @@ def layer_provenance(terrain_info, binfo, nb, npier, nareas, nmoor, nfer, cls):
         dict(id="landmarks", label="Landmarks", status="data", tag="S", source=f"OSM names and footprints via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,
              notes=["Shown on their real footprints with labels. The app draws the principal landmarks as described in their listing entries and other sources (docs/SOURCES.md L1–L8): BRNC's brick and Portland stone and its central clock tower, the castles' battlements and Kingswear Castle's stair turret, St Petrox's west tower, the Royal Dart Hotel's balcony, RDYC's flagstaff; parish churches get a west tower by rule. Their proportions are estimates (E)."]),
         dict(id="piers", label="Piers, jetties and pontoons", status="data", tag="S", source=f"OpenStreetMap (man_made=pier) via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,
-             notes=[f"{npier} features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'."]),
+             notes=[f"{npier} features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'.", "RDYC's main pontoon (unnamed in OSM) and its dinghy pontoon, Moody Island, are named from the club's documents (PIER_CORRECTIONS; the main pontoon floating, E)."]),
         dict(id="mooring-areas", label="Mooring areas (trots)", status="data", tag="S", source=f"OpenStreetMap water polygons (Kingswear, Noss and Distins Trots; DHNA anchorage) via Overture Maps {OVERTURE_RELEASE}", licence=ODBL,
              notes=[f"{nareas} areas."]),
         dict(id="moorings", label="Individual moorings and moored boats", status="provisional", tag="E",

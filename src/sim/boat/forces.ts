@@ -319,7 +319,7 @@ export interface FoilForce extends BodyForce {
  * Underwater lifting surface at body x = p.x moving with local velocity (u, vLocal) through the water,
  * deflected by `deflection` (rudder angle; > 0 = trailing edge to starboard, turning the boat to starboard).
  * Horizontal force is reduced by cos φ (heeled foil). vLocal must include the sway caused by yaw (r·x) and
- * roll (−p·depth) at the foil.
+ * roll (−p·depth) at the foil. `grip` scales the force of a foil that ventilates (rudderGrip).
  */
 export function foilForce(
   p: FoilParams,
@@ -329,6 +329,7 @@ export function foilForce(
   heel: number,
   rhoWater: number,
   out?: FoilForce,
+  grip = 1,
 ): FoilForce {
   const o = out ?? { x: 0, y: 0, yPlane: 0, n: 0, alpha: 0, cl: 0, cd: 0, speed: 0 };
   const v2 = u * u + vLocal * vLocal;
@@ -343,7 +344,8 @@ export function foilForce(
   const k = foilCoefficients(alpha, p, K_FOIL);
   const dx = -u / speed;
   const dy = -vLocal / speed;
-  const qPlane = 0.5 * rhoWater * v2 * p.area;
+  // `grip`: the share of its force a ventilating foil keeps (1 = fully wetted).
+  const qPlane = 0.5 * rhoWater * v2 * p.area * grip;
   const cosH = Math.cos(heel);
   const yPlane = qPlane * (k.cl * dx + k.cd * dy);
   const fx = qPlane * cosH * (k.cl * -dy + k.cd * dx);
@@ -357,6 +359,17 @@ export function foilForce(
   o.cd = k.cd;
   o.speed = speed;
   return o;
+}
+
+/**
+ * Share of its force the rudder keeps at heel φ: all of it up to ventStart, fading (smoothly) to ventResidual by
+ * ventEnd as it ventilates or lifts out. It is why an overpressed keelboat rounds up and comes upright (E).
+ */
+export function rudderGrip(p: { ventStart: number; ventEnd: number; ventResidual: number }, heel: number): number {
+  const a = Math.abs(heel);
+  if (a <= p.ventStart) return 1;
+  const t = Math.min(1, (a - p.ventStart) / (p.ventEnd - p.ventStart));
+  return 1 - (1 - p.ventResidual) * t * t * (3 - 2 * t);
 }
 
 export interface HullResistance {

@@ -68,6 +68,11 @@ export class DartGeo implements Seabed {
     return waterLevelOdn - this.bedElevation(n, e);
   }
 
+  /** The mapped area's bounds (local metres). */
+  get domain(): { nMin: number; nMax: number; eMin: number; eMax: number } {
+    return this.manifest.domain;
+  }
+
   inDomain(n: number, e: number): boolean {
     const d = this.manifest.domain;
     return e >= d.eMin && e <= d.eMax && n >= d.nMin && n <= d.nMax;

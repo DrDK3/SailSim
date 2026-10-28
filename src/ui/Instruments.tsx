@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { damageSummary } from '../sim/boat/damage';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { EnvironmentInfo } from '../sim/env/environment';
 import { describeSky } from '../sim/env/sky';
@@ -75,6 +76,13 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
             title="Water shipped into the cockpit (over the rail or in spray). A self-draining cockpit (Rondar) lets it out through the transom; older boats keep it until the crew bails. It makes the boat heavier and more tender."
           />
         )}
+        {damageSummary(s.damage) && (
+          <Cell
+            label="Damage"
+            value={damageSummary(s.damage)}
+            title="From collisions and groundings: the hull leaks into the bilge (heavier, slower; the crew pump), a damaged rudder grips less and a bent one pulls aside, a damaged rig drives less. Thresholds and rates are estimates (E). Restart to repair."
+          />
+        )}
         {more && (
           <>
             <Cell label="SOG" value={kn(s.sog, 2)} unit="kn" title="Speed over ground" />
@@ -124,6 +132,15 @@ function Conditions({ env, waterLevel }: { env: EnvironmentInfo; waterLevel: num
           <span className="fine-inline"> · gust ×{env.gustFactor.toFixed(2)}</span>
         </span>
       </div>
+      {env.landEffect && (
+        <div className="cond-row" title="The hills shelter the water in their lee and the valley turns the wind along the river: estimated from the terrain (docs/PHYSICS.md), not measured.">
+          <span className="cell-label">Land effect</span>
+          <span className="cond-value" data-testid="land-effect">
+            wind {Math.round(env.landEffect.speed * 100)}% of the open-water wind
+            {Math.abs(env.landEffect.turnDeg) >= 1 && <span className="fine-inline"> · turned {Math.abs(env.landEffect.turnDeg).toFixed(0)}° {env.landEffect.turnDeg > 0 ? 'clockwise' : 'anticlockwise'}</span>}
+          </span>
+        </div>
+      )}
       {tide && (
         <div className="cond-row" title={[tide.label, ...tide.notes].join('\n')}>
           <span className="cell-label">Tide</span>

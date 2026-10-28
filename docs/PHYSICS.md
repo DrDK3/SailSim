@@ -375,7 +375,9 @@ Boats in a race (or the user's boat alone, in free sailing) are stepped together
 - **Coefficients:** μ = 0.3. Hard bodies (boats, committee boat, moored boats, ferries): k = 2×10⁵ N/m, c = 5×10³ N s/m. Inflatable marks: k = 3×10⁴ N/m, c = 2×10³ N s/m. All estimates (E).
 - **Timing:** forces are computed from the states at the start of the step and held over it (the `external` force of `Simulation`). The result does not depend on the order of the boats.
 - **Fixed bodies:** marks, moored boats (a box l × l/3, lying to the stream or wind, downstream of the buoy) and ferries (moving on their timetable) do not respond.
-- **Limits:** horizontal only. There is no roll, heave or damage from contact, and no rafting.
+- **Heel (realism round):** each contact force also heels the boat, acting at a height above the waterline: topsides 0.55 m (boats, moored boats, ferries), a pontoon's fenders 0.35 m, a jetty's piles 0.25 m, a mark 0.3 m (E).
+- **Piers and pontoons (realism round, `race/piers.ts`):** solid; a line pier is a rectangle per segment (grown by half its width at each end), an outlined one is cut into triangles (ear clipping); 25 m grid. Fixed jetties as hard bodies; floating pontoons k = 8×10⁴ N/m, c = 4×10³ N s/m on their fenders (E).
+- **Limits:** no heave or rafting. What an impact does to the boat is in §21 (damage).
 - **Measured:** a 3.7 m/s port–starboard collision overlaps by at most 14 cm, and the boats separate.
 - **Determinism:** with no contact, `external` is null and the arithmetic is unchanged, so the golden traces are bit-identical.
 
@@ -403,7 +405,7 @@ The actuator follows the control at 0.25 per second (a crew needs about 4 s). Th
 
 **Gusty preset** (`env/wind.ts`): puffs at 3.5 per km² per minute, strength 0.45 of the mean (cores 1.2–1.7×), radius 75 m, life 70 s, direction offsets of 14°, shifts of 12° over 60 s (all E). Over 20 minutes at nine points the 95th-percentile gust factor is about 1.39, against shifty's 1.31.
 
-**Determinism:** these changes moved the reference race's hash from `5de2cc60d1e76458` to `df0d92d410cf27e9` (deliberate; the golden traces never exceed 24° of heel and are unchanged).
+**Determinism:** these changes moved the reference race's hash from `5de2cc60d1e76458` to `df0d92d410cf27e9` (deliberate; the golden traces never exceed 24° of heel and are unchanged). The realism round moved it again, to `93d1b0dea2bfcf14` (§22).
 
 ## 18. Squib types and water in the cockpit (`boat/squib.ts`, `boat/cockpit.ts`)
 
@@ -452,3 +454,32 @@ The physics reads the sea state for spray (older builds). Speed lost to pitching
 Ferries and Dart Marina's boats are scripted bodies (solid in the fleet physics, §16): their positions are a pure function of the clock and the stream, so the physics and the picture see the same traffic. Each trip is a **speed profile** integrated in 1 s steps: accelerate, cruise (never above the 6 kn harbour limit north of about Castle Ledge, H3), brake to arrive, crab into the cross-stream to hold the track (the speed over the ground is V cos(crab) + the stream along the track), and wait short of a ferry's track while that ferry is under way nearby (marina boats). The Higher Ferry runs on cables: no crab, and the stream does not change its speed.
 
 The Lower Ferry follows the operator's first and last departures (UK local time, with the clock changes) and the manoeuvre described in F3: the tug goes astern for 20 s to clear the float off the slip, then swings end for end about its bow (the head rope) in 35 s, then pushes across; ramps come down at the far slip. A second unit runs opposite the first between 08:00 and 20:00 (E: "when traffic demands"), so they pass mid-stream; during the 29 Oct – 13 Dec 2026 refit only one runs (F2). Dart Marina's boats (numbers per day by month, kinds, speeds: E) follow routes found by A* through deep water (16 m grid, depth at about low water springs, keeping off moorings) to the sea past Castle Ledge or up-river.
+
+## 21. Knockdowns and damage (realism round, `boat/forces.ts`, `simulation.ts`, `boat/damage.ts`)
+
+**Knockdowns.** Held turns with the sheets cleated in 26–32 kn knocked the boat flat on each side in turn and left it pinned at 70–84° (task 81). Two mechanisms were missing:
+- **The rudder lets go:** past 45° of heel the rudder works near the surface, draws air down its low-pressure side or lifts out; its force fades smoothly to 15 % of itself by 80° (`rudderGrip`; calibration `hydro.rudderVent*`, E; practitioner accounts R3). The boat rounds up, as keelboats do.
+- **The crew let the sheets run:** with the crew assist on (the default), past 50° of heel the sheets run out at 1.5 of their travel a second whatever they were set to, and come back to the trim at 0.3 a second once she is back under 35° (`KNOCKDOWN`, E). With the assist off they stay cleated, and a boat can still lie pinned, as a real one would.
+- **Measured** (`tests/sim/heavyweather.test.ts`; a sweep of held turns, all three Squib types, 18–32 kn, steady and gusty, four starting angles, both ways, three ways of handling the sheets): time spent past 55° fell by 86 % (2,784 → 385 s over 497 runs), runs reaching 70° from 69 to 13, and with the app's default sheet settings from 313 s to 13 s. The 32 kn cleated case comes up in seconds instead of lying flat for a minute. Neither change acts below 45° of heel, so the golden traces and the reference race are unchanged by them.
+
+**Damage** (all thresholds and rates estimates, E18). An impact's energy is ½·m·v² of the closing speed along the contact normal, with m the boat's mass (crew included) for a fixed or scripted object and the two boats' reduced mass when two meet; inflatable marks do no harm. Where it strikes is judged from the contact point along the hull (front or back quarter of the length, or the side).
+- below 300 J: a scrape;
+- beyond 800 J anywhere: the hull cracks (1/6000 per joule), and leaks into the bilge at up to 3 kg/s; the crew pump 0.4 kg/s; buoyancy caps the bilge at 300 kg. Bilge water is weight (more resistance); its effect on stability is taken as nil;
+- at the stern beyond 400 J (1/3000 per joule): the rudder keeps less grip (down to 25 %) and a bent blade adds up to 6° of rudder;
+- at the bow beyond 2.5 kJ (1/8000 per joule): the rig drives less, and at full damage fails (the sails come down);
+- running aground at over 0.8 m/s over the ground: an impact on the keel (or the rudder, if the rudder heel touches).
+Damage is part of the boat's state (deterministic), shown in the instruments and the contact message, and repaired only by restarting.
+
+## 22. The land, the wind and the stream (realism round, `env/terrainWind.ts`, `env/streamAnomalies.ts`)
+
+**Shelter and steering.** On a 50 m grid over the River Dart data, for 16 wind directions (each computed the first time it is needed, 30–140 ms), looking upwind along a ray to 3 km: a rise h metres above the sails (water level 0.1 m ODN plus 3 m) x metres away shelters the water by `shelterAt(x/h)`: 30 % in the immediate lee rising to 40 % from 2h to 6h, falling to nothing at 30h (the shape of shelter behind windbreaks, R4; the size for rounded valley sides E). The strongest rise counts. Where sheltered, an oblique wind turns towards the river's line (the stream pattern's direction): by (difference × |cos difference|) × 0.5 × shelter / 40 %, at most 30° (E). A wind square across the valley is not turned. The speed factor and turn are interpolated between directions and grid points; where no land lies upwind at any corner the wind is returned unchanged, bit for bit. The environment applies it to the wind each boat feels and to the waves' wind; the conditions panel shows it; a scenario can turn it off (`landEffects: false`).
+
+Results (`tests/sim/terrain.test.ts`, and a table of places): cross-river winds in the harbour blow at 60–70 % of the open-water wind, turned up to about 15° towards the river's line; winds along the river 80–100 %; Start Bay unchanged except in offshore winds (75–85 % near the coast).
+
+**The stream, locally** (estimates around DHNA's statements, H1):
+- **Deeper water runs faster:** the pattern's velocity × (h/h̄)^(2/3), h̄ the mean depth within 150 m at mid-tide, clamped to 0.5–1.5 (Manning on a common surface slope);
+- **Start Bay's coastal stream:** north-east-going from HW−2 to HW+4 and south-west-going from LW−2 to LW+4, a half-sine of 0.7 kn at most (rate E), weighted in from 0.5 to 2 km out from the entrance, seaward of it, over water only;
+- **Northerlies:** a wind from within 45° of north above 10 m/s adds river outflow, up to 1 kn at 20 m/s (DHNA: the entrance ebb can reach 3.5 kn with heavy rain or strong northerlies; the amount E). Heavy rain upriver is the scenario's river-outflow setting.
+
+**Determinism and cost.** The reference race (7 boats, 400 s, Start Bay, the channel-following stream) hashed to `93d1b0dea2bfcf14` after this change (was `df0d92d410cf27e9`), deliberately, because the coastal stream and the depth weighting now act where it sails. The robotic marks of the pre-UAT round (contact radius 0.9 m, RACING.md) moved it again, to `11824f89f479d0f4`, because the AI keeps clear of marks by their radius. It runs about 20 % slower (13 s for 400 s of seven boats), mostly from the AI's planning, which samples the wind and stream at many points; still about thirty times faster than real time.
+

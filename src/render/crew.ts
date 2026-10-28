@@ -6,8 +6,9 @@ import * as THREE from 'three';
  * helm's hand on the tiller extension (which swings with the rudder) and the mainsheet, the crew's on the
  * jib sheet, feet on the cockpit floor or hooked under the toe straps. The caller (squibModel.ts) decides the
  * pose: sitting in, sitting out and leaning back to hike, crouching across under the boom in a tack or gybe,
- * looking at the sails. Proportions are an adult's (about 1.78 m); the poses are illustrative, not measured.
- * Visual only.
+ * looking at the sails. Figures are built to the measured mean stature of adults (STATURE: 1.75 m for men,
+ * 1.61 m for women); proportions otherwise are illustrative, as are the poses. Visual only: the physics' crew
+ * weight is its own calibration estimate, whoever is drawn.
  *
  * Every bone's frame: origin at its joint, +y along the segment (towards the next joint), +z its front (the
  * chest, the face, the knee cap, the top of the foot). Bones are posed directly in the parent's frame (the
@@ -36,7 +37,7 @@ const BONES = [
 type BoneName = (typeof BONES)[number];
 const B = Object.fromEntries(BONES.map((n, i) => [n, i])) as Record<BoneName, number>;
 
-/** Segment lengths and widths (m). */
+/** Segment lengths and widths (m) the parts are modelled at: a reference figure 1.877 m tall (REF_STATURE). */
 export const BODY = {
   pelvisToSpine: 0.06,
   spine: 0.22,
@@ -52,6 +53,39 @@ export const BODY = {
   shin: 0.45,
 } as const;
 
+export type Body = { readonly [K in keyof typeof BODY]: number };
+
+/** Standing height of the reference figure: ankle (0.09 m), legs, hip drop, torso, neck and head (0.217 m). */
+export const REF_STATURE = 0.09 + BODY.shin + BODY.thigh + BODY.hipDrop + BODY.pelvisToSpine + BODY.spine + BODY.chest + BODY.neck + 0.217;
+
+export type CrewBuild = 'male' | 'female';
+
+/**
+ * Mean measured stature of adults (m): Scottish Health Survey 2008, ages 16 and over, men 175.0 cm and women
+ * 161.3 cm (S, docs/SOURCES.md R1); the figures are built to these.
+ */
+export const STATURE: Record<CrewBuild, number> = { male: 1.75, female: 1.613 };
+
+/**
+ * A figure's proportions: the reference scaled to the stature, and for a woman's build somewhat narrower
+ * shoulders and wider hips for her height (E).
+ */
+export function bodyOf(build: CrewBuild, stature = STATURE[build]): Body {
+  const k = stature / REF_STATURE;
+  const out = Object.fromEntries(Object.entries(BODY).map(([key, v]) => [key, v * k])) as Record<keyof typeof BODY, number>;
+  if (build === 'female') {
+    out.shoulderHalf *= SHAPE.female.shoulders;
+    out.hipHalf *= SHAPE.female.hips;
+  }
+  return out;
+}
+
+/** Breadth factors for a build (on top of the stature scaling), applied to the chest and pelvis parts too. */
+const SHAPE: Record<CrewBuild, { shoulders: number; hips: number }> = {
+  male: { shoulders: 1, hips: 1 },
+  female: { shoulders: 0.93, hips: 1.08 },
+};
+
 export type CrewRole = 'helm' | 'crew';
 
 export interface CrewColours {
@@ -62,6 +96,8 @@ export interface CrewColours {
   skin: number;
   boots: number;
   gloves: number;
+  /** Hair (for a figure whose hair shows: a ponytail under the cap). */
+  hair?: number;
 }
 
 export const CREW_COLOURS: Record<CrewRole, CrewColours> = {
@@ -96,19 +132,19 @@ export interface BodyFrame {
 
 const Y = new THREE.Vector3(0, 1, 0);
 
-export function bodyFrame(hip: THREE.Vector3, facing: THREE.Vector3, back: number, out?: BodyFrame): BodyFrame {
+export function bodyFrame(hip: THREE.Vector3, facing: THREE.Vector3, back: number, out?: BodyFrame, bd: Body = BODY): BodyFrame {
   const o = out ?? { right: new THREE.Vector3(), up: new THREE.Vector3(), front: new THREE.Vector3(), shoulders: [new THREE.Vector3(), new THREE.Vector3()], neck: new THREE.Vector3() };
   const f = o.front.set(facing.x, 0, facing.z).normalize();
   o.right.crossVectors(f, Y).normalize();
   // Leaning back tips the torso away from the way it faces (a hiking sailor faces inboard and leans out).
   o.up.copy(Y).multiplyScalar(Math.cos(back)).addScaledVector(f, -Math.sin(back));
   o.front.multiplyScalar(Math.cos(back)).addScaledVector(Y, Math.sin(back));
-  const top = BODY.pelvisToSpine + BODY.spine + BODY.chest;
+  const top = bd.pelvisToSpine + bd.spine + bd.chest;
   o.neck.copy(hip).addScaledVector(o.up, top);
   for (let i = 0; i < 2; i++) {
     o.shoulders[i]!.copy(hip)
-      .addScaledVector(o.up, top - BODY.shoulderDrop)
-      .addScaledVector(o.right, (i === 0 ? -1 : 1) * BODY.shoulderHalf);
+      .addScaledVector(o.up, top - bd.shoulderDrop)
+      .addScaledVector(o.right, (i === 0 ? -1 : 1) * bd.shoulderHalf);
   }
   return o;
 }
@@ -208,16 +244,27 @@ function body(profile: [number, number][], sx: number, sz: number, seg = 18): TH
   return g.scale(sx, 1, sz);
 }
 
-function buildGeometry(role: CrewRole, c: CrewColours, tessellation = 1): THREE.BufferGeometry {
+function buildGeometry(role: CrewRole, c: CrewColours, tessellation = 1, build: CrewBuild = 'male', stature = STATURE[build]): THREE.BufferGeometry {
   detail = tessellation;
   try {
-    return buildParts(role, c);
+    const g = buildParts(role, c, build);
+    // Every part is in its bone's frame, about the joint: scaling the vertices scales the parts and their
+    // offsets along the bone alike. Breadth: the chest (shoulders) and pelvis (hips) for the build.
+    const k = stature / REF_STATURE;
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const bone = g.getAttribute('skinIndex');
+    for (let i = 0; i < pos.count; i++) {
+      const b = bone.getX(i);
+      const wide = b === B.chest ? SHAPE[build].shoulders : b === B.pelvis ? SHAPE[build].hips : 1;
+      pos.setXYZ(i, pos.getX(i) * k * wide, pos.getY(i) * k, pos.getZ(i) * k);
+    }
+    return g;
   } finally {
     detail = 1;
   }
 }
 
-function buildParts(role: CrewRole, c: CrewColours): THREE.BufferGeometry {
+function buildParts(role: CrewRole, c: CrewColours, build: CrewBuild = 'male'): THREE.BufferGeometry {
   const b = new PartBuilder();
   const dark = 0x15181c;
   // Pelvis and seat (trousers), with a belt line.
@@ -254,6 +301,13 @@ function buildParts(role: CrewRole, c: CrewColours): THREE.BufferGeometry {
     b.add(new THREE.SphereGeometry(0.094, segs(18), segs(10), 0, Math.PI * 2, 0, Math.PI / 1.9).scale(1, 1.18, 1.08), B.head, c.cap, at(0, 0.12, 0.002));
     b.add(new THREE.TorusGeometry(0.093, 0.016, segs(6), segs(20)).rotateX(Math.PI / 2).scale(1, 1, 1.07), B.head, c.cap, at(0, 0.13, 0.004));
   }
+  if (build === 'female') {
+    // Hair: a ponytail out of the back of the cap, and hair over the ears and nape.
+    const hair = c.hair ?? 0x4a3020;
+    b.add(ellipsoid(0.088, 0.07, 0.07), B.head, hair, at(0, 0.075, -0.035));
+    b.add(ellipsoid(0.03, 0.09, 0.03), B.head, hair, at(0, 0.03, -0.11));
+    b.add(ellipsoid(0.034, 0.024, 0.034), B.head, c.cap === hair ? dark : 0x2b2b2b, at(0, 0.11, -0.1)); // band
+  }
   // Arms (jacket sleeves with dark cuffs) and gloved hands; the thumb on the inside.
   for (const [ua, fa, hd, s] of [[B.upperArmL, B.forearmL, B.handL, -1], [B.upperArmR, B.forearmR, B.handR, 1]] as const) {
     b.add(limb(0.056, 0.047, BODY.upperArm), ua, c.jacket);
@@ -277,13 +331,15 @@ function buildParts(role: CrewRole, c: CrewColours): THREE.BufferGeometry {
 }
 
 const MATERIAL = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 });
-const geometryCache = new Map<CrewRole, THREE.BufferGeometry>();
+const geometryCache = new Map<string, THREE.BufferGeometry>();
 
 export class CrewFigure {
   readonly group = new THREE.Group();
   readonly mesh: THREE.SkinnedMesh;
+  /** This figure's proportions (its build and stature). */
+  readonly body: Body;
   private readonly bones: THREE.Bone[];
-  private readonly frame: BodyFrame = bodyFrame(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 0);
+  private readonly frameOut: BodyFrame = bodyFrame(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 0);
   private readonly v = Array.from({ length: 10 }, () => new THREE.Vector3());
   private readonly m = new THREE.Matrix4();
 
@@ -291,13 +347,17 @@ export class CrewFigure {
     readonly role: CrewRole,
     colours: CrewColours = CREW_COLOURS[role],
     tessellation = 1,
+    readonly build: CrewBuild = 'male',
+    stature = STATURE[build],
   ) {
     this.group.name = `crew-${role}`;
-    const shared = colours === CREW_COLOURS[role] && tessellation === 1;
-    let geo = shared ? geometryCache.get(role) : undefined;
+    this.body = bodyOf(build, stature);
+    const shared = colours === CREW_COLOURS[role] && tessellation === 1 && stature === STATURE[build];
+    const key = `${role}:${build}`;
+    let geo = shared ? geometryCache.get(key) : undefined;
     if (!geo) {
-      geo = buildGeometry(role, colours, tessellation);
-      if (shared) geometryCache.set(role, geo);
+      geo = buildGeometry(role, colours, tessellation, build, stature);
+      if (shared) geometryCache.set(key, geo);
     }
     this.bones = BONES.map((n) => {
       const bone = new THREE.Bone();
@@ -360,8 +420,14 @@ export class CrewFigure {
     bone.quaternion.setFromRotationMatrix(this.m.makeBasis(x, y, z));
   }
 
+  /** The torso's frame for a pose of this figure (where its shoulders are). */
+  frame(hip: THREE.Vector3, facing: THREE.Vector3, back: number, out?: BodyFrame): BodyFrame {
+    return bodyFrame(hip, facing, back, out, this.body);
+  }
+
   pose(p: CrewPose): void {
-    const f = bodyFrame(p.hip, p.facing, p.back, this.frame);
+    const BODY = this.body;
+    const f = bodyFrame(p.hip, p.facing, p.back, this.frameOut, BODY);
     const [a, b, c, d, e] = this.v as [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
     this.set('pelvis', p.hip, f.up, f.front);
     const spine = a.copy(p.hip).addScaledVector(f.up, BODY.pelvisToSpine);
@@ -437,15 +503,20 @@ const ONE = new THREE.Vector3(1, 1, 1);
  * skinning applied): feet at the origin, facing -z. Many people aboard cost nothing per frame.
  */
 export function bakedPerson(seed: number, sitting: boolean): THREE.BufferGeometry {
-  const key = `${seed % PASSENGER_COLOURS.length}:${sitting}`;
+  const build: CrewBuild = seed % 2 === 0 ? 'male' : 'female';
+  const key = `${seed % PASSENGER_COLOURS.length}:${build}:${sitting}`;
   let g = baked.get(key);
   if (!g) {
-    const fig = new CrewFigure(seed % 3 === 0 ? 'helm' : 'crew', PASSENGER_COLOURS[seed % PASSENGER_COLOURS.length], 0.45);
+    const fig = new CrewFigure(seed % 3 === 0 ? 'helm' : 'crew', PASSENGER_COLOURS[seed % PASSENGER_COLOURS.length], 0.45, build);
+    const bd = fig.body;
+    const k = bd.thigh / BODY.thigh;
     const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    // Standing: the hips over the ankles, knees all but straight; sitting on a 0.45 m bench.
+    const stand = 0.09 * k + bd.shin + bd.thigh + bd.hipDrop - 0.02;
     fig.pose(
       sitting
-        ? { hip: V(0, 0.5, 0.05), facing: V(0, 0, -1), back: 0.06, feet: [V(-0.12, 0.09, -0.4), V(0.12, 0.09, -0.4)], hands: [V(-0.16, 0.6, -0.32), V(0.16, 0.6, -0.32)], look: V(0, 1.1, -5) }
-        : { hip: V(0, 0.98, 0), facing: V(0, 0, -1), back: -0.02, feet: [V(-0.12, 0.09, 0.02), V(0.12, 0.09, -0.04)], hands: [V(-0.24, 0.78, 0.05), V(0.24, 0.78, 0.0)], look: V(0, 1.6, -5) },
+        ? { hip: V(0, 0.5, 0.05), facing: V(0, 0, -1), back: 0.06, feet: [V(-0.12, 0.09 * k, -0.4 * k), V(0.12, 0.09 * k, -0.4 * k)], hands: [V(-0.16, 0.6, -0.3), V(0.16, 0.6, -0.3)], look: V(0, 1.1, -5) }
+        : { hip: V(0, stand, 0), facing: V(0, 0, -1), back: -0.02, feet: [V(-0.11, 0.09 * k, 0.02), V(0.11, 0.09 * k, -0.04)], hands: [V(-0.22, stand - 0.2, 0.05), V(0.22, stand - 0.2, 0.0)], look: V(0, 1.6, -5) },
     );
     g = fig.bake();
     baked.set(key, g);

@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Kit, LANDMARKS, WIN, battlements, buildExtra, facing, insetRing, insetRingAdaptive, insideRing, landmarkFor, longAxisDeg, outward, simplifyRing } from '../../src/render/landmarks';
-import { CAR_SPEED, ROAD_WIDTH, StreetLife, TOWNS, along, buildRoadSurfaces, carGeometry, personGeometry, type RoadsData } from '../../src/render/population';
+import { CAR_SPEED, ROAD_WIDTH, StreetLife, TOWNS, along, carGeometry, type RoadsData } from '../../src/render/population';
+import { personPartsGeometry } from '../../src/render/people';
 import type { DartFeatures } from '../../src/app/geoLoader';
 import { standingSpots } from '../../src/render/dart';
 
@@ -104,16 +105,6 @@ describe('roads and street life', () => {
     for (const c of Object.keys(CAR_SPEED)) expect(ROAD_WIDTH[c]).toBeGreaterThan(3.5);
   });
 
-  it('draws the road surfaces just above the ground', () => {
-    const mesh = buildRoadSurfaces({ roads: [{ c: 'p', l: [[0, 0], [0, 40]] }, { c: 'x', l: [[0, 0], [5, 5]] }] }, () => 2);
-    const p = mesh.geometry.getAttribute('position');
-    // 10 steps of 4 m, two edges each: 22 vertices; steps are not drawn.
-    expect(p.count).toBe(22);
-    for (let i = 0; i < p.count; i++) expect(p.getY(i)).toBeCloseTo(2.12, 6);
-    // Width 6.5 m across x (the road runs north).
-    expect(Math.abs(p.getX(0) - p.getX(1))).toBeCloseTo(6.5, 6);
-  });
-
   it('cars keep to the left and face their way; people and cars stay small models', () => {
     const life = new StreetLife({ roads: { roads: [{ c: 'p', l: [[0, 0], [0, 400]] }] }, groundAt: () => 0, seed: 1 });
     expect(life.counts.cars).toBe(130);
@@ -140,7 +131,8 @@ describe('roads and street life', () => {
     }
     expect(checked).toBeGreaterThan(50);
     expect(carGeometry().getAttribute('position').count / 3).toBeLessThan(400);
-    expect(personGeometry().getAttribute('position').count / 3).toBeLessThan(200);
+    // A jointed person (thighs, shins, arms, body, head) stays a small model: under 400 triangles.
+    expect(personPartsGeometry().getAttribute('position').count / 3).toBeLessThan(400);
   });
 
   it('positions along a polyline', () => {

@@ -2,21 +2,26 @@ import * as THREE from 'three';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { Course } from '../sim/course/types';
 import { makeLabel } from './labels';
+import { robotMark, sponsorsFor } from './robotMark';
 
 /**
- * Course marks and lines on the water (floating at y = 0): inflatable marks, the pin and the committee boat,
- * the start and finish lines (dashed), lane boundaries, and a ring on the next mark.
+ * Course marks and lines on the water (floating at y = 0): robotic marks (src/render/robotMark.ts) for the
+ * turning marks and the pin, each with a sponsor's name, lying head to wind; the committee boat; the start and
+ * finish lines (dashed), lane boundaries, and a ring on the next mark.
  */
 export class CourseScene {
   readonly group = new THREE.Group();
   private readonly ring: THREE.Mesh;
   private readonly labels: THREE.Sprite[] = [];
   private readonly lines: THREE.Object3D[] = [];
+  /** The robotic marks, each with a phase for its gentle bob. */
+  private readonly robots: { g: THREE.Group; phase: number }[] = [];
 
   constructor(private readonly r: ResolvedCourse, course: Course) {
     this.group.name = 'course';
     const orange = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.55 });
     const yellow = new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.55 });
+    const sponsors = sponsorsFor(course.marks.filter((m) => m.kind === 'inflatable' || m.kind === 'pin').map((m) => m.id), course.id);
     for (const m of course.marks) {
       const p = r.pos.get(m.id)!;
       const g = new THREE.Group();
@@ -36,16 +41,13 @@ export class CourseScene {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 10), yellow);
         post.position.y = 0.4;
         g.add(post);
-      } else if (m.kind === 'pin') {
-        const buoy = new THREE.Mesh(new THREE.SphereGeometry(0.6, 14, 10), orange);
-        buoy.position.y = 0.2;
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.4), new THREE.MeshStandardMaterial({ color: 0x777777 }));
-        pole.position.y = 1.4;
-        const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.4), new THREE.MeshStandardMaterial({ color: 0xff7a1a, side: THREE.DoubleSide }));
-        flag.position.set(0.3, 2.4, 0);
-        g.add(buoy, pole, flag);
+      } else if (m.kind === 'pin' || m.kind === 'inflatable') {
+        // A robotic mark; the pin end flies a flag from its mast.
+        const robot = robotMark(0xff7a1a, sponsors.get(m.id)!, m.kind === 'pin' ? 0xff7a1a : undefined);
+        g.add(robot);
+        this.robots.push({ g: robot, phase: this.robots.length * 1.7 });
       } else {
-        // Inflatable racing mark (cylinder, ~1.2 m across, ~1.8 m high).
+        // Navigation buoys and fixed marks used as course marks.
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.65, 1.8, 20), orange);
         body.position.y = 0.6;
         g.add(body);
@@ -81,5 +83,16 @@ export class CourseScene {
       this.ring.scale.setScalar(leg.points.length > 1 ? Math.max(1, Math.hypot(leg.points[0]!.n - leg.points[1]!.n, leg.points[0]!.e - leg.points[1]!.e) / 9) : 1 + 0.08 * Math.sin(time * 3));
     }
     for (const l of this.labels) l.visible = showLabels;
+    // The robotic marks ride the chop a little.
+    for (const r of this.robots) {
+      r.g.position.y = 0.04 * Math.sin(time * 1.3 + r.phase);
+      r.g.rotation.x = 0.035 * Math.sin(time * 1.1 + r.phase * 1.3);
+      r.g.rotation.z = 0.03 * Math.sin(time * 0.9 + r.phase * 0.7);
+    }
+  }
+
+  /** The robotic marks hold station head to wind (`fromDir`, rad, compass: where the wind comes from). */
+  setWind(fromDir: number): void {
+    for (const r of this.robots) r.g.rotation.y = -fromDir;
   }
 }

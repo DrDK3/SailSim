@@ -188,7 +188,7 @@
    "source": "OpenStreetMap (man_made=pier) via Overture Maps 2026-10-21.0",
    "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
    "notes": [
-    "92 features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'."
+    "92 features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'.", "RDYC's main pontoon (unnamed in OSM) and its dinghy pontoon, Moody Island, are named from the club's documents (PIER_CORRECTIONS; the main pontoon floating, E)."
    ]
   },
   {

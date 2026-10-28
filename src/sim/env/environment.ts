@@ -6,6 +6,7 @@ import type { TideSource, TideState } from './tide';
 import type { WindField } from './wind';
 import type { SkySource, SkyState } from './sky';
 import { SeaStateModel, type SeaState } from './seaState';
+import type { TerrainWind } from './terrainWind';
 
 /** Where the wind comes from, for labelling and provenance in the UI. */
 export interface WeatherInfo {
@@ -25,6 +26,8 @@ export interface EnvironmentInfo {
   /** Wind and current more than 120° opposed with enough of both: steep, short chop (visual flag). */
   windAgainstTide: boolean;
   gustFactor: number;
+  /** The land's effect on the wind here (shelter: speed factor; valley steering: turn in degrees), when any. */
+  landEffect?: { speed: number; turnDeg: number };
   epochMs: number;
   /** Cloud, visibility and rain (visual only), with where they come from. */
   sky?: SkyState & { label: string; kind: SkySource['kind'] };
@@ -86,6 +89,8 @@ export interface ComposedOptions {
   sky?: SkySource;
   /** Land and water for the waves' fetch (the River Dart data); without it the sea is open all round. */
   terrain?: { bedElevation(n: number, e: number): number; inDomain(n: number, e: number): boolean };
+  /** The land's effect on the wind (shelter, valley steering); none without it. */
+  terrainWind?: TerrainWind;
 }
 
 /** Combine a wind field, a current model and an optional tide source into an Environment. */
@@ -95,12 +100,14 @@ export function composeEnvironment(o: ComposedOptions): Environment {
   const level = o.datum ? (t: number) => (o.tide ? o.tide.at(epoch(t)).height : o.datum!.meanLevelCd) - o.datum!.cdBelowOdn : undefined;
   const runTime = (epochMs: number) => (epochMs - o.startEpochMs) / 1000;
   const terrain = o.terrain;
+  const tw = o.terrainWind;
   // Waves from the mean wind (gusts are too short-lived to raise a sea), the stream and the land.
   const sea = new SeaStateModel({
     startEpochMs: o.startEpochMs,
     wind: (ms, n, e) => {
       const b = o.wind.base.at(n, e, runTime(ms));
-      return { n: -b.speed * Math.cos(b.fromDir), e: -b.speed * Math.sin(b.fromDir) };
+      const w = { n: -b.speed * Math.cos(b.fromDir), e: -b.speed * Math.sin(b.fromDir) };
+      return tw ? tw.apply(w, n, e) : w;
     },
     current: (ms, n, e) => current.at(ms, n, e),
     depth: terrain && level ? (ms, n, e) => level(runTime(ms)) - terrain.bedElevation(n, e) : undefined,
@@ -111,13 +118,15 @@ export function composeEnvironment(o: ComposedOptions): Environment {
     windField: o.wind,
     startEpochMs: o.startEpochMs,
     sky: o.sky,
-    wind: (_t, n, e) => o.wind.wind(n, e),
+    wind: tw ? (_t, n, e) => tw.apply(o.wind.wind(n, e), n, e) : (_t, n, e) => o.wind.wind(n, e),
     current: (t, n, e) => current.at(epoch(t), n, e),
     step: (t, dt) => o.wind.step(t, dt),
     waterLevel: level,
     seaState: (t, n, e) => sea.at(t, n, e),
     describe(t, n, e) {
       const w = o.wind.sample(n, e);
+      const f = tw?.factor(n, e, w.fromDir);
+      const shaped = f ? { speed: f.speed, turn: f.turn } : { speed: 1, turn: 0 };
       const here = sea.at(t, n, e);
       const c = current.at(epoch(t), n, e);
       const cRate = Math.hypot(c.n, c.e);
@@ -132,6 +141,7 @@ export function composeEnvironment(o: ComposedOptions): Environment {
         windAgainstTide: here.windAgainstTide || (cos < Math.cos(120 * DEG) && cRate > knToMs(0.5) && w.speed > knToMs(8)),
         sea: here,
         gustFactor: w.gustFactor,
+        landEffect: shaped.speed !== 1 || shaped.turn !== 0 ? { speed: shaped.speed, turnDeg: (shaped.turn * 180) / Math.PI } : undefined,
         epochMs: epoch(t),
         sky: o.sky ? { ...o.sky.at(t), label: o.sky.label, kind: o.sky.kind } : undefined,
       };

@@ -8,7 +8,7 @@ export * from './control/trim';
 export { squibParams, squibProvenance } from './boat/squib';
 export type { BoatParams, Tag, ProvenanceRecord } from './boat/params';
 export type { ForceBreakdown } from './boat/dynamics';
-export { apparentWind, windVelocity, windFrom, bodyToWorld, worldToBody } from './boat/forces';
+export { apparentWind, windVelocity, windFrom, bodyToWorld, worldToBody, rudderGrip } from './boat/forces';
 export * from './env/conditions';
 export * from './env/wind';
 export * from './env/tide';

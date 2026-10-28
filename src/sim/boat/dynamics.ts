@@ -1,11 +1,13 @@
 import { clamp } from '../math/angles';
 import { interpTable } from '../math/interp';
 import { G } from '../units';
+import { rigFactor, rudderDamage, type Damage } from './damage';
 import {
   apparentWind,
   bodyToWorld,
   effectiveApparent,
   foilForce,
+  rudderGrip,
   hullCrossFlow,
   hullResistance,
   sailPairForces,
@@ -53,6 +55,8 @@ export interface Actuators {
   crewY: number;
   /** Water shipped into the cockpit (kg; src/sim/boat/cockpit.ts). */
   water: number;
+  /** Damage from collisions and groundings (src/sim/boat/damage.ts); none when absent. */
+  damage?: Damage;
 }
 
 export interface Fluids {
@@ -140,16 +144,29 @@ export function computeForces(
   MAIN_MOTION.boomRate = a.boomRate;
   JIB_MOTION.boomRate = 0;
   const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, s.phi, fluids.rhoAir, MAIN_MOTION, JIB_MOTION, a.mainInverted, o);
+  // A damaged rig drives less (a slack forestay, a bent or broken mast).
+  const rig = rigFactor(a.damage);
+  if (rig < 1) for (const sf of [main, jib]) {
+    sf.x *= rig;
+    sf.y *= rig;
+    sf.yPlane *= rig;
+    sf.n *= rig;
+    sf.boomTorque *= rig;
+  }
   const windage = windageForce(p, aw, s.phi, fluids.rhoAir, o.windage);
   // Local sway at each foil: yaw (r·x) and roll (the keel swings opposite to the mast: −p·depth).
   const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x - s.p * p.clrDepth, 0, s.phi, fluids.rhoWater, o.lateral);
   // The keel's downwash straightens the flow reaching the rudder: only part of the hull's leeway remains.
   const rudderSway = s.v * (1 - p.rudder.flowStraightening) + s.r * p.rudder.x - s.p * p.rudderDepth;
-  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder, s.phi, fluids.rhoWater, o.rudder);
+  // A damaged rudder grips less, and a bent blade pulls to one side.
+  const rd = rudderDamage(a.damage);
+  const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder + rd.bias, s.phi, fluids.rhoWater, o.rudder, rudderGrip(p.rudder, s.phi) * rd.grip);
   const water = a.water;
+  // Water in the bilge (a leak) is extra weight: more resistance (its effect on stability is taken as nil, E).
+  const bilge = a.damage?.bilge ?? 0;
   o.water = water;
   // Shipped water adds weight: more residuary resistance (and more displacement in the righting moment below).
-  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater, o.hull, water > 0 ? water * G : 0);
+  const hull = hullResistance(p, s.u, s.phi, fluids.rhoWater, o.hull, water + bilge > 0 ? (water + bilge) * G : 0);
   const crossFlow = hullCrossFlow(p, s.v, s.r, fluids.rhoWater, o.crossFlow);
   const yawDamping = -p.yawLinearDamping * s.r;
   o.yawDamping = yawDamping;

@@ -193,7 +193,7 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
     return { dart: c.getState().dart, names: [...names] };
   });
   expect(state.dart).toEqual({ status: 'loaded', issues: [] });
-  for (const n of ['terrain', 'buildings', 'pontoons', 'moorings', 'traffic', 'mark']) expect(state.names).toContain(n);
+  for (const n of ['terrain', 'buildings', 'pontoons', 'moorings', 'traffic', 'mark', 'club-ensign', 'berthed-vanes', 'walkers']) expect(state.names).toContain(n);
   await expect(page.getByTestId('minimap')).toBeVisible();
   await expect(page.locator('footer.badge')).toContainText('River Dart (depths and stream provisional)');
   // Depth at the keel is shown, from the provisional depths mid-river.
