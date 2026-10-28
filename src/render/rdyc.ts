@@ -559,6 +559,8 @@ function chimney(b: Builder, x: number, y: number, h0: number, top: number, sx =
 export interface RdycClub {
   /** Fixed to the land: the clubhouse, terrace, sea wall and rail. */
   group: THREE.Group;
+  /** 0 by day … 1 at night: the club's windows glow (it is open in the evening). */
+  setNight(x: number): void;
   /** The flagstaff's foot (local e, n), its foot height (m ODN) and its height (m): the ensign flies from it. */
   flagstaff: { at: [number, number]; fromM: number; height: number };
   triangles: number;
@@ -821,9 +823,20 @@ export function buildRdycClub(): RdycClub {
   b.box('trim', fx, fy, fh * 0.66, 0.1, 4.2, 0.1);
   b.add('trim', new THREE.SphereGeometry(0.16, 8, 6), new THREE.Matrix4().makeTranslation(fp.x, G + fh + 0.1, fp.z));
 
-  const group = b.build(materials(), 'rdyc-club');
+  const mats = materials();
+  const group = b.build(mats, 'rdyc-club');
   const [fe, fn] = rdycToEN(fx, fy);
-  return { group, flagstaff: { at: [fe, fn], fromM: G, height: fh }, triangles: b.tris };
+  const glass = mats.glass;
+  glass.emissive.setHex(0xffb766);
+  glass.emissiveIntensity = 0;
+  return {
+    group,
+    setNight: (x: number) => {
+      glass.emissiveIntensity = 0.9 * x;
+    },
+    flagstaff: { at: [fe, fn], fromM: G, height: fh },
+    triangles: b.tris,
+  };
 }
 
 /**

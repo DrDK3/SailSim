@@ -1,4 +1,5 @@
 /** The roads built as roads: level across, cut into the town ground, kerbs and pavements in town, markings clear of junctions. */
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ROAD_STYLE, RoadNetwork, type GroundGrid } from '../../src/render/roads';
 import { ROAD_WIDTH } from '../../src/render/population';
@@ -22,9 +23,13 @@ describe('roads', () => {
     // The surface is the same across the road (level), on the carriageway.
     expect(net.surfaceAt(3000 - 2, 30)).toBeCloseTo(net.surfaceAt(3000 + 2, 30)!, 6);
     expect(net.surfaceAt(3000 + 20, 30)).toBeUndefined();
-    const mesh = net.mesh((e) => slope(e));
-    expect(mesh.name).toBe('roads');
-    expect(mesh.geometry.getAttribute('aKind').count).toBeGreaterThan(0);
+    const roads = net.mesh((e) => slope(e));
+    expect(roads.name).toBe('roads');
+    const tile = roads.children[0] as THREE.Mesh;
+    expect(tile.geometry.getAttribute('aKind').count).toBeGreaterThan(0);
+    // The low-detail version leaves out the vertical faces.
+    const low = net.mesh((e) => slope(e), 'low').children[0] as THREE.Mesh;
+    expect(low.geometry.getAttribute('position').count).toBeLessThanOrEqual(tile.geometry.getAttribute('position').count);
   });
 
   it('in town: cut and filled into the ground, with kerbs and raised pavements', () => {
@@ -39,7 +44,7 @@ describe('roads', () => {
     // The ground under the carriageway is just below it; uphill and downhill within the corridor, at the road's level.
     expect(at(100, 40)).toBeCloseTo(road - ROAD_STYLE.under, 1);
     const reach = p.w + p.pave + ROAD_STYLE.corridor - grid.cell;
-    expect(Math.abs(at(100 + reach, 40) - (road + ROAD_STYLE.kerb - ROAD_STYLE.under))).toBeLessThan(0.05);
+    expect(Math.abs(at(100 + reach, 40) - (road - ROAD_STYLE.under))).toBeLessThan(0.05);
     // Well beyond the corridor the hillside is untouched.
     const cellCentre = (e: number) => grid.e0 + (Math.floor((e - grid.e0) / grid.cell) + 0.5) * grid.cell;
     expect(at(140, 40)).toBeCloseTo(slope(cellCentre(140)), 4);

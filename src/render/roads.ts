@@ -58,6 +58,8 @@ interface Profile {
   /** 1 where the road has kerbs and pavements (not across the mouth of a junction). */
   kerb: Uint8Array;
   s: Float64Array;
+  /** Sample spacing (m). */
+  ds: number;
   /** Half carriageway width; pavement width (0 for none); carved into the town ground or riding on the ground. */
   w: number;
   pave: number;
@@ -66,6 +68,9 @@ interface Profile {
 }
 
 const gauss = (x: number, s: number) => Math.exp(-(x * x) / (2 * s * s));
+
+/** Height priority by class (m): main roads over side streets over service roads and car parks. */
+const CLASS_LIFT: Record<string, number> = { p: 0.035, s: 0.03, t: 0.025, u: 0.02, r: 0.015, l: 0.012, v: 0.008, w: 0.004, f: 0 };
 
 export class RoadNetwork {
   readonly profiles: Profile[] = [];
@@ -131,7 +136,9 @@ export class RoadNetwork {
         const f = (x - cum[i - 1]!) / (cum[i]! - cum[i - 1]! || 1);
         return [p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f] as const;
       };
-      const steps = Math.max(1, Math.ceil(len / S.step));
+      // Every 3 m in the towns (carved into the finer ground), every 6 m in the country.
+      const carved = inGrid(r.l[0]![0], r.l[0]![1]) && inGrid(r.l[r.l.length - 1]![0], r.l[r.l.length - 1]![1]);
+      const steps = Math.max(1, Math.ceil(len / (carved ? S.step : 2 * S.step)));
       const N = steps + 1;
       const p: Profile = {
         c: r.c,
@@ -143,6 +150,7 @@ export class RoadNetwork {
         mark: new Float32Array(N),
         kerb: new Uint8Array(N),
         s: new Float64Array(N),
+        ds: len / steps,
         w: (ROAD_WIDTH[r.c] ?? 3) / 2,
         pave: 0,
         carved: false,
@@ -151,7 +159,7 @@ export class RoadNetwork {
       const path = r.c === 'f' || r.c === 'w';
       const [e0, n0] = r.l[0]!;
       const town = inTown(e0, n0);
-      p.carved = inGrid(e0, n0) && inGrid(r.l[r.l.length - 1]![0], r.l[r.l.length - 1]![1]);
+      p.carved = carved;
       if (town && !path) p.pave = S.pavement[r.c] ?? 0;
       if (p.pave > 0) p.flags |= MARK.kerbed;
       if (!path && (r.c === 'p' || r.c === 's' || r.c === 't')) p.flags |= MARK.centre;
@@ -192,7 +200,9 @@ export class RoadNetwork {
         }
         const sm = sum / wt;
         // A road riding on the ground stays above it; a carved one may cut a little into a crest.
-        p.h[k] = (p.carved ? sm : Math.max(sm, raw[k]!)) + (path ? 0.04 : 0.02);
+        // Where two roads overlap (junctions, a street over a car park), the more important lies a little higher,
+        // so the surfaces never fight for the same depth.
+        p.h[k] = (p.carved ? sm : Math.max(sm, raw[k]!)) + (path ? 0.04 : 0.02) + (CLASS_LIFT[r.c] ?? 0);
         const clear = clearOfJunction(p.e[k]!, p.n[k]!);
         p.mark[k] = len < 12 ? 0 : Math.min(1, Math.max(0, (clear - S.junctionClear) / 3));
         p.kerb[k] = p.pave > 0 && clear > 1 ? 1 : 0;
@@ -233,7 +243,7 @@ export class RoadNetwork {
           const ve = e - p.e[k]!;
           const vn = n - p.n[k]!;
           const along = ve * p.de[k]! + vn * p.dn[k]!;
-          if (Math.abs(along) > ROAD_STYLE.step * 0.6) continue;
+          if (Math.abs(along) > p.ds * 0.6) continue;
           const lat = Math.abs(-ve * p.dn[k]! + vn * p.de[k]!);
           if (lat > p.w + p.pave || lat >= bestLat) continue;
           bestLat = lat;
@@ -284,8 +294,9 @@ export class RoadNetwork {
             const v = j * t.nx + i;
             if (d >= best[v]!) continue;
             best[v] = d;
-            const top = p.h[k]! + (lat > p.w && p.kerb[k] ? S.kerb : 0);
-            out[v] = top - S.under;
+            // Just below the carriageway across the whole corridor (pavements are drawn on top of it): set any
+            // higher, the ground between grid points would rise through the carriageway beside the kerb.
+            out[v] = p.h[k]! - S.under;
           }
         }
       }
@@ -293,13 +304,14 @@ export class RoadNetwork {
     return out;
   }
 
-  /** The road surfaces as one mesh (named 'roads'). `ground` is the picture's ground after carving. */
-  mesh(ground: (e: number, n: number) => number): THREE.Mesh {
-    const pos: number[] = [];
-    const col: number[] = [];
-    const road: number[] = [];
-    const kind: number[] = [];
-    const idx: number[] = [];
+  /**
+   * The road surfaces (a group named 'roads' of meshes by 600 m tile, so roads off screen are not drawn). `ground`
+   * is the picture's ground after carving; at 'low' detail (a software renderer) the kerb faces and the faces at
+   * the backs of the pavements are left out.
+   */
+  mesh(ground: (e: number, n: number) => number, detail: 'high' | 'low' = 'high'): THREE.Group {
+    type Buf = { pos: number[]; col: number[]; road: number[]; kind: number[]; idx: number[] };
+    const tiles = new Map<string, Buf>();
     const lin = (hex: number) => {
       const c = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
       return [c.r, c.g, c.b];
@@ -312,65 +324,79 @@ export class RoadNetwork {
     const BANK = lin(0x5d5a47);
     const WALL = lin(0x8a8276);
     const S = ROAD_STYLE;
+    const TILE = 600;
+    const CHUNK = 60;
+    let buf: Buf;
     /**
-     * One strip along a profile between lateral offsets a and b (m, + is left) at heights ya and yb: flat when a
-     * and b differ (facing up), or a vertical face at a = b from ya (foot) to yb (top) facing `outward` (+ left).
+     * One strip along a profile's samples k0..k1 between lateral offsets a and b (m, + is left) at heights ya and
+     * yb: flat when a and b differ (facing up), or a vertical face at a = b from ya (foot) to yb (top) facing
+     * `outward` (+ left). Only where `use` holds at both ends of a step; vertices are shared along each run.
      */
-    const strip = (p: Profile, a: number, b: number, ya: (k: number) => number, yb: (k: number) => number, colour: number[], kd: number, outward?: number, use?: (k: number) => boolean) => {
-      const base = pos.length / 3;
-      const N = p.h.length;
-      for (let k = 0; k < N; k++) {
+    const strip = (p: Profile, k0: number, k1: number, a: number, b: number, ya: (k: number) => number, yb: (k: number) => number, colour: number[], kd: number, outward?: number, use?: (k: number) => boolean) => {
+      const { pos, col, road, kind, idx } = buf;
+      let prev = -1;
+      for (let k = k0; k <= k1; k++) {
+        const ok = !use || use(k);
+        const next = k < k1 && (!use || use(k + 1));
+        if (!ok || (prev < 0 && !next)) {
+          prev = -1;
+          continue;
+        }
         const le = -p.dn[k]!;
         const ln = p.de[k]!;
+        const cur = pos.length / 3;
         for (const [off, y] of [[a, ya(k)], [b, yb(k)]] as const) {
           pos.push(p.e[k]! + le * off, y, -(p.n[k]! + ln * off));
           col.push(...colour);
           road.push(p.s[k]!, off, p.w);
           kind.push(kd, p.mark[k]!, p.flags);
         }
-        if (k > 0 && (!use || (use(k - 1) && use(k)))) {
-          const i0 = base + (k - 1) * 2;
+        if (prev >= 0) {
           // Wind so the face looks up (or outward for the vertical faces).
-          if (outward === undefined ? a < b : outward < 0) idx.push(i0, i0 + 2, i0 + 1, i0 + 1, i0 + 2, i0 + 3);
-          else idx.push(i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2);
+          if (outward === undefined ? a < b : outward < 0) idx.push(prev, cur, prev + 1, prev + 1, cur, cur + 1);
+          else idx.push(prev, prev + 1, cur, prev + 1, cur + 1, cur);
         }
+        prev = cur;
       }
     };
+    const low = detail === 'low';
     for (const p of this.profiles) {
       const path = p.c === 'f' || p.c === 'w';
       const town = inTown(p.e[0]!, p.n[0]!);
       const h = (k: number) => p.h[k]!;
       const up = (k: number) => p.h[k]! + S.kerb;
-      if (path) {
-        strip(p, -p.w, p.w, h, h, town ? PATH_TOWN : GRAVEL, KIND.path);
-        continue;
-      }
-      // The carriageway, level across.
-      strip(p, -p.w, p.w, h, h, ASPHALT, KIND.carriageway);
-      for (const side of [-1, 1]) {
-        const edge = side * p.w;
-        if (p.pave > 0) {
-          // Kerb face, then the pavement at kerb height, then a face down at its back.
-          // (Not across the mouth of a junction.)
-          const kerbed = (k: number) => p.kerb[k] === 1;
-          strip(p, edge, edge, h, up, KERB, KIND.kerb, -side, kerbed);
-          strip(p, edge, side * (p.w + p.pave), up, up, PAVING, KIND.pavement, undefined, kerbed);
-          const out = side * (p.w + p.pave);
-          strip(p, out, out, (k) => Math.min(ground(p.e[k]! - p.dn[k]! * out, p.n[k]! + p.de[k]! * out), p.h[k]!) - 0.4, up, p.carved ? WALL : BANK, KIND.wall, side, kerbed);
-        } else {
-          // A bank from the road's edge down to the ground beside it (hidden where the ground is level with it).
-          strip(p, edge, edge, (k) => Math.min(ground(p.e[k]! - p.dn[k]! * edge * 1.15, p.n[k]! + p.de[k]! * edge * 1.15), p.h[k]!) - 0.3, h, p.carved ? WALL : BANK, KIND.bank, side);
+      const N = p.h.length;
+      for (let k0 = 0; k0 < N - 1; k0 += CHUNK) {
+        const k1 = Math.min(N - 1, k0 + CHUNK);
+        const km = (k0 + k1) >> 1;
+        const key = `${Math.floor(p.e[km]! / TILE)},${Math.floor(p.n[km]! / TILE)}`;
+        buf = tiles.get(key) ?? { pos: [], col: [], road: [], kind: [], idx: [] };
+        tiles.set(key, buf);
+        if (path) {
+          strip(p, k0, k1, -p.w, p.w, h, h, town ? PATH_TOWN : GRAVEL, KIND.path);
+          continue;
+        }
+        // The carriageway, level across.
+        strip(p, k0, k1, -p.w, p.w, h, h, ASPHALT, KIND.carriageway);
+        for (const side of [-1, 1]) {
+          const edge = side * p.w;
+          if (p.pave > 0) {
+            // Kerb face, then the pavement at kerb height, then a face down at its back (not across the mouth of
+            // a junction).
+            const kerbed = (k: number) => p.kerb[k] === 1;
+            if (!low) strip(p, k0, k1, edge, edge, h, up, KERB, KIND.kerb, -side, kerbed);
+            strip(p, k0, k1, edge, side * (p.w + p.pave), up, up, PAVING, KIND.pavement, undefined, kerbed);
+            const out = side * (p.w + p.pave);
+            if (!low) strip(p, k0, k1, out, out, (k) => Math.min(ground(p.e[k]! - p.dn[k]! * out, p.n[k]! + p.de[k]! * out), p.h[k]!) - 0.4, up, p.carved ? WALL : BANK, KIND.wall, side, kerbed);
+          } else if (!p.carved) {
+            // A bank from the road's edge down to the ground beside it, where the road stands above it (a carved
+            // road has the ground at its level).
+            const foot = (k: number) => ground(p.e[k]! - p.dn[k]! * edge * 1.15, p.n[k]! + p.de[k]! * edge * 1.15);
+            strip(p, k0, k1, edge, edge, (k) => Math.min(foot(k), p.h[k]!) - 0.3, h, BANK, KIND.bank, side, (k) => p.h[k]! - foot(k) > 0.12);
+          }
         }
       }
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(road, 3));
-    geo.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 3));
-    geo.setIndex(idx);
-    geo.computeVertexNormals();
-    geo.computeBoundingSphere();
     // Little of the sky's reflection (as the terrain): a matt surface; otherwise dark asphalt reads pale blue.
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.25, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
     mat.onBeforeCompile = (shader) => {
@@ -391,7 +417,14 @@ export class RoadNetwork {
             f = f * f * (3.0 - 2.0 * f);
             return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), f.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + vec2(1.0, 1.0)), f.x), f.y);
           }
-          bool hasFlag(float flags, float bit) { return mod(floor(flags / bit), 2.0) > 0.5; }`,
+          bool hasFlag(float flags, float bit) { return mod(floor(flags / bit), 2.0) > 0.5; }
+          // A line of half-width hw at c across x, anti-aliased: thinner than a pixel, it fades to its coverage
+          // rather than breaking into speckles.
+          float aaLine(float x, float c, float hw) {
+            float fw = max(fwidth(x), 1e-4);
+            float w = max(hw, fw);
+            return (1.0 - smoothstep(w - fw, w + fw, abs(x - c))) * (hw / w);
+          }`
         )
         .replace(
           '#include <color_fragment>',
@@ -403,8 +436,10 @@ export class RoadNetwork {
             float w = vRoad.z;
             vec2 xz = vRoadWorld.xz;
             if (kind < 0.5) {
-              // Asphalt: fine aggregate, broad mottling, darker patches of newer surfacing, polished wheel tracks.
-              float grain = rHash(floor(xz * 22.0)) - 0.5;
+              // Asphalt: fine aggregate (faded out where it would be smaller than a pixel), broad mottling,
+              // darker patches of newer surfacing, polished wheel tracks.
+              float fine = 1.0 - smoothstep(0.02, 0.06, length(fwidth(xz)));
+              float grain = (rHash(floor(xz * 22.0)) - 0.5) * fine;
               float mottle = rNoise(xz * 0.35) - 0.5;
               diffuseColor.rgb *= 1.0 + 0.16 * grain + 0.22 * mottle;
               float patched = step(0.86, rHash(floor(vec2(s / 7.0, (v + 9.0) / 2.6))));
@@ -418,17 +453,16 @@ export class RoadNetwork {
               vec3 white = vec3(0.82, 0.82, 0.78);
               vec3 yellow = vec3(0.85, 0.66, 0.12);
               if (hasFlag(flags, 1.0)) {
-                float dash = step(abs(v), 0.05) * step(fract(s / 9.0), 0.45);
+                float dash = aaLine(v, 0.0, 0.05) * step(fract(s / 9.0), 0.45);
                 diffuseColor.rgb = mix(diffuseColor.rgb, white, dash * m * wear);
               }
               if (hasFlag(flags, 2.0)) {
-                float edge = step(abs(abs(v) - (w - 0.3)), 0.05);
+                float edge = aaLine(abs(v), w - 0.3, 0.05);
                 diffuseColor.rgb = mix(diffuseColor.rgb, white, edge * m * wear);
               }
               if (hasFlag(flags, 4.0)) {
-                float y1 = step(abs(abs(v) - (w - 0.2)), 0.04);
-                float y2 = step(abs(abs(v) - (w - 0.36)), 0.04);
-                diffuseColor.rgb = mix(diffuseColor.rgb, yellow, max(y1, y2) * m * wear);
+                float yl = max(aaLine(abs(v), w - 0.2, 0.04), aaLine(abs(v), w - 0.36, 0.04));
+                diffuseColor.rgb = mix(diffuseColor.rgb, yellow, yl * m * wear);
               }
               // A gutter: darker along a kerb.
               if (hasFlag(flags, 8.0)) diffuseColor.rgb *= 1.0 - 0.18 * smoothstep(w - 0.35, w, abs(v));
@@ -459,9 +493,23 @@ export class RoadNetwork {
           }`,
         );
     };
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = 'roads';
-    mesh.receiveShadow = true;
-    return mesh;
+    const group = new THREE.Group();
+    group.name = 'roads';
+    for (const t of tiles.values()) {
+      if (!t.idx.length) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(t.col, 3));
+      geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(t.road, 3));
+      geo.setAttribute('aKind', new THREE.Float32BufferAttribute(t.kind, 3));
+      geo.setIndex(t.idx);
+      geo.computeVertexNormals();
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'roads-tile';
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
+    return group;
   }
 }

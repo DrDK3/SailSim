@@ -15,7 +15,7 @@ import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
 import { StreetLife, TOWNS, type RoadsData } from './population';
 import { RoadNetwork } from './roads';
-import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt } from './rdyc';
+import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt, type RdycClub } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -103,6 +103,8 @@ export class DartScene {
   private readonly street?: StreetLife;
   private pontoons?: Pontoons;
   private readonly ensigns: ClubEnsign[] = [];
+  /** The yacht club (src/render/rdyc.ts). */
+  private club?: RdycClub;
 
   private readonly input: DartSceneInput;
   /** The roads (src/render/roads.ts): their surfaces, and the town ground cut and filled to them. */
@@ -157,7 +159,7 @@ export class DartScene {
     }
     if (input.roads && this.roadNet) {
       const net = this.roadNet;
-      this.fixed.add(net.mesh((e, n) => this.groundAt(e, n)));
+      this.fixed.add(net.mesh((e, n) => this.groundAt(e, n), input.detail === 'low' ? 'low' : 'high'));
       this.street = new StreetLife({
         roads: input.roads,
         groundAt: (e, n) => this.groundAt(e, n),
@@ -691,6 +693,7 @@ export class DartScene {
     // The Royal Dart Yacht Club as itself, with its terrace and sea wall; its ensign flies from the flagstaff.
     if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'rdyc')) {
       const club = buildRdycClub();
+      this.club = club;
       this.fixed.add(club.group);
       this.ensigns.push(new ClubEnsign(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
     }
@@ -702,6 +705,7 @@ export class DartScene {
     this.street?.setDaylight(day);
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
+    this.club?.setNight(x * x * (3 - 2 * x));
   }
 
   // ------------------------------------------------------------- piers etc.
