@@ -447,6 +447,9 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
   .hud-left { top: 8px; left: 8px; right: 96px; max-height: calc(100% - 300px); }
   .hud-left .race, .hud-left .instruments, .hud-left .instruments:not(.compact) { width: auto; }
   .sheet-bar span { font-size: 11px; }
+  /* The sail's status and advice on a line of their own (the later flex-basis above would squeeze them). */
+  .sail-row .status { flex-basis: 100%; width: auto; white-space: normal; }
+  .sheet-bar { min-width: 68px; }
 }
 .toolbar .select select { color: var(--text); min-height: 32px; }
 .minimap-bar { font-size: 11px; }
