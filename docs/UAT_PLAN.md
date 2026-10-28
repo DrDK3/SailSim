@@ -66,6 +66,8 @@ Use the Drone camera over Dartmouth, then fly low along a street.
 | 4.2 | Fly low (2–5 m) along the embankment and a hillside street | Kerbs, raised paving-flag pavements and gutters; roads cut into the hillside with a bank above and below; nothing sinks into the ground or floats | |
 | 4.3 | **Look closely at the edge of a road next to a pavement** | **No white or yellow glitter** along the kerb (fixed this round, but tested only on a software renderer: issue 85) | |
 | 4.4 | Watch the cars and the people for a minute | Cars stay on the roads; parked cars sit on the road surface; people walk on pavements and quays | |
+| 4.5 | **Compare with your photographs** (photo round): fly round the castle, along South Town and Bayard's Cove, and along the Kingswear shore | Green-teal water, lighter in the shallows; woods down to dark rocks at the harbour mouth; white and strongly painted fronts under grey slate, with gardens between; houses standing on stone quay walls; the castle's square tower, St Petrox limewashed, BRNC's three towers | |
+| 4.6 | Sail gently into a quay wall below the houses (South Town or Kingswear) | The boat stops against the wall, as at a pier, rather than running up a slope | |
 
 ## 5. River traffic: the paddle steamer, ferries, trains (20 min)
 
@@ -73,12 +75,12 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
-| 5.1 | Fly to the South Embankment, Dartmouth | **PS Kingswear Castle** lies alongside with passengers aboard: black hull, paddle boxes, buff funnel with a wisp of smoke | |
+| 5.1 | Fly to the South Embankment, Dartmouth | **PS Kingswear Castle** lies alongside with passengers aboard: black hull with a gold line, varnished saloons, paddle boxes, buff funnel with a wisp of smoke | |
 | 5.2 | Restart at 10:14 UTC and watch; then restart at 10:35 and at 11:05 UTC (live play runs in real time; only replays speed up) | At 10:15 she leaves; by 10:35 she has been down past the castles and is heading up towards Greenway, smoking from her funnel; by about 11:05 she is coming back to, or lying at, the embankment | |
 | 5.3 | Sail into her side, gently | She is solid like the other ferries: the contact pushes your boat away, and a hard one can damage it | |
 | 5.4 | Set the date to a Friday (17 July 2026) or to October | She does not sail; out of season she is not there | |
 | 5.5 | Find the Totnes river boat | It is labelled **MV Cardiff Castle** (a motor vessel; the paddle steamer is the Kingswear Castle) | |
-| 5.6 | Watch the Lower Ferry, Higher Ferry, passenger ferry and a steam train at Kingswear | The Lower Ferry tug swings the float and the two units pass port to port; trains arrive and leave on the timetable | |
+| 5.6 | Watch the Lower Ferry, Higher Ferry, passenger ferry and a steam train at Kingswear | The Lower Ferry tug (black hull, cream wheelhouse) swings the float (orange ramp lips, "Do not board" boards) and the two units pass port to port; trains arrive and leave on the timetable | |
 | 5.7 | **Livery** | Note any colour or detail of the steamer or the Cardiff Castle that is wrong (both are estimates; E19) | |
 
 ## 6. Racing (20 min)

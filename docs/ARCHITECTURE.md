@@ -1,6 +1,6 @@
 # Technical architecture
 
-Status: **implemented**. This began as the proposal approved before Phase 1; it is kept up to date as the build changes (last: pre-UAT round, 28 Oct 2026). Where a section still reads as a plan, the phase reports say what was built.
+Status: **implemented**. This began as the proposal approved before Phase 1; it is kept up to date as the build changes (last: photo round, 28 Oct 2026). Where a section still reads as a plan, the phase reports say what was built.
 
 ## 1. Principles
 
@@ -150,9 +150,10 @@ A **course validator** runs in both CI and the editor. It checks that:
 
 ## 7. Rendering (`src/render`)
 
-- **Water:** custom shader on a dense radial mesh round the camera, drawn only near tidal water (the pipeline's water mask, so low ground inland stays dry). Eight Gerstner wave trains, weighted per place by a 32 × 32 field of the modelled sea state (height, peak wavelength, whitecaps, steepness), per-pixel normals, foam on compressed crests; sky reflection; wake ribbon and foam trail.
+- **Water:** custom shader on a dense radial mesh round the camera, drawn only near tidal water (the pipeline's water mask, so low ground inland stays dry). Green-teal as the owner's photographs show it, lighter over the shallows within 40 m of the banks (from the same mask). Eight Gerstner wave trains, weighted per place by a 32 × 32 field of the modelled sea state (height, peak wavelength, whitecaps, steepness), per-pixel normals, foam on compressed crests; sky reflection; wake ribbon and foam trail.
 - **Terrain:** chunked heightmap meshes from EA LIDAR (8 m grid; 4 m over the towns) with a Sentinel-2 colour drape, and detail the 10 m drape cannot show: fine variation, rock on steep slopes, mud and shingle on the tidal foreshore (illustrative).
-- **Woodland** (`trees.ts`): instanced trees where the drape shows woods (dark, green-dominant pixels) and a few hedgerow trees in fields, off the foreshore and out of building footprints; seeded by place, built in chunks round the camera, coarser further off (illustrative, E).
+- **Woodland** (`trees.ts`): instanced trees where the drape shows woods (dark, green-dominant pixels) and a few hedgerow trees in fields; since the photo round also on steep valley sides where the drape is dark or spoiled, and garden trees and shrubs among the houses (kept off roads and footprints); off the foreshore; seeded by place, built in chunks round the camera, coarser further off (illustrative, E).
+- **Quay walls** (`src/sim/env/quays.ts`, drawn by `quays.ts`; photo round): stone walls along the towns' waterfronts where houses stand, found from the 4 m ground and the footprints when the data loads (`geoLoader.ts`); the ground behind is filled to their tops before the roads are cut, and the fleet meets them as fixed piers.
 - **Buildings:** OSM footprints extruded, merged per chunk, on bases from the LIDAR ground. Heights come from OSM where present, otherwise estimated by class (labelled). Roofs from the pipeline (OSM roof:shape, else inferred: terraces gabled along the street with party walls, hips, flat). Added detail is illustrative, not data:
   - gable-end walls, hips, chimney stacks, slate or tile courses;
   - windows drawn per fragment from each wall's coordinates, some lit after dark, none starting below the ground along the wall;

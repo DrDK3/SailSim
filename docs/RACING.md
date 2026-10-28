@@ -15,7 +15,7 @@ All boats share one environment, stepped once per 10 ms tick, and sail with the 
 | Turning mark, pin (robotic marks: an inflatable on twin pontoons, `src/render/robotMark.ts`) | Fixed circle of 0.9 m round the pontoons (was 0.75 m for an anchored inflatable and 0.4 m for the pin buoy), softer | k = 3×10⁴ N/m, c = 2×10³ N s/m (E) |
 | Moored boat | Box l × l/3, lying to the stream (or wind) downstream of its buoy, as drawn | hard (E) |
 | Ferry, river boat, the paddle steamer | Box on its timetabled track, moving | hard (E) |
-| Pier, jetty, pontoon (and the RDYC pontoon's gangway) | Convex pieces of the outline; floating pontoons softer on their fenders | PIER_CONTACT (E) |
+| Pier, jetty, pontoon (and the RDYC pontoon's gangway); the towns' quay walls (photo round, PHYSICS.md §16) | Convex pieces of the outline; floating pontoons softer on their fenders | PIER_CONTACT (E) |
 
 **How the forces are applied:** they are computed from the states at the start of the step and held over it, so the result does not depend on the order of the boats and runs are deterministic. They act in the horizontal plane, and since the realism round a contact also heels the boat through its force at deck height, and a hard one can damage the hull, rudder or rig (PHYSICS.md §21). Marks do not move.
 
