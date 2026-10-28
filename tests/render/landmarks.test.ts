@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Kit, LANDMARKS, WIN, battlements, buildExtra, facing, insetRing, insetRingAdaptive, insideRing, landmarkFor, longAxisDeg, outward, simplifyRing } from '../../src/render/landmarks';
-import { CAR_SPEED, ROAD_WIDTH, StreetLife, TOWNS, along, buildRoadSurfaces, carGeometry, personGeometry, type RoadsData } from '../../src/render/population';
+import { CAR_SPEED, ROAD_WIDTH, StreetLife, TOWNS, along, buildRoadSurfaces, carGeometry, type RoadsData } from '../../src/render/population';
+import { personPartsGeometry } from '../../src/render/people';
 import type { DartFeatures } from '../../src/app/geoLoader';
 import { standingSpots } from '../../src/render/dart';
 
@@ -140,7 +141,8 @@ describe('roads and street life', () => {
     }
     expect(checked).toBeGreaterThan(50);
     expect(carGeometry().getAttribute('position').count / 3).toBeLessThan(400);
-    expect(personGeometry().getAttribute('position').count / 3).toBeLessThan(200);
+    // A jointed person (thighs, shins, arms, body, head) stays a small model: under 400 triangles.
+    expect(personPartsGeometry().getAttribute('position').count / 3).toBeLessThan(400);
   });
 
   it('positions along a polyline', () => {

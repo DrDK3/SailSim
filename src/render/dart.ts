@@ -124,7 +124,7 @@ export class DartScene {
     }
     if (input.roads) {
       this.fixed.add(buildRoadSurfaces(input.roads, (e, n) => this.groundAt(e, n)));
-      this.street = new StreetLife({ roads: input.roads, groundAt: (e, n) => this.groundAt(e, n), standing: f ? standingSpots(f) : [], detail: input.detail });
+      this.street = new StreetLife({ roads: input.roads, groundAt: (e, n) => this.groundAt(e, n), standing: f ? standingSpots(f) : [], queues: f ? ferryQueues(f) : [], detail: input.detail });
       this.fixed.add(this.street.fixed);
       this.floating.add(this.street.floating);
     }
@@ -1102,6 +1102,27 @@ function shadowed(m: THREE.Mesh): THREE.Mesh {
  * Where people stand (E): on the quays and jetties and on the pontoons in the two towns, about one person per
  * 60 m² of deck (fewer on long pontoons), never more than 40 on one. Seeded, so the same each time.
  */
+/**
+ * Where foot passengers queue: at each end of the ferry routes that carry them (every route but the vehicle-only
+ * floats), a few metres back from the landing, facing the way the boat leaves (each end once).
+ */
+export function ferryQueues(f: DartFeatures): { e: number; n: number; de: number; dn: number }[] {
+  const out: { e: number; n: number; de: number; dn: number }[] = [];
+  const seen: [number, number][] = [];
+  for (const r of f.ferries) {
+    if (r.route.length < 2) continue;
+    for (const [end, next] of [[r.route[0]!, r.route[1]!], [r.route[r.route.length - 1]!, r.route[r.route.length - 2]!]] as const) {
+      if (seen.some(([e, n]) => Math.hypot(e - end[0], n - end[1]) < 15)) continue;
+      seen.push([end[0], end[1]]);
+      const L = Math.hypot(next[0] - end[0], next[1] - end[1]) || 1;
+      const de = (next[0] - end[0]) / L;
+      const dn = (next[1] - end[1]) / L;
+      out.push({ e: end[0] - de * 4, n: end[1] - dn * 4, de, dn });
+    }
+  }
+  return out;
+}
+
 export function standingSpots(f: DartFeatures): { e: number; n: number; floating: boolean; deck: number }[] {
   const out: { e: number; n: number; floating: boolean; deck: number }[] = [];
   let seed = 991;
