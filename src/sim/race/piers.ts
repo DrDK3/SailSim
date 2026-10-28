@@ -16,7 +16,12 @@ export interface PierInput {
   line?: [number, number][];
   width?: number;
   poly?: [number, number][];
+  /** A floating pontoon's gangway from the shore: solid too (a boat cannot pass under it near the wall). */
+  gangway?: { shore: [number, number]; pontoon: [number, number] };
 }
+
+/** A gangway's width (m, E). */
+export const GANGWAY_WIDTH = 1.3;
 
 export interface PierPiece {
   /** Index of the pier it belongs to. */
@@ -90,6 +95,24 @@ function piece(pier: number, label: string, floating: boolean, pts: Vec[]): Pier
 /** Convex pieces for every pier in the data. */
 export function pierPieces(piers: readonly PierInput[]): PierPiece[] {
   const out: PierPiece[] = [];
+  /** One rectangle along a segment, `h` either side, grown by `grow` at each end. */
+  const rectangle = (e0: number, n0: number, e1: number, n1: number, h: number, grow: number): Vec[] | undefined => {
+    const L = Math.hypot(e1 - e0, n1 - n0);
+    if (L < 1e-6) return undefined;
+    const ue = (e1 - e0) / L;
+    const un = (n1 - n0) / L;
+    // Across the segment (to its right), and along it grown at each end.
+    const xe = un;
+    const xn = -ue;
+    const a = { e: e0 - ue * grow, n: n0 - un * grow };
+    const b = { e: e1 + ue * grow, n: n1 + un * grow };
+    return clockwise([
+      { e: a.e + xe * h, n: a.n + xn * h },
+      { e: b.e + xe * h, n: b.n + xn * h },
+      { e: b.e - xe * h, n: b.n - xn * h },
+      { e: a.e - xe * h, n: a.n - xn * h },
+    ]);
+  };
   piers.forEach((p, i) => {
     const label = p.name ? p.name : p.floating ? 'a pontoon' : 'a jetty';
     if (p.line && p.line.length >= 2) {
@@ -97,25 +120,16 @@ export function pierPieces(piers: readonly PierInput[]): PierPiece[] {
       for (let k = 1; k < p.line.length; k++) {
         const [e0, n0] = p.line[k - 1]!;
         const [e1, n1] = p.line[k]!;
-        const L = Math.hypot(e1 - e0, n1 - n0);
-        if (L < 1e-6) continue;
-        const ue = (e1 - e0) / L;
-        const un = (n1 - n0) / L;
-        // Across the segment (to its right), and along it grown by h at each end.
-        const xe = un;
-        const xn = -ue;
-        const a = { e: e0 - ue * h, n: n0 - un * h };
-        const b = { e: e1 + ue * h, n: n1 + un * h };
-        const rect = [
-          { e: a.e + xe * h, n: a.n + xn * h },
-          { e: b.e + xe * h, n: b.n + xn * h },
-          { e: b.e - xe * h, n: b.n - xn * h },
-          { e: a.e - xe * h, n: a.n - xn * h },
-        ];
-        out.push(piece(i, label, p.floating, clockwise(rect)));
+        const rect = rectangle(e0, n0, e1, n1, h, h);
+        if (rect) out.push(piece(i, label, p.floating, rect));
       }
     } else if (p.poly && p.poly.length >= 3) {
       for (const t of triangulate(p.poly.map(([e, n]) => ({ e, n })))) out.push(piece(i, label, p.floating, t));
+    }
+    if (p.gangway) {
+      const { shore, pontoon } = p.gangway;
+      const rect = rectangle(shore[0], shore[1], pontoon[0], pontoon[1], GANGWAY_WIDTH / 2, 0);
+      if (rect) out.push(piece(i, `${label} gangway`, false, rect));
     }
   });
   return out;

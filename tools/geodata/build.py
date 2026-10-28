@@ -60,19 +60,29 @@ EXTRA_LANDMARKS = [
 # the feature whose centroid is within `within` m of `near` (local e, n) gets this name and floating flag.
 PIER_CORRECTIONS = [
     dict(near=(-31.0, -18.0), within=15.0, name="Royal Dart Yacht Club pontoon", floating=True,
-         why="The club's main pontoon in front of the clubhouse (RDYC RYA training centre manual 2024; RDYC water-based facilities 2023); floating assumed (E)"),
+         why="The club's main pontoon in front of the clubhouse (RDYC RYA training centre manual 2024; RDYC water-based facilities 2023); floating assumed (E)",
+         # OSM draws the pontoon's head and its 20 m arm to the clubhouse as one outline; the owner's photographs
+         # show the arm is a gangway from the terrace on the sea wall. Head outline as OSM's; the gangway's ends E.
+         poly=[(-44.0, -10.8), (-37.8, -8.7), (-27.8, -37.3), (-34.0, -39.5)],
+         gangway=dict(shore=(-17.1, -8.1), pontoon=(-35.9, -14.05))),
     dict(near=(-7.6, -76.0), within=10.0, name="Moody Island (RDYC dinghy pontoon)", floating=True,
          why="OSM 'Moody Island Pontoon': RDYC's dinghy pontoon (RDYC RYA training centre manual 2024)"),
 ]
 
 
 def correct_pier(name, floating, pts):
+    """Name, floating, and any shape and gangway overrides for a pier near a correction."""
     ce = sum(p[0] for p in pts) / len(pts)
     cn = sum(p[1] for p in pts) / len(pts)
     for c in PIER_CORRECTIONS:
         if np.hypot(ce - c["near"][0], cn - c["near"][1]) < c["within"]:
-            return c["name"], c["floating"]
-    return name, floating
+            extra = {}
+            if "poly" in c:
+                extra["poly"] = [list(p) for p in c["poly"]]
+            if "gangway" in c:
+                extra["gangway"] = dict(shore=list(c["gangway"]["shore"]), pontoon=list(c["gangway"]["pontoon"]))
+            return c["name"], c["floating"], extra
+    return name, floating, {}
 
 # Navigation marks: ONLY positions with a stated source are placed.
 MARKS = [
@@ -326,8 +336,10 @@ def piers(extract, elev):
             shape = dict(poly=ring(list(g.exterior.coords)[:-1]))
         else:
             continue
-        name, floating = correct_pier(name, floating, shape.get("line") or shape.get("poly"))
-        out.append(dict(name=name or None, floating=floating, **shape))
+        name, floating, extra = correct_pier(name, floating, shape.get("line") or shape.get("poly"))
+        if "poly" in extra:
+            shape = dict(poly=extra.pop("poly"))
+        out.append(dict(name=name or None, floating=floating, **shape, **extra))
     return out
 
 

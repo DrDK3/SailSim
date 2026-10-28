@@ -16,6 +16,8 @@ export interface PontoonPier {
   line?: [number, number][];
   width?: number;
   poly?: [number, number][];
+  /** A named gangway: from the shore (e, n) to the pontoon (e, n). */
+  gangway?: { shore: [number, number]; pontoon: [number, number] };
 }
 
 /** Heights (m): floating pontoon deck top above the water, fixed jetty deck top (ODN), pile tops (ODN). */
@@ -202,7 +204,9 @@ export function buildPontoons(piers: readonly PontoonPier[], groundAt: (e: numbe
       geo.translate(0, top - depth, 0);
       (p.floating ? decks : jettyDecks).push(geo);
       if (p.floating) {
-        const g = gangwayFromCorner(p.poly, groundAt);
+        const g = p.gangway
+          ? makeGangway({ e: p.gangway.pontoon[0], n: p.gangway.pontoon[1] }, { e: p.gangway.shore[0], n: p.gangway.shore[1], y: groundAt(p.gangway.shore[0], p.gangway.shore[1]) + 0.05 }, 1.2)
+          : gangwayFromCorner(p.poly, groundAt);
         if (g) gangways.push(g);
       }
       if (!p.floating) {
@@ -298,15 +302,23 @@ function makeGangway(from: { e: number; n: number }, to: { e: number; n: number;
   mesh.name = 'gangway';
   const steel = new THREE.MeshStandardMaterial({ color: 0x9ea4aa, roughness: 0.5, metalness: 0.6 });
   const tread = new THREE.MeshStandardMaterial({ color: 0x6d6a64, roughness: 0.9 });
-  // Built along +z from the origin, 1 m long (scaled to the span), with side rails.
+  // Built along +z from the origin, 1 m long (scaled to the span): a treaded deck, and on each side a handrail,
+  // a knee rail and posts about every 1.2 m (their thickness set for the span, which changes little with the tide).
+  const span = Math.max(2, Math.hypot(to.e - from.e, to.n - from.n));
   const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.08, 1).translate(0, 0, 0.5), tread);
   deck.name = 'gangway-deck';
   mesh.add(deck);
+  const parts: THREE.BufferGeometry[] = [];
   for (const s of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 1).translate((s * width) / 2, 0.45, 0.5), steel);
-    rail.name = 'gangway-rail';
-    mesh.add(rail);
+    parts.push(new THREE.BoxGeometry(0.05, 0.05, 1).translate((s * width) / 2, 1.0, 0.5));
+    parts.push(new THREE.BoxGeometry(0.04, 0.04, 1).translate((s * width) / 2, 0.5, 0.5));
+    parts.push(new THREE.BoxGeometry(0.06, 0.18, 1).translate((s * width) / 2, 0.05, 0.5));
+    const posts = Math.max(2, Math.round(span / 1.2) + 1);
+    for (let k = 0; k < posts; k++) parts.push(new THREE.BoxGeometry(0.05, 1.0, 0.05 / span).translate((s * width) / 2, 0.5, k / (posts - 1)));
   }
+  const rails = new THREE.Mesh(mergeGeometries(parts.map((g) => g.toNonIndexed()))!, steel);
+  rails.name = 'gangway-rail';
+  mesh.add(rails);
   return { mesh, from, to };
 }
 

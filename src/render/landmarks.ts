@@ -40,6 +40,8 @@ export interface LandmarkSpec extends Look {
   id: string;
   /** A point inside the footprint (local e, n). */
   at: [number, number];
+  /** Heights (m ODN) to use instead of the data's, where photographs show the data is wrong (E). */
+  heights?: { base: number; eaves: number; top: number };
   /** Extras, given the footprint's base and top (m ODN) and its ring (counter-clockwise). */
   extras?: (base: number, top: number, ring: [number, number][]) => Extra[];
   source: string;
@@ -115,24 +117,44 @@ export const LANDMARKS: LandmarkSpec[] = [
   {
     id: 'rdyc',
     at: [2, 1],
-    walls: 0xf1efe8,
+    // Matched here, drawn by src/render/rdyc.ts: red brick and white render under slate, from photographs.
+    walls: 0x9b4a37,
+    roof: SLATE,
+    win: WIN.sash,
+    source: 'Royal Dart Yacht Club clubhouse, Priory Street, Kingswear (1881): ground-floor bar and dining area opening onto a riverside terrace; upstairs a formal dining room, the Quarter Deck function room and a large balcony overlooking the harbour (Wikipedia, via search). Modelled from the owner\'s photographs of the river front (October 2026, src/render/rdyc.ts): a red-brick wing with its gable to the river (bay window, RDYC sign, porch), a round turret with a conical roof, a white balcony on posts over the terrace, a white-rendered south wing, the flagstaff, a stone sea wall. Proportions E.',
+  },
+  {
+    id: 'rdyc-north',
+    at: [-3, 20],
+    // North of the club: red brick and clay tile with white gables and bay windows (owner's photographs).
+    walls: 0xa55a44,
+    roof: 0x9a4a32,
+    win: WIN.sash,
+    shape: 'p',
+    roofDrop: 3.6,
+    // Three storeys on the club's terrace level (the data's 2.0 to 9.6 m ODN is too low beside the photographs).
+    heights: { base: 3.0, eaves: 9.6, top: 13.2 },
+    source: "The houses immediately north of the club on Priory Street: red brick, clay-tile roofs, white gables, three storeys (the owner's photographs, October 2026). Heights, roof form and colours E.",
+  },
+  {
+    id: 'rdyc-south',
+    at: [15, -39],
+    walls: 0xf1f0ea,
     roof: SLATE,
     win: WIN.sash,
     shape: 'g',
-    roofDrop: 2.2,
-    // On the river (west) front: the ground-floor bar and dining room open onto a riverside terrace; upstairs the
-    // dining room and the Quarter Deck behind a large balcony; the flagstaff stands at the terrace's edge.
-    extras: (base, _top, ring) => {
-      const [a, b] = facing(ring, 225, 315);
-      const [oe, on] = outward(a, b);
-      const depth = 6;
-      return [
-        { kind: 'terrace', a, b, floorM: base + 0.3, depth, tables: Math.max(2, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / 4)) },
-        { kind: 'balconies', a, b, floorsM: [base + 3.3], depth: 2.4 },
-        { kind: 'flagstaff', at: [(a[0] + b[0]) / 2 + oe * (depth - 0.8), (a[1] + b[1]) / 2 + on * (depth - 0.8)], fromM: base + 0.3, height: 11 },
-      ];
-    },
-    source: 'Royal Dart Yacht Club clubhouse, Priory Street, Kingswear (purpose-built, 1881): ground-floor bar and dining area opening onto a riverside terrace; upstairs a formal dining room, the Quarter Deck function room and a large balcony overlooking the harbour (Wikipedia, via search); the flagstaff on the river front from photographs. Painted walls and a slate roof; sizes, the roof form and colours E.',
+    // On the sea wall, two storeys and an attic (the data's base of 0.5 m ODN is the foreshore beside it).
+    heights: { base: 2.6, eaves: 8.2, top: 12.0 },
+    source: "The white-rendered houses with slate roofs south of the club, behind its pontoon (the owner's photographs, October 2026). Heights and colours E.",
+  },
+  {
+    id: 'rdyc-south-east',
+    at: [27, -16],
+    walls: 0xeeece4,
+    roof: SLATE,
+    win: WIN.sash,
+    shape: 'g',
+    source: "A white-rendered house behind the club's south wing (the owner's photographs, October 2026). Colours E.",
   },
   {
     id: 'royal-dart-hotel',

@@ -11,7 +11,8 @@ export interface DartFeatures {
    * floors (when the data has them). Older data has none of the roof fields (flat roofs).
    */
   buildings: { b: number; t: number; r: [number, number][]; n: string | null; c: string | null; s?: 'g' | 'h' | 'f'; e?: number; d?: number; w?: string; f?: number }[];
-  piers: ({ name: string | null; floating: boolean } & ({ line: [number, number][]; width: number } | { poly: [number, number][] }))[];
+  /** Piers: a centre line and width, or an outline; a floating one may name its gangway (shore and pontoon ends, e, n). */
+  piers: ({ name: string | null; floating: boolean; gangway?: { shore: [number, number]; pontoon: [number, number] } } & ({ line: [number, number][]; width: number } | { poly: [number, number][] }))[];
   mooringAreas: { name: string; ring: [number, number][] }[];
   /** Provisional moorings: position, boat kind, length (m), initial heading (deg), area name. */
   moorings: { e: number; n: number; k: 'yacht' | 'motor' | 'keelboat'; l: number; h: number; a: string }[];

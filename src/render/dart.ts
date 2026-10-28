@@ -5,7 +5,7 @@ import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
 import { berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
-import { buildPontoons, type Pontoons } from './pontoons';
+import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
@@ -14,6 +14,7 @@ import { TrafficView } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
 import { StreetLife, TOWNS, buildRoadSurfaces, type RoadsData } from './population';
+import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -139,6 +140,9 @@ export class DartScene {
 
   /** Ground (m ODN) as the picture draws it: the towns' 4 m grid where there is one, else the 8 m grid. */
   groundAt(e: number, n: number): number {
+    // The Royal Dart Yacht Club's terrace, on its sea wall (src/render/rdyc.ts).
+    const terrace = rdycPlatformAt(e, n);
+    if (terrace !== undefined) return terrace;
     const town = this.input.town;
     if (town) {
       const t = town.spec;
@@ -381,10 +385,14 @@ export class DartScene {
     const w = new THREE.Vector3();
     const DEG = Math.PI / 180;
     const kit = new Kit();
-    f.buildings.forEach((b0, idx) => {
-      let b = b0;
-      const ring = b.r;
+    f.buildings.forEach((bData, idx) => {
+      const ring = bData.r;
       if (ring.length < 3) return;
+      // A landmark may correct the data's heights where photographs show them wrong (src/render/landmarks.ts).
+      const spec = landmarkFor(ring);
+      const hSpec = spec?.heights;
+      const b0 = hSpec ? { ...bData, b: hSpec.base, t: hSpec.top, e: hSpec.eaves } : bData;
+      let b = b0;
       const cx = ring.reduce((a, p) => a + p[0], 0) / ring.length;
       const cn = ring.reduce((a, p) => a + p[1], 0) / ring.length;
       const key = `${Math.floor(cx / 800)},${Math.floor(cn / 800)}`;
@@ -393,7 +401,8 @@ export class DartScene {
       const T = t;
       // Landmarks as themselves (src/render/landmarks.ts); churches and chapels in stone with tall windows; the
       // marina buildings at Noss; shopfronts on the named buildings of the town streets.
-      const spec = landmarkFor(ring);
+      // The yacht club is modelled as itself (src/render/rdyc.ts), added after the loop.
+      if (spec?.id === 'rdyc') return;
       const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
       const chapel = !spec && !church && (b.c === 'chapel' || /chapel/i.test(b.n ?? ''));
       const ce0 = ring.reduce((a, p) => a + p[0], 0) / ring.length;
@@ -420,7 +429,7 @@ export class DartScene {
         const t = (bearing * Math.PI) / 180;
         const across = ring.map(([e, n]) => e * Math.cos(t) - n * Math.sin(t));
         const width = Math.max(...across) - Math.min(...across);
-        const eavesG = b0.b + Math.min(8, Math.max(4, 0.45 * (b0.t - b0.b)));
+        const eavesG = hSpec?.eaves ?? b0.b + Math.min(8, Math.max(4, 0.45 * (b0.t - b0.b)));
         b = { ...b0, s: 'g', d: bearing, e: eavesG, t: Math.min(b0.t, eavesG + 0.35 * width) };
         if (church && b0.r.length >= 4) {
           // A tower at the west end, as most parish churches have (E: position and size).
@@ -439,11 +448,7 @@ export class DartScene {
         const top = b.t;
         if (look.parapet === 'battlements' || look.parapet === 'corbelled-battlements') battlements(kit, ccwRing, top, look.walls, look.parapet === 'corbelled-battlements');
         if (spec?.extras) {
-          for (const x of spec.extras(b0.b, b0.t, ccwRing)) {
-            buildExtra(kit, x);
-            // The club's ensign flies from its flagstaff's gaff (at colours: ClubEnsign).
-            if (x.kind === 'flagstaff' && spec.id === 'rdyc') this.ensigns.push(new ClubEnsign(x.at, x.fromM, x.height));
-          }
+          for (const x of spec.extras(b0.b, b0.t, ccwRing)) buildExtra(kit, x);
         }
       }
       // Counter-clockwise (in e, n) so that wall normals face out; party-wall flags follow the ring.
@@ -656,6 +661,12 @@ export class DartScene {
       this.fixed.add(mesh);
     }
     if (kit.pos.length) this.fixed.add(kit.mesh('landmark-details'));
+    // The Royal Dart Yacht Club as itself, with its terrace and sea wall; its ensign flies from the flagstaff.
+    if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'rdyc')) {
+      const club = buildRdycClub();
+      this.fixed.add(club.group);
+      this.ensigns.push(new ClubEnsign(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
+    }
   }
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
@@ -673,6 +684,13 @@ export class DartScene {
     this.pontoons = buildPontoons(f.piers, (e, n) => this.groundAt(e, n));
     this.floating.add(this.pontoons.floating);
     this.fixed.add(this.pontoons.fixed);
+    // The yacht club's dinghy racks, its RIB and the pontoon's guide piles.
+    const club = f.piers.find((p) => p.name === 'Royal Dart Yacht Club pontoon');
+    if (club && 'poly' in club) {
+      const gear = buildRdycPontoonGear(club.poly, PONTOON.floatDeck);
+      this.floating.add(gear.floating);
+      this.fixed.add(gear.fixed);
+    }
   }
 
   private buildMoorings(f: DartFeatures): THREE.InstancedMesh {
