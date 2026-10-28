@@ -14,6 +14,8 @@ import { TrafficView } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
 import { StreetLife, TOWNS, type RoadsData } from './population';
+import { quayMesh } from './quays';
+import { fillBehindQuays, type QuayWall } from '../sim/env/quays';
 import { RoadNetwork } from './roads';
 import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt, type RdycClub } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
@@ -43,6 +45,8 @@ export interface DartSceneInput {
   detail?: 'high' | 'low';
   /** Roads and footways: their surfaces, and cars and people on them (illustrative). */
   roads?: RoadsData;
+  /** The towns' quay walls (src/sim/env/quays.ts): drawn, and the ground behind them filled to their tops. */
+  quays?: readonly QuayWall[];
 }
 
 /** Where the water surface may be drawn: a distance texture over a box (e0, n0, width, height in m). */
@@ -111,13 +115,16 @@ export class DartScene {
   private readonly roadNet?: RoadNetwork;
 
   constructor(input0: DartSceneInput) {
-    // The roads first: they cut and fill the town ground the terrain, buildings and everything else stand on.
+    // The quays first (the ground behind each wall filled level to its top), then the roads: they cut and fill
+    // the town ground the terrain, buildings and everything else stand on.
     let input = input0;
-    if (input0.roads) {
-      const t = input0.town;
-      const raw = (e: number, n: number) => rdycPlatformAt(e, n) ?? townGround(input0, e, n) ?? input0.geo.bedElevation(n, e);
-      this.roadNet = new RoadNetwork(input0.roads, raw, t?.spec ? { e0: t.spec.e0, n0: t.spec.n0, cell: t.spec.cell, nx: t.spec.nx, ny: t.spec.ny } : undefined);
-      if (t) input = { ...input0, town: { ...t, values: this.roadNet.carve(t.values) } };
+    if (input0.town && input0.quays?.length) input = { ...input0, town: { ...input0.town, values: fillBehindQuays(input0.town, input0.quays) } };
+    if (input.roads) {
+      const base = input;
+      const t = base.town;
+      const raw = (e: number, n: number) => rdycPlatformAt(e, n) ?? townGround(base, e, n) ?? base.geo.bedElevation(n, e);
+      this.roadNet = new RoadNetwork(base.roads!, raw, t?.spec ? { e0: t.spec.e0, n0: t.spec.n0, cell: t.spec.cell, nx: t.spec.nx, ny: t.spec.ny } : undefined);
+      if (t) input = { ...base, town: { ...t, values: this.roadNet.carve(t.values) } };
     }
     this.input = input;
     this.fixed.name = 'dart-fixed';
@@ -135,6 +142,7 @@ export class DartScene {
       this.waterMask = { texture, box: new THREE.Vector4(s.e0, s.n0, s.nx * s.cell, s.ny * s.cell) };
     }
     this.buildTerrain();
+    if (input.quays?.length) this.fixed.add(quayMesh(input.quays));
     const f = input.features;
     if (f) {
       this.buildBuildings(f);
@@ -173,7 +181,15 @@ export class DartScene {
     }
     const pixels = input.drape ? drapePixels(input.drape) : undefined;
     if (pixels) {
-      this.woodland = new Woodland({ pixels, drape: input.manifest.drape, groundAt: (e, n) => this.groundAt(e, n), buildings: f?.buildings.map((b) => b.r) });
+      const roads = this.roadNet;
+      this.woodland = new Woodland({
+        pixels,
+        drape: input.manifest.drape,
+        groundAt: (e, n) => this.groundAt(e, n),
+        buildings: f?.buildings.map((b) => b.r),
+        onRoad: roads ? (e, n) => roads.surfaceAt(e, n) !== undefined || rdycPlatformAt(e, n) !== undefined : (e, n) => rdycPlatformAt(e, n) !== undefined,
+        towns: TOWNS,
+      });
       this.fixed.add(this.woodland.group);
     }
   }
@@ -408,8 +424,14 @@ export class DartScene {
     // Off-white and pastel render, ochre, sandstone and grey stone; mostly slate roofs, some clay tile.
     // Scaled to a painted wall's albedo (about 0.5–0.7): the sun, sky and environment light together would
     // otherwise drive pale render to white.
-    const wallPalette = [0xe4ddcc, 0xddc394, 0xd4a49b, 0xa3bccf, 0xdcc56f, 0xafc39b, 0xc4ae90, 0xd2cbbc, 0x9ea4a6, 0xe8e3d8].map((h) => lin(h).map((c) => c * 0.72));
-    const roofPalette = [0x2f3338, 0x363a41, 0x3d4148, 0x2b2e33, 0x7f4532, 0x45403c].map(lin);
+    // Matched to the owner's photographs of both waterfronts (photo round): many white and cream fronts, and
+    // strong painted colours among them (cornflower and navy blue, teal, sage green, pink, ochre, brick red,
+    // grey); slate roofs mid to dark grey (sky light turns a darker or bluer slate navy), a few clay tile.
+    const wallPalette = [
+      0xf1efe7, 0xe9e4d6, 0xf3f0ea, 0xe4dcc8, 0xddc394, 0xd9a5a8, 0x7f9fc4, 0x46607e, 0x7fb1b0, 0x9fbf9f,
+      0xe2c46a, 0xb2584a, 0x9aa2a8, 0xe8e3d8, 0xc7b79b, 0xf0ece0,
+    ].map((h) => lin(h).map((c) => c * 0.74));
+    const roofPalette = [0x4a4743, 0x55514c, 0x403f3d, 0x5d5852, 0x8a4c38, 0x4f4a45].map(lin);
     const v = new THREE.Vector3();
     const w = new THREE.Vector3();
     const DEG = Math.PI / 180;
@@ -1123,20 +1145,42 @@ function terrainDetail(m: THREE.MeshStandardMaterial, mask?: WaterMask): void {
         '#include <map_fragment>',
         `#include <map_fragment>
         float tn = tNoise(vGround.xz * 0.21) * 0.55 + tNoise(vGround.xz * 0.9) * 0.3 + tNoise(vGround.xz * 3.1) * 0.15;
+        // Every colour added here is on the picture's own scale (the material colour \`diffuse\` times a linear
+        // albedo), so it sits with the satellite colours around it. Albedos are the owner's photographs' (photo
+        // round): slate rock, weed and mud at the shore, the woods' floor.
+        vec3 px = diffuseColor.rgb / max(diffuse, vec3(1e-3));
+        float pl = dot(px, vec3(0.2126, 0.7152, 0.0722));
+        float psat = max(px.r, max(px.g, px.b)) - min(px.r, min(px.g, px.b));
+        float d2w = -1000.0;
+        if (uMaskBox.z > 0.0) {
+          vec2 muv = (vec2(vGround.x, -vGround.z) - uMaskBox.xy) / uMaskBox.zw;
+          d2w = (texture2D(uMask, muv).r * 255.0 - 128.0) * 0.5;
+        }
+        float tidal = smoothstep(-24.0, -6.0, d2w);
+        float steep = smoothstep(0.93, 0.78, vUpright);
+        // Pale pixels on a slope are not ground: a 10 m pixel of surf, sunlit rock, a white boat or a roof
+        // stretched down a bank. The photographs show woods and gardens there (rock only at the water).
+        float pale = smoothstep(0.17, 0.3, pl) * (1.0 - smoothstep(0.05, 0.12, psat)) * steep;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * vec3(0.04, 0.062, 0.022) * (0.75 + 0.5 * tn), pale);
+        // Summer green: the picture (July 2025, a dry month) shows many fields parched; the photographs show
+        // most of them green. Yellow-brown on gentle ground is moved part way towards green (a grade, E).
+        float brown = smoothstep(0.0, 0.05, px.r - px.g) * smoothstep(0.03, 0.12, px.r - px.b) * (1.0 - steep);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * vec3(px.g * 0.78, (px.r + px.g) * 0.56, px.b * 0.85), brown * 0.5);
         // Satellite colour is hazy and flat: a little more saturation and depth, as the eye sees fields (a grade).
         float tl = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
         diffuseColor.rgb = max(mix(vec3(tl), diffuseColor.rgb, 1.4) * 0.9, 0.0);
         diffuseColor.rgb *= 0.84 + 0.32 * tn;
-        float rock = smoothstep(0.8, 0.58, vUpright);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.19, 0.17) * (0.75 + 0.5 * tn), rock * 0.7);
-        // Mud only on the tidal foreshore (near tidal water), not on low ground inland.
-        float tidal = 1.0;
-        if (uMaskBox.z > 0.0) {
-          vec2 muv = (vec2(vGround.x, -vGround.z) - uMaskBox.xy) / uMaskBox.zw;
-          tidal = smoothstep(-24.0, -6.0, (texture2D(uMask, muv).r * 255.0 - 128.0) * 0.5);
-        }
+        // Rock: dark slate with ochre lichen, on steep ground at the water and on the steepest faces.
+        float rock = steep * max(smoothstep(-30.0, -6.0, d2w) * smoothstep(14.0, 6.0, vGround.y), smoothstep(0.62, 0.5, vUpright));
+        float lichen = smoothstep(0.55, 0.8, tNoise(vGround.xz * 0.9 + vGround.y * 0.6));
+        vec3 rockCol = mix(vec3(0.075, 0.07, 0.058), vec3(0.2, 0.165, 0.075), lichen * 0.55) * (0.7 + 0.6 * tn);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * rockCol, rock * 0.85);
+        // The foreshore (near tidal water only, not low ground inland): weed-dark rock and mud, wetter and darker
+        // towards the water, with a little paler shingle.
         float mud = smoothstep(2.6, 1.6, vGround.y) * smoothstep(-4.0, -2.5, vGround.y) * tidal;
-        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.27, 0.24, 0.2), vec3(0.42, 0.39, 0.34), step(0.62, tn)) * (0.8 + 0.4 * tn), mud * 0.8);`,
+        vec3 shore = mix(vec3(0.058, 0.05, 0.036), vec3(0.05, 0.052, 0.024), smoothstep(0.4, 0.7, tn));
+        shore = mix(shore, vec3(0.15, 0.135, 0.1), step(0.78, tn) * 0.6) * (0.65 + 0.35 * smoothstep(-2.5, 1.5, vGround.y));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * shore * (0.8 + 0.4 * tn), mud * 0.85);`,
       );
   };
 }

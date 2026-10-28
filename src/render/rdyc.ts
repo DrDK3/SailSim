@@ -191,7 +191,7 @@ function renderTex() {
 }
 
 /** Random rubble stone, as the sea wall in the photographs: grey and brown stones with dark joints, 2.4 by 1.2 m. */
-function stoneTex() {
+export function stoneTex() {
   return canvasTex('rdyc-stone', 256, 128, (g) => {
     g.fillStyle = '#4a4540';
     g.fillRect(0, 0, 256, 128);

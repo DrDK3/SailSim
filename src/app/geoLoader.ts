@@ -1,6 +1,8 @@
 import { DartGeo, type DartManifest } from '../sim/geo/dart';
 import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
 import type { RoadsData } from '../render/population';
+import { rdycPlatformAt } from '../render/rdyc';
+import { quayWalls, type QuayWall, type TownGrid } from '../sim/env/quays';
 
 /** public/geo/features.json (written by tools/geodata/build.py); local metres, rounded to 0.1 m. */
 export interface DartFeatures {
@@ -88,6 +90,8 @@ export interface DartData {
   waterMask?: { spec: WaterMaskSpec; image: HTMLImageElement };
   /** Roads and footways (roads.json, written by tools/geodata/roads.py), when the data has them. */
   roads?: RoadsData;
+  /** The towns' quay walls (src/sim/env/quays.ts), from the town ground and the buildings: drawn and solid. */
+  quays?: QuayWall[];
   issues: { asset: string; message: string; effect: string }[];
 }
 
@@ -175,6 +179,21 @@ export async function loadDartData(base = BASE): Promise<DartData> {
   else if (mask.status === 'rejected' && m.waterMask) issue(m.waterMask.file, mask.reason, 'Water drawn wherever the ground is below the tide, inland hollows included.');
   if (roads.status === 'fulfilled') out.roads = roads.value;
   else if (m.roads) issue(m.roads.file, roads.reason, 'No roads, cars or people.');
+  if (out.town && out.features) out.quays = townQuays(out.town, out.features);
   out.minimapUrl = base + m.minimap.file;
   return out;
+}
+
+/**
+ * The quay walls, kept off the vehicle ferries' slipways (18 m round each end of their routes), the yacht club's
+ * own sea wall (src/render/rdyc.ts, 6 m round it) and the castles' rocks (70 m round Dartmouth and Kingswear
+ * castles and St Petrox: the photographs show the castles standing on bare rock).
+ */
+export function townQuays(town: TownGrid, f: DartFeatures): QuayWall[] {
+  const slips = f.ferries
+    .filter((r) => /lower ferry|higher ferry|floating bridge/i.test(r.name) && r.route.length >= 2)
+    .flatMap((r) => [r.route[0]!, r.route[r.route.length - 1]!]);
+  const rocks = (f.landmarks ?? []).filter((l) => /castle$|st petrox/i.test(l.name) && !/hotel/i.test(l.name)).map((l) => [l.e, l.n] as const);
+  const club = (e: number, n: number) => [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]].some(([de, dn]) => rdycPlatformAt(e + de!, n + dn!) !== undefined);
+  return quayWalls(town, f.buildings.map((b) => b.r), (e, n) => club(e, n) || slips.some(([se, sn]) => Math.hypot(e - se, n - sn) < 18) || rocks.some(([le, ln]) => Math.hypot(e - le, n - ln) < 70));
 }

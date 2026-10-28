@@ -150,7 +150,13 @@ function wake(beam: number): THREE.Mesh {
 
 // ------------------------------------------------------------------ the Lower Ferry
 
-/** Tug of the Lower Ferry (Hauley IV-VI, F1): a round-bilge workboat, heavily fendered, wheelhouse forward of midships. */
+/** The tug's cream-yellow upperworks (the owner's photographs). */
+const TUG_CREAM = 0xe4cd8e;
+
+/**
+ * Tug of the Lower Ferry (Hauley IV-VI, F1): a round-bilge workboat, heavily fendered, wheelhouse forward of
+ * midships. Black hull, cream-yellow wheelhouse and tyres for fenders, as the owner's photographs show her.
+ */
 function tugModel(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'tug';
@@ -159,7 +165,7 @@ function tugModel(): THREE.Group {
   const B = 3.6;
   const h = hull(kit, {
     length: L, beam: B, freeboard: 1.0, draft: 1.2, sheerBow: 0.45, sheerStern: 0.12, stemRake: 0.5, entry: 0.42, transom: 0.62,
-    flare: 0.12, bulwark: 0.5, colours: { bottom: C.antifouling, boot: C.black, topsides: C.navy, deck: C.greyDeck, bulwarkInside: C.cream },
+    flare: 0.12, bulwark: 0.5, colours: { bottom: C.antifouling, boot: C.black, topsides: C.black, deck: C.greyDeck, bulwarkInside: TUG_CREAM },
   });
   // Rubber D-fender along the sheer, a thick bow fender, tyres down the sides.
   for (const s of [-1, 1]) fenderLine(kit, h.sheerLine(s, -0.1, 0.06, 1).map((p) => p.setY(p.y - 0.18)), 0.14);
@@ -172,7 +178,7 @@ function tugModel(): THREE.Group {
   // Wheelhouse with windows all round (the skipper sees both ends of the float), roof, mast with radar.
   const wz = -0.8;
   const wy = h.deck(wz);
-  cabin(kit, { z: wz, y: wy, length: 2.8, width: 2.3, height: 2.05, rFront: 0.55, rBack: 0.25, rake: 0.25, tumble: 0.12, colour: C.cream, windows: [0.5, 0.9], front: [0.45, 0.92], roof: { overhang: 0.15, thickness: 0.09, colour: C.cream } });
+  cabin(kit, { z: wz, y: wy, length: 2.8, width: 2.3, height: 2.05, rFront: 0.55, rBack: 0.25, rake: 0.25, tumble: 0.12, colour: TUG_CREAM, windows: [0.5, 0.9], front: [0.45, 0.92], roof: { overhang: 0.15, thickness: 0.09, colour: C.white } });
   mast(kit, 0, wy + 2.14, wz + 0.3, 2.3, { radar: true });
   lifebuoy(kit, -1.16, wy + 0.8, wz + 0.6, -1);
   lifebuoy(kit, 1.16, wy + 0.8, wz + 0.6, 1);
@@ -182,7 +188,7 @@ function tugModel(): THREE.Group {
   kit.rod(V(0.6, h.deck(sz) + 1.5, sz), V(0.6, h.deck(sz) + 1.75, sz), 0.13, VMAT.paint, C.cream, 10);
   for (const x of [-0.7, 0.7]) kit.rod(V(x, h.deck(3), 3), V(x, h.deck(3) + 0.55, 3), 0.11, VMAT.paint, C.black);
   kit.rod(V(-0.7, h.deck(3) + 0.42, 3), V(0.7, h.deck(3) + 0.42, 3), 0.06, VMAT.paint, C.black);
-  kit.box(1.2, 0.12, 1.2, VMAT.paint, C.cream, 0, h.deck(2) + 0.06, 2);
+  kit.box(1.2, 0.12, 1.2, VMAT.paint, TUG_CREAM, 0, h.deck(2) + 0.06, 2);
   addPerson(kit, 0.4, wy, wz + 0.2, 0, 11);
   g.add(kit.build('tug-hull'));
   navLights(g, { length: L, beam: B, mastY: wy + 4.4, mastZ: wz + 0.3, sideY: wy + 1.6, ram: true });
@@ -190,7 +196,10 @@ function tugModel(): THREE.Group {
   return g;
 }
 
-/** Lower Ferry float: a spoon-ended steel pontoon, two car lanes between walkways, ramps at both ends. */
+/**
+ * Lower Ferry float: a spoon-ended steel pontoon, two car lanes between walkways, ramps at both ends with
+ * orange lips, and "Do not board" boards on the gates at each end (the owner's photographs).
+ */
 function floatModel(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
   const kit = new Kit();
@@ -218,6 +227,15 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
     }
     lifebuoy(kit, s * (beam / 2 - 0.1), deckY + 0.75, -4, s);
   }
+  // The gates' boards at each end of the walkways: white, lettered in red ("Do not board" when the ramp is up).
+  for (const e of [-1, 1]) {
+    for (const s of [-1, 1]) {
+      const x = s * (beam / 2 - walk / 2 - 0.05);
+      kit.box(walk - 0.2, 0.55, 0.04, VMAT.paint, 0xf4f4f0, x, deckY + 1.05, e * (deckL / 2 - 0.25));
+      kit.box(walk - 0.2, 0.12, 0.05, VMAT.paint, 0xc0282d, x, deckY + 1.17, e * (deckL / 2 - 0.25));
+      kit.box(walk - 0.5, 0.06, 0.05, VMAT.paint, 0xc0282d, x, deckY + 0.95, e * (deckL / 2 - 0.25));
+    }
+  }
   // Cars, two lanes of up to four (8 cars, F1); foot passengers and a deckhand in hi-vis.
   const n = 3 + (seed % 6);
   for (let i = 0; i < n; i++) car(kit, (i % 2 ? 1 : -1) * (beam / 2 - walk - 1.55), deckY + 0.04, -deckL / 2 + 4 + Math.floor(i / 2) * 5.4, seed * 7 + i);
@@ -231,8 +249,9 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
     const rk = new Kit();
     const w = beam - 2 * walk - 0.4;
     rk.box(w, 0.16, 3.6, VMAT.paint, 0x7a7e82, 0, 0, end * 1.8);
+    rk.box(w, 0.18, 0.35, VMAT.paint, 0xe07a2a, 0, 0.01, end * 3.45);
     for (const s of [-1, 1]) {
-      rk.box(0.14, 0.45, 3.6, VMAT.paint, C.yellow, s * (w / 2 + 0.07), 0.15, end * 1.8);
+      rk.box(0.14, 0.45, 3.6, VMAT.paint, 0xe07a2a, s * (w / 2 + 0.07), 0.15, end * 1.8);
       for (let k = 0; k < 6; k++) rk.box(0.15, 0.46, 0.22, VMAT.paint, C.black, s * (w / 2 + 0.07), 0.15, end * (0.3 + k * 0.6));
     }
     pivot.add(rk.build('ramp'));
@@ -363,7 +382,8 @@ function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
   const big = length >= 20;
   const h = hull(kit, {
     length, beam, freeboard: big ? 1.4 : 1.0, draft: big ? 1.5 : 1.0, sheerBow: big ? 0.6 : 0.4, sheerStern: 0.2, stemRake: big ? 1.8 : 0.9, entry: 0.38, transom: 0.7,
-    transomRake: 0.2, flare: 0.08, bulwark: 0.9, colours: { bottom: C.antifouling, boot: C.navy, topsides: C.white, deck: C.wood, bulwarkInside: C.white, stripe: C.navy },
+    // Navy hull under white upperworks, as the river boats in the owner's photographs (E for any one boat).
+    transomRake: 0.2, flare: 0.08, bulwark: 0.9, colours: { bottom: C.antifouling, boot: C.white, topsides: C.navy, deck: C.wood, bulwarkInside: C.white, stripe: C.white },
     bootTop: 0.25, stripe: [0.35, 0.2],
   });
   const L = length;
@@ -410,10 +430,10 @@ export const STEAMER_FUNNEL_TOP = new THREE.Vector3(0, 8.6, -2.3);
 
 /**
  * The paddle steamer Kingswear Castle (1924): 34.7 m long, 5.3 m in the hull and 8.5 m over the paddle boxes,
- * paddle wheels 3 m across (F16). Drawn as a Dart river paddler: a black hull with a gold line, white upperworks,
- * the paddle boxes amidships with the bridge across them, a tall raked buff funnel with a black top just ahead
- * of the paddle shaft, a mast forward, saloons below an open promenade deck with passengers. The livery and the
- * layout are estimates (E): no photograph or drawing of her could be viewed.
+ * paddle wheels 3 m across (F16). Drawn as the owner's photograph of her shows: a black hull with a gold line,
+ * varnished saloons with white rails, a tall raked buff funnel with a black top just ahead of the paddle shaft,
+ * a varnished mast forward; the paddle boxes amidships with the bridge across them, an open promenade deck with
+ * passengers. The paddle boxes' colour and the layout's proportions are estimates (E).
  */
 function paddleSteamerModel(length: number, beamOver: number, seed: number): THREE.Group {
   const g = new THREE.Group();
@@ -464,12 +484,13 @@ function paddleSteamerModel(length: number, beamOver: number, seed: number): THR
   rail(kit, [V(-outer, by, -0.6), V(outer, by, -0.6), V(outer, by, 0.8), V(-outer, by, 0.8), V(-outer, by, -0.6)], 1.0, { spacing: 1.0, colour: white });
   kit.add(new THREE.TorusGeometry(0.45, 0.04, 6, 16), VMAT.paint, C.wood, place(0, by + 1.0, 0.1, 0, 0, 0));
   addPerson(kit, 0, by + 0.06, 0.55, 0, seed + 3);
-  // Saloons forward and aft of the boxes, white with windows, the promenade deck on their roofs.
+  // Saloons forward and aft of the boxes in varnished wood with windows (the owner's photograph of her), the
+  // promenade deck on their roofs.
   const fz = -L * 0.2;
   const fl = L * 0.26;
   const az = L * 0.19;
   const al = L * 0.24;
-  for (const [z, l] of [[fz, fl], [az, al]] as const) cabin(kit, { z, y: deck, length: l, width: hb - 0.9, height: 2.1, rFront: 0.4, rBack: 0.4, colour: white, windows: [0.38, 0.88], roof: { overhang: 0.2, thickness: 0.1, colour: C.wood } });
+  for (const [z, l] of [[fz, fl], [az, al]] as const) cabin(kit, { z, y: deck, length: l, width: hb - 0.9, height: 2.1, rFront: 0.4, rBack: 0.4, colour: 0x7d4f2c, windows: [0.38, 0.88], roof: { overhang: 0.2, thickness: 0.1, colour: white } });
   const top = deck + 2.2;
   for (const [z, l] of [[fz, fl], [az, al]] as const) {
     const w = (hb - 0.9) / 2;

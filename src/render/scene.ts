@@ -251,13 +251,16 @@ export class SceneView {
     // Direct sun: dimmed by cloud (low cloud most), warmer near the horizon; diffuse sky light grows under cloud.
     const sunVis = day * (1 - 0.75 * cloud - 0.2 * lowCloud) * Math.min(1, Math.max(0, w.sunElevationDeg / 4));
     const warm = Math.min(1, Math.max(0, (12 - w.sunElevationDeg) / 12));
-    this.sun.set(this.sunDir, 3.0 * Math.max(0, sunVis), SUN_COLOUR.setRGB(1, 0.95 - 0.25 * warm, 0.88 - 0.45 * warm));
-    // The sky's light comes mostly from the environment map; the hemisphere light only lifts the shade a
-    // little (together they flattened the scene: buildings and hills washed out to pastels).
-    this.hemi.intensity = (0.02 + 0.22 * day) * (1 + 0.8 * cloud);
-    this.hemi.color.setRGB(0.81 - 0.25 * cloud, 0.89 - 0.3 * cloud, 0.96 - 0.32 * cloud);
-    // The sky's share of the light: on a clear day roughly a fifth of the sun's on open ground (more under cloud).
-    this.scene.environmentIntensity = (0.04 + 0.4 * day) * (1 - 0.3 * cloud);
+    this.sun.set(this.sunDir, 3.5 * Math.max(0, sunVis), SUN_COLOUR.setRGB(1, 0.95 - 0.25 * warm, 0.88 - 0.45 * warm));
+    // The sky's light comes partly from the environment map (reflections, a little fill) and partly from the
+    // hemisphere light, nearly neutral above and olive below (light thrown back by the woods and fields).
+    // Matched by eye to the owner's photographs of the harbour (photo round): with the blue sky dome as most
+    // of the fill, white render read blue-grey and slate read navy; in the photographs whites are neutral.
+    this.hemi.intensity = (0.03 + 0.35 * day) * (1 + 0.6 * cloud);
+    this.hemi.color.setRGB(0.97 - 0.3 * cloud, 0.96 - 0.3 * cloud, 0.93 - 0.26 * cloud);
+    this.hemi.groundColor.setRGB(0.3, 0.29, 0.2);
+    // The sky's share through the environment map: on a clear day about a tenth of the sun's on open ground.
+    this.scene.environmentIntensity = (0.02 + 0.18 * day) * (1 - 0.3 * cloud) + 0.12 * cloud * day;
     // Fog: the visibility (σ = 3.912 / V; exp² fog reaches 98% at V when d = 1.978 / V), never thinner than
     // the scene's own haze; grey under cloud, dark at night.
     const density = Math.max(this.baseFogDensity, 1.978 / Math.max(visibilityM, 50));

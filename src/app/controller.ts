@@ -1,4 +1,5 @@
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
+import { quayPiers } from '../sim/env/quays';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
 import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
@@ -332,7 +333,7 @@ export class SimController {
           conditions: scenario.conditions,
           env: built.env,
           geo,
-          features: this.dartData?.features,
+          features: this.dartData?.features ? { ...this.dartData.features, piers: [...this.dartData.features.piers, ...quayPiers(this.dartData.quays ?? [])] } : undefined,
           course,
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
@@ -370,7 +371,7 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: f.piers });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: [...f.piers, ...quayPiers(this.dartData?.quays ?? [])] });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;
@@ -791,7 +792,7 @@ export class SimController {
     this.dartStatus = data.geo ? 'loaded' : 'unavailable';
     if (data.geo && data.manifest && this.view) {
       try {
-        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, detail: this.view.quality });
+        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, quays: data.quays, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
       } catch (err) {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });

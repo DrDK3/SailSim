@@ -91,6 +91,7 @@ ${common}
 uniform vec3 uSunDir;
 uniform vec3 uDeep;
 uniform vec3 uShallow;
+uniform vec3 uShallowBank;
 uniform vec3 uSky;
 uniform vec3 uHorizon;
 uniform vec3 uFogColor;
@@ -118,9 +119,14 @@ vec2 rippleGrad(vec2 p) {
 
 void main() {
   // Only tidal water and its banks: low ground inland (below the tide but not connected) stays dry.
+  // Distance into the water from its edge (m); far out at sea, off the mask.
+  float inWater = 60.0;
   if (uMaskBox.z > 0.0) {
     vec2 muv = (vec2(vWorld.x, -vWorld.z) - uMaskBox.xy) / uMaskBox.zw;
-    if (muv.x > 0.0 && muv.y > 0.0 && muv.x < 1.0 && muv.y < 1.0 && (texture2D(uMask, muv).r * 255.0 - 128.0) * 0.5 < -${MASK_MARGIN_M.toFixed(1)}) discard;
+    if (muv.x > 0.0 && muv.y > 0.0 && muv.x < 1.0 && muv.y < 1.0) {
+      inWater = (texture2D(uMask, muv).r * 255.0 - 128.0) * 0.5;
+      if (inWater < -${MASK_MARGIN_M.toFixed(1)}) discard;
+    }
   }
   float dist = length(cameraPosition - vWorld);
   vec4 f = seaField(vPlanar);
@@ -169,6 +175,9 @@ void main() {
   vec3 skyCol = mix(uHorizon, uSky, clamp(refl.y * 2.0, 0.0, 1.0));
   float facing = max(dot(n, viewDir), 0.0);
   vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5) * uLight;
+  // Shallows along the banks: lighter and greener over the bed (as the photographs from above show), fading
+  // out over the first 40 m (E).
+  body = mix(body, uShallowBank * uLight, (1.0 - smoothstep(4.0, 40.0, inWater)) * 0.55);
   // Light through the thin crest of a steep wave.
   body += uShallow * uLight * 0.6 * smoothstep(0.2, 0.9, h / max(f.r * 0.5, 0.02)) * steep;
   // In a puff the surface is rougher, so it reflects less sky and reads darker; the edge of a puff is darker
@@ -260,8 +269,10 @@ export class Water {
         uFieldOrigin: { value: new THREE.Vector2() },
         uFieldCell: { value: FIELD_CELL },
         uSunDir: { value: sunDir.clone().normalize() },
-        uDeep: { value: new THREE.Color(0x0b2f3d) },
-        uShallow: { value: new THREE.Color(0x1d5a63) },
+        // The estuary's green-teal (the owner's photographs from above, and the satellite picture's water).
+        uDeep: { value: new THREE.Color(0x0f3a36) },
+        uShallow: { value: new THREE.Color(0x2a6c62) },
+        uShallowBank: { value: new THREE.Color(0x3d8273) },
         uSky: { value: new THREE.Color(0x6a9ccf) },
         uHorizon: { value: new THREE.Color(0xc9dbe6) },
         uFogColor: { value: fogColor.clone() },
@@ -317,7 +328,7 @@ export class Water {
     u.uFogDensity!.value = o.fogDensity;
     // Colours are linear here; the output's sRGB encoding lifts dark values, so night needs a low floor.
     const light = 0.012 + 0.988 * o.day * o.day;
-    (u.uSky!.value as THREE.Color).setHex(0x6a9ccf).lerp(new THREE.Color(0x6f777c), o.cloud).multiplyScalar(light);
+    (u.uSky!.value as THREE.Color).setHex(0x75a0c4).lerp(new THREE.Color(0x6f777c), o.cloud).multiplyScalar(light);
     (u.uHorizon!.value as THREE.Color).setHex(0xc9dbe6).lerp(new THREE.Color(0x8e979c), o.cloud).multiplyScalar(light);
     u.uGlint!.value = o.glint;
     u.uLight!.value = light * (1 - 0.3 * o.cloud);
