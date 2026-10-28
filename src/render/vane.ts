@@ -38,7 +38,7 @@ export function vaneYaw(windFromDir: number): number {
 
 /**
  * A masthead wind vane: a spindle, the arrow along -z (into the wind) and a pair of tail fins splayed aft, the
- * vane 0.38 m long overall (a Windex 15, sold for 5-12 m boats, has a 15 in vane, S). The pivot is at the origin.
+ * vane 0.38 m long overall (a Windex 15, sold for 5-12 m boats, has a 15 in vane: SOURCES.md R2). The pivot is at the origin.
  */
 export function windexGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];

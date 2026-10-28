@@ -62,7 +62,7 @@ export type CrewBuild = 'male' | 'female';
 
 /**
  * Mean measured stature of adults (m): Scottish Health Survey 2008, ages 16 and over, men 175.0 cm and women
- * 161.3 cm (S); the figures are built to these.
+ * 161.3 cm (S, docs/SOURCES.md R1); the figures are built to these.
  */
 export const STATURE: Record<CrewBuild, number> = { male: 1.75, female: 1.613 };
 

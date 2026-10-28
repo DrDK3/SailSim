@@ -631,7 +631,7 @@
    "unit": "deg",
    "tag": "E",
    "source": "estimate",
-   "note": "Heel beyond which the rudder starts to lose grip: heeled, it works nearer the surface and draws air down its low-pressure side (ventilation) or lifts partly out. Practitioner accounts describe sudden loss of steering at large heel, after which the boat rounds up and comes upright (PBO 'Broaching'; see SOURCES.md). No Squib measurement."
+   "note": "Heel beyond which the rudder starts to lose grip: heeled, it works nearer the surface and draws air down its low-pressure side (ventilation) or lifts partly out. Practitioner accounts describe sudden loss of steering at large heel, after which the boat rounds up and comes upright (PBO 'Broaching' and others: SOURCES.md R3). No Squib measurement."
   },
   "rudderVentEndDeg": {
    "value": 80,

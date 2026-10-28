@@ -7,7 +7,7 @@ import type { NE } from '../boat/forces';
  *
  * Shelter: looking upwind from each point, a rise of h metres above the sails x metres away shelters the water
  * most from 2h to 6h downwind and not at all beyond 30h - the shape of measured shelter behind windbreaks
- * (docs/SOURCES.md W1, W2); the strongest such rise counts. A rounded valley side is not a dense windbreak
+ * (docs/SOURCES.md R4); the strongest such rise counts. A rounded valley side is not a dense windbreak
  * (which can halve the wind), so the most it takes here is 40 % (E).
  * Steering: where the valley shelters the water, the wind turns towards the line of the river (the channel
  * direction from the stream pattern), the more the more sheltered and the more obliquely it blows across the

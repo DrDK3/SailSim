@@ -2,7 +2,8 @@ import { sunPosition } from '../sim/env/sun';
 
 /**
  * When a yacht club flies its ensign (colours): hoisted at 0800 from 25 March to 20 September and at 0900 the
- * rest of the year, local time, and lowered at sunset (PBO and club flag etiquette, docs/SOURCES.md). Local
+ * rest of the year, local time, and lowered at sunset (a yacht club warrant's wording and PBO's advice,
+ * docs/SOURCES.md R7; RDYC's own practice is not published, and some clubs strike at 2100 if that is earlier). Local
  * time in Devon is GMT, or BST (GMT+1) from 01:00 GMT on the last Sunday in March to 01:00 GMT on the last
  * Sunday in October.
  */

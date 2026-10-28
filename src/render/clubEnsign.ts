@@ -6,7 +6,7 @@ import { flagDroop, flagYaw } from './vane';
 let tex: THREE.Texture | undefined;
 /**
  * The Royal Dart Yacht Club's ensign: a red ensign (the Union Flag in the canton) defaced in the fly with a
- * crown above a golden arrow (Flags of the World, docs/SOURCES.md). The drawing of the badge is simplified (E).
+ * crown above a golden arrow (Flags of the World, docs/SOURCES.md R6). The drawing of the badge is simplified (E).
  */
 function ensignTexture(): THREE.Texture | undefined {
   if (tex || typeof document === 'undefined') return tex;
