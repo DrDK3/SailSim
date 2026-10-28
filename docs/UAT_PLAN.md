@@ -1,0 +1,129 @@
+# User acceptance test plan
+
+A script for the owner (and any club testers) to accept or reject the build. It is about two hours in all; each part can be done on its own.
+
+## Before you start
+
+- **Where.** Use the published site once the `hifi` branch is merged into `main`: the Deploy workflow publishes it to GitHub Pages. Or run it locally with `npm install` then `npm run dev` (README, Quick start).
+- **What to use.** A laptop or desktop with a real graphics card and a current Chrome, Edge, Firefox or Safari. Do part 9 on a phone as well.
+- **Fill in each row.** Mark it **Pass**, **Fail** or **Note**. For a Fail, write what you did, what you saw and the scenario's start time, and take a screenshot.
+- **Saving a run.** Library → **Save replay of this run** saves the whole run as a file. Send it with the report: it plays back exactly what you saw.
+- **The judge.** It is a simplified subset of the racing rules, not an authoritative adjudication (RACING.md). Judge it for whether it is useful for training, not as a protest committee would.
+
+| Key | Action |
+|---|---|
+| A / D | Helm |
+| S / W | Ease / trim the main |
+| Q / E | Ease / trim the jib |
+| C | Change camera |
+| B | Fly back to the boat |
+| P | Pause |
+| R | Restart |
+| H | Help |
+
+## 1. First run and sailing (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 1.1 | Open the app in a fresh browser window | The welcome screen; the River Dart loads in under a minute on a normal connection | |
+| 1.2 | Take the tutorial (five minutes) | Each step (steer, trim, tack, gybe, stop) is checked as you sail; the wording is clear to a club sailor | |
+| 1.3 | Sail close-hauled, tack, bear away to a run, gybe | Sails fill on the correct side at every angle; the crew move smoothly across in tacks and gybes; the boom crosses in the gybe | |
+| 1.4 | Scenario → Boat → Squib type: try the Rondar, the classic and the B3 sails | The classic cockpit keeps water it ships; the types feel slightly different (the differences are estimates) | |
+| 1.5 | Scenario → Wind 20 kn, gusty; sail upwind and reach | The boat heels and rounds up in gusts, the auto main eases, Flatten depowers; a knockdown comes back up | |
+
+## 2. The Royal Dart Yacht Club (15 min): **the owner's check against the real building**
+
+Restart with Scenario → Start position **Off RDYC, mid-river**, Start time **15 July 2026 11:00 (UTC)**. Switch to the **Drone** camera (C) and fly round the club.
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 2.1 | Look at the club from the river, from the west | Compare with your photographs. The red-brick gable to the river has a canted bay over a gabled porch on white posts and the navy RDYC sign; the round brick turret has a conical slate roof; there is a white balcony on the south side and round the turret; the south wing is white; the roofs are steep slate with tall chimneys | |
+| 2.2 | Look along the waterfront | A stone sea wall with a white rail, and the terrace in front with tables, parasols and a marquee; the flagstaff stands in front of the turret, flying the club's ensign (crown over a golden dart) | |
+| 2.3 | Fly to the pontoon | A gangway with open rails runs from the terrace down to the pontoon head; dinghies are stored on edge, with a stacked rack carrying the RDYC sign | |
+| 2.4 | Look at the neighbours north and south | Red-brick houses with tile roofs to the north; white-rendered houses with slate to the south | |
+| 2.5 | Set the start time to 21:00 and restart | The clubhouse windows glow after dark; the ensign is lowered after sunset | |
+| 2.6 | **Note anything still wrong** (proportions, colours, missing features) | List it, ideally with a photograph from the same angle | |
+
+## 3. Robotic marks and sponsors (10 min)
+
+Library → **Practice race**, or Race → **Quick race** with 0–5 AI boats.
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 3.1 | Fly the drone to each mark | Each turning mark is a robotic mark: an inflatable on twin pontoons with a mast, a GPS dome and an amber light. It lies head to wind and rides the chop | |
+| 3.2 | Read the sponsor bands | Each mark carries one of RDYC, Ancaster, Salcombe Gin or Henri Lloyd, in plain type. With four or more marks, each name appears before any repeats | |
+| 3.3 | Restart the same race, then pick a different course | The same course shows the same names; another course deals them differently | |
+| 3.4 | Touch a mark deliberately | The judge reports a mark touch at about a metre from the mark's centre; a one-turn penalty is offered | |
+| 3.5 | **Sponsors' permission** | Confirm whether the three commercial names may appear on a public site (issue 83) | |
+
+## 4. Roads and the towns (15 min)
+
+Use the Drone camera over Dartmouth, then fly low along a street.
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 4.1 | From 80–100 m up over Dartmouth and Kingswear | Roads read as roads: dark asphalt with centre dashes and double yellows on the main streets, pale pavements, cars on the carriageways | |
+| 4.2 | Fly low (2–5 m) along the embankment and a hillside street | Kerbs, raised paving-flag pavements and gutters; roads cut into the hillside with a bank above and below; nothing sinks into the ground or floats | |
+| 4.3 | **Look closely at the edge of a road next to a pavement** | **No white or yellow glitter** along the kerb (fixed this round, but tested only on a software renderer: issue 85) | |
+| 4.4 | Watch the cars and the people for a minute | Cars stay on the roads; parked cars sit on the road surface; people walk on pavements and quays | |
+
+## 5. River traffic: the paddle steamer, ferries, trains (20 min)
+
+Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before the steamer's 11:15 cruise.
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 5.1 | Fly to the South Embankment, Dartmouth | **PS Kingswear Castle** lies alongside with passengers aboard: black hull, paddle boxes, buff funnel with a wisp of smoke | |
+| 5.2 | Restart at 10:14 UTC and watch; then restart at 10:35 and at 11:05 UTC (live play runs in real time; only replays speed up) | At 10:15 she leaves; by 10:35 she has been down past the castles and is heading up towards Greenway, smoking from her funnel; by about 11:05 she is coming back to, or lying at, the embankment | |
+| 5.3 | Sail into her side, gently | She is solid like the other ferries: the contact pushes your boat away, and a hard one can damage it | |
+| 5.4 | Set the date to a Friday (17 July 2026) or to October | She does not sail; out of season she is not there | |
+| 5.5 | Find the Totnes river boat | It is labelled **MV Cardiff Castle** (a motor vessel; the paddle steamer is the Kingswear Castle) | |
+| 5.6 | Watch the Lower Ferry, Higher Ferry, passenger ferry and a steam train at Kingswear | The Lower Ferry tug swings the float and the two units pass port to port; trains arrive and leave on the timetable | |
+| 5.7 | **Livery** | Note any colour or detail of the steamer or the Cardiff Castle that is wrong (both are estimates; E19) | |
+
+## 6. Racing (20 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 6.1 | Quick race, 5 AI boats, Good level, random conditions | The 5-4-1-0 sequence with its flags and a countdown (there are no sound signals); the AI start sensibly and race the course | |
+| 6.2 | Start early (OCS) | An individual recall (X flag); you must return | |
+| 6.3 | Meet an AI boat port and starboard | The judge's call is shown, labelled as the simplified judge | |
+| 6.4 | Finish | Results show elapsed times and any penalties | |
+| 6.5 | Coach (More → Race coach) | Tips during the race and a debrief afterwards; the advice is sensible | |
+
+## 7. Conditions and weather (10 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 7.1 | Library → Wind against tide | Short steep waves in the entrance; spray into a classic cockpit | |
+| 7.2 | Library → Fog, Rain, Evening | Visibility, rain streaks and sunset light look right; colours are not washed out | |
+| 7.3 | Scenario → Tide manual; set a low tide and sail near the edge | The boat grounds where the drying areas are; no start is placed on the mud | |
+| 7.4 | Library → the Met Office replay | Wind follows the forecast, labelled as model output with its age | |
+
+## 8. Library, replays and the editor (10 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 8.1 | Save the current scenario, reload the page, load it | It comes back as saved | |
+| 8.2 | Save a replay of a short race and open it | It plays back and reports that it matches; you can take over | |
+| 8.3 | More → Course editor: add a mark, export, import | The course round-trips; the live check flags a mark on land | |
+
+## 9. Phone (10 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 9.1 | Open the site on a phone, upright | Instruments and controls fit; the sail status reads in full ("Luffing · trim in (W)"); the sheet bars show "% eased" | |
+| 9.2 | Steer and trim with the on-screen buttons | They respond; nothing important is hidden | |
+
+## 10. Speed on your own machine (5 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 10.1 | Sail off RDYC with the chase camera, then fly the drone over the town | Smooth movement (aim: 30 frames a second or more on a laptop; this could not be measured here) | |
+| 10.2 | Note the machine and browser | e.g. "MacBook Air M2, Safari 18" | |
+
+## Accepting the build
+
+- **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
+- **Rejected** if any row fails. Each failure becomes an item for the next round.
+- Return the completed tables (or a copy of this file) with the screenshots and replays.
