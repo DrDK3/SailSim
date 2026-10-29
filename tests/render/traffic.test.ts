@@ -4,7 +4,7 @@ import type { VesselState } from '../../src/sim/env/traffic';
 
 // Labels draw text on a canvas (a browser API): plain sprites here.
 vi.mock('../../src/render/labels', () => ({ makeLabel: () => new THREE.Sprite() }));
-const { TrafficView } = await import('../../src/render/traffic');
+const { TrafficView, minehunterModel } = await import('../../src/render/traffic');
 
 /** The river traffic's models (visual only): every kind builds, within a budget, with its moving parts. */
 
@@ -72,6 +72,25 @@ describe('river traffic models', () => {
     const down = ramp();
     view.update([state('tug-float', 33, 11, { ramp: 1 })], 1, cam, false);
     expect(Math.abs(ramp() - down)).toBeGreaterThan(0.2);
+  });
+
+  it('the Hindostan (a moored Sandown-class minehunter) builds at her size, bow along -z, its mast forward of amidships', () => {
+    const ship = minehunterModel(52.5, 10.5);
+    ship.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(ship);
+    expect(box.max.z - box.min.z).toBeGreaterThan(50);
+    expect(box.max.z - box.min.z).toBeLessThan(56);
+    expect(box.max.x - box.min.x).toBeGreaterThan(9.5);
+    expect(box.max.x - box.min.x).toBeLessThan(12.5);
+    // The highest point (the masthead) lies forward of amidships.
+    let top = { y: -Infinity, z: 0 };
+    ship.traverse((m) => {
+      if (!(m instanceof THREE.Mesh)) return;
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) if (pos.getY(i) > top.y) top = { y: pos.getY(i), z: pos.getZ(i) };
+    });
+    expect(top.z).toBeLessThan(0);
+    expect(triangles(ship)).toBeLessThan(45_000);
   });
 
   it('copies of a model share its geometry; each has its own wake', () => {

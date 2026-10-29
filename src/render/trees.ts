@@ -4,10 +4,13 @@ import { BUMP_GLSL, bumpBlock } from './bump';
 /**
  * Woodland and hedgerow trees, where the satellite image (the terrain drape, Sentinel-2, 10 m) shows them: a
  * dark, green-dominant pixel is woodland (the Dart valley's hanging oak woods), a lighter green one field or
- * pasture with an occasional hedgerow tree. Trees are kept off the water and foreshore and out of the towns'
- * building footprints. Positions, sizes and kinds are drawn from a seeded hash of the place (the same trees
- * every time), not surveyed: illustrative (E). Built in chunks around the camera as instanced meshes, with a
- * coarser shape further off; beyond that the drape's colour stands for the woods.
+ * pasture with an occasional hedgerow tree. Since the photo round (the owner's photographs of the harbour), the
+ * steep valley sides outside the towns are wooded down to the rocks wherever the picture is dark or spoiled
+ * (a pale 10 m pixel of surf or sunlit rock), and the towns' gardens have trees and shrubs between the houses,
+ * as the photographs show. Trees are kept off the water and foreshore, out of building footprints and off the
+ * roads. Positions, sizes and kinds are drawn from a seeded hash of the place (the same trees every time), not
+ * surveyed: illustrative (E). Built in chunks around the camera as instanced meshes, with a coarser shape
+ * further off; beyond that the drape's colour stands for the woods.
  */
 
 export interface WoodlandInput {
@@ -18,6 +21,10 @@ export interface WoodlandInput {
   groundAt(e: number, n: number): number;
   /** Building footprints (e, n rings): no trees in them. */
   buildings?: [number, number][][];
+  /** On a road (no tree there). */
+  onRoad?: (e: number, n: number) => boolean;
+  /** The towns (garden trees and shrubs; no woodland by slope), as well as wherever houses stand. */
+  towns?: readonly { eMin: number; eMax: number; nMin: number; nMax: number }[];
 }
 
 const CHUNK = 400;
@@ -48,9 +55,10 @@ function broadleaf(detail: number): THREE.BufferGeometry {
   const pos: number[] = [];
   const nor: number[] = [];
   const col: number[] = [];
-  const leaf = new THREE.Color().setHex(0x34502a, THREE.SRGBColorSpace);
+  const leaf = new THREE.Color().setHex(0x42552c, THREE.SRGBColorSpace);
   lobes.forEach(([lx, ly, lz, r], li) => {
-    const g = new THREE.IcosahedronGeometry(r, 0).toNonIndexed();
+    const ico = new THREE.IcosahedronGeometry(r, 0);
+    const g = ico.index ? ico.toNonIndexed() : ico;
     const p = g.getAttribute('position');
     for (let i = 0; i < p.count; i++) {
       const v = new THREE.Vector3().fromBufferAttribute(p, i);
@@ -146,6 +154,10 @@ export class Woodland {
   private readonly geo = { broadNear: broadleaf(1), broadFar: broadleaf(0), coniferNear: conifer(8), coniferFar: conifer(5) };
   private readonly built = new Set<Chunk>();
   private readonly occupied: Set<number>;
+  /** 24 m cells with a building within about one cell: gardens there, not woods. */
+  private readonly settled = new Set<number>();
+  /** Building footprints on a 4 m grid, no margin (garden trees grow right up to the houses). */
+  private readonly footprint = new Set<number>();
   private frames = 0;
   /** How many trees there are in the chunks built so far (for tests and the report). */
   count = 0;
@@ -166,44 +178,92 @@ export class Woodland {
         n1 = Math.max(n1, n);
       }
       for (let i = Math.floor(e0 / 8) - 1; i <= Math.floor(e1 / 8) + 1; i++) for (let j = Math.floor(n0 / 8) - 1; j <= Math.floor(n1 / 8) + 1; j++) this.occupied.add(cellKey(i, j));
+      for (let i = Math.floor(e0 / 4); i <= Math.floor(e1 / 4); i++) for (let j = Math.floor(n0 / 4); j <= Math.floor(n1 / 4); j++) this.footprint.add(cellKey(i, j));
+      for (let i = Math.floor(e0 / 24) - 1; i <= Math.floor(e1 / 24) + 1; i++) for (let j = Math.floor(n0 / 24) - 1; j <= Math.floor(n1 / 24) + 1; j++) this.settled.add(cellKey(i, j));
     }
+  }
+
+  /** The drape's pixel (sRGB 0–255) at (e, n), or undefined off the picture. */
+  private pixel(e: number, n: number): [number, number, number] | undefined {
+    const d = this.input.drape;
+    const i = Math.floor((e - d.e0) / d.cell);
+    const j = d.ny - 1 - Math.floor((n - d.n0) / d.cell);
+    if (i < 0 || j < 0 || i >= d.nx || j >= d.ny) return undefined;
+    const k = (j * d.nx + i) * 4;
+    const px = this.input.pixels;
+    return [px[k]!, px[k + 1]!, px[k + 2]!];
   }
 
   /** Woodland density 0…1 from the drape at (e, n): dark green woods, an occasional tree in green fields. */
   density(e: number, n: number): number {
-    const d = this.input.drape;
-    const i = Math.floor((e - d.e0) / d.cell);
-    const j = d.ny - 1 - Math.floor((n - d.n0) / d.cell);
-    if (i < 0 || j < 0 || i >= d.nx || j >= d.ny) return 0;
-    const k = (j * d.nx + i) * 4;
-    const px = this.input.pixels;
-    const r = px[k]!;
-    const g = px[k + 1]!;
-    const b = px[k + 2]!;
+    const p = this.pixel(e, n);
+    if (!p) return 0;
+    const [r, g, b] = p;
     if (!(g > r * 1.12 && g > b * 1.08)) return 0;
     const lum = 0.3 * r + 0.59 * g + 0.11 * b;
-    const wood = Math.min(1, Math.max(0, (68 - lum) / 14));
+    const wood = Math.min(1, Math.max(0, (72 - lum) / 14));
     const hedge = lum < 100 ? 0.012 : 0;
-    return Math.max(wood * 0.85, hedge);
+    return Math.max(wood * 0.92, hedge);
+  }
+
+  /**
+   * Woods on a steep bank (outside the towns) where the picture cannot be trusted: dark of any hue (woods
+   * shading the water's edge) or pale and grey (surf, sunlit rock, a white boat). Steep green fields keep
+   * their grass. 0…1.
+   */
+  steepWood(e: number, n: number, slope: number): number {
+    const p = this.pixel(e, n);
+    if (!p) return 0;
+    const [r, g, b] = p;
+    const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+    const sat = Math.max(r, g, b) - Math.min(r, g, b);
+    const dark = lum < 82 ? 1 : 0;
+    const pale = lum > 105 && sat < 30 ? 0.8 : 0;
+    const k = Math.min(1, Math.max(0, (slope - 0.32) / 0.22));
+    return k * Math.max(dark, pale) * 0.9;
   }
 
   private plant(ce: number, cn: number): TreeList {
     const broad: number[] = [];
     const con: number[] = [];
+    const towns = this.input.towns ?? [];
+    const G = (e: number, n: number) => this.input.groundAt(e, n);
     for (let n = cn; n < cn + CHUNK; n += SPACING) {
       for (let e = ce; e < ce + CHUNK; e += SPACING) {
         const x = e + (hash(e, n, 1) - 0.5) * SPACING * 0.9;
         const y = n + (hash(e, n, 2) - 0.5) * SPACING * 0.9;
-        const p = this.density(x, y);
+        const town = towns.some((t) => x >= t.eMin && x <= t.eMax && y >= t.nMin && y <= t.nMax) || this.settled.has(cellKey(Math.floor(x / 24), Math.floor(y / 24)));
+        let p = this.density(x, y);
+        let garden = false;
+        if (p < 0.5) {
+          const ground0 = G(x, y);
+          if (!(ground0 > SHORE_ODN)) continue;
+          const slope = Math.hypot(G(x + 3, y) - G(x - 3, y), G(x, y + 3) - G(x, y - 3)) / 6;
+          if (town) {
+            // Gardens: a tree or a shrub on most open plots, more on the steep gardens of the hillsides (E).
+            const g = 0.5 + 0.3 * Math.min(1, slope / 0.5);
+            if (g > p) {
+              p = g;
+              garden = true;
+            }
+          } else p = Math.max(p, this.steepWood(x, y, slope));
+        }
         if (p <= 0 || hash(e, n, 3) > p) continue;
-        if (this.occupied.has(cellKey(Math.floor(x / 8), Math.floor(y / 8)))) continue;
-        const ground = this.input.groundAt(x, y);
+        if (garden ? this.footprint.has(cellKey(Math.floor(x / 4), Math.floor(y / 4))) : this.occupied.has(cellKey(Math.floor(x / 8), Math.floor(y / 8)))) continue;
+        const ground = G(x, y);
         if (!(ground > SHORE_ODN)) continue;
-        const isConifer = hash(e, n, 4) < 0.12;
-        const h = isConifer ? 12 + 9 * hash(e, n, 5) : 10 + 8 * hash(e, n, 5);
+        if ((town || garden) && this.input.onRoad?.(x, y)) continue;
+        const isConifer = hash(e, n, 4) < (garden ? 0.18 : 0.1);
+        let h = isConifer ? 12 + 9 * hash(e, n, 5) : 10 + 8 * hash(e, n, 5);
         // Crowns wider than the spacing in woodland, so the canopy closes over.
-        const crown = isConifer ? 3.6 + 1.8 * hash(e, n, 6) : (p > 0.3 ? 9 : 7) + 4 * hash(e, n, 6);
-        (isConifer ? con : broad).push(x, y, ground - 0.4, crown, h, hash(e, n, 7) * Math.PI * 2, hash(e, n, 8));
+        let crown = isConifer ? 3.6 + 1.8 * hash(e, n, 6) : (p > 0.3 ? 10 : 7) + 4 * hash(e, n, 6);
+        if (garden) {
+          // Garden trees and shrubs: smaller, and half of them bushes (E).
+          const shrub = hash(e, n, 9) < 0.5;
+          h = shrub ? 2 + 1.5 * hash(e, n, 5) : 5 + 5 * hash(e, n, 5);
+          crown = shrub ? 2.4 + 1.6 * hash(e, n, 6) : (isConifer ? 3 : 4.5) + 3 * hash(e, n, 6);
+        }
+        (isConifer ? con : broad).push(x, y, ground - (garden ? 0.2 : 0.4), crown, h, hash(e, n, 7) * Math.PI * 2, hash(e, n, 8));
       }
     }
     return { broad: Float32Array.from(broad), conifer: Float32Array.from(con) };
@@ -221,10 +281,11 @@ export class Woodland {
       q.setFromAxisAngle(Y, list[o + 5]!);
       mat.compose(new THREE.Vector3(list[o]!, list[o + 2]!, -list[o + 1]!), q, new THREE.Vector3(list[o + 3]!, list[o + 4]!, list[o + 3]!));
       m.setMatrixAt(k, mat);
-      // Greens from dark oak to lighter ash and birch, a few yellowing.
+      // Greens from dark oak and holm oak to lighter ash and birch, a few yellowing (the photographs' woods
+      // are olive, not emerald).
       const t = list[o + 6]!;
-      c.setRGB(0.78 + 0.22 * t, 0.8 + 0.2 * t, 0.78 + 0.08 * t);
-      if (t > 0.95) c.setRGB(1.12, 1.0, 0.62);
+      c.setRGB(0.74 + 0.4 * t, 0.8 + 0.3 * t, 0.78 + 0.02 * t);
+      if (t > 0.94) c.setRGB(1.2, 1.06, 0.6);
       m.setColorAt(k, c);
     }
     m.instanceMatrix.needsUpdate = true;

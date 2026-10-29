@@ -1,4 +1,5 @@
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
+import { quayPiers } from '../sim/env/quays';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
 import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
@@ -12,7 +13,7 @@ import { courseFor, type CourseChoice } from './courseLibrary';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { RaceEvent } from '../sim/course/judge';
 import { DART_LEVELS, type CourseIssue } from '../sim/course/validate';
-import { createRace, practiceLineLength, startClearWater, startPositions, type ClearWater } from '../sim/race/setup';
+import { createRace, practiceLineLength, raceStructures, startClearWater, startPositions, type ClearWater } from '../sim/race/setup';
 import { Fleet } from '../sim/race/fleet';
 import type { RaceSession, LogEntry } from '../sim/race/session';
 import type { Flag, PrepFlag, ResultRow } from '../sim/race/committee';
@@ -31,6 +32,9 @@ import { TUTORIAL_INPUT, TUTORIAL_SCENARIO, Tutorial, type TutorialState } from 
 import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
+import { SoundScape, type AudioSettings } from '../render/audio';
+import type { GraphicsSettings } from '../render/graphics';
+import { lightingStart, type LightingPreset } from './lighting';
 
 /**
  * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
@@ -188,6 +192,13 @@ export interface UiState {
   fleet: { id: string; n: number; e: number; heading: number; colour: number; label: string }[];
   /** The user's latest contact with a boat, mark, moored boat or ferry, for 8 s after it happened. */
   contact?: string;
+  /** Graphics and sound settings (the panel), and the scenery detail the view was built with. */
+  showSettings: boolean;
+  graphics?: GraphicsSettings;
+  sceneryBuilt?: 'high' | 'low';
+  shadowsBuilt?: 'standard' | 'fine';
+  audio: AudioSettings;
+  audioRunning: boolean;
 }
 
 type Listener = () => void;
@@ -332,7 +343,7 @@ export class SimController {
           conditions: scenario.conditions,
           env: built.env,
           geo,
-          features: this.dartData?.features,
+          features: this.dartData?.features ? { ...this.dartData.features, piers: [...this.dartData.features.piers, ...quayPiers(this.dartData.quays ?? [])] } : undefined,
           course,
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
@@ -343,7 +354,7 @@ export class SimController {
             params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             // Either way in clear water (not on the mud of a river bank).
-            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) }))) : undefined),
+            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(feats, geo), ...quayPiers(this.dartData?.quays ?? [])]) : undefined),
           },
           committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
           traffic,
@@ -370,7 +381,7 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: f.piers });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...quayPiers(this.dartData?.quays ?? [])] });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;
@@ -712,7 +723,7 @@ export class SimController {
         id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
         mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
         mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
-        rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, sailsDown: sn.damage.rig >= 1, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater,
+        rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, sailsDown: sn.damage.rig >= 1, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater, stw: sn.stw,
       });
     }
     this.fleetCurr = m;
@@ -791,7 +802,7 @@ export class SimController {
     this.dartStatus = data.geo ? 'loaded' : 'unavailable';
     if (data.geo && data.manifest && this.view) {
       try {
-        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, detail: this.view.quality });
+        this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, quays: data.quays, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
       } catch (err) {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
@@ -824,6 +835,8 @@ export class SimController {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    window.addEventListener('pointerdown', this.onGesture);
+    document.addEventListener('visibilitychange', this.onVisibility);
     void this.discoverSources();
     this.publish(true);
   }
@@ -833,6 +846,9 @@ export class SimController {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+    window.removeEventListener('pointerdown', this.onGesture);
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    this.sound.dispose();
     this.view?.dispose();
     this.view = undefined;
   }
@@ -850,7 +866,8 @@ export class SimController {
   }
 
   private frame(now: number): void {
-    const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
+    // Never backwards: a frame's timestamp can fall a little before a clock reading taken on resume.
+    const dt = Math.max(0, Math.min(0.1, (now - this.lastFrame) / 1000));
     this.lastFrame = now;
     if (!this.paused) {
       const t0 = performance.now();
@@ -913,7 +930,64 @@ export class SimController {
       this.frames = 0;
       this.fpsT0 = now;
     }
+    this.updateSound(now);
     if (now - this.lastPublish > 100) this.publish();
+  }
+
+  // --------------------------------------------------------------- sound, graphics, lighting
+
+  readonly sound = new SoundScape();
+  private showSettings = false;
+  private lastBoomT = -1;
+  private harbour = { at: -Infinity, value: 0 };
+  private onGesture = () => this.sound.resume();
+  private onVisibility = () => this.sound.setHidden(document.hidden);
+
+  /** The sounds follow the boat as drawn (the latest physics state). */
+  private updateSound(now: number): void {
+    const c = this.currSnap;
+    const boom = c.lastBoomEvent?.t ?? -1;
+    const crossed = boom !== this.lastBoomT && boom > this.lastBoomT;
+    this.lastBoomT = boom;
+    // Moored boats near (their halyards), once a second: the nearest mooring within 180 m.
+    if (now - this.harbour.at > 1000) {
+      this.harbour.at = now;
+      let best = Infinity;
+      for (const m of this.dartData?.features?.moorings ?? []) best = Math.min(best, (m.n - c.n) ** 2 + (m.e - c.e) ** 2);
+      this.harbour.value = Math.max(0, 1 - Math.sqrt(best) / 180);
+    }
+    this.sound.update({ aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed, harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended });
+  }
+
+  setAudio(a: AudioSettings): void {
+    this.sound.resume();
+    this.sound.setSettings(a);
+    this.publish(true);
+  }
+
+  toggleMute(): void {
+    this.setAudio({ ...this.sound.settings, muted: !this.sound.settings.muted });
+  }
+
+  toggleSettings(force?: boolean): void {
+    this.showSettings = force ?? !this.showSettings;
+    this.publish(true);
+  }
+
+  /** Apply and keep graphics settings (scenery detail and shadows need a reload of the page). */
+  setGraphics(g: GraphicsSettings): void {
+    this.view?.applyGraphics(g, true);
+    this.publish(true);
+  }
+
+  /**
+   * Restart at the time of day (and with the sky) of a lighting preset on the scenario's date; the wind and
+   * everything else are kept, and the tide follows the new time.
+   */
+  setLighting(preset: LightingPreset): void {
+    const c = this.scenario.conditions;
+    const l = lightingStart(c.startTime, preset, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+    this.restart({ ...this.scenario, conditions: { ...c, startTime: l.startTime, sky: { source: 'preset', preset: l.sky } } });
   }
 
   // --------------------------------------------------------------- inputs
@@ -1094,6 +1168,8 @@ export class SimController {
   };
 
   private onKeyDown = (ev: KeyboardEvent) => {
+    // Browsers let sound start only after the user has pressed a key or clicked.
+    this.sound.resume();
     const t = ev.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
     const held = SimController.KEYMAP[ev.code];
@@ -1112,6 +1188,7 @@ export class SimController {
       case 'KeyP': this.togglePause(); break;
       case 'KeyR': this.requestReset(); break;
       case 'KeyC': this.cycleCamera(); break;
+      case 'KeyU': this.toggleMute(); break;
       case 'KeyB': this.centreDrone(); break;
       case 'KeyF': this.toggleForces(); break;
       case 'KeyG': this.toggleDebug(); break;
@@ -1119,7 +1196,7 @@ export class SimController {
       case 'KeyL': this.toggleLabels(); break;
       case 'KeyN': this.toggleMinimap(); break;
       case 'KeyH': case 'Slash': this.toggleHelp(); break;
-      case 'Escape': this.toggleHelp(false); this.togglePolar(false); this.toggleLayers(false); break;
+      case 'Escape': this.toggleHelp(false); this.togglePolar(false); this.toggleLayers(false); this.toggleSettings(false); break;
       default: return;
     }
     ev.preventDefault();
@@ -1198,6 +1275,12 @@ export class SimController {
       showResults: this.showResults,
       fleet: (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, n: b.sim.state.n, e: b.sim.state.e, heading: b.sim.state.psi, colour: b.colour, label: b.sailNumber })),
       contact: this.contactText(),
+      showSettings: this.showSettings,
+      graphics: this.view?.graphics,
+      sceneryBuilt: this.view?.sceneryBuilt,
+      shadowsBuilt: this.view?.shadowsBuilt,
+      audio: this.sound.settings,
+      audioRunning: this.sound.running,
     };
     for (const l of this.listeners) l();
   }

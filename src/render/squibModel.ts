@@ -5,6 +5,7 @@ import type { SquibTypeId } from '../sim/boat/squib';
 import { CrewFigure, type BodyFrame, type CrewBuild, type CrewPose } from './crew';
 import { Burgee, BURGEE_STICK } from './burgee';
 import { nonSlipTexture, sailTexture, transomTexture, woodTexture } from './squibTextures';
+import { addTranslucency, addWetBand } from './materialFx';
 
 /**
  * Procedural Squib. Principal dimensions come from the class data (LOA, beam, draft, mast, boom, sail
@@ -28,6 +29,41 @@ export interface SailShapeInput {
    * the wind runs along it (luffing). From `sailFill`.
    */
   fill: number;
+}
+
+/**
+ * A sail's set as the physics has it: how deep (camber, × the drawing sail's), where the draft lies (share of
+ * the chord), how much the leech twists open beyond its usual (deg), and how a flogging sail moves (angular
+ * frequency rad/s, amplitude as a share of the chord). From the flatten control, the sheet and the apparent
+ * wind (`sailTrim`).
+ */
+export interface SailTrim {
+  depth: number;
+  draft: number;
+  twist: number;
+  flutterW: number;
+  flutterAmp: number;
+}
+
+const DEFAULT_TRIM: SailTrim = { depth: 1, draft: 0.42, twist: 0, flutterW: 14, flutterAmp: 0.06 };
+
+/**
+ * The set of a sail from the controls and the wind (visual, consistent with the physics' flattening): the
+ * flatten control takes up to a third of the depth out and pulls the draft forward (cunningham) while twisting
+ * the leech open (kicker eased at the head); easing the sheet lets the leech twist further; a breeze stretches
+ * the cloth, moving the draft aft; a flogging sail beats faster and harder in more wind (E for all amounts).
+ * `ease`: 0 sheeted hard … 1 fully eased; `aws` apparent wind (m/s).
+ */
+export function sailTrim(flatten: number, ease: number, aws: number): SailTrim {
+  const f = Math.min(1, Math.max(0, flatten));
+  const e = Math.min(1, Math.max(0, ease));
+  return {
+    depth: 1 - 0.35 * f,
+    draft: 0.41 - 0.06 * f + 0.05 * smoothstep(4, 10, aws),
+    twist: 10 * e + 6 * f,
+    flutterW: 2 * Math.PI * (1.2 + 0.45 * Math.min(aws, 16)),
+    flutterAmp: 0.045 + 0.03 * smoothstep(2, 10, aws),
+  };
 }
 
 /**
@@ -117,6 +153,8 @@ const MAT = {
   tiller: new THREE.MeshPhysicalMaterial({ color: 0xc8a684, roughness: 0.4, clearcoat: 1 }),
   water: new THREE.MeshPhysicalMaterial({ color: 0x3f7c86, roughness: 0.05, transmission: 0, transparent: true, opacity: 0.72, depthWrite: false }),
 };
+// The gelcoat at the waterline stays wet: darker and glossier (materialFx.ts).
+addWetBand(MAT.hull);
 let texturesApplied = false;
 function applyTextures(): void {
   if (texturesApplied || typeof document === 'undefined') return;
@@ -254,8 +292,12 @@ export class SquibModel {
     this.group.add(this.boom);
 
     const pkg = this.type === 'new-sails' ? 'new' : 'standard';
-    const sailMat = (kind: 'main' | 'jib') =>
-      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, side: THREE.DoubleSide, map: typeof document === 'undefined' ? null : sailTexture({ kind, package: pkg }) });
+    const sailMat = (kind: 'main' | 'jib') => {
+      const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, side: THREE.DoubleSide, map: typeof document === 'undefined' ? null : sailTexture({ kind, package: pkg }) });
+      // Sailcloth lets about a quarter of the light through: a sail seen against the sun glows (E).
+      addTranslucency(m, 0.28);
+      return m;
+    };
     this.mainGeo = this.gridGeometry(SquibModel.MAIN_U, SquibModel.MAIN_V);
     this.jibGeo = this.gridGeometry(SquibModel.JIB_U, SquibModel.JIB_V);
     const main = new THREE.Mesh(this.mainGeo, sailMat('main'));
@@ -787,9 +829,13 @@ export class SquibModel {
     time: number,
     ce: THREE.Vector3,
     flatFoot: number,
+    trim: SailTrim = DEFAULT_TRIM,
   ): void {
     const pos = geo.getAttribute('position') as THREE.BufferAttribute;
     const flog = 1 - s.luff;
+    // Draft position (share of the chord) and the NACA mean line through it, peak 1 there.
+    const p = Math.min(0.55, Math.max(0.3, trim.draft));
+    const meanLine = (x: number) => (x < p ? (2 * p * x - x * x) / (p * p) : (1 - 2 * p + 2 * p * x - x * x) / ((1 - p) * (1 - p)));
     let k = 0;
     ce.set(0, 0, 0);
     let wsum = 0;
@@ -797,19 +843,19 @@ export class SquibModel {
       const fv = v / nv;
       const luff = luffAt(fv);
       const chord = chordAt(fv);
-      const ang = s.angle + Math.sign(s.angle || 1) * (twistDeg * Math.PI / 180) * fv * s.luff;
+      const ang = s.angle + Math.sign(s.angle || 1) * ((twistDeg + trim.twist) * Math.PI / 180) * fv * s.luff;
       const cx = -Math.sin(ang);
       const cz = Math.cos(ang);
       const belly = s.fill;
       const nx = -cz * belly;
       const nz = cx * belly;
-      const camber = (0.11 * s.luff + 0.03) * (1 - 0.3 * fv) * (1 - flatFoot * (1 - smoothstep(0, 0.35, fv)));
+      const camber = (0.11 * s.luff + 0.03) * trim.depth * (1 - 0.3 * fv) * (1 - flatFoot * (1 - smoothstep(0, 0.35, fv)));
       for (let u = 0; u <= nu; u++) {
         const fu = u / nu;
-        // Draft forward of mid-chord (max depth near 40%).
-        const shape = 4 * fu * (1 - fu) * (1 + 0.35 * (1 - 2 * fu) * (1 - fu));
+        const shape = meanLine(fu);
         const depth = chord * camber * shape;
-        const wave = flog * chord * 0.06 * Math.sin(fu * 9 - time * 14 + fv * 5) * (0.3 + fu);
+        // A flogging sail: a wave running aft along the cloth, faster and larger in more wind.
+        const wave = flog * chord * trim.flutterAmp * Math.sin(fu * 9 - time * trim.flutterW + fv * 5) * (0.3 + fu);
         const off = depth + wave;
         const x = luff.x + cx * chord * fu + nx * off;
         const y = luff.y;
@@ -835,6 +881,7 @@ export class SquibModel {
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh && (o.name === 'hull' || o.name === 'hull-transom')) {
         const m = (o.material as THREE.MeshPhysicalMaterial).clone();
+        if (o.name === 'hull') addWetBand(m);
         m.color.setHex(hex);
         o.material = m;
       }
@@ -858,6 +905,10 @@ export class SquibModel {
     water?: number;
     /** The rig has failed (damage): the sails are down. */
     sailsDown?: boolean;
+    /** The flatten control (0 … 1) and how far each sheet is eased (0 hard in … 1 fully eased): the sails' set. */
+    flatten?: number;
+    mainEase?: number;
+    jibEase?: number;
   }): void {
     const { main, jib, time } = params;
     for (const o of this.group.children) if (o.name === 'mainsail' || o.name === 'jib' || o.name === 'telltale') o.visible = !params.sailsDown;
@@ -878,6 +929,7 @@ export class SquibModel {
       time,
       this.anchors.mainCE,
       flat,
+      sailTrim(params.flatten ?? 0, params.mainEase ?? 0.3, aws),
     );
 
     // Jib: luff along the forestay from tack to hounds.
@@ -895,6 +947,7 @@ export class SquibModel {
       time,
       this.anchors.jibCE,
       flat,
+      sailTrim(params.flatten ?? 0, params.jibEase ?? 0.3, aws),
     );
     const jp = this.jibGeo.getAttribute('position') as THREE.BufferAttribute;
     const clew = new THREE.Vector3(jp.getX(SquibModel.JIB_U), jp.getY(SquibModel.JIB_U), jp.getZ(SquibModel.JIB_U));

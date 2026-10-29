@@ -187,6 +187,15 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .chip.bad { background: rgba(255, 107, 94, 0.18); color: var(--bad); margin-top: 6px; }
 .chip.bad::before { content: '⚠ '; }
 .layers { position: static; width: min(900px, calc(100% - 24px)); max-height: calc(100% - 40px); overflow: auto; }
+.settings { position: static; width: min(640px, calc(100% - 24px)); max-height: calc(100% - 40px); overflow: auto; }
+.settings h4 { margin: 12px 0 6px; }
+.settings .seg { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.settings .seg button.on { outline: 2px solid currentColor; font-weight: 600; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; align-items: center; }
+.settings-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.settings-grid label.check { flex-direction: row; align-items: center; gap: 6px; }
+.settings-grid input[type='range'] { width: 100%; }
+.notice-inline { font-size: 13px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 200, 80, 0.15); }
 .layers ul { margin: 4px 0 8px; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
 .layers li { margin: 3px 0; }
 .layers .status { display: inline-block; width: auto; padding: 1px 6px; font-size: 11px; }

@@ -316,7 +316,7 @@ function makeGangway(from: { e: number; n: number }, to: { e: number; n: number;
     const posts = Math.max(2, Math.round(span / 1.2) + 1);
     for (let k = 0; k < posts; k++) parts.push(new THREE.BoxGeometry(0.05, 1.0, 0.05 / span).translate((s * width) / 2, 0.5, k / (posts - 1)));
   }
-  const rails = new THREE.Mesh(mergeGeometries(parts.map((g) => g.toNonIndexed()))!, steel);
+  const rails = new THREE.Mesh(mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)))!, steel);
   rails.name = 'gangway-rail';
   mesh.add(rails);
   return { mesh, from, to };

@@ -147,6 +147,8 @@ export class AiSkipper {
   private lastLeg = -1;
   private penaltyDir = 0;
   private holdUntil = -Infinity;
+  /** Where the boat waits once out of the race (chosen when it finishes or retires). */
+  private park?: LocalPoint;
   /** Measured leeway when sailing upwind (rad, EMA), used to predict tracks. */
   private leeway = 5 * DEG;
   /** Last tactical decision, for the debug overlay. */
@@ -486,8 +488,34 @@ export class AiSkipper {
       fn = { n: fn.n / fl, e: fn.e / fl };
       if ((last.n - fm.n) * fn.n + (last.e - fm.e) * fn.e > 0) fn = { n: -fn.n, e: -fn.e };
       const k = this.phase / 3;
-      const off = ((k % 7) - 3) * 30;
-      const park = v(fm.n + fn.n * (150 + 40 * Math.floor(k / 7)) + (fb.n - fa.n) / fl * off, fm.e + fn.e * (150 + 40 * Math.floor(k / 7)) + (fb.e - fa.e) / fl * off);
+      // Waiting spots: rows of seven, 30 m apart, from 150 m beyond the finishing line.
+      const spotAt = (j: number) => {
+        const off = ((j % 7) - 3) * 30;
+        const back = 150 + 40 * Math.floor(j / 7);
+        return v(fm.n + fn.n * back + ((fb.n - fa.n) / fl) * off, fm.e + fn.e * back + ((fb.e - fa.e) / fl) * off);
+      };
+      // Chosen once: the boat's own spot, or the nearest clear one to it (deep enough, away from piers and
+      // structures) that it can reach in a straight line clear of them.
+      if (!this.park) {
+        const reach = (q: LocalPoint) => {
+          const d = hypot2(q.n - me.n, q.e - me.e);
+          for (let x = 10; x < d; x += 10) {
+            const p = v(me.n + ((q.n - me.n) * x) / d, me.e + ((q.e - me.e) * x) / d);
+            if (W.fleet.nearStructure(p.n, p.e, 12) || !this.depthOk(t, p)) return false;
+          }
+          return true;
+        };
+        const ok = (q: LocalPoint) => this.depthOk(t, q) && !W.fleet.nearStructure(q.n, q.e, 20) && !this.inMoorings(q);
+        this.park = spotAt(k);
+        for (let j = 0; j < 28; j++) {
+          const cand = spotAt((k + j) % 28);
+          if (ok(cand) && reach(cand)) {
+            this.park = cand;
+            break;
+          }
+        }
+      }
+      const park = this.park;
       if (hypot2(park.n - me.n, park.e - me.e) < 25) return { p: park, label: 'clear of the course', lineWall: false, depower: 1, hold: true };
       return { p: park, label: 'clear of the course', lineWall: false, depower: 0.3 };
     }
@@ -811,6 +839,7 @@ export class AiSkipper {
     for (let d = 5; d <= 60; d += 5) {
       const p = v(me.n + ux * d, me.e + uy * d);
       if (!this.depthOk(sim.time, p)) return d;
+      if (this.world.fleet.nearStructure(p.n, p.e, 4)) return d;
       if (!meIn && this.inMoorings(p)) return d;
       if (this.crossesBoundary(prev, p)) return d;
       if (wall > 0 && d / sp < wall && this.crossesLine(prev, { n: p.n - prev.n, e: p.e - prev.e }, 1)) return d;
@@ -993,6 +1022,10 @@ export class AiSkipper {
         if (!this.depthOk(t, p)) cost += 6 * wgt;
         if (!meIn && this.inMoorings(p)) cost += 3 * wgt;
       }
+      // Piers, pontoons, quay walls and structures in the water: solid, so kept clear of like the bank, along
+      // the whole track (they are narrow: points 2 s apart) and on the look ahead.
+      for (let k = 4; k <= K; k += 4) if (W.fleet.nearStructure(tr[2 * k]!, tr[2 * k + 1]!, 6)) cost += 6 * (1 - k / (K + 8));
+      if (W.fleet.nearStructure(probes[3]![0].n, probes[3]![0].e, 6)) cost += 2;
       if (this.crossesBoundary(me, { n: tr[2 * 16]!, e: tr[2 * 16 + 1]! })) cost += 4;
       if (wall > 0) {
         const kw = Math.min(K, Math.floor(Math.min(wall, 10) / DT));

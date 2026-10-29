@@ -15,7 +15,7 @@ All boats share one environment, stepped once per 10 ms tick, and sail with the 
 | Turning mark, pin (robotic marks: an inflatable on twin pontoons, `src/render/robotMark.ts`) | Fixed circle of 0.9 m round the pontoons (was 0.75 m for an anchored inflatable and 0.4 m for the pin buoy), softer | k = 3×10⁴ N/m, c = 2×10³ N s/m (E) |
 | Moored boat | Box l × l/3, lying to the stream (or wind) downstream of its buoy, as drawn | hard (E) |
 | Ferry, river boat, the paddle steamer | Box on its timetabled track, moving | hard (E) |
-| Pier, jetty, pontoon (and the RDYC pontoon's gangway) | Convex pieces of the outline; floating pontoons softer on their fenders | PIER_CONTACT (E) |
+| Pier, jetty, pontoon (and the RDYC pontoon's gangway); the towns' quay walls (photo round, PHYSICS.md §16); buildings standing in the water, such as the Hindostan, BRNC's moored training ship, and huts on pontoons (fix round, `src/sim/env/structures.ts`) | Convex pieces of the outline; floating pontoons softer on their fenders; buildings in the water fixed | PIER_CONTACT (E) |
 
 **How the forces are applied:** they are computed from the states at the start of the step and held over it, so the result does not depend on the order of the boats and runs are deterministic. They act in the horizontal plane, and since the realism round a contact also heels the boat through its force at deck height, and a hard one can damage the hull, rudder or rig (PHYSICS.md §21). Marks do not move.
 
@@ -101,15 +101,15 @@ These are the **model's** own steady speeds with the AI's controls. They are mod
   - **Lay lines:** the AI tacks or gybes when the mark (or the point beside it) can be laid, plus a skill-dependent overstand.
   - **Shifts:** it sails the tack that points nearer the mark, with a hysteresis of twice the skill's shift threshold.
   - **Cone:** it comes back if it strays too far from the line to the mark.
-  - **Hazards:** it tacks away from shallow water, boundaries, mooring areas, and the starting line before the gun.
+  - **Hazards:** it tacks away from shallow water, boundaries, mooring areas, piers and structures in the water (a track passing within 6 m of one costs more, one within 4 m is a hazard: fix round), and the starting line before the gun.
 - **Marks:** the AI approaches on the tack that leaves the mark on the required side (starboard for a port rounding). It aims at a point one rounding radius beside the mark, then follows a circle round it until the judge credits the rounding. It leaves the mark astern before turning for the next one.
   - It does not tack within two rounding radii of the mark: it stalls there.
   - Close to the mark, if a shift has put it below its layline, it tacks away and comes back.
-- **Start:** each boat holds near its own starting slot (rows 60, 95, 130 m behind the line) with the sails eased. It then makes a timed run: to an approach point 25 m below its spot on the line, then close-hauled to the line. It eases the main to arrive on time, a few seconds after the signal (skill).
+- **Start:** each boat holds near its own starting slot (rows 60, 95, 130 m behind the line) with the sails eased. Slots are only placed in clear water: deep enough, outside the moorings, and (since the fix round) at least 12 m from any pier or structure in the water. It then makes a timed run: to an approach point 25 m below its spot on the line, then close-hauled to the line. It eases the main to arrive on time, a few seconds after the signal (skill).
   - **Spots:** they follow the slots' order along the line and stay well inside its ends.
   - **Over early:** the AI returns. If it ends up on the course side without starting (for example round the end of the line), it goes back behind the line.
 - **Penalties:** the AI turns when no boat is within 15 m or closing to within 12 m, and no mark is near.
-- **After finishing, or when disqualified:** the AI sails 150 m beyond the finishing line and keeps out of the way.
+- **After finishing, or when disqualified:** the AI sails about 150 m beyond the finishing line, to a spot it picks once: in water deep enough, outside the mooring areas, at least 20 m from any pier or structure, and reachable in a straight line that keeps 12 m clear of them (fix round). There it keeps out of the way.
 
 ### Collision avoidance (5 times a second)
 
@@ -195,6 +195,12 @@ It never changes the physics.
   - **A run is clean only if:** every boat finishes; no boat touches another boat, a mark, the committee boat, a moored boat or a ferry; no boat touches the bottom; and no boundary is crossed. **Touching a mark counts as a failure here**, a stricter reading than "collision".
   - The report (`out/ai-trials.json`) lists every contact with its time.
   - **Results (23 Oct 2026):** 97 of 100 runs clean (seeds 1–100), and 97 of 100 on seeds 101–200, which were never used for tuning (`npm run ai:trials -- --first 101`). Details in [PHASE5_REPORT.md](PHASE5_REPORT.md).
+- **On the river (fix round, 29 Oct 2026):** `npm run ai:trials -- --river --runs 20 --boats 5` sails the Range sausage with a 1.5 kn flood and wind 6–14 kn. 15 of 20 runs were clean and 96% of boats finished, with no groundings and no contact with any structure. The failures were:
+  - boat-on-boat contacts;
+  - mark touches;
+  - pontoon contacts, including one boat over the line early that could not beat back against the stream in 7 kn and lay pinned against the mid-river pontoons.
+
+  The river is below the Start Bay standard; see OUTSTANDING_ISSUES 93.
 - **Larger fleets:** same code, other seeds (`--boats 10`, `--boats 20`). 77% of 30 ten-boat races and 40% of 10 twenty-boat races are clean.
   - With 10 boats the contacts are mostly port–starboard around the start.
   - With 20 boats they come during the race, at crossings and roundings (no mark-room).

@@ -49,8 +49,10 @@ export interface LandmarkSpec extends Look {
 
 const BRICK = 0x9a4d3c;
 const PORTLAND = 0xe6e0d0;
-const SLATE = 0x3a3f46;
-const RUBBLE = 0x5e5952;
+// Slate as it reads in the owner's photographs: mid grey (a bluer or darker slate turns navy under the sky).
+const SLATE = 0x4a4743;
+// Grey-buff rubble, as the castles and St Petrox look in the photographs.
+const RUBBLE = 0x777168;
 const LEAD = 0x6f7d78;
 
 /** The bespoke landmarks (positions in the OSM footprints; see SOURCES.md for each description). */
@@ -64,11 +66,14 @@ export const LANDMARKS: LandmarkSpec[] = [
     shape: 'p',
     roofDrop: 3.5,
     parapet: 'cornice-balustrade',
-    // The central entrance block's tower in the middle of the 150 m river front (azimuth 141°), set in 7 m.
+    // The central entrance block's tower in the middle of the 150 m river front (azimuth 141°), set in 7 m, and
+    // the towers with cupolas on the pavilions at each end of the front (the owner's photographs from the river).
     extras: (base, top) => [
-      { kind: 'tower', at: [-639.4, 1002.1], w: 9, d: 9, bearingDeg: 50.7, fromM: base, toM: top + 9, top: 'clock-cupola', walls: BRICK, dressing: PORTLAND },
+      { kind: 'tower', at: [-639.4, 1002.1], w: 9, d: 9, bearingDeg: 50.7, fromM: base, toM: top + 13, top: 'clock-cupola', walls: BRICK, dressing: PORTLAND },
+      { kind: 'tower', at: [-704, 926], w: 6, d: 6, bearingDeg: 50.7, fromM: base, toM: top + 5, top: 'clock-cupola', walls: BRICK, dressing: PORTLAND },
+      { kind: 'tower', at: [-561, 1046], w: 6, d: 6, bearingDeg: 50.7, fromM: base, toM: top + 5, top: 'clock-cupola', walls: BRICK, dressing: PORTLAND },
     ],
-    source: 'Britannia Royal Naval College (Aston Webb, 1899–1905): Flemish-bond brick with Portland stone dressings, slate roofs, a central entrance block with a balustraded parapet and a central clock tower (Historic England list entry 1208626, via search; photographs). Tower and cupola proportions E.',
+    source: 'Britannia Royal Naval College (Aston Webb, 1899–1905): Flemish-bond brick with Portland stone dressings, slate roofs, a central entrance block with a balustraded parapet and a central clock tower (Historic England list entry 1208626, via search; photographs, including the owner\'s from the river). Tower and cupola proportions E.',
   },
   {
     id: 'dartmouth-castle',
@@ -78,7 +83,9 @@ export const LANDMARKS: LandmarkSpec[] = [
     win: WIN.slit,
     shape: 'f',
     parapet: 'battlements',
-    source: 'Dartmouth Castle gun tower (1481): stone artillery tower (Historic England photograph captions, via search). Battlement spacing E.',
+    // The square tower rising behind the round gun tower, as the owner's photographs show it from the river.
+    extras: (base, top) => [{ kind: 'tower', at: [523, -633], w: 8, d: 8, bearingDeg: 30, fromM: base, toM: top + 4.5, top: 'battlements', walls: RUBBLE, dressing: 0x8b857a }],
+    source: 'Dartmouth Castle gun tower (1481): stone artillery tower, round and square towers together at the water (Historic England photograph captions, via search; the owner\'s photographs). Battlement spacing and the square tower\'s height E.',
   },
   {
     id: 'dartmouth-castle-battery',
@@ -91,9 +98,18 @@ export const LANDMARKS: LandmarkSpec[] = [
     source: 'Dartmouth Castle, southern works (gun platforms): stone. Detail E.',
   },
   {
+    id: 'castle-tea-room',
+    at: [535, -681],
+    walls: RUBBLE,
+    roof: SLATE,
+    win: WIN.sash,
+    source: 'The castle\'s tea room (OSM): a stone building under slate, as the buildings round the castle are in the owner\'s photographs. Details E.',
+  },
+  {
     id: 'st-petrox',
     at: [509, -648],
-    walls: RUBBLE,
+    // Limewashed walls under slate, as the owner's aerial photograph shows (the tower in grey stone).
+    walls: 0xd6d2c8,
     roof: SLATE,
     win: WIN.tall,
     shape: 'g',

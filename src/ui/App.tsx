@@ -20,6 +20,7 @@ const Help = lazy(() => import('./Help').then((m) => ({ default: m.Help })));
 const Dashboard = lazy(() => import('./Dashboard').then((m) => ({ default: m.Dashboard })));
 const PolarPanel = lazy(() => import('./PolarPanel').then((m) => ({ default: m.PolarPanel })));
 const LayersPanel = lazy(() => import('./LayersPanel').then((m) => ({ default: m.LayersPanel })));
+const SettingsPanel = lazy(() => import('./SettingsPanel').then((m) => ({ default: m.SettingsPanel })));
 const ResultsPanel = lazy(() => import('./ResultsPanel').then((m) => ({ default: m.ResultsPanel })));
 const CourseEditor = lazy(() => import('./CourseEditor').then((m) => ({ default: m.CourseEditor })));
 const LibraryPanel = lazy(() => import('./LibraryPanel').then((m) => ({ default: m.LibraryPanel })));
@@ -181,6 +182,7 @@ export function App({ ctl }: { ctl: SimController }) {
               <span className="sr-only">Camera</span>
               <select value={ui.camera} onChange={(e) => ctl.setCamera(e.target.value as CameraMode)} title="Camera (C cycles)">
                 <option value="chase">Chase view</option>
+                <option value="scenic">Scenic (wide, slow orbit)</option>
                 <option value="helm">Helm (first person)</option>
                 <option value="orbit">Orbit the boat</option>
                 <option value="drone">Drone (fly and pan)</option>
@@ -208,6 +210,8 @@ export function App({ ctl }: { ctl: SimController }) {
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
                 { label: 'Force arrows', keys: 'F', checked: ui.showForces, onSelect: () => ctl.toggleForces() },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
+                { section: 'Settings', label: 'Graphics and sound', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
+                { label: ui.audio.muted ? 'Sound off' : 'Sound on', keys: 'U', checked: !ui.audio.muted, onSelect: () => ctl.toggleMute() },
                 { section: 'Physics tools', label: 'Validation dashboard', keys: 'V', checked: ui.showDashboard, onSelect: () => ctl.toggleDashboard() },
                 { label: 'Polar sweep', checked: ui.showPolar, onSelect: () => ctl.togglePolar() },
                 { label: 'Physics panel', keys: 'G', checked: ui.showDebug, onSelect: () => ctl.toggleDebug() },
@@ -263,6 +267,7 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
+      <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
       {(() => {

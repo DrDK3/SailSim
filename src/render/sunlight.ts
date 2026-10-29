@@ -14,14 +14,22 @@ import { CSM } from 'three/addons/csm/CSM.js';
 
 export type ShadowQuality = 'high' | 'low';
 
-/** High unless the renderer is a software one, or the URL asks (?quality=high|low). */
-export function shadowQuality(renderer: THREE.WebGLRenderer): ShadowQuality {
-  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('quality') : null;
-  if (q === 'high' || q === 'low') return q;
+/** The graphics renderer's name (e.g. "ANGLE (Apple, M2)", "SwiftShader"). */
+export function rendererName(renderer: THREE.WebGLRenderer): string {
   const gl = renderer.getContext();
   const info = gl.getExtension('WEBGL_debug_renderer_info');
-  const name = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-  return /swiftshader|llvmpipe|software|basic render/i.test(name) ? 'low' : 'high';
+  return String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+}
+
+/**
+ * The URL's choice (?quality=high|low) if any, else the graphics settings' (`preferred`), else high unless the
+ * renderer is a software one.
+ */
+export function shadowQuality(renderer: THREE.WebGLRenderer, preferred?: ShadowQuality): ShadowQuality {
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('quality') : null;
+  if (q === 'high' || q === 'low') return q;
+  if (preferred) return preferred;
+  return /swiftshader|llvmpipe|software|basic render/i.test(rendererName(renderer)) ? 'low' : 'high';
 }
 
 const MAX_FAR = 1100;
@@ -42,10 +50,12 @@ export class SunLight {
     private readonly scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
     quality: ShadowQuality,
+    /** Shadow map size (pixels a side): 2048, or 4096 for the Ultra preset's finer shadows. */
+    mapSize = 2048,
   ) {
     this.quality = quality;
     if (quality === 'high') {
-      this.csm = new CSM({ camera, parent: scene, cascades: 3, maxFar: MAX_FAR, mode: 'practical', shadowMapSize: 2048, lightIntensity: 3, lightNear: 1, lightFar: 4000, lightMargin: 400 });
+      this.csm = new CSM({ camera, parent: scene, cascades: 3, maxFar: MAX_FAR, mode: 'practical', shadowMapSize: mapSize, lightIntensity: 3, lightNear: 1, lightFar: 4000, lightMargin: 400 });
       this.csm.fade = true;
       for (const l of this.csm.lights) {
         l.shadow.bias = -0.0002;
@@ -54,7 +64,7 @@ export class SunLight {
     } else {
       const sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
       sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.mapSize.set(mapSize, mapSize);
       sun.shadow.normalBias = 0.02;
       const sc = sun.shadow.camera;
       sc.left = -10;

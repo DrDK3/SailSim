@@ -2,17 +2,17 @@
   "schema": "squib-course/1",
   "id": "sim-river-range",
   "name": "River: the Range sausage (simulated)",
-  "description": "Up and down the wide reach north of the Higher Ferry, between Dart Marina and Noss. Two laps; legs along the river, so a beat or a run when the wind blows up or down the river.",
+  "description": "Up and down the Range, the wide reach between Sandquay and Noss, north of the Higher Ferry. Two laps; legs along the river, so a beat or a run when the wind blows up or down the river. The starting area lies clear of the Sandquay pontoons, the Hindostan and Dart Marina.",
   "status": "simulated",
   "provenance": {
     "kind": "simulated",
-    "notes": "Invented practice course placed by the developer in deep water clear of the mooring areas and ferry tracks in the geodata. Not an RDYC course; marks are not real."
+    "notes": "Invented practice course placed by the developer in deep water clear of the mooring areas, ferry tracks, piers and structures in the geodata (moved 180 m upriver on 29 Oct 2026, so that the starting area is clear of the Sandquay pontoons, the moored training ship Hindostan and Dart Marina). Not an RDYC course; marks are not real."
   },
   "marks": [
-    { "id": "S1", "name": "Start pin (west)", "kind": "pin", "position": { "n": 1380, "e": -400 }, "source": "placed on the River Dart data (simulated)" },
-    { "id": "S2", "name": "Start boat (east)", "kind": "committee-boat", "position": { "n": 1380, "e": -310 }, "source": "placed on the River Dart data (simulated)" },
-    { "id": "T", "name": "Top mark", "kind": "inflatable", "position": { "n": 1850, "e": -440 }, "source": "placed on the River Dart data (simulated)" },
-    { "id": "B", "name": "Bottom mark", "kind": "inflatable", "position": { "n": 1470, "e": -400 }, "source": "placed on the River Dart data (simulated)" }
+    { "id": "S1", "name": "Start pin (west)", "kind": "pin", "position": { "n": 1560, "e": -430 }, "source": "placed on the River Dart data (simulated)" },
+    { "id": "S2", "name": "Start boat (east)", "kind": "committee-boat", "position": { "n": 1560, "e": -340 }, "source": "placed on the River Dart data (simulated)" },
+    { "id": "T", "name": "Top mark", "kind": "inflatable", "position": { "n": 1960, "e": -420 }, "source": "placed on the River Dart data (simulated)" },
+    { "id": "B", "name": "Bottom mark", "kind": "inflatable", "position": { "n": 1620, "e": -400 }, "source": "placed on the River Dart data (simulated)" }
   ],
   "start": { "ends": ["S1", "S2"] },
   "legs": [
