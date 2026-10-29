@@ -3,6 +3,7 @@ import { createRng } from '../math/rng';
 import type { FerryRoute } from './ferries';
 import { fairwayRoute, type FairwayInput } from './fairway';
 import { MarinaPlanner, berthOccupancy, layoutBerths, type Berth, type PierFeature } from './marinas';
+import { blendPose, landingBerths, landingWeight, type LandingClaim, type LandingPose } from './landings';
 
 /**
  * River traffic: the ferries on their OSM routes and boats coming in and out of Dart Marina. Each trip is a
@@ -504,8 +505,13 @@ export const PADDLE_STEAMER = {
   vMax: 8 * 1852 / 3600,
   accel: 0.06,
   decel: 0.08,
-  /** Alongside the South Embankment, bow downriver (E). */
-  berth: { e: -262, n: 300, heading: (200 * Math.PI) / 180 },
+  /**
+   * Her route's end off the South Embankment's Town Jetty (deep water, E), and the jetty edge she lies alongside
+   * (its outer, river side, the south end: src/sim/env/landings.ts lays the boats out along it). The heading is
+   * used only without the pier data.
+   */
+  berth: { e: -236, n: 305, heading: (184 * Math.PI) / 180 },
+  landing: { e: -246.5, n: 305 },
   /** Where she turns: off Dartmouth Castle, and up-river towards Greenway (E). */
   turnDown: { e: 380, n: -520 },
   turnUp: { e: -1000, n: 3560 },
@@ -518,7 +524,7 @@ export const PADDLE_STEAMER = {
   /** Special sailings: the Totnes trip (date, departure, back at Dartmouth). */
   specials: [{ date: '2026-09-08', dep: 15 * 60 + 30, back: 19 * 60 + 30 }],
   /** Without the depth data: down the Castle Ferry's track and back, then up the Greenway Ferry's (E). */
-  fallback: [[-262, 300], [-224, 224], [-201, 59], [-128, -232], [65, -358], [358, -454], [380, -520], [213, -400], [-75, -273], [-190, -109], [-205, 158], [-156, 378], [-81, 688], [-141, 1214], [-366, 1750], [-352, 2279], [-394, 2837], [-558, 3111], [-829, 3369], [-1000, 3560], [-829, 3369], [-474, 2978], [-352, 2687], [-387, 1953], [-250, 1486], [-73, 933], [-133, 402], [-262, 300]] as [number, number][],
+  fallback: [[-236, 305], [-224, 224], [-201, 59], [-128, -232], [65, -358], [358, -454], [380, -520], [213, -400], [-75, -273], [-190, -109], [-205, 158], [-156, 378], [-81, 688], [-141, 1214], [-366, 1750], [-352, 2279], [-394, 2837], [-558, 3111], [-829, 3369], [-1000, 3560], [-829, 3369], [-474, 2978], [-352, 2687], [-387, 1953], [-250, 1486], [-73, 933], [-133, 402], [-236, 305]] as [number, number][],
 };
 
 /** The steamer's sailings on a local date ('YYYY-MM-DD'), weekday (0 = Sunday) and month (0–11). */
@@ -578,6 +584,34 @@ export class RiverTraffic {
       }
       if (port.routes.length) this.ports.push(port);
     }
+    // Where the timetabled river boats and the steamer lie at their landings: alongside, not across the pier.
+    if (opts.piers) {
+      const claims: LandingClaim[] = [];
+      for (const sv of this.services) {
+        if (sv.spec.dwell) continue;
+        const r = sv.route;
+        const a = along(r, Math.min(30, r.length));
+        const b = along(r, Math.max(0, r.length - 30));
+        claims.push({ key: `${sv.name}|A`, at: r.pts[0]!, from: [a.e, a.n], length: sv.spec.length, beam: sv.spec.beam });
+        claims.push({ key: `${sv.name}|B`, at: r.pts[r.pts.length - 1]!, from: [b.e, b.n], length: sv.spec.length, beam: sv.spec.beam });
+      }
+      const P = PADDLE_STEAMER;
+      claims.push({ key: 'steamer', at: [P.landing.e, P.landing.n], from: [P.berth.e, P.berth.n], length: P.length, beam: P.beam });
+      this.landings = landingBerths(claims, opts.piers);
+    }
+  }
+
+  /** Where the timetabled boats and the steamer lie at their landings (empty without the piers). */
+  private landings = new Map<string, LandingPose>();
+
+  /** The pose at distance s along a route, eased into the landings at its ends (`ends`: the claims' keys). */
+  private landed(route: Route, s: number, pose: LandingPose, ends: [string, string]): LandingPose {
+    const atStart = this.landings.get(ends[0]);
+    const atEnd = this.landings.get(ends[1]);
+    let out = pose;
+    if (atStart) out = blendPose(out, atStart, landingWeight(s));
+    if (atEnd) out = blendPose(out, atEnd, landingWeight(route.length - s));
+    return out;
   }
 
   /** Where a route crosses the tracks of ferries that are restricted in their ability to manoeuvre. */
@@ -673,7 +707,8 @@ export class RiverTraffic {
         const p = along(out, q.s);
         // Beyond the map up-river (Totnes): away until she comes back.
         if (sl.to === 'totnes' && q.s > out.length - 30) return undefined;
-        return at(p.n, p.e, facingAt(trip, q.s, 12) + q.crab, true, q.v);
+        const lp = this.landed(out, q.s, { n: p.n, e: p.e, heading: facingAt(trip, q.s, 12) + q.crab }, ['steamer', sl.to === 'totnes' ? '' : 'steamer']);
+        return at(lp.n, lp.e, lp.heading, true, q.v);
       }
       if (sl.to === 'totnes' && sl.back !== undefined && out) {
         // Back down the river, timed to be alongside at the embankment at `back`.
@@ -686,11 +721,13 @@ export class RiverTraffic {
           const q = stateOnTrip(ret, epochMs);
           const p = along(home, q.s);
           if (q.s < 30) return undefined;
-          return at(p.n, p.e, facingAt(ret, q.s, 12) + q.crab, true, q.v);
+          const lp = this.landed(home, q.s, { n: p.n, e: p.e, heading: facingAt(ret, q.s, 12) + q.crab }, ['', 'steamer']);
+          return at(lp.n, lp.e, lp.heading, true, q.v);
         }
       }
     }
-    return at(P.berth.n, P.berth.e, P.berth.heading, false, 0);
+    const lie = this.landings.get('steamer') ?? { n: P.berth.n, e: P.berth.e, heading: P.berth.heading };
+    return at(lie.n, lie.e, lie.heading, false, 0);
   }
 
   private steamerTrip(route: Route, t0: number): Trip {
@@ -983,8 +1020,8 @@ export class RiverTraffic {
     const k = Math.floor((epochMs - t0) / min(interval));
     const lastK = Math.floor((day.midnight + min(Math.max(hrs.a[1], hrs.b[1])) - t0) / min(interval));
     if (k < 0) {
-      const p = along(sv.route, 0);
-      return { ...base, n: p.n, e: p.e, heading: p.dir, moving: false, sog: 0, phase: 'berthed', parts: [{ n: p.n, e: p.e, heading: p.dir, length: spec.length, beam: spec.beam }] };
+      const p = this.landed(sv.route, 0, { ...along(sv.route, 0), heading: along(sv.route, 0).dir }, [`${sv.name}|A`, `${sv.name}|B`]);
+      return { ...base, n: p.n, e: p.e, heading: p.heading, moving: false, sog: 0, phase: 'berthed', parts: [{ n: p.n, e: p.e, heading: p.heading, length: spec.length, beam: spec.beam }] };
     }
     const kk = Math.min(k, lastK);
     const fromA = kk % 2 === 0;
@@ -999,8 +1036,10 @@ export class RiverTraffic {
       if (this.tripCache.size > 256) this.tripCache.delete(this.tripCache.keys().next().value!);
     }
     const q = epochMs < trip.t1 ? stateOnTrip(trip, epochMs) : { s: route.length, v: 0, crab: 0, hold: false };
-    const p = along(route, q.s);
-    const heading = p.dir + q.crab;
+    const p0 = along(route, q.s);
+    const ends: [string, string] = fromA ? [`${sv.name}|A`, `${sv.name}|B`] : [`${sv.name}|B`, `${sv.name}|A`];
+    const p = this.landed(route, q.s, { n: p0.n, e: p0.e, heading: p0.dir + q.crab }, ends);
+    const heading = p.heading;
     const moving = epochMs < trip.t1 && k <= lastK;
     return { ...base, n: p.n, e: p.e, heading, moving, sog: moving ? q.v : 0, phase: moving ? 'underway' : 'berthed', parts: [{ n: p.n, e: p.e, heading, length: spec.length, beam: spec.beam }] };
   }

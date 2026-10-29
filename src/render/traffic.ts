@@ -5,6 +5,7 @@ import { bakedPerson } from './crew';
 import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn } from './vessels';
 import { flagDroop, flagYaw } from './vane';
 import { Exhaust } from './railway';
+import { longAxisDeg } from './landmarks';
 
 /**
  * River traffic as 3D vessels (positions and manoeuvres from src/sim/env/traffic.ts), modelled with the vessel
@@ -13,7 +14,9 @@ import { Exhaust } from './railway';
  * with the tug (Hauley IV-VI, F1) lashed alongside (F3), which the model moves on its own (it swings end for
  * end at each slip). The Higher Ferry is a cable ferry (2009, Pendennis, F5) on its two cables (F6). The
  * passenger ferry is drawn as the Dartmouth Princess (18 m, blue hull, F7) and the Totnes cruise as the Cardiff
- * Castle (30 m by 6.4 m, three decks, F8). Other shapes, colours and liveries are illustrative (E): no measured drawings were found.
+ * Castle (30 m by 6.4 m, three decks, F8; her livery and layout from the owner's photograph, P3). The Hindostan,
+ * BRNC's moored training ship, is drawn as a Sandown-class minehunter (N1). Other shapes, colours and liveries are
+ * illustrative (E): no measured drawings were found.
  * Model frame: x = starboard, y = up (0 = waterline), z = aft (bow towards -z), as the Squib's.
  */
 
@@ -375,6 +378,9 @@ function launchModel(length: number, beam: number, seed: number): THREE.Group {
   return g;
 }
 
+/** The river boats' hull navy: darker than the passenger ferry's, as the Cardiff Castle's photograph shows (P3). */
+const CARDIFF_NAVY = 0x18212f;
+
 /** A river ferry or cruise boat: the Totnes cruise as the Cardiff Castle (30 m, three decks); smaller ones shorter. */
 function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
@@ -382,9 +388,10 @@ function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
   const big = length >= 20;
   const h = hull(kit, {
     length, beam, freeboard: big ? 1.4 : 1.0, draft: big ? 1.5 : 1.0, sheerBow: big ? 0.6 : 0.4, sheerStern: 0.2, stemRake: big ? 1.8 : 0.9, entry: 0.38, transom: 0.7,
-    // Navy hull under white upperworks, as the river boats in the owner's photographs (E for any one boat).
-    transomRake: 0.2, flare: 0.08, bulwark: 0.9, colours: { bottom: C.antifouling, boot: C.white, topsides: C.navy, deck: C.wood, bulwarkInside: C.white, stripe: C.white },
-    bootTop: 0.25, stripe: [0.35, 0.2],
+    // Navy hull under white upperworks with a white band at the gunwale, as the owner's photographs of the river
+    // boats show (the Cardiff Castle's, P3; E for any other boat).
+    transomRake: 0.2, flare: 0.08, bulwark: 0.9, colours: { bottom: C.antifouling, boot: C.white, topsides: CARDIFF_NAVY, deck: C.wood, bulwarkInside: C.white, stripe: C.white },
+    bootTop: 0.25, stripe: [0.3, 0],
   });
   const L = length;
   const mz = big ? -0.02 * L : -0.18 * L;
@@ -394,18 +401,44 @@ function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
   cabin(kit, { z: mz, y: my, length: ml, width: mw, height: big ? 2.3 : 2.0, rFront: big ? 1.6 : 0.8, rBack: 0.4, rake: 0.3, tumble: 0.06, colour: C.white, windows: [0.35, 0.9], front: [0.32, 0.92], roof: { overhang: 0.12, thickness: 0.12 } });
   const top = my + (big ? 2.42 : 2.12);
   if (big) {
-    // Promenade deck: a covered part forward with the wheelhouse, open astern behind rails; funnel and people.
+    // As the owner's photograph of the Cardiff Castle shows (P3): the upper deck behind a solid white bulwark
+    // with passengers all along it; a raised wheelhouse forward; a tall white mast with a radar and flags; no
+    // funnel. Sizes are estimates (E).
     const rw = mw / 2 - 0.1;
-    rail(kit, [V(-rw, top, mz + ml / 2 - 0.2), V(-rw, top, mz - ml / 2 + 2.5), V(0, top, mz - ml / 2 + 0.6), V(rw, top, mz - ml / 2 + 2.5), V(rw, top, mz + ml / 2 - 0.2), V(-rw, top, mz + ml / 2 - 0.2)], 1.05, { spacing: 1.5 });
-    const cz = mz - ml * 0.22;
-    cabin(kit, { z: cz, y: top, length: ml * 0.36, width: mw - 0.6, height: 2.0, rFront: 1.2, rBack: 0.3, rake: 0.25, colour: C.white, windows: [0.4, 0.88], front: [0.35, 0.92], roof: { overhang: 0.15, thickness: 0.1, colour: C.navy } });
-    mast(kit, 0, top + 2.1, cz - ml * 0.1, 2.4, { radar: true });
-    const fz = cz + ml * 0.24;
-    kit.add(new THREE.CylinderGeometry(0.45, 0.55, 1.6, 16), VMAT.paint, 0xd9c08a, place(0, top + 0.8, fz));
-    kit.add(new THREE.CylinderGeometry(0.46, 0.46, 0.35, 16), VMAT.paint, C.black, place(0, top + 1.75, fz));
-    for (let i = 0; i < 2; i++) bench(kit, (i ? 1 : -1) * (rw - 0.6), top, mz + ml * 0.3, ml * 0.3, i ? -1 : 1, 4, seed + i * 9);
+    const edge = [V(-rw, top, mz + ml / 2 - 0.2), V(-rw, top, mz - ml / 2 + 2.5), V(0, top, mz - ml / 2 + 0.6), V(rw, top, mz - ml / 2 + 2.5), V(rw, top, mz + ml / 2 - 0.2)];
+    for (let k = 1; k < edge.length; k++) {
+      const [p, q] = [edge[k - 1]!, edge[k]!];
+      kit.add(new THREE.BoxGeometry(0.08, 0.95, p.distanceTo(q)), VMAT.paint, C.white, place((p.x + q.x) / 2, top + 0.47, (p.z + q.z) / 2, Math.atan2(q.x - p.x, q.z - p.z)));
+    }
+    kit.tube(edge.map((p) => V(p.x, top + 0.96, p.z)), 0.05, VMAT.paint, C.white);
+    rail(kit, [edge[4]!, edge[0]!], 1.0, { spacing: 1.2 });
+    const wz = mz - ml / 2 + 3.6;
+    cabin(kit, { z: wz, y: top, length: 3.4, width: mw - 2.6, height: 2.3, rFront: 1.0, rBack: 0.3, rake: 0.3, colour: C.white, windows: [0.42, 0.9], front: [0.36, 0.93], roof: { overhang: 0.2, thickness: 0.1, colour: C.white } });
+    const mastTop = top + 2.4 + 4.2;
+    mast(kit, 0, top + 2.4, wz + 0.7, 4.2, { radar: true });
+    // Flags from the yard (courtesy and house flags: colours E).
+    for (const [x, col] of [[-0.42, 0x1d4d8a], [0.42, 0xc8102e]] as const) kit.box(0.02, 0.32, 0.5, VMAT.paint, col, x, top + 2.4 + 4.2 * 0.7 - 0.25, wz + 0.7 + 0.26);
+    kit.box(0.02, 0.36, 0.6, VMAT.paint, C.white, 0, mastTop + 0.1, wz + 0.7 + 0.32);
+    for (let i = 0; i < 2; i++) bench(kit, (i ? 1 : -1) * (rw - 0.55), top, mz + ml * 0.14, ml * 0.56, i ? -1 : 1, 5, seed + i * 9);
     for (let i = 0; i < 3; i++) addPerson(kit, -1 + i, top, mz + ml * 0.46, Math.PI, seed + 40 + i);
-    for (const s of [-1, 1]) kit.add(new THREE.CylinderGeometry(0.3, 0.3, 1.1, 12), VMAT.paint, C.white, place(s * (rw - 0.35), top + 0.35, fz + 1.6, 0, Math.PI / 2));
+    for (let i = 0; i < 2; i++) addPerson(kit, -0.5 + i, top, wz + 2.6, 0, seed + 50 + i);
+    // The white crest on each bow (P3), drawn as a plain shield (its device not drawn).
+    const cz = -L / 2 + 0.13 * L;
+    const slope = h.half(cz + 0.5) - h.half(cz - 0.5);
+    const shield = new THREE.Shape();
+    shield.moveTo(-0.5, 0.4);
+    shield.lineTo(0.5, 0.4);
+    shield.lineTo(0.5, 0);
+    shield.quadraticCurveTo(0.45, -0.38, 0, -0.55);
+    shield.quadraticCurveTo(-0.45, -0.38, -0.5, 0);
+    shield.closePath();
+    for (const sd of [-1, 1]) {
+      const nrm = new THREE.Vector3(sd, 0, -slope).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      const m = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, nrm), up, nrm);
+      m.setPosition(V(sd * h.half(cz), h.sheer(cz) - 0.85, cz).addScaledVector(nrm, 0.04));
+      kit.add(new THREE.ExtrudeGeometry(shield, { depth: 0.03, bevelEnabled: false, curveSegments: 6 }), VMAT.paint, C.white, m);
+    }
   } else {
     // A wheelhouse-saloon forward, open well aft under a canopy.
     const az0 = mz + ml / 2 + 0.3;
@@ -418,9 +451,95 @@ function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
   for (const s of [-1, 1]) lifebuoy(kit, s * (mw / 2 + 0.02), my + 1.2, mz + ml * 0.3, s);
   ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4);
   g.add(kit.build(big ? 'river-cruiser' : 'river-ferry'));
-  navLights(g, { length: L, beam, mastY: top + (big ? 4.6 : 1.8), mastZ: mz - ml * (big ? 0.32 : 0.1), sideY: top + 0.8 });
+  navLights(g, { length: L, beam, mastY: big ? top + 6.2 : top + 1.8, mastZ: big ? mz - ml / 2 + 4.3 : mz - ml * 0.1, sideY: top + 0.8 });
   g.add(wake(beam));
   return g;
+}
+
+// ------------------------------------------------------------------ the Hindostan (moored)
+
+/**
+ * The Hindostan: Britannia Royal Naval College's static training ship off Sandquay, the former Sandown-class
+ * minehunter HMS Cromer (M103), 52.5 m by 10.5 m, renamed for the role (Wikipedia, via search). Drawn as a
+ * Sandown in naval grey: a high, flared bow, the long deckhouse with the bridge forward and a pole mast with a
+ * radar, a low funnel aft of it, the open quarterdeck with its crane, guard rails and an ensign. Bow along -z,
+ * floating at y = 0. Proportions and details are estimates (E): no photograph or drawing of her was viewed.
+ */
+export function minehunterModel(length = 52.5, beam = 10.5): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'hindostan';
+  const kit = new Kit();
+  const GREY = 0x8d9499;
+  const DARK = 0x4f5458;
+  const h = hull(kit, {
+    length, beam, freeboard: 2.6, draft: 2.3, sheerBow: 1.4, sheerStern: 0.2, stemRake: 2.4, entry: 0.4, transom: 0.85, transomRake: -0.2,
+    flare: 0.08, bulwark: 0.25, colours: { bottom: C.antifouling, boot: C.black, topsides: GREY, deck: DARK, bulwarkInside: GREY }, bootTop: 0.35,
+  });
+  const L = length;
+  // The deckhouse: from abaft the forecastle to the quarterdeck, the bridge on top forward with its windows.
+  const dz = -L * 0.06;
+  const dl = L * 0.5;
+  const dy = h.deck(dz);
+  cabin(kit, { z: dz, y: dy, length: dl, width: beam - 2.2, height: 2.6, rFront: 1.2, rBack: 0.4, colour: GREY, windows: [0.55, 0.75], roof: { overhang: 0.1, thickness: 0.12, colour: DARK } });
+  const bz = dz - dl * 0.3;
+  cabin(kit, { z: bz, y: dy + 2.72, length: L * 0.14, width: beam - 3.6, height: 2.3, rFront: 1.4, rBack: 0.3, rake: 0.35, colour: GREY, windows: [0.45, 0.85], front: [0.4, 0.9], roof: { overhang: 0.25, thickness: 0.12, colour: DARK } });
+  // Pole mast with yards and a radar, and the low funnel aft of it.
+  mast(kit, 0, dy + 5.1, bz + L * 0.09, 9, { radar: true, colour: GREY });
+  kit.box(5, 0.1, 0.1, VMAT.paint, GREY, 0, dy + 11.5, bz + L * 0.09);
+  kit.add(new THREE.CylinderGeometry(0.9, 1.1, 2.4, 14), VMAT.paint, GREY, place(0, dy + 3.8, dz + dl * 0.22));
+  kit.add(new THREE.CylinderGeometry(0.92, 0.92, 0.4, 14), VMAT.paint, C.black, place(0, dy + 5.2, dz + dl * 0.22));
+  // The gun on the forecastle, the quarterdeck's crane, guard rails round the decks.
+  const gz = -L * 0.36;
+  kit.add(new THREE.CylinderGeometry(0.7, 0.8, 0.9, 12), VMAT.paint, GREY, place(0, h.deck(gz) + 0.45, gz));
+  kit.rod(V(0, h.deck(gz) + 0.9, gz), V(0, h.deck(gz) + 1.05, gz - 2.4), 0.07, VMAT.paint, DARK);
+  const qz = L * 0.38;
+  kit.rod(V(1.5, h.deck(qz), qz), V(1.5, h.deck(qz) + 3.2, qz), 0.18, VMAT.paint, 0xd7a021);
+  kit.rod(V(1.5, h.deck(qz) + 3.2, qz), V(-1.5, h.deck(qz) + 4.2, qz + 3), 0.12, VMAT.paint, 0xd7a021);
+  for (const sd of [-1, 1]) {
+    const pts: THREE.Vector3[] = [];
+    for (let k = 0; k <= 12; k++) {
+      const z = -L * 0.42 + (k / 12) * L * 0.9;
+      pts.push(V(sd * (h.half(z) - 0.15), h.deck(z), z));
+    }
+    rail(kit, pts, 1.0, { spacing: 2, colour: GREY });
+  }
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4);
+  g.add(kit.build('hindostan'));
+  return g;
+}
+
+/**
+ * A moored ship drawn on her mapped outline (OSM maps the Hindostan as a building): the middle of the outline
+ * along its long axis, the heading towards the narrower end (the bow; the area's centroid lies towards the
+ * wider stern), and the outline's length and beam.
+ */
+export function shipOnFootprint(ring: readonly (readonly [number, number])[]): { e: number; n: number; heading: number; length: number; beam: number } {
+  const th = (longAxisDeg(ring) * Math.PI) / 180;
+  const u = [Math.sin(th), Math.cos(th)] as const;
+  const along = ring.map(([e, n]) => e * u[0] + n * u[1]);
+  const across = ring.map(([e, n]) => e * u[1] - n * u[0]);
+  const [a0, a1] = [Math.min(...along), Math.max(...along)];
+  const [c0, c1] = [Math.min(...across), Math.max(...across)];
+  // The area's centroid along the axis (shoelace).
+  let A = 0;
+  let ca = 0;
+  for (let k = 0; k < ring.length; k++) {
+    const [p, q] = [ring[k]!, ring[(k + 1) % ring.length]!];
+    const cr = p[0] * q[1] - q[0] * p[1];
+    A += cr;
+    ca += cr * ((p[0] + q[0]) * u[0] + (p[1] + q[1]) * u[1]);
+  }
+  const centroid = A !== 0 ? ca / (3 * A) : (a0 + a1) / 2;
+  const sign = centroid < (a0 + a1) / 2 ? 1 : -1;
+  const am = (a0 + a1) / 2;
+  const cm = (c0 + c1) / 2;
+  return {
+    e: am * u[0] + cm * u[1],
+    n: am * u[1] - cm * u[0],
+    heading: Math.atan2(sign * u[0], sign * u[1]),
+    length: a1 - a0,
+    beam: c1 - c0,
+  };
 }
 
 // ------------------------------------------------------------------ the paddle steamer

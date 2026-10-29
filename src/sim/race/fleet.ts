@@ -180,6 +180,11 @@ export class Fleet {
 
   private ferryCache = new Map<number, VesselState[]>();
 
+  /** Is a pier, pontoon, quay wall or structure in the water within `reach` (m) of this point? */
+  nearStructure(n: number, e: number, reach: number): boolean {
+    return this.piers?.within(n, e, reach) ?? false;
+  }
+
   /** Could a ferry be within reach of this point (inside the routes' bounding box)? */
   nearFerries(n: number, e: number): boolean {
     const b = this.ferryBox;

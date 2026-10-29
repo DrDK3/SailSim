@@ -13,7 +13,7 @@ import { courseFor, type CourseChoice } from './courseLibrary';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { RaceEvent } from '../sim/course/judge';
 import { DART_LEVELS, type CourseIssue } from '../sim/course/validate';
-import { createRace, practiceLineLength, startClearWater, startPositions, type ClearWater } from '../sim/race/setup';
+import { createRace, practiceLineLength, raceStructures, startClearWater, startPositions, type ClearWater } from '../sim/race/setup';
 import { Fleet } from '../sim/race/fleet';
 import type { RaceSession, LogEntry } from '../sim/race/session';
 import type { Flag, PrepFlag, ResultRow } from '../sim/race/committee';
@@ -344,7 +344,7 @@ export class SimController {
             params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             // Either way in clear water (not on the mud of a river bank).
-            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) }))) : undefined),
+            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(feats, geo), ...quayPiers(this.dartData?.quays ?? [])]) : undefined),
           },
           committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
           traffic,
@@ -371,7 +371,7 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: [...f.piers, ...quayPiers(this.dartData?.quays ?? [])] });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...quayPiers(this.dartData?.quays ?? [])] });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;

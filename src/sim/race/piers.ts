@@ -154,6 +154,12 @@ export class PierGrid {
     });
   }
 
+  /** Whether any piece comes within `reach` (m) of (n, e) (inside one counts). */
+  within(n: number, e: number, reach: number): boolean {
+    for (const k of this.near(n, e, reach, [])) if (distanceToConvex(this.pieces[k]!.pts, n, e) <= reach) return true;
+    return false;
+  }
+
   /** Indices of pieces whose cells are within `reach` (m) of (n, e), each once. */
   near(n: number, e: number, reach: number, out: number[] = []): number[] {
     out.length = 0;
@@ -166,4 +172,27 @@ export class PierGrid {
     }
     return out;
   }
+}
+
+/** Distance (m) from a point to a convex polygon (0 inside). */
+export function distanceToConvex(pts: readonly Vec[], n: number, e: number): number {
+  let inside = true;
+  let sign = 0;
+  let best = Infinity;
+  for (let k = 0; k < pts.length; k++) {
+    const a = pts[k]!;
+    const b = pts[(k + 1) % pts.length]!;
+    const dn = b.n - a.n;
+    const de = b.e - a.e;
+    const cross = dn * (e - a.e) - de * (n - a.n);
+    if (cross !== 0) {
+      const sg = Math.sign(cross);
+      if (sign === 0) sign = sg;
+      else if (sg !== sign) inside = false;
+    }
+    const L2 = dn * dn + de * de || 1;
+    const t = Math.min(1, Math.max(0, ((n - a.n) * dn + (e - a.e) * de) / L2));
+    best = Math.min(best, Math.hypot(n - a.n - t * dn, e - a.e - t * de));
+  }
+  return inside ? 0 : best;
 }

@@ -10,7 +10,7 @@ import { ClubEnsign } from './clubEnsign';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
-import { TrafficView } from './traffic';
+import { TrafficView, minehunterModel, shipOnFootprint } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
 import { StreetLife, TOWNS, type RoadsData } from './population';
@@ -31,6 +31,8 @@ const FAR_LOD_M = 1400;
 const SUBMERGED_ODN = -3.6; // chunks entirely below this never show (below the lowest tides)
 const FIXED_DECK_ODN = 3.0; // E: deck level of fixed jetties and quays
 const LABEL_RANGE_M = 1600;
+/** OSM buildings that are moored ships (drawn as ships; their outlines are solid in the race, sim/env/structures). */
+const MOORED_SHIPS = new Set(['Hindostan']);
 
 export interface DartSceneInput {
   manifest: ManifestFull;
@@ -146,6 +148,7 @@ export class DartScene {
     const f = input.features;
     if (f) {
       this.buildBuildings(f);
+      this.buildShips(f);
       for (const en of this.ensigns) this.fixed.add(en.group);
       this.buildPiers(f);
       this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
@@ -406,6 +409,20 @@ export class DartScene {
     return geo;
   }
 
+  // ---------------------------------------------------------------- moored ships
+
+  /** Ships OSM maps as buildings (the Hindostan off Sandquay), drawn as ships on their outlines, afloat. */
+  private buildShips(f: DartFeatures): void {
+    for (const b of f.buildings) {
+      if (!MOORED_SHIPS.has(b.n ?? '') || b.r.length < 3) continue;
+      const p = shipOnFootprint(b.r);
+      const ship = minehunterModel(p.length, p.beam);
+      ship.position.set(p.e, 0, -p.n);
+      ship.rotation.y = -p.heading;
+      this.floating.add(ship);
+    }
+  }
+
   // ---------------------------------------------------------------- buildings
 
   /**
@@ -454,6 +471,8 @@ export class DartScene {
       // marina buildings at Noss; shopfronts on the named buildings of the town streets.
       // The yacht club is modelled as itself (src/render/rdyc.ts), added after the loop.
       if (spec?.id === 'rdyc') return;
+      // The Hindostan is a moored ship that OSM maps as a building: drawn as a ship below (buildShips).
+      if (MOORED_SHIPS.has(b.n ?? '')) return;
       const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
       const chapel = !spec && !church && (b.c === 'chapel' || /chapel/i.test(b.n ?? ''));
       const ce0 = ring.reduce((a, p) => a + p[0], 0) / ring.length;

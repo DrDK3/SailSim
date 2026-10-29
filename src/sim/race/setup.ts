@@ -15,7 +15,8 @@ import { DEFAULT_WATER_LEVEL_ODN, type ControlInput, type InitialConditions, typ
 import type { AiLevel } from '../ai/skipper';
 import type { CommitteeOptions } from './committee';
 import { RaceSession, type EntrySpec } from './session';
-import type { PierInput } from './piers';
+import { PierGrid, pierPieces, type PierInput } from './piers';
+import { structuresInWater } from '../env/structures';
 
 /** The parts of the River Dart features the race needs (moored boats, mooring areas, ferries). */
 export interface RaceFeatures {
@@ -24,6 +25,8 @@ export interface RaceFeatures {
   ferries: (FerryRoute & { name: string; ram: boolean })[];
   /** Piers, jetties and pontoons (solid to the fleet); absent from older data. */
   piers?: readonly PierInput[];
+  /** Building footprints: those standing in the water are solid too (src/sim/env/structures.ts). */
+  buildings?: readonly { r: readonly (readonly [number, number])[]; n?: string | null }[];
 }
 
 export interface RaceSetup {
@@ -71,7 +74,7 @@ export type ClearWater = (n: number, e: number) => boolean;
  * Depth a starting slot needs over the draft (m), the clear run it needs ahead along its heading, how far ahead
  * is looked, and the least spacing between boats placed off the regular slots (m) (E).
  */
-export const START_CLEARANCE = { depthMarginM: 1.0, runM: 40, lookM: 80, spacingM: 15 };
+export const START_CLEARANCE = { depthMarginM: 1.0, runM: 40, lookM: 80, spacingM: 15, structureM: 12 };
 
 /** How far (m, up to `max`) a boat can go from (n, e) along a unit direction before the water is not clear. */
 function clearRun(clear: ClearWater, n: number, e: number, dn: number, de: number, max: number): number {
@@ -158,12 +161,25 @@ export function startPositions(r: ResolvedCourse, count: number, clear?: ClearWa
 
 /**
  * Clear water for starting slots on the River Dart: inside the data, at least the draft plus a margin deep at
- * the start's water level (about mean sea level when the run has no tide), and outside the mooring areas.
+ * the start's water level (about mean sea level when the run has no tide), outside the mooring areas, and at
+ * least START_CLEARANCE.structureM from any pier, pontoon, quay wall or structure standing in the water.
  */
-export function startClearWater(geo: DartGeo, waterLevelOdn: number | undefined, draft: number, moorings?: { ring: { n: number; e: number }[] }[]): ClearWater {
+export function startClearWater(geo: DartGeo, waterLevelOdn: number | undefined, draft: number, moorings?: { ring: { n: number; e: number }[] }[], structures?: readonly PierInput[]): ClearWater {
   const level = waterLevelOdn ?? DEFAULT_WATER_LEVEL_ODN;
   const need = draft + START_CLEARANCE.depthMarginM;
-  return (n, e) => geo.inDomain(n, e) && geo.depth(n, e, level) >= need && !(moorings ?? []).some((a) => pointInPolygon({ n, e }, a.ring));
+  const grid = structures?.length ? new PierGrid(pierPieces(structures)) : undefined;
+  return (n, e) =>
+    geo.inDomain(n, e) &&
+    geo.depth(n, e, level) >= need &&
+    !(moorings ?? []).some((a) => pointInPolygon({ n, e }, a.ring)) &&
+    !(grid?.within(n, e, START_CLEARANCE.structureM) ?? false);
+}
+
+/** The fixed and floating structures of the River Dart a race meets: piers and pontoons, and buildings in the water. */
+export function raceStructures(features: RaceFeatures | undefined, geo: DartGeo | undefined): PierInput[] {
+  if (!features) return [];
+  const wet = geo && features.buildings ? structuresInWater(features.buildings, (n, e) => geo.bedElevation(n, e)) : [];
+  return [...(features.piers ?? []), ...wet];
 }
 
 export interface CreatedRace {
@@ -188,7 +204,8 @@ export function createRace(s: RaceSetup): CreatedRace {
   });
   if (!v.ok || !v.resolved) throw new Error(`course "${s.course.name}" is not valid: ${v.issues.filter((i) => i.severity === 'error').map((i) => i.message).join(' ')}`);
   const total = s.aiCount + (s.human ? 1 : 0);
-  const pos = startPositions(v.resolved, total, geo ? startClearWater(geo, env.waterLevel?.(0), params.draft, restrictions?.moorings) : undefined);
+  const structures = raceStructures(s.features, geo);
+  const pos = startPositions(v.resolved, total, geo ? startClearWater(geo, env.waterLevel?.(0), params.draft, restrictions?.moorings, structures) : undefined);
   const entries: EntrySpec[] = [];
   let k = 0;
   if (s.human) {
@@ -211,7 +228,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     moored: s.features?.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })),
     ferries: s.features?.ferries,
     traffic: s.traffic,
-    piers: s.features?.piers,
+    piers: structures,
     mooringAreas: restrictions?.moorings,
     seed: s.seed,
   });
