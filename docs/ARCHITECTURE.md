@@ -207,6 +207,14 @@ A **course validator** runs in both CI and the editor. It checks that:
 - **Reset** asks first in a race that has started.
 - **Instruments:** compact by default on every screen (speed, compass, tack, heading, TWA, TWS, heel, VMG, depth); the rest and the conditions one click away, remembered. With a race, the race panel stacks under them on the left.
 - **Phones:** a separate layout below 700 px.
+- **UI v2, slice 1 ([UI_V2_REPORT.md](UI_V2_REPORT.md)):**
+  - **Design tokens:** one block at the top of `styles.css` (palette, type, spacing, shape, elevation, motion; tints by `color-mix`).
+  - **Activity button:** the first item of the toolbar names the current activity, derived from the session's own state (`src/ui/activity.ts`): free sailing, race, course, tutorial or replay.
+  - **Experience hub** (`Welcome.tsx`): four doors (Learn to sail, Free sailing, Race against AI, Scenarios), each opening an existing feature. It is the first-visit welcome and can be reopened.
+  - **Session rules on the controller:**
+    - `leaveTo(what, start)` asks "Leave the race?" when Reset would (a race between its start signal and your finish), for every path that starts another activity.
+    - `startSession` starts a scenario and un-pauses.
+    - `freeSail` leaves a course or the tutorial without touching the conditions.
 
 Panels that open on demand (scenario, library, dashboard, polar, debug, layers, course editor, results, help) are loaded when first opened (`React.lazy`); three.js and React are separate chunks (PERFORMANCE.md).
 

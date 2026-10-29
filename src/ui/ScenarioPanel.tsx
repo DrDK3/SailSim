@@ -108,7 +108,9 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
   };
 
   const apply = () => {
-    if (ctl.restart(draft)) onClose();
+    ctl.leaveTo('Applying these settings', () => {
+      if (ctl.restart(draft)) onClose();
+    });
   };
 
   return (

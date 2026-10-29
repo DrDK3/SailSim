@@ -31,12 +31,14 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
     } catch {
       // Not remembered: storage is unavailable.
     }
-    const r = ctl.startQuickRace(opts);
-    if (!r) setMessage(`Could not start: ${ctl.getState().scenarioError ?? 'invalid settings'}`);
-    else {
-      setMessage(r.note ? `${r.summary}. ${r.note}` : `${r.summary}.`);
-      onClose();
-    }
+    ctl.leaveTo('Starting a new race', () => {
+      const r = ctl.startQuickRace(opts);
+      if (!r) setMessage(`Could not start: ${ctl.getState().scenarioError ?? 'invalid settings'}`);
+      else {
+        setMessage(r.note ? `${r.summary}. ${r.note}` : `${r.summary}.`);
+        onClose();
+      }
+    });
   };
 
   return (

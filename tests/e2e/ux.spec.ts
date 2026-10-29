@@ -23,10 +23,12 @@ test.describe('first visit', () => {
   test('the welcome offers the tutorial; the tutorial teaches step by step and moves on when the goal is met', async ({ page }) => {
     test.setTimeout(180_000 * CI_SLOW);
     const errors = await ready(page);
+    // The welcome is the experience hub: four ways in, the lesson first.
     const welcome = page.getByRole('dialog', { name: 'Squib sailing simulator' });
     await expect(welcome).toBeVisible();
-    await expect(welcome.getByRole('button', { name: 'Start the tutorial' })).toBeFocused();
-    await welcome.getByRole('button', { name: 'Start the tutorial' }).click();
+    await expect(welcome.getByRole('button', { name: 'Learn to sail' })).toBeFocused();
+    for (const door of ['Free sailing', 'Race against AI', 'Scenarios']) await expect(welcome.getByRole('button', { name: door })).toBeVisible();
+    await welcome.getByRole('button', { name: 'Learn to sail' }).click();
     await expect(welcome).toBeHidden();
 
     const card = page.getByTestId('tutorial');
@@ -69,8 +71,8 @@ test.describe('first visit', () => {
 
 test('toolbar: the More menu (sections, toggles), Escape closes menus and panels, one side panel at a time', async ({ page }) => {
   const errors = await ready(page);
-  // Few controls in view: playback, camera, Race, Library and Scenario, More and Help.
-  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(7);
+  // Few controls in view: the activity button (UI v2), playback, camera, Race, Library and Scenario, More and Help.
+  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(8);
   const view = page.getByRole('button', { name: 'More', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });

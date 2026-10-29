@@ -180,6 +180,8 @@ export interface UiState {
   tutorial?: TutorialState & { finished: boolean };
   /** Reset was asked for during a race: the UI asks before throwing the race away. */
   confirmReset: boolean;
+  /** Something else was asked for during a race (what, in a few words): the UI asks before leaving the race. */
+  confirmLeave?: string;
   telemetryVersion: number;
   /** River Dart data: loading, loaded, or unavailable; plus anything that failed to load. */
   dart: { status: 'loading' | 'loaded' | 'unavailable'; issues: DartData['issues'] };
@@ -402,6 +404,7 @@ export class SimController {
       this.timeScale = 1;
     }
     this.confirmReset = false;
+    this.leave = undefined;
     // Starting anything other than the tutorial's own scenario ends the tutorial (Reset keeps it).
     if (this.tutorial && JSON.stringify(scenario) !== JSON.stringify(TUTORIAL_SCENARIO)) this.tutorial = undefined;
     this.currSnap = this.sim.snapshot(false);
@@ -529,13 +532,75 @@ export class SimController {
    * would otherwise throw the race away (error prevention). Otherwise reset at once.
    */
   requestReset(): void {
-    const judge = this.race?.session.judgeOf('you');
-    if (judge && !this.replay && this.sim.time >= judge.startSignalTime && judge.phase !== 'finished') {
+    if (this.raceAtStake()) {
       this.confirmReset = true;
       this.publish(true);
       return;
     }
     this.restart();
+  }
+
+  /** A race the user would lose by starting again or starting something else: from its start signal to your finish. */
+  private raceAtStake(): boolean {
+    const judge = this.race?.session.judgeOf('you');
+    return !!judge && !this.replay && this.sim.time >= judge.startSignalTime && judge.phase !== 'finished';
+  }
+
+  // ------------------------------------------------------- leaving the current activity
+
+  /** Waiting for the user to confirm leaving a race in progress: what would start instead. */
+  private leave?: { what: string; start: () => void };
+
+  /**
+   * Start something else: another scenario, a race, the tutorial, new settings, a replay. During a race that has
+   * started (when Reset asks too) ask first, since the race would be lost; otherwise start it at once.
+   * `what` says it in a few words ("Loading Fog in the harbour").
+   */
+  leaveTo(what: string, start: () => void): void {
+    if (this.raceAtStake()) {
+      this.leave = { what, start };
+      this.publish(true);
+      return;
+    }
+    start();
+  }
+
+  answerLeave(go: boolean): void {
+    const l = this.leave;
+    this.leave = undefined;
+    if (go && l) l.start();
+    this.publish(true);
+  }
+
+  /** Start a session and sail: a restart, then on from a pause (a new activity starts moving, as a quick race does). */
+  startSession(scenario: AppScenario): boolean {
+    if (!this.restart(scenario)) return false;
+    this.resume();
+    return true;
+  }
+
+  /**
+   * Free sailing from whatever is running: a replay hands over where it is, the tutorial ends where the boat is,
+   * and a course with its fleet is left (the place, conditions and boat stay); then the boat sails.
+   */
+  freeSail(): void {
+    if (this.replay) this.takeOver();
+    if (this.tutorial) this.tutorial = undefined;
+    if (this.race) {
+      const free = structuredClone(this.scenario);
+      delete free.course;
+      delete free.race;
+      delete free.fleet;
+      if (!this.restart(free)) return;
+    }
+    this.resume();
+  }
+
+  private resume(): void {
+    if (!this.paused) return this.publish(true);
+    this.paused = false;
+    this.lastFrame = performance.now();
+    this.publish(true);
   }
 
   answerReset(reset: boolean): void {
@@ -1235,6 +1300,7 @@ export class SimController {
       timeScale: this.timeScale,
       tutorial: this.tutorial ? { ...this.tutorial.state, finished: this.tutorial.finished } : undefined,
       confirmReset: this.confirmReset,
+      confirmLeave: this.leave?.what,
       replay: this.replay
         ? {
             title: this.replay.rec.title,

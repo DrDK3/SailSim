@@ -146,7 +146,7 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     ctx.save();
     ctx.translate(bx, by);
     ctx.rotate(s.heading);
-    ctx.fillStyle = s.grounded ? '#ff6b5e' : '#ffffff';
+    ctx.fillStyle = s.grounded ? '#f0625a' : '#ffffff';
     ctx.strokeStyle = '#0b1a24';
     ctx.beginPath();
     ctx.moveTo(0, -8);

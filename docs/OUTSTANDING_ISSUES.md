@@ -1,6 +1,6 @@
 # Outstanding issues and risks
 
-Updated: 29 Oct 2026 (graphics round: water, wake, sails, light, cameras, sound, presets; before that, the fix round)
+Updated: 29 Oct 2026 (UI v2, Phase 0 and slice 1: the audit, design tokens, the experience hub, leaving a race asks; before that, the graphics round)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
@@ -104,3 +104,9 @@ Updated: 29 Oct 2026 (graphics round: water, wake, sails, light, cameras, sound,
 | 98 | Sound is synthesised and its levels set by ear (E); there are no other boats, ferries, engines, gulls or race signals (the start sequence still has no sound signals). Browsers start sound only after a click or key press | Immersion, not information: nothing in the sound is needed to sail | Add race signals with the start sequence; recorded sounds would need licences |
 | 99 | The wake, hull foam and spray are drawn on the surface, not simulated: they do not meet other boats' waves or the shore, a sharp turn can fold the wake's ribbon over itself, and spray does not wet the deck | Looks right in normal sailing; close up in tight turns the wake can show a crease | A wake particle field or a heightfield wake on fast GPUs |
 | 100 | The new water (graphics round) reflects the sky and has lost the old speckled glints, which were aliasing; in the midday screenshots it reads paler and calmer than the old water's deep teal sparkle. The share of sky reflected (0.65 of the sky map, `skyLight`) and the ripples' strength (`uRipple`) were set by eye on a software renderer | The owner may prefer more colour and contrast | Judge in UAT 11.1; both are single numbers in `src/render/water.ts` |
+| 101 | The tutorial's Reset restarts the boat but keeps the step, whose starting sample (heading, sail side) is the one taken before the reset (UI v2 audit, T3) | After a reset mid-step, "turn 30° from where you began" measures from the old heading | Stage E: a lesson engine with a recovery path that restarts the step |
+| 102 | Free sailing starts with the main on manual and eased, so its status reads "Luffing · trim in (W)" before the user has done anything (auto-trim is on for the jib only, by design since Phase 1) (U6) | A newcomer's first message is a warning | Stage B: start a fresh free sail trimmed for the point of sail, or with both auto-trims on in the Simple interface level |
+| 103 | In a race the coach card, under the instruments and the race panel, runs off the bottom of the left column on an 800 px-high window (U7) | Part of the briefing needs scrolling | Stage B: the racing HUD fits the column (folded briefing, or a coach toast) |
+| 104 | The toolbar's labels are unchanged this slice: "Library" holds the ready-made scenarios that the hub calls Scenarios, and "Scenario" is the set-up form (U1) | Two names for one thing until Stage C | Stage C: rename (Scenarios, Set up) with the browser tests together |
+| 105 | The compass tells true from apparent wind by colour (blue, violet) and arrow length only; no label (U8) | Hard for colour-blind sailors | Stage B: label the arrows (T, A) or add a legend |
+| 106 | Below about 1100 px wide the toolbar wraps onto two rows (already so before UI v2; the activity button adds one item) | The bar covers a little more of the sky on tablets | Stage B: a compact top bar (camera as an icon menu) |
