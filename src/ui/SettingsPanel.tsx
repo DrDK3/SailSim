@@ -102,7 +102,7 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <p className="fine">Restarts the scenario at that time of day on the same date (the tide follows); the wind is kept.</p>
             <div className="seg">
               {LIGHTING_PRESETS.map((l) => (
-                <button key={l.id} title={l.detail} onClick={() => ctl.setLighting(l.id)}>
+                <button key={l.id} title={l.detail} onClick={() => ctl.leaveTo(`Changing the light to ${l.label.toLowerCase()}`, () => ctl.setLighting(l.id))}>
                   {l.label}
                 </button>
               ))}

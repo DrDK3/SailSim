@@ -37,9 +37,12 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const builtIn = builtInScenarios(ui.weatherSources, ui.dart.status === 'loaded');
 
   const load = (s: LibraryScenario) => {
-    if (!s.scenario) return;
-    if (ctl.restart(s.scenario)) setMessage(`Started "${s.title}".`);
-    else setMessage(`Could not start "${s.title}": ${ctl.getState().scenarioError ?? 'invalid settings'}`);
+    const sc = s.scenario;
+    if (!sc) return;
+    ctl.leaveTo(`Loading “${s.title}”`, () => {
+      if (ctl.startSession(sc)) setMessage(`Started "${s.title}".`);
+      else setMessage(`Could not start "${s.title}": ${ctl.getState().scenarioError ?? 'invalid settings'}`);
+    });
   };
   const save = () => {
     const ok = saveUserScenario(scenarioFile(title.trim() || 'My scenario', ui.scenario));
@@ -49,9 +52,11 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const importScenario = async (file: File) => {
     try {
       const f = parseScenarioFile(JSON.parse(await file.text()));
-      if (ctl.restart(f.scenario)) setMessage(`Imported and started "${f.title}". Save it to keep it in this browser.`);
-      else setMessage(`Imported "${f.title}" but could not start it: ${ctl.getState().scenarioError ?? 'invalid settings'}`);
       setTitle(f.title);
+      ctl.leaveTo(`Importing “${f.title}”`, () => {
+        if (ctl.startSession(f.scenario)) setMessage(`Imported and started "${f.title}". Save it to keep it in this browser.`);
+        else setMessage(`Imported "${f.title}" but could not start it: ${ctl.getState().scenarioError ?? 'invalid settings'}`);
+      });
     } catch (err) {
       setMessage(`Not imported: ${(err as Error).message}`);
     }
@@ -70,10 +75,12 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
       setMessage('Not a replay: the file is not JSON.');
       return;
     }
-    if (ctl.startReplay(json)) {
-      setMessage('Playing the replay: see the bar at the bottom.');
-      onClose();
-    } else setMessage(`Cannot play it: ${ctl.getState().scenarioError ?? 'invalid replay'}`);
+    ctl.leaveTo('Opening a replay', () => {
+      if (ctl.startReplay(json)) {
+        setMessage('Playing the replay: see the bar at the bottom.');
+        onClose();
+      } else setMessage(`Cannot play it: ${ctl.getState().scenarioError ?? 'invalid replay'}`);
+    });
   };
 
   const row = (s: LibraryScenario) => (

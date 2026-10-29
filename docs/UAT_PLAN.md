@@ -147,6 +147,19 @@ The graphics round ([GRAPHICS_REPORT.md](GRAPHICS_REPORT.md)). It was checked he
 | 11.10 | Sound: click in the view, then sail; tack, let the sails luff, sail into the moorings | Wind rising with the apparent wind, water with speed, a flutter when luffing, a thump as the boom crosses, halyards clinking near the moorings. U mutes and unmutes; each volume slider works; nothing plays before the first click | |
 | 11.11 | **Note anything that looks wrong or worse than before** | List it with a screenshot and the preset used | |
 
+## 12. Getting started and switching activity (10 min)
+
+UI v2, slice 1 ([UI_V2_REPORT.md](UI_V2_REPORT.md)).
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 12.1 | Open the site in a private window (first visit) | "Squib sailing simulator" with four choices: Learn to sail, Free sailing, Race against AI, Scenarios; the sea is live behind it; Escape or × closes it and you are sailing | |
+| 12.2 | Look at the start of the toolbar | A button says what you are doing: "Free sailing" | |
+| 12.3 | Choose it, then each door in turn | Learn to sail starts the lesson (the button says Tutorial); Race against AI opens the race set-up; Scenarios opens the library; Free sailing ends the lesson and sails on | |
+| 12.4 | Start a quick race and let the start signal go; then choose a scenario in the Library, or Free sailing from the activity button | "Leave the race?" asks first. Keep racing (or Escape) changes nothing; Leave the race starts the new activity | |
+| 12.5 | Pause, then load a scenario from the Library | The new scenario starts sailing (it does not stay paused) | |
+| 12.6 | **Look and feel** | The colours (deep navy, slate, ocean blue; teal for good, amber for advice, red for warnings) read well over the water; note anything hard to read | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

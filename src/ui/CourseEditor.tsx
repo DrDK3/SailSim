@@ -159,8 +159,10 @@ export function CourseEditor({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const sail = () => {
     const saved = saveUserCourse(course);
     const choice = saved ? { source: 'library' as const, id: course.id } : { source: 'inline' as const, course };
-    if (ctl.restart({ ...ctl.scenario, course: choice, race: ctl.scenario.race ?? { sequence: 'one-minute', startInS: 90 } })) onClose();
-    else setMessage(ui.scenarioError ?? 'Could not start this course.');
+    ctl.leaveTo('Sailing this course', () => {
+      if (ctl.restart({ ...ctl.scenario, course: choice, race: ctl.scenario.race ?? { sequence: 'one-minute', startInS: 90 } })) onClose();
+      else setMessage(ctl.getState().scenarioError ?? 'Could not start this course.');
+    });
   };
   const prov = course.provenance;
   const setProv = (patch: Partial<Course['provenance']>) => update((c) => ({ ...c, provenance: { ...c.provenance, ...patch } }));

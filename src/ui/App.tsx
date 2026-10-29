@@ -9,7 +9,9 @@ import { SKY_PRESETS } from '../sim/env/sky';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
-import { Welcome, markWelcomed, shouldWelcome } from './Welcome';
+import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
+import { activityOf } from './activity';
+import { ActivityIcon } from './icons';
 import type { CameraMode } from '../render/scene';
 import type { AppScenario } from '../app/controller';
 
@@ -61,11 +63,15 @@ export function App({ ctl }: { ctl: SimController }) {
   const toolbar = useRef<HTMLElement>(null);
   // Side panels open just below the toolbar, which wraps to two rows on narrower screens.
   const [sideTop, setSideTop] = useState<number>();
+  // The camera hint strip sits just below the toolbar, however many rows the toolbar wraps onto.
+  const [barTop, setBarTop] = useState<number>();
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [raceOpen, setRaceOpen] = useState(false);
-  const [welcome, setWelcome] = useState(shouldWelcome);
+  // The experience hub: by itself on the first visit only; the activity button brings it back.
+  const [hubFirst, setHubFirst] = useState(shouldWelcome);
+  const [hubOpen, setHubOpen] = useState(hubFirst);
   // Small screens: the toolbar folds behind a Menu button (styles.css).
   const [toolsOpen, setToolsOpen] = useState(false);
   // The sailing controls can be put away (keyboard sailors), remembered in this browser.
@@ -96,11 +102,14 @@ export function App({ ctl }: { ctl: SimController }) {
       setLibraryOpen(false);
     }
   };
-  const closeWelcome = (then?: () => void) => {
+  const closeHub = (then?: () => void) => {
     markWelcomed();
-    setWelcome(false);
+    setHubOpen(false);
+    setHubFirst(false);
     then?.();
   };
+  const activity = activityOf(ui);
+  const startTutorial = () => ctl.leaveTo('Starting the tutorial', () => ctl.startTutorial());
 
   // Escape closes the panels this component owns (the controller closes help, polar and layers).
   useEffect(() => {
@@ -114,6 +123,7 @@ export function App({ ctl }: { ctl: SimController }) {
       ctl.toggleDashboard(false);
       ctl.toggleResults(false);
       if (ctl.getState().confirmReset) ctl.answerReset(false);
+      if (ctl.getState().confirmLeave) ctl.answerLeave(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -127,6 +137,7 @@ export function App({ ctl }: { ctl: SimController }) {
       const r = nav.getBoundingClientRect();
       // On tablets the toolbar sits at the bottom (styles.css): keep the default position then.
       let top = r.top < window.innerHeight / 2 ? r.bottom + 8 : undefined;
+      setBarTop(top === undefined ? undefined : Math.round(top));
       // On phones the instruments span the top: open panels (the tutorial too) below them, not over them.
       if (window.innerWidth <= 700 && instruments) top = Math.max(top ?? 0, instruments.getBoundingClientRect().bottom + 8);
       setSideTop(top === undefined ? undefined : Math.round(top));
@@ -168,6 +179,26 @@ export function App({ ctl }: { ctl: SimController }) {
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
         <div className="tb-items">
+          {/* What you are doing, and the way to the other experiences. */}
+          <div className="tb-group">
+            <button
+              className="activity-chip"
+              data-kind={activity.kind}
+              onClick={() => {
+                setToolsOpen(false);
+                setHubOpen(true);
+              }}
+              aria-haspopup="dialog"
+              aria-label={`Activity: ${activity.label}${activity.detail ? `, ${activity.detail}` : ''}. Choose another`}
+              title={`${activity.label}${activity.detail ? ` · ${activity.detail}` : ''}: learn to sail, sail freely, race against AI or choose a scenario`}
+              data-testid="activity"
+            >
+              <ActivityIcon kind={activity.kind} />
+              <span className="chip-label">{activity.label}</span>
+              {activity.detail && <span className="chip-detail">{activity.detail}</span>}
+              <span className="chip-caret" aria-hidden="true">▾</span>
+            </button>
+          </div>
           {/* Playback: the commonest actions, first. */}
           <div className="tb-group">
             <button className="tb-primary" onClick={() => ctl.togglePause()} data-testid="pause" title="Pause or resume (P)">
@@ -202,7 +233,7 @@ export function App({ ctl }: { ctl: SimController }) {
               label="More"
               title="Tutorial, course editor, what is shown, and physics tools"
               items={[
-                { section: 'Learn and plan', label: 'Tutorial', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : ctl.startTutorial()) },
+                { section: 'Learn and plan', label: 'Tutorial', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
                 { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
@@ -242,7 +273,7 @@ export function App({ ctl }: { ctl: SimController }) {
         <Controls ctl={ctl} ui={ui} onHide={() => setControlsHidden(true)} />
       )}
       {ui.camera === 'drone' && (
-        <div className="camera-bar panel" role="group" aria-label="Drone view">
+        <div className="camera-bar panel" role="group" aria-label="Drone view" style={barTop === undefined ? undefined : { top: barTop }}>
           <span className="fine">Drag to turn · right-drag or two fingers to pan · wheel to climb</span>
           <button onClick={() => ctl.centreDrone()} title="Fly back to the boat (B)">Back to boat <kbd className="key-hint" aria-hidden="true">B</kbd></button>
           <label className="toggle" title="Carry the view along with the boat">
@@ -252,7 +283,7 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {ui.camera === 'helm' && (
-        <div className="camera-bar panel" role="note" aria-label="Helm view">
+        <div className="camera-bar panel" role="note" aria-label="Helm view" style={barTop === undefined ? undefined : { top: barTop }}>
           <span className="fine">Drag to look around · double-click to look ahead · wheel to zoom</span>
         </div>
       )}
@@ -284,7 +315,7 @@ export function App({ ctl }: { ctl: SimController }) {
             onClose={() => ctl.toggleHelp(false)}
             onTutorial={() => {
               ctl.toggleHelp(false);
-              ctl.startTutorial();
+              startTutorial();
             }}
           />
         )}
@@ -301,12 +332,28 @@ export function App({ ctl }: { ctl: SimController }) {
           </section>
         </div>
       )}
-      {welcome && (
-        <Welcome
-          onTutorial={() => closeWelcome(() => ctl.startTutorial())}
-          onLibrary={() => closeWelcome(() => openLibrary(true))}
-          onExplore={() => closeWelcome()}
+      {hubOpen && (
+        <ExperienceHub
+          first={hubFirst}
+          activity={activity}
+          onClose={() => closeHub()}
+          onLearn={() => closeHub(startTutorial)}
+          onFree={() => closeHub(() => ctl.leaveTo('Free sailing', () => ctl.freeSail()))}
+          onRace={() => closeHub(() => openRace(true))}
+          onScenarios={() => closeHub(() => openLibrary(true))}
         />
+      )}
+      {ui.confirmLeave && (
+        <div className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="leave-title" aria-describedby="leave-text" data-testid="confirm-leave">
+          <section className="panel confirm">
+            <h3 id="leave-title">Leave the race?</h3>
+            <p id="leave-text">The race is under way. {ui.confirmLeave} ends it, and the race is lost.</p>
+            <div className="row left">
+              <button className="primary" autoFocus onClick={() => ctl.answerLeave(false)}>Keep racing</button>
+              <button onClick={() => ctl.answerLeave(true)}>Leave the race</button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );
