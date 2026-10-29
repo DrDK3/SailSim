@@ -97,3 +97,29 @@ export function helmLookDir(yaw: number, pitch: number): [number, number, number
 export function cameraFloor(ground: number, waterLevel = 0): number {
   return Math.max(waterLevel, ground) + 6;
 }
+
+/**
+ * The height (m) the chase and scenic cameras follow: a slow average of the hull's heave on the waves, with a
+ * share `motion` (0 … 1, the settings' camera motion) of the wave-by-wave heave added back. At 0 the horizon
+ * stays still while the boat rides the waves in the picture; at 1 the camera rides with her (half of each wave).
+ */
+export function followHeave(smoothed: number, raw: number, motion: number): number {
+  return smoothed + (raw - smoothed) * 0.5 * Math.min(1, Math.max(0, motion));
+}
+
+/** Chase camera: how high above the water (m) for a distance behind the boat (m): the same view angle as at 15 m. */
+export function chaseHeight(distance: number): number {
+  return 5.5 * (distance / 15);
+}
+
+/**
+ * Scenic camera: a slow circle round the boat (one turn in six minutes), low over the water and well off,
+ * swinging in and out a little: bearing from the boat (rad, compass), distance (m) and height (m) at time t (s).
+ */
+export function scenicPose(t: number): { bearing: number; distance: number; height: number } {
+  return {
+    bearing: (t * 2 * Math.PI) / 360 + 0.6,
+    distance: 30 + 6 * Math.sin(t * 0.021),
+    height: 2.6 + 1.2 * (0.5 + 0.5 * Math.sin(t * 0.013 + 1)),
+  };
+}

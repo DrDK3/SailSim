@@ -16,6 +16,7 @@ A script for the owner (and any club testers) to accept or reject the build. It 
 | S / W | Ease / trim the main |
 | Q / E | Ease / trim the jib |
 | C | Change camera |
+| U | Sound on / off |
 | B | Fly back to the boat |
 | P | Pause |
 | R | Restart |
@@ -125,6 +126,26 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 |---|---|---|---|
 | 10.1 | Sail off RDYC with the chase camera, then fly the drone over the town | Smooth movement (aim: 30 frames a second or more on a laptop; this could not be measured here) | |
 | 10.2 | Note the machine and browser | e.g. "MacBook Air M2, Safari 18" | |
+| 10.3 | More → Graphics and sound: note which preset it chose, and the frames a second it shows there; try the other two | A graphics card starts on Balanced; Ultra is sharper on a high-density screen; Performance is smoother on an older laptop | |
+| 10.4 | If the view is slow, try Performance, then lower the resolution | It becomes smooth enough to sail; nothing about the sailing changes | |
+
+## 11. Graphics and sound (20 min)
+
+The graphics round ([GRAPHICS_REPORT.md](GRAPHICS_REPORT.md)). It was checked here only on a software renderer, so **your machine is the real test**.
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 11.1 | Sail off RDYC in 12 kn, chase camera; look at the water near and far | Fine ripples running with the wind near the boat, short-crested, never tiled; further off the water grows smoothly duller and rougher, with **no shimmer or crawling** | |
+| 11.2 | Look along the sun's direction (Settings → Light → Golden hour) | A glitter path of sun on the water; the sky and the water warm; distant hills fade into warm haze toward the sun and bluer haze away from it | |
+| 11.3 | Look back at the wake at 5 kn, then put the helm over | A churned white centre that spreads and breaks up, faint arms at an angle behind; it lies on the waves; turning stirs it | |
+| 11.4 | Sail fast on a reach in waves (Library → Fresh and shifty, or Start Bay at 16 kn) | A bow wave and foam along the lee side that grow with speed; spray from the bow when it drops into a wave | |
+| 11.5 | Press Z (flatten) twice, then ease the main a long way (S) | The sails flatten and their heads open; easing lets the leech twist open; let a sail luff and it flogs, harder in more wind | |
+| 11.6 | Camera → Scenic; then the wheel in the chase view; then press C a few times | Scenic circles the boat low and well off, never over land; the wheel moves the chase camera in and out; each change of camera glides rather than jumps | |
+| 11.7 | Settings → Camera motion at 0, then at 100% | At 0 the horizon stays level in the chase and helm views; at 100% the view rides the waves and heels with the boat | |
+| 11.8 | Look up at the sails with the sun behind them (Golden hour, sail away from the sun) | The sails glow, with the seams showing darker; behind a hill the glow fades | |
+| 11.9 | Settings → Light: each of the four presets | Clear morning, bright midday, golden hour and overcast each restart at that time on the same date; the wind is kept | |
+| 11.10 | Sound: click in the view, then sail; tack, let the sails luff, sail into the moorings | Wind rising with the apparent wind, water with speed, a flutter when luffing, a thump as the boom crosses, halyards clinking near the moorings. U mutes and unmutes; each volume slider works; nothing plays before the first click | |
+| 11.11 | **Note anything that looks wrong or worse than before** | List it with a screenshot and the preset used | |
 
 ## Accepting the build
 

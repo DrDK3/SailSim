@@ -409,6 +409,11 @@ export class DartScene {
     return geo;
   }
 
+  /** The bed and ground elevation grid (m ODN, 8 m): the water's colour follows its depth. */
+  get bed(): DartGeo['elevation'] {
+    return this.input.geo.elevation;
+  }
+
   // ---------------------------------------------------------------- moored ships
 
   /** Ships OSM maps as buildings (the Hindostan off Sandquay), drawn as ships on their outlines, afloat. */

@@ -25,6 +25,7 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | Pre-UAT red team: RDYC modelled from the owner's photographs, robotic racing marks with sponsors' names, roads rebuilt, the paddle steamer Kingswear Castle (and the Cardiff Castle named), lighting no longer washed out, a whole-build review | Done, 28 Oct 2026 ([report](docs/PREUAT_REPORT.md)); **ready for user acceptance testing** ([UAT plan](docs/UAT_PLAN.md)) |
 | Photo round: the harbour matched to the owner's 40 photographs (green-teal water, neutral light, woods to the water, gardens, painted fronts, stone quay walls that boats meet, the castle, St Petrox, BRNC, the Lower Ferry and the steamer) | Done, 28 Oct 2026 ([report](docs/PHOTO_REPORT.md)) |
 | Fix round: the river boats lie alongside their landings (the Kingswear Castle no longer across the Town Jetty); the Hindostan drawn as a ship and solid, with buildings in the water, start slots and the AI keeping clear and the river course moved to open water; the Cardiff Castle as photographed | Done, 29 Oct 2026 ([report](docs/FIX_REPORT.md)) |
+| Graphics round: water that reflects the sky and never shimmers, a wake with Kelvin arms, a bow wave, hull foam and spray (AI boats too), sails shaped by the controls that glow against the sun, haze from the sky's colour, lighting presets, a scenic camera, wheel zoom and camera blends, synthesised sound, Performance / Balanced / Ultra presets; physics unchanged | Done, 29 Oct 2026 ([report](docs/GRAPHICS_REPORT.md)) |
 
 **New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from More → Tutorial or from Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
 
@@ -52,6 +53,7 @@ npm run dev          # open the printed URL; press H in the app for help
 | `npm run test:e2e` | Build, serve and run the browser tests (Playwright) on the production build, at the root and under a GitHub Pages sub-path. Uses `/opt/pw-browsers/chromium` or `$PW_CHROMIUM` |
 | `.venv/bin/python -I -m unittest discover -s tools/ingest -p 'test_*.py'` | Live-data ingest tests (weather, tide, harmonics, index); `tools/ingest/requirements.txt` |
 | `node tools/load-timing.mjs URL [Mbit/s] [runs]` | Loading time and bytes over a throttled connection ([how](docs/PERFORMANCE.md)) |
+| `node tools/gfx-bench.mjs out/gfx [low\|high]` | Graphics benchmark: frame time, draw calls, triangles and screenshots of eight fixed views (`GFX` for settings, `GPU=1` for the machine's graphics card; [how](docs/GRAPHICS_REPORT.md#6-benchmarks-before-and-after)) |
 | `npm run typecheck` / `npm run lint` | TypeScript (app, DOM-free sim, tests) and ESLint |
 | `npm run scenario -- scenarios/beat-10kn.json` | Run a scenario headlessly and write a CSV trace to `out/` |
 | `npm run polar` | Model-output speed table (not validated data) |
@@ -76,12 +78,13 @@ npm run dev          # open the printed URL; press H in the app for help
 | Space | Centre the helm |
 | P / R | Pause / reset (in a race that has started, reset asks first) |
 | Esc | Close the open panels and menus |
-| C | Cycle camera: chase, helm (drag to look round), orbit, drone (drag, right-drag to pan, wheel to climb), top |
+| C | Cycle camera: chase (wheel to zoom), scenic, helm (drag to look round), orbit, drone (drag, right-drag to pan, wheel to climb), top |
 | B | Drone view: back to the boat |
 | Z / Shift+Z | Flatten the sails to depower / power them up, a quarter at a time |
 | F / G | Force arrows / physics panel |
 | V | Validation dashboard (live charts, table, CSV export) |
 | L / N | Place labels / minimap |
+| U | Sound on / off |
 | H | Help |
 
 On-screen buttons provide the same controls, with their keys shown on them. The sail status is one word when all is well and says what to do when not ("Luffing · trim in (W)"). The sailing controls can be put away (▾) when you sail by keyboard. On a phone the toolbar folds behind a Menu button.
@@ -90,7 +93,7 @@ The toolbar keeps to the essentials:
 - **Pause** (or **Resume**), **Reset** and the **camera**;
 - **Race**: a quick race in one step (0–20 AI boats, their level, Start Bay or the river, random, live or as-set conditions), with the **race coach** (briefing, tips, debrief);
 - **Library** and **Scenario**;
-- **More**: the **Tutorial** and the **course editor**; what is shown (labels, minimap, sailing controls, force arrows, layers and sources); the physics tools (validation dashboard, polar sweep, physics panel);
+- **More**: the **Tutorial** and the **course editor**; **Graphics and sound** (quality presets, effects, camera motion, lighting presets, volumes); what is shown (labels, minimap, sailing controls, force arrows, layers and sources); the physics tools (validation dashboard, polar sweep, physics panel);
 - **Help** (?).
 
 The instruments show the essentials; **All instruments and conditions** opens the rest, and the choice is remembered.
@@ -120,7 +123,7 @@ No API keys are in the client code; the build fails if one appears in `dist/`. *
 src/sim/      physics core: pure TypeScript, no DOM/Three/React (lint and tsconfig enforced)
 src/sim/race/ fleet and contact, race committee, rules subset, race session, trials
 src/sim/ai/   AI skippers, AI sheet handling, AI target-speed polar
-src/render/   Three.js scene, water (with per-boat deck masks), procedural Squib and crew, wake, force arrows, River Dart (terrain, buildings with roofs and windows, piers, moorings, ferries)
+src/render/   Three.js scene, water (with per-boat deck masks), wake, bow wave and spray, sound, graphics presets, procedural Squib and crew, force arrows, River Dart (terrain, buildings with roofs and windows, piers, moorings, ferries)
 src/ui/       React instruments, controls, toolbar menus, welcome, tutorial card, dashboard, polar, debug, scenario, library and help panels
 src/app/      game loop (fixed 100 Hz step with render interpolation), input, telemetry, polar worker, replays, scenario library, tutorial
 public/live/  data files the app discovers through index.json (bundled Met Office replays; live weather and tide when deployed)
@@ -154,6 +157,7 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 | [docs/PREUAT_REPORT.md](docs/PREUAT_REPORT.md) | The pre-UAT red team: RDYC from photographs, robotic marks, roads, the paddle steamer, and the whole-build review |
 | [docs/PHOTO_REPORT.md](docs/PHOTO_REPORT.md) | The photo round: what the owner's photographs showed, what changed, before and after |
 | [docs/FIX_REPORT.md](docs/FIX_REPORT.md) | The fix round: boats at their landings, the river start and the Hindostan, the Cardiff Castle |
+| [docs/GRAPHICS_REPORT.md](docs/GRAPHICS_REPORT.md) | The graphics round: audit, plan, water, wake, sails, light, cameras, sound, presets, benchmarks before and after, final configuration |
 | [docs/PHASE4_REPORT.md](docs/PHASE4_REPORT.md) | Phase 4 report |
 | [docs/COURSES.md](docs/COURSES.md) | Course format, validation rules, how the judge works, entering and verifying club courses |
 | [docs/PHASE3_REPORT.md](docs/PHASE3_REPORT.md) | Phase 3 report |

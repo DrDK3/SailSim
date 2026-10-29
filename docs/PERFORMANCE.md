@@ -57,6 +57,17 @@ Neither cause can be measured on real graphics hardware from this environment (O
 
 **Expected effect on a real device (an estimate, not measured):** 3.5 MB less to download is about 2.8 s less at 10 Mbit/s, and about 0.6 s less at 50 Mbit/s.
 
+## 2a. Drawing cost: the graphics round
+
+The graphics round (29 Oct 2026) measured drawing cost before and after with `tools/gfx-bench.mjs`, over eight fixed views in this container's software renderer. All numbers are in [GRAPHICS_REPORT.md](GRAPHICS_REPORT.md#6-benchmarks-before-and-after).
+
+| Settings | Harbour views | Open sea | All eight views |
+|---|---|---|---|
+| Balanced | about the same as before (−5% to +6%) | 23–73% more | +3% to +4% |
+| Performance (a software renderer's default) | 18–30% less | 32–34% less | 25% less |
+
+The simulation's own cost is unchanged.
+
 ## 3. How to measure
 
 ```bash
@@ -64,6 +75,7 @@ npm run build
 GZIP=1 node tools/pages-server.mjs 4175 squib-dart-sim dist &
 node tools/load-timing.mjs http://localhost:4175/squib-dart-sim/ 10 5   # Mbit/s, runs
 npm run perf                                                         # simulation cost per frame
+node tools/gfx-bench.mjs out/gfx low                                 # drawing cost and screenshots (serve a build at :4173 first)
 ```
 
 `tools/load-timing.mjs` prints:

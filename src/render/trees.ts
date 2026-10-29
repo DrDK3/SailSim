@@ -57,7 +57,8 @@ function broadleaf(detail: number): THREE.BufferGeometry {
   const col: number[] = [];
   const leaf = new THREE.Color().setHex(0x42552c, THREE.SRGBColorSpace);
   lobes.forEach(([lx, ly, lz, r], li) => {
-    const g = new THREE.IcosahedronGeometry(r, 0).toNonIndexed();
+    const ico = new THREE.IcosahedronGeometry(r, 0);
+    const g = ico.index ? ico.toNonIndexed() : ico;
     const p = g.getAttribute('position');
     for (let i = 0; i < p.count; i++) {
       const v = new THREE.Vector3().fromBufferAttribute(p, i);

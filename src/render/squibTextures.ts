@@ -91,14 +91,32 @@ export function sailTexture(a: SailArt): THREE.Texture {
     const Y = (v: number) => (1 - v) * c.height;
     g.fillStyle = '#f6f4ee';
     g.fillRect(0, 0, c.width, c.height);
-    // Panel seams, square to the leech (cross cut: roughly horizontal).
-    g.strokeStyle = 'rgba(120, 120, 110, 0.35)';
-    g.lineWidth = 2;
+    // The cloth: a faint mottle of the weave and resin finish (seen up close and against the light).
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = `rgba(${rnd() < 0.5 ? '120, 118, 110' : '255, 255, 250'}, ${0.025 + 0.03 * rnd()})`;
+      g.fillRect(rnd() * c.width, rnd() * c.height, 2 + rnd() * 10, 1 + rnd() * 3);
+    }
+    // Panel seams, square to the leech (cross cut: roughly horizontal): the panels overlap a few centimetres,
+    // stitched twice along the overlap (the doubled cloth shows darker against the light).
     for (let v = 0.07; v < 1; v += 0.075) {
+      g.fillStyle = 'rgba(150, 148, 138, 0.16)';
       g.beginPath();
-      g.moveTo(0, Y(v - 0.015));
-      g.lineTo(c.width, Y(v + 0.015));
-      g.stroke();
+      g.moveTo(0, Y(v - 0.015) - 3);
+      g.lineTo(c.width, Y(v + 0.015) - 3);
+      g.lineTo(c.width, Y(v + 0.015) + 3);
+      g.lineTo(0, Y(v - 0.015) + 3);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(110, 110, 100, 0.4)';
+      g.lineWidth = 1;
+      for (const d of [-2.5, 2.5]) {
+        g.beginPath();
+        g.moveTo(0, Y(v - 0.015) + d);
+        g.lineTo(c.width, Y(v + 0.015) + d);
+        g.stroke();
+      }
     }
     // Luff tape and reinforcement patches.
     g.fillStyle = 'rgba(170, 170, 160, 0.7)';

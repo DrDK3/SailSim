@@ -21,6 +21,8 @@ uniform vec2 uDrift;
 uniform vec3 uSunDir;
 uniform vec3 uFogColor;
 uniform float uFogMix;
+uniform vec3 uSunColor;
+uniform float uWarm;
 varying vec3 vDir;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -53,6 +55,8 @@ void main() {
   float alpha = c * mix(0.55 + 0.45 * uCover, 1.0, horizon);
   float toSun = max(dot(d, normalize(uSunDir)), 0.0);
   vec3 lit = vec3(0.97, 0.97, 0.98) * (0.75 + 0.25 * toSun);
+  // A low sun lights the clouds in its own colour, most on the side towards it (golden hour, sunset).
+  lit = mix(lit, uSunColor * (0.85 + 0.35 * pow(toSun, 3.0)), uWarm * (0.45 + 0.4 * toSun));
   vec3 grey = mix(vec3(0.62, 0.65, 0.69), vec3(0.42, 0.45, 0.49), uLow);
   vec3 col = mix(lit, grey, clamp(uCover * 0.85 + uLow * 0.3, 0.0, 1.0) * (0.55 + 0.45 * n));
   col *= mix(0.015, 1.0, uDay);
@@ -81,6 +85,8 @@ export class CloudDome {
         uSunDir: { value: new THREE.Vector3(0, 1, 0) },
         uFogColor: { value: new THREE.Color() },
         uFogMix: { value: 0 },
+        uSunColor: { value: new THREE.Color(1, 1, 1) },
+        uWarm: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -94,8 +100,10 @@ export class CloudDome {
   }
 
   /** `fogMix` 0 … 1: how far the sky is lost in mist or fog (blends the dome to `fogColor`). */
-  set(cover: number, low: number, day: number, sunDir: THREE.Vector3, fogColor: THREE.Color, fogMix: number): void {
+  set(cover: number, low: number, day: number, sunDir: THREE.Vector3, fogColor: THREE.Color, fogMix: number, sunColor?: THREE.Color, warm = 0): void {
     const u = this.material.uniforms;
+    if (sunColor) (u.uSunColor!.value as THREE.Color).copy(sunColor);
+    u.uWarm!.value = warm;
     u.uCover!.value = cover;
     u.uLow!.value = low;
     u.uDay!.value = day;
@@ -103,6 +111,10 @@ export class CloudDome {
     (u.uFogColor!.value as THREE.Color).copy(fogColor);
     u.uFogMix!.value = fogMix;
     this.mesh.visible = cover > 0.02 || fogMix > 0;
+  }
+
+  setFogColour(c: THREE.Color): void {
+    (this.material.uniforms.uFogColor!.value as THREE.Color).copy(c);
   }
 
   /** Follow the camera; drift with the wind (Three.js xz direction the air moves to, m/s). */
