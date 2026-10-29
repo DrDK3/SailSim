@@ -604,3 +604,5 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
   .hub-grid { grid-template-columns: 1fr; }
   .hub-door { min-height: 0; }
 }
+/* The camera menu: as wide as its usual choices, so the toolbar keeps to one row on a laptop whatever the font. */
+.toolbar .select select { max-width: 168px; text-overflow: ellipsis; }

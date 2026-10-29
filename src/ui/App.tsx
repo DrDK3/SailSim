@@ -63,6 +63,8 @@ export function App({ ctl }: { ctl: SimController }) {
   const toolbar = useRef<HTMLElement>(null);
   // Side panels open just below the toolbar, which wraps to two rows on narrower screens.
   const [sideTop, setSideTop] = useState<number>();
+  // The camera hint strip sits just below the toolbar, however many rows the toolbar wraps onto.
+  const [barTop, setBarTop] = useState<number>();
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -135,6 +137,7 @@ export function App({ ctl }: { ctl: SimController }) {
       const r = nav.getBoundingClientRect();
       // On tablets the toolbar sits at the bottom (styles.css): keep the default position then.
       let top = r.top < window.innerHeight / 2 ? r.bottom + 8 : undefined;
+      setBarTop(top === undefined ? undefined : Math.round(top));
       // On phones the instruments span the top: open panels (the tutorial too) below them, not over them.
       if (window.innerWidth <= 700 && instruments) top = Math.max(top ?? 0, instruments.getBoundingClientRect().bottom + 8);
       setSideTop(top === undefined ? undefined : Math.round(top));
@@ -270,7 +273,7 @@ export function App({ ctl }: { ctl: SimController }) {
         <Controls ctl={ctl} ui={ui} onHide={() => setControlsHidden(true)} />
       )}
       {ui.camera === 'drone' && (
-        <div className="camera-bar panel" role="group" aria-label="Drone view">
+        <div className="camera-bar panel" role="group" aria-label="Drone view" style={barTop === undefined ? undefined : { top: barTop }}>
           <span className="fine">Drag to turn · right-drag or two fingers to pan · wheel to climb</span>
           <button onClick={() => ctl.centreDrone()} title="Fly back to the boat (B)">Back to boat <kbd className="key-hint" aria-hidden="true">B</kbd></button>
           <label className="toggle" title="Carry the view along with the boat">
@@ -280,7 +283,7 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {ui.camera === 'helm' && (
-        <div className="camera-bar panel" role="note" aria-label="Helm view">
+        <div className="camera-bar panel" role="note" aria-label="Helm view" style={barTop === undefined ? undefined : { top: barTop }}>
           <span className="fine">Drag to look around · double-click to look ahead · wheel to zoom</span>
         </div>
       )}

@@ -320,6 +320,17 @@ Later stages (proposed):
 
 Everything in the preservation matrix (§2) keeps its entry point. The toolbar's Race, Library, Scenario, More and Help, every menu item and every key are unchanged; the hub adds ways in and removes none.
 
+### A regression CI caught, and its fix
+
+The first push's CI run (40954598184) failed one browser test: the drone view's "Back to boat" could not be clicked.
+
+- **Cause:** the CI runners lack the Inter font. In the fallback font the toolbar, one item longer with the activity button, wrapped onto a second row and covered the camera hint strip. That strip had sat at a fixed 64 px from the top since the red-team round.
+- **Why local runs missed it:** Inter is installed here, so the toolbar fitted on one row.
+- **Fix:**
+  - The strip is placed just below the toolbar's measured edge, as the side panels already were, so it can never be covered.
+  - The camera menu is no wider than its usual choices (168 px), so the toolbar keeps to one row at 1280 px in DejaVu Sans and Liberation Sans too.
+- **Checks:** both fonts were reproduced locally (toolbar 46 px high; strip clickable); so was the two-row toolbar at 1024 px (strip below it; clickable). The test passes locally.
+
 ### Not tested, limitations
 
 - **No real-GPU check.** Not measured on a real GPU or a touch device: layout was reviewed in screenshots at three sizes only.
