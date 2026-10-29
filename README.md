@@ -24,6 +24,7 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | Realism round: fluid crew, sails that fill the right way, a man or a woman at the helm, damage from collisions and groundings, knockdowns that recover, solid pontoons, no starts on the mud, the land shaping the wind and stream, RDYC rebuilt with its ensign at colours, people who walk, chat, sit and queue | Done, 28 Oct 2026 ([report](docs/REALISM_REPORT.md)) |
 | Pre-UAT red team: RDYC modelled from the owner's photographs, robotic racing marks with sponsors' names, roads rebuilt, the paddle steamer Kingswear Castle (and the Cardiff Castle named), lighting no longer washed out, a whole-build review | Done, 28 Oct 2026 ([report](docs/PREUAT_REPORT.md)); **ready for user acceptance testing** ([UAT plan](docs/UAT_PLAN.md)) |
 | Photo round: the harbour matched to the owner's 40 photographs (green-teal water, neutral light, woods to the water, gardens, painted fronts, stone quay walls that boats meet, the castle, St Petrox, BRNC, the Lower Ferry and the steamer) | Done, 28 Oct 2026 ([report](docs/PHOTO_REPORT.md)) |
+| Fix round: the river boats lie alongside their landings (the Kingswear Castle no longer across the Town Jetty); the Hindostan drawn as a ship and solid, with buildings in the water, start slots and the AI keeping clear and the river course moved to open water; the Cardiff Castle as photographed | Done, 29 Oct 2026 ([report](docs/FIX_REPORT.md)) |
 
 **New here?** The app opens with a welcome and a five-minute **interactive tutorial** (steer, trim, tack, gybe, stop), which checks each step as you sail. It can be restarted from More → Tutorial or from Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
 
@@ -152,6 +153,7 @@ docs/         research, sources, architecture, plan, physics, parameters, report
 | [docs/UAT_PLAN.md](docs/UAT_PLAN.md) | The user acceptance test script: what to do and what to expect, part by part |
 | [docs/PREUAT_REPORT.md](docs/PREUAT_REPORT.md) | The pre-UAT red team: RDYC from photographs, robotic marks, roads, the paddle steamer, and the whole-build review |
 | [docs/PHOTO_REPORT.md](docs/PHOTO_REPORT.md) | The photo round: what the owner's photographs showed, what changed, before and after |
+| [docs/FIX_REPORT.md](docs/FIX_REPORT.md) | The fix round: boats at their landings, the river start and the Hindostan, the Cardiff Castle |
 | [docs/PHASE4_REPORT.md](docs/PHASE4_REPORT.md) | Phase 4 report |
 | [docs/COURSES.md](docs/COURSES.md) | Course format, validation rules, how the judge works, entering and verifying club courses |
 | [docs/PHASE3_REPORT.md](docs/PHASE3_REPORT.md) | Phase 3 report |

@@ -75,11 +75,12 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
-| 5.1 | Fly to the South Embankment, Dartmouth | **PS Kingswear Castle** lies alongside with passengers aboard: black hull with a gold line, varnished saloons, paddle boxes, buff funnel with a wisp of smoke | |
+| 5.1 | Fly to the South Embankment, Dartmouth | **PS Kingswear Castle** lies alongside the Town Jetty, parallel to it and not across it (fixed in the fix round), with passengers aboard: black hull with a gold line, varnished saloons, paddle boxes, buff funnel with a wisp of smoke. Other river boats lie outside her (rafted) | |
 | 5.2 | Restart at 10:14 UTC and watch; then restart at 10:35 and at 11:05 UTC (live play runs in real time; only replays speed up) | At 10:15 she leaves; by 10:35 she has been down past the castles and is heading up towards Greenway, smoking from her funnel; by about 11:05 she is coming back to, or lying at, the embankment | |
 | 5.3 | Sail into her side, gently | She is solid like the other ferries: the contact pushes your boat away, and a hard one can damage it | |
 | 5.4 | Set the date to a Friday (17 July 2026) or to October | She does not sail; out of season she is not there | |
-| 5.5 | Find the Totnes river boat | It is labelled **MV Cardiff Castle** (a motor vessel; the paddle steamer is the Kingswear Castle) | |
+| 5.5 | Find the Totnes river boat (at 10:05 UTC she lies outside the steamer) | It is labelled **MV Cardiff Castle** (a motor vessel; the paddle steamer is the Kingswear Castle). Compare with your photograph: navy hull with a white crest on the bow and a white band at the gunwale, windowed saloon, white bulwark round the upper deck with passengers, wheelhouse forward, tall white mast with flags | |
+| 5.5a | Watch the ferries arrive at and leave their landings for a few minutes (any landing) | Each comes alongside the pier, parallel to it; none lies across a pier or on top of another boat at rest | |
 | 5.6 | Watch the Lower Ferry, Higher Ferry, passenger ferry and a steam train at Kingswear | The Lower Ferry tug (black hull, cream wheelhouse) swings the float (orange ramp lips, "Do not board" boards) and the two units pass port to port; trains arrive and leave on the timetable | |
 | 5.7 | **Livery** | Note any colour or detail of the steamer or the Cardiff Castle that is wrong (both are estimates; E19) | |
 
@@ -92,6 +93,7 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 | 6.3 | Meet an AI boat port and starboard | The judge's call is shown, labelled as the simplified judge | |
 | 6.4 | Finish | Results show elapsed times and any penalties | |
 | 6.5 | Coach (More → Race coach) | Tips during the race and a debrief afterwards; the advice is sensible | |
+| 6.6 | Race → **River: the Range sausage**, 4 AI boats | The start is in open water in the wide part of the Range, clear of the pontoons; no boat starts beside a building. The Hindostan at Sandquay is drawn as a grey ship, and a boat sailed into her stops as at a pier | |
 
 ## 7. Conditions and weather (10 min)
 

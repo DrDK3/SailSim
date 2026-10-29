@@ -7,7 +7,7 @@
 | Kind | Where it comes from | Status | Shown as |
 |---|---|---|---|
 | **Practice** | Generated at the start position, relative to the wind: windward–leeward, triangle, tacking lane, gybing slalom, mark-rounding drill (`src/sim/course/practice.ts`) | `simulated` | "… (simulated)", amber "Simulated course" chip |
-| **Simulated library** | Fixed practice courses shipped with the app (`data/courses/simulated/*.course.json`). One so far: *River: the Range sausage* | `simulated` | as above |
+| **Simulated library** | Fixed practice courses shipped with the app (`data/courses/simulated/*.course.json`). One so far: *River: the Range sausage*, a windward–leeward up and down the Range between Sandquay and Noss. Its start lies in the wide part of the Range, clear of the Sandquay pontoons, the Hindostan and Dart Marina (moved 180 m upriver in the fix round, 29 Oct 2026) | `simulated` | as above |
 | **User** | Drawn or imported in the course editor; saved in the viewer's browser only (export to keep or share) | `simulated` (or club statuses, see below) | "Mine: …" |
 | **Club (RDYC)** | Entered from official club documents (`data/courses/club/`) | `pending-check` → `verified` | **None yet**: no RDYC documents have been made available |
 
@@ -23,7 +23,7 @@ No course is presented as an RDYC course unless it was entered from a named club
   "status": "simulated",
   "provenance": { "kind": "simulated", "notes": "…" },
   "marks": [
-    { "id": "S1", "name": "Start pin (west)", "kind": "pin", "position": { "n": 1380, "e": -400 } },
+    { "id": "S1", "name": "Start pin (west)", "kind": "pin", "position": { "n": 1560, "e": -430 } },
     { "id": "T", "name": "Top mark", "kind": "inflatable", "position": { "lat": 50.3646, "lon": -3.5799 } }
   ],
   "start": { "ends": ["S1", "S2"] },

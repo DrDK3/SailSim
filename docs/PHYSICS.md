@@ -378,6 +378,7 @@ Boats in a race (or the user's boat alone, in free sailing) are stepped together
 - **Heel (realism round):** each contact force also heels the boat, acting at a height above the waterline: topsides 0.55 m (boats, moored boats, ferries), a pontoon's fenders 0.35 m, a jetty's piles 0.25 m, a mark 0.3 m (E).
 - **Piers and pontoons (realism round, `race/piers.ts`):** solid; a line pier is a rectangle per segment (grown by half its width at each end), an outlined one is cut into triangles (ear clipping); 25 m grid. Fixed jetties as hard bodies; floating pontoons k = 8×10⁴ N/m, c = 4×10³ N s/m on their fenders (E).
 - **Quay walls (photo round, `env/quays.ts`):** where houses stand on the town waterfronts, the vertical stone walls the owner's photographs show are put back along the 1 m ODN contour of the 4 m town ground (the LIDAR grids smooth them into ramps). Each wall's face stands 1 m into the water from the contour; it is a fixed pier 1.2 m thick behind the face, so boats meet a wall instead of grounding on a slope. About 2.5 km in the two towns, kept off the ferry slipways, the yacht club's sea wall and the castles' rocks. Where the walls stand and how high they are follow a rule (E).
+- **Buildings in the water (fix round, `env/structures.ts`):** an OSM building whose ground is under water (the 8 m bed below 0.5 m ODN at its centre, or at half its corners or more, E) is a fixed outline like a jetty. Fourteen are found: the Hindostan (BRNC's moored training ship, which OSM maps as a building), two boathouses, the ferry office and ten huts and offices on pontoons. Start slots keep 12 m from any pier or structure.
 - **Limits:** no heave or rafting. What an impact does to the boat is in §21 (damage).
 - **Measured:** a 3.7 m/s port–starboard collision overlaps by at most 14 cm, and the boats separate.
 - **Determinism:** with no contact, `external` is null and the arithmetic is unchanged, so the golden traces are bit-identical.
@@ -453,6 +454,16 @@ The physics reads the sea state for spray (older builds). Speed lost to pitching
 ## 20. River traffic (`env/traffic.ts`, `env/fairway.ts`)
 
 Ferries and Dart Marina's boats are scripted bodies (solid in the fleet physics, §16): their positions are a pure function of the clock and the stream, so the physics and the picture see the same traffic. Each trip is a **speed profile** integrated in 1 s steps: accelerate, cruise (never above the 6 kn harbour limit north of about Castle Ledge, H3), brake to arrive, crab into the cross-stream to hold the track (the speed over the ground is V cos(crab) + the stream along the track), and wait short of a ferry's track while that ferry is under way nearby (marina boats). The Higher Ferry runs on cables: no crab, and the stream does not change its speed.
+
+**Landings (fix round, `env/landings.ts`).** A boat at rest lies alongside the pier, not across it.
+
+- **Matching.** Each route end and the steamer's berth is matched to the nearest pier edge within 15 m that faces the way the boat comes in. A line pier has both sides; an outlined pier has every edge, with its outward side.
+- **Layout along the edge.** The boats claiming one edge lie along it in order of their route ends, 2 m apart, parallel to it, 0.6 m off it, heading the way nearer their approach. Boats claiming the same place go longest first.
+- **When the edge is full.** A boat that would run off the end moves the others back if there is room. Otherwise it lies outside the boat nearest its place (rafted).
+- **Clearing other piers.** Each boat is moved out from the edge, half a metre at a time, until it clears every pier piece, and the boats rafted outside it move out with it.
+- **Arriving and leaving.** A trip blends into the landing pose over its last 40 m and out of it over its first 40 m (smoothstep in position, the heading the short way round).
+
+All of this layout is estimated (E). Traffic is kinematic, so a boat leaving from inside a raft passes through the boats outside it (OUTSTANDING_ISSUES 91).
 
 The Lower Ferry follows the operator's first and last departures (UK local time, with the clock changes) and the manoeuvre described in F3: the tug goes astern for 20 s to clear the float off the slip, then swings end for end about its bow (the head rope) in 35 s, then pushes across; ramps come down at the far slip. A second unit runs opposite the first between 08:00 and 20:00 (E: "when traffic demands"), so they pass mid-stream; during the 29 Oct – 13 Dec 2026 refit only one runs (F2). Dart Marina's boats (numbers per day by month, kinds, speeds: E) follow routes found by A* through deep water (16 m grid, depth at about low water springs, keeping off moorings) to the sea past Castle Ledge or up-river.
 
