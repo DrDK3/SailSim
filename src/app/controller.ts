@@ -521,7 +521,8 @@ export class SimController {
   /** Start a quick race (one step: competitors, level, venue and conditions). Returns a summary, or undefined. */
   startQuickRace(o: QuickRaceOptions): { summary: string; note?: string } | undefined {
     const live = this.weatherSources.find((w) => w.kind === 'live');
-    const q = quickRaceScenario(o, this.scenario, live);
+    const liveTide = this.tideSources.find((t) => t.kind === 'live');
+    const q = quickRaceScenario(o, this.scenario, live, liveTide);
     if (!this.restart(q.scenario)) return undefined;
     if (this.paused) this.togglePause();
     return { summary: q.summary, note: q.note };

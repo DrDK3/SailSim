@@ -1,6 +1,6 @@
 # Fix: racing on the river (31 Oct 2026)
 
-The owner reported: **"Racing in the river is not working."** Two causes were found. The first is fixed. The second is shown clearly on screen and recorded, but not changed, because it is how the protected physics engine is designed.
+The owner reported: **"Racing in the river is not working."** Two causes were found. The first is fixed. The second is shown clearly on screen and recorded, but not changed, because it is how the protected physics engine is designed. The owner then sent a screenshot of a third: a live race on the river would not start (section 3, fixed).
 
 **Nothing in this fix needs an external service or paid infrastructure.**
 
@@ -65,16 +65,48 @@ The start slot was not changed either:
 - **Before building it:** check the wording against the official World Sailing 2025–2028 rulebook.
 - **Cost:** it would be a change to the protected engine.
 
+## 3. A live race on the river would not start (fixed; owner report, second message)
+
+**What happened:** on the published site, Quick race → the river → Live now (Met Office) said **"Could not start: conditions: a tidal stream needs a tide source"**.
+
+**Cause:** a live race on the river asked for the river's tidal stream, which needs a tide to drive it, and gave it none.
+
+- The site publishes the live Met Office wind (`live/latest.json`).
+- It publishes **no live tide yet**: the published `live/index.json` lists no `tide.json`. The tide job writes one only when it has predictions:
+  - from UKHO, which needs the `UKHO_API_KEY` secret (not set; licence terms unconfirmed, issue 15);
+  - or from the site's own harmonic analysis of the EA gauge, which needs about 36 days of readings. The record began on 24 October 2026, and the analysis runs weekly on Mondays, so the first run that can produce them is about 30 November 2026, provided the record has no long gaps.
+- Random conditions were not affected (they set a tide), nor was Start Bay (no stream). The Scenario panel already refuses a stream without a tide.
+
+**Fix (`src/app/quickRace.ts`, `src/app/controller.ts`, `src/ui/QuickRacePanel.tsx`):**
+
+- **With a live tide:** a live race uses it, so the river has its tide and channel stream. The tide applies in Start Bay as well (water level only).
+- **Without one:** a live race on the river has no tidal stream, and the water stays at about mean sea level. It says so rather than failing:
+  - before you start, the panel reads: "No live tide is published yet, so the river has no tidal stream";
+  - during the race, the status line at the bottom reads "no tide · no current".
+
+  No tide is made up for "live" conditions.
+
+**Tests (`tests/sim/river-race.test.ts`, 2 new):** both run the controller with the River Dart data and a live Met Office source (the recorded snapshot in `tests/fixtures`).
+
+- **No live tide:** the race starts with no stream and the note. **Without the fix it fails with the owner's exact message.**
+- **With a live tide** (the synthetic tide snapshot): the race has the snapshot tide and the channel stream.
+
+**Browser check:** in the app with a live wind source and no live tide, as on the site:
+
+- the panel shows the note;
+- the race starts with 6 boats, the Met Office wind and no stream;
+- there are no page errors.
+
 ## Tests and checks
 
 | Check | Result |
 |---|---|
-| `tests/sim/river-race.test.ts` (2, new) | Pass. Fails without the fix |
+| `tests/sim/river-race.test.ts` (4, new) | Pass. The first and third fail without their fixes |
 | `tests/sim/aground-text.test.ts` (2, new) | Pass |
-| Unit and integration tests (Vitest) | All 361 pass (47 files) |
+| Unit and integration tests (Vitest) | All 363 pass (47 files) |
 | Typecheck, lint, build | Pass |
 | Start Bay determinism hash | Unchanged (`11824f89f479d0f4`) |
-| Screenshots | River race aground at 1280 × 800 and 390 × 844, no page errors |
+| Screenshots | River race aground at 1280 × 800 and 390 × 844; live quick race on the river at 1280 × 800. No page errors |
 
 **Not tested:**
 
