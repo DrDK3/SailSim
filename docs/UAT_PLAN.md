@@ -95,6 +95,7 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 | 6.4 | Finish | Results show elapsed times and any penalties | |
 | 6.5 | Coach (More → Race coach) | Tips during the race and a debrief afterwards; the advice is sensible | |
 | 6.6 | Race → **River: the Range sausage**, 4 AI boats | The start is in open water in the wide part of the Range, clear of the pontoons; no boat starts beside a building. The Hindostan at Sandquay is drawn as a grey ship, and a boat sailed into her stops as at a pier | |
+| 6.7 | Race the river sausage to the finish (or Quick race → River). Then, in a new race, let your boat sail into the bank and stop | The race runs to the end with the ferries and marina boats moving and does not freeze (31 Oct fix). Aground and stopped, the warning says whether the tide will float you off or to press R; the instruments stay inside their panel | |
 
 ## 7. Conditions and weather (10 min)
 

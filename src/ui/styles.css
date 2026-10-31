@@ -122,6 +122,8 @@ option { background: var(--navy-900); }
 .cell-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cell-value { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cell-value .unit { font-size: 11px; }
+.cell.wide { grid-column: 1 / -1; }
+.cell.wide .cell-value { white-space: normal; font-size: 14px; line-height: 1.3; }
 
 .compass .ring { fill: rgba(0, 0, 0, 0.25); stroke: rgba(255, 255, 255, 0.35); }
 .compass .tick { stroke: rgba(255, 255, 255, 0.45); stroke-width: 1; }
