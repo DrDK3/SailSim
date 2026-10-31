@@ -4,6 +4,7 @@ import type { BoatSnapshot } from '../sim/simulation';
 import type { EnvironmentInfo } from '../sim/env/environment';
 import { describeSky } from '../sim/env/sky';
 import { Compass } from './Compass';
+import { agroundText } from './aground';
 import { bearing, deg, kn, sideAngle } from './format';
 
 const MORE_KEY = 'squib.instruments.more';
@@ -21,9 +22,10 @@ function initialMore(): boolean {
   }
 }
 
-function Cell({ label, value, unit, title, tutorial }: { label: string; value: string; unit?: string; title?: string; tutorial?: string }) {
+/** `wide`: a value in words (damage), across the whole row and wrapping, so it cannot push the columns out of the panel. */
+function Cell({ label, value, unit, title, tutorial, wide }: { label: string; value: string; unit?: string; title?: string; tutorial?: string; wide?: boolean }) {
   return (
-    <div className="cell" title={title} data-tutorial={tutorial}>
+    <div className={wide ? 'cell wide' : 'cell'} title={title} data-tutorial={tutorial}>
       <div className="cell-label">{label}</div>
       <div className="cell-value">
         {value}
@@ -35,6 +37,7 @@ function Cell({ label, value, unit, title, tutorial }: { label: string; value: s
 
 export function Instruments({ s }: { s: BoatSnapshot }) {
   const tack = s.mainSide === 1 ? 'Starboard' : 'Port';
+  const aground = agroundText(s);
   const [more, setMore] = useState(initialMore);
   const toggleMore = () => {
     setMore(!more);
@@ -79,6 +82,7 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
         {damageSummary(s.damage) && (
           <Cell
             label="Damage"
+            wide
             value={damageSummary(s.damage)}
             title="From collisions and groundings: the hull leaks into the bilge (heavier, slower; the crew pump), a damaged rudder grips less and a bent one pulls aside, a damaged rig drives less. Thresholds and rates are estimates (E). Restart to repair."
           />
@@ -99,7 +103,11 @@ export function Instruments({ s }: { s: BoatSnapshot }) {
       <button className="link more-toggle" aria-expanded={more} onClick={toggleMore}>
         {more ? 'Fewer instruments' : 'All instruments and conditions'}
       </button>
-      {s.grounded && <div className="chip bad" role="alert" data-testid="aground">Aground: the keel is on the bottom</div>}
+      {aground && (
+        <div className="chip bad" role="alert" data-testid="aground" title={aground.title}>
+          {aground.text}
+        </div>
+      )}
       {more && s.env && <Conditions env={s.env} waterLevel={s.waterLevel} />}
     </section>
   );

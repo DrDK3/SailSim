@@ -253,7 +253,7 @@ Later stages (proposed):
 | `npm run typecheck` | clean |
 | `npx vitest run` | **349 / 349 passed** (44 files) |
 | `npm run build` (with the secret check) | passed (graphics round, same commit) |
-| Determinism hash (7 boats, 400 s, River Dart) | `11824f89f479d0f4` |
+| Determinism hash (7 boats, 400 s, Start Bay with the River Dart data) | `11824f89f479d0f4` |
 | Browser tests | **CI run 40927400564: all four shards and the checks job green** on this commit. Locally they time out on the software renderer (issue 86): CI is the reference |
 | Screenshots | 11 surfaces at 1280 × 800, 1024 × 768 and 390 × 844, no page errors (`scratchpad/ux/before`) |
 | Performance | Drawing cost measured in the graphics round (`tools/gfx-bench.mjs`). The UI work is measured by frame time in the same views, and by the UI's publish rate (10 Hz, unchanged) |

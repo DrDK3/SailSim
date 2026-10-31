@@ -906,7 +906,13 @@ export class AiSkipper {
     }
     const ferryNear = W.fleet.nearFerries(me.n, me.e);
     const ferries = ferryNear ? W.fleet.ferriesAt(t) : [];
-    const fsoon = ferryNear ? W.fleet.ferriesAt(t + 1) : [];
+    // Each vessel's velocity over the next second, matched by id: the traffic list changes as boats arrive and
+    // leave (a vessel there now and gone in a second keeps its position).
+    const soon = new Map((ferryNear ? W.fleet.ferriesAt(t + 1) : []).map((f) => [f.id, f]));
+    const ferryVel = ferries.map((f) => {
+      const nx = soon.get(f.id);
+      return nx ? { n: nx.n - f.n, e: nx.e - f.e } : { n: 0, e: 0 };
+    });
     const meIn = this.inMoorings(me);
     const r = goal.round;
     const wall = this.wallTime(t, goal);
@@ -1000,7 +1006,7 @@ export class AiSkipper {
       // Ferries (restricted in ability to manoeuvre): keep well clear.
       ferries.forEach((f, i) => {
         if (Math.abs(f.n - me.n) > 300 || Math.abs(f.e - me.e) > 300) return;
-        const fv = { n: fsoon[i]!.n - f.n, e: fsoon[i]!.e - f.e };
+        const fv = ferryVel[i]!;
         const need = f.length / 2 + 25;
         let worst = 0;
         for (let k = 2; k <= K; k += 2) {

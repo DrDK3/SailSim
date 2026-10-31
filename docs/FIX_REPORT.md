@@ -1,3 +1,88 @@
+# Fix: racing on the river (31 Oct 2026)
+
+The owner reported: **"Racing in the river is not working."** Two causes were found. The first is fixed. The second is shown clearly on screen and recorded, but not changed, because it is how the protected physics engine is designed.
+
+**Nothing in this fix needs an external service or paid infrastructure.**
+
+## 1. The race froze within a few minutes (fixed)
+
+**What happened:** in any race on the river, sooner or later between about one and three minutes in, every physics step threw an error and the race stopped. The boats froze and the clock stood still. Start Bay races were not affected.
+
+**Cause:** the river traffic (ferries and marina boats) arrives and leaves. To keep clear of it, each AI skipper took the list of vessels now and the list one second later, and paired them by position in the list. When a boat arrived or left within that second, the two lists differed: the AI read a vessel that was not there (`undefined`) and threw.
+
+- The fleet's own contact code already paired vessels by their id.
+- The AI trials (`npm run ai:trials -- --river`) race without the traffic, so they never met this.
+
+**Fix (`src/sim/ai/skipper.ts`, 8 lines):** the AI now pairs vessels by id, as the fleet does. A vessel that leaves within the second keeps its position (velocity zero) for that second. This is an AI change, not a physics change: the Start Bay determinism hash is unchanged (`11824f89f479d0f4`).
+
+**Test:** `tests/sim/river-race.test.ts` (new) runs the app's controller headless with the River Dart data, so with the traffic:
+
+- the library's "River race: the Range sausage" for 8 minutes;
+- a quick race on the river with five AI boats for 7 minutes.
+
+Both must run without an error, start, and get every AI boat racing.
+
+- **Without the fix:** it fails with `TypeError: Cannot read properties of undefined (reading 'n')`.
+- **With the fix:** it passes.
+
+**Browser check:** a whole library river race, in Chromium with no page errors:
+
+- the three AI boats started;
+- they rounded the top and bottom marks twice;
+- all three finished by about 26 minutes.
+
+## 2. Your boat can run aground before the start and stay there (made clear on screen; not changed)
+
+**What happens:** in the library river race your boat starts at the front of the row, sailing along the line towards its west end at 2 kn on a beam reach. The bank is about 120 m of clear water ahead. Left alone, the boat runs onto the mud in about 80 s, roughly three minutes before the start.
+
+The **AI boats** turn away. **Your boat stays aground:**
+
+- Helm either way, sheets in or released, crew in or out: none of these free her, as tried headless.
+- The library race keeps the water level fixed, so the tide never floats her off.
+
+**Why this is not changed here:** it is the grounding model as designed (PHYSICS.md §15). The bottom holds a grounded boat against her sails, and rising water floats her off. The crew can only hike to windward, so they cannot heel her off. There is no way to push off. These are the protected physics engine, so this fix does not change them.
+
+The start slot was not changed either:
+
+- turning your boat the other way along the line would put her head-on to the next boat in the row, 20 m away;
+- moving her to the back of the row would change the reference race.
+
+**What changed (interface only):**
+
+- **The Aground warning** (`src/ui/aground.ts`): while the boat still moves on the bottom, it reads as before, "Aground: the keel is on the bottom". Once she has stopped (under 0.1 m/s over the ground), it says what will happen and what to do:
+  - **rising tide:** "Aground and stopped: the rising tide will float her off, or press R to start again";
+  - **falling tide:** "… the tide is falling, so she will stay until it turns. Press R to start again";
+  - **no tide:** "… the water level does not change in this session, so she will stay. Press R to start again".
+
+  Its tooltip explains that only rising water floats a grounded boat off in the simulator.
+- **The Damage line** in the instruments (seen after hard groundings: "hull leaking 0.7 kg/s · 9 kg in the bilge") now spans the row and wraps. Before, its long text pushed the instrument columns out of the panel, cutting off TWA, TWS, VMG and Depth.
+
+![Aground and stopped in the river race: the warning says what to do; the instruments fit](img/fix-river-aground.jpg)
+
+**Proposed, not done (OUTSTANDING_ISSUES 107):** a crew "push off" after a grounding.
+
+- **The rule:** RRS 42.3(h) reads: "To get clear after grounding or colliding with a vessel or object, a boat may use force applied by her crew or the crew of the other vessel and any equipment other than a propulsion engine". Sources: US Sailing's rule sheets, [2020](https://www.ussailing.org/wp-content/uploads/2020/12/42.3-Exceptions.pdf) and [December 2024](https://ussailing.org/wp-content/uploads/2024/12/42.3.pdf).
+- **Before building it:** check the wording against the official World Sailing 2025–2028 rulebook.
+- **Cost:** it would be a change to the protected engine.
+
+## Tests and checks
+
+| Check | Result |
+|---|---|
+| `tests/sim/river-race.test.ts` (2, new) | Pass. Fails without the fix |
+| `tests/sim/aground-text.test.ts` (2, new) | Pass |
+| Unit and integration tests (Vitest) | All 361 pass (47 files) |
+| Typecheck, lint, build | Pass |
+| Start Bay determinism hash | Unchanged (`11824f89f479d0f4`) |
+| Screenshots | River race aground at 1280 × 800 and 390 × 844, no page errors |
+
+**Not tested:**
+
+- **Real GPU and touch:** not checked on a real GPU or a touch device.
+- **AI trials with traffic:** the AI trials still race without the traffic (issue 108). The new test covers two races, not a statistical run.
+
+---
+
 # Fix round: boats at their landings, the river start, the Cardiff Castle (29 Oct 2026)
 
 The owner reported two faults, with screenshots, and supplied a photograph of MV Cardiff Castle:
