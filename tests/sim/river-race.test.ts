@@ -7,14 +7,14 @@
  * second later; when a boat arrived or left in that second the lists differed, the AI read a vessel that was not
  * there and the physics step threw, freezing the race.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { decodeGridPlanes, isGzip } from '../../src/sim/geo/pack';
 import { townQuays, type DartData, type DartFeatures, type TownGridSpec } from '../../src/app/geoLoader';
-import { SimController } from '../../src/app/controller';
+import { SimController, type DataSource } from '../../src/app/controller';
 import { builtInScenarios } from '../../src/app/scenarioLibrary';
-import { quickRaceScenario, DEFAULT_QUICK_RACE } from '../../src/app/quickRace';
+import { quickRaceScenario, DEFAULT_QUICK_RACE, NO_LIVE_TIDE_NOTE } from '../../src/app/quickRace';
 import { loadDartGeo } from './helpers';
 
 const dir = new URL('../../public/geo/', import.meta.url);
@@ -67,4 +67,48 @@ describe('racing on the river with its traffic', () => {
     expect(() => sail(c, 420)).not.toThrow();
     expect(c.getState().race!.log.some((l) => /started/.test(l.text))).toBe(true);
   }, 240_000);
+});
+
+/**
+ * Owner report (31 Oct 2026): on the published site, Quick race → the river → Live now said "Could not start:
+ * conditions: a tidal stream needs a tide source". The site publishes the live Met Office wind but, so far, no
+ * live tide (docs/LIVE_TIDES.md), and the live race asked for the river's tidal stream with no tide to drive it.
+ */
+describe('a live quick race on the river', () => {
+  const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8')) as unknown;
+  const weather: DataSource = { id: 'live/latest.json', kind: 'live', label: 'Live: Met Office UKV', url: 'live/latest.json', json: fixture('metoffice-snapshot-2026-10-22T0715Z.json') };
+  const tide: DataSource = { id: 'live/tide.json', kind: 'live', label: 'Live tide: synthetic test predictions', url: 'live/tide.json', json: fixture('tide-snapshot-SYNTHETIC.json'), gaugeUsable: false };
+  const LIVE_RIVER = { ...DEFAULT_QUICK_RACE, venue: 'river' as const, conditions: 'live' as const, competitors: 3 };
+  // "Now" within the weather recording, so the live race starts at a time the data covers.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-22T07:15:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('starts with the live wind and no live tide: no tidal stream, and the race says so', () => {
+    const c = riverController();
+    c.weatherSources = [weather];
+    const r = c.startQuickRace(LIVE_RIVER);
+    expect(c.getState().scenarioError).toBeUndefined();
+    expect(r).toBeDefined();
+    expect(r!.note).toBe(NO_LIVE_TIDE_NOTE);
+    expect(c.scenario.conditions.weather.source).toBe('metoffice');
+    expect(c.scenario.conditions.current).toEqual({ mode: 'none' });
+    expect(c.race?.session.fleet.boats.length).toBe(4);
+    expect(() => sail(c, 60)).not.toThrow();
+  }, 120_000);
+
+  it('with a live tide as well, the river has its tide and channel stream', () => {
+    const c = riverController();
+    c.weatherSources = [weather];
+    c.tideSources = [tide];
+    const r = c.startQuickRace(LIVE_RIVER);
+    expect(c.getState().scenarioError).toBeUndefined();
+    expect(r!.note).toBeUndefined();
+    expect(r!.summary).toMatch(/Live tide/);
+    expect(c.scenario.conditions.tide).toEqual({ mode: 'snapshot', snapshot: tide.json, useGauge: false });
+    expect(c.scenario.conditions.current.mode).toBe('dart');
+    expect(() => sail(c, 60)).not.toThrow();
+  }, 120_000);
 });

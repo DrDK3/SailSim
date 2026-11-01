@@ -112,7 +112,7 @@ All thresholds are estimates (E), chosen for sessions of about an hour.
 4. **Weather:** 9 wind steps (the 05:00 UTC run, 09:00–11:00) and 3 hourly sky readings. Pass.
 5. **Harmonics:** need 36 days of history, so the first possible run is Monday 30 Nov 2026.
 
-**No `tide.json` yet.** `tide.py` writes it only when there are predictions: from UKHO (needs the key) or from the harmonics (needs 36 days). Until then the app has no live tide. Manual tide and recorded snapshots still work.
+**No `tide.json` yet.** `tide.py` writes it only when there are predictions: from UKHO (needs the key) or from the harmonics (needs 36 days; the gauge record began on 24 Oct 2026, so about 30 Nov 2026 at the earliest). Until then the app has no live tide: a live quick race on the river runs without a tidal stream and says so. Manual tide and recorded snapshots still work.
 
 The checks, for this or a later run:
 

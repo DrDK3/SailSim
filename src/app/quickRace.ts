@@ -50,6 +50,8 @@ export const QUICK_WIND_KN: Record<QuickWind, [number, number]> = {
 const SEQUENCE_S = { 'one-minute': 60, 'three-minute': 180, 'five-minute': 300 } as const;
 /** Skies a random race may have: none that hides the course (fog, mist) (E). */
 const RANDOM_SKIES: SkyPreset[] = ['clear', 'fair', 'fair', 'hazy', 'overcast', 'rain'];
+/** The river's tidal stream in a quick race, random or live (E). */
+const RIVER_STREAM = { floodSetDeg: 0, peakFloodKn: 1.5, peakEbbKn: 2, riverEbbKn: 0 };
 /** Random tide: high water and low water heights as in the app's other scenarios (E: not Dartmouth's tables). */
 const RANDOM_TIDE = { hwHeightM: 4.6, lwHeightM: 1.2 };
 
@@ -86,9 +88,7 @@ export function randomConditions(seed: number, wind: QuickWind, venue: QuickVenu
     weather: { source: 'manual', twsKn, twdDeg },
     gusts: { preset, seed },
     tide: { mode: 'manual', hwTime: iso(hw), ...RANDOM_TIDE },
-    current: venue === 'river'
-      ? { mode: 'dart', stream: { floodSetDeg: 0, peakFloodKn: 1.5, peakEbbKn: 2, riverEbbKn: 0 } }
-      : { mode: 'none' },
+    current: venue === 'river' ? { mode: 'dart', stream: { ...RIVER_STREAM } } : { mode: 'none' },
     sky: { source: 'preset', preset: sky },
   };
   const hoursToHw = (hw.getTime() - start.getTime()) / 3600e3;
@@ -103,20 +103,30 @@ export interface QuickRaceBuild {
   note?: string;
 }
 
-/** The scenario for a quick race. `current` is the scenario as set now; `live` the live weather source, if any. */
-export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, live?: DataSource): QuickRaceBuild {
+/** Said when a live race on the river has no live tide to drive its stream. */
+export const NO_LIVE_TIDE_NOTE = 'No live tide is published yet, so the river has no tidal stream and the water stays at about mean sea level.';
+
+/**
+ * The scenario for a quick race. `current` is the scenario as set now; `live` the live weather source and
+ * `liveTide` the live tide, if any. A tidal stream needs a tide: without a live one, a live race on the river
+ * has no stream (and says so) rather than failing to start.
+ */
+export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, live?: DataSource, liveTide?: DataSource): QuickRaceBuild {
   const competitors = Math.max(0, Math.min(20, Math.round(o.competitors)));
   let conditions: ConditionsSettings;
   let summary: string;
   let note: string | undefined;
   if (o.conditions === 'live' && live) {
+    const river = o.venue === 'river';
     conditions = {
       startTime: new Date().toISOString().slice(0, 16) + ':00Z',
       weather: { source: 'metoffice', snapshot: live.json, replay: false },
       gusts: { preset: 'from-data', seed: o.seed },
-      current: o.venue === 'river' ? { mode: 'dart', stream: { floodSetDeg: 0, peakFloodKn: 1.5, peakEbbKn: 2, riverEbbKn: 0 } } : { mode: 'none' },
+      ...(liveTide ? { tide: { mode: 'snapshot' as const, snapshot: liveTide.json, useGauge: liveTide.gaugeUsable === true } } : {}),
+      current: river && liveTide ? { mode: 'dart', stream: { ...RIVER_STREAM } } : { mode: 'none' },
     };
-    summary = `live Met Office conditions (${live.label})`;
+    summary = `live Met Office conditions (${live.label})${liveTide ? ` and ${liveTide.label}` : ''}`;
+    if (river && !liveTide) note = NO_LIVE_TIDE_NOTE;
   } else if (o.conditions === 'as-set') {
     conditions = structuredClone(current.conditions);
     summary = 'the conditions as set';
