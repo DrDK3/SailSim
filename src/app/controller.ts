@@ -35,6 +35,7 @@ import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
 import { SoundScape, type AudioSettings } from '../render/audio';
 import type { GraphicsSettings } from '../render/graphics';
 import { lightingStart, type LightingPreset } from './lighting';
+import { freshLiveWeather, liveNowConditions, nowStartTime } from './liveNow';
 
 /**
  * Start positions on the River Dart (local metres from the RDYC origin). Chosen in deep water from the
@@ -853,7 +854,30 @@ export class SimController {
     this.weatherSources = weather;
     this.tideSources = tide;
     this.liveIssues = issues;
+    this.goLiveIfUntouched();
     this.publish(true);
+  }
+
+  /**
+   * Real-time conditions (owner review, 1 Nov 2026): when the site's live forecast covers now and the user has not
+   * started anything yet (the default free sail, a few seconds in), sail in today's weather from this minute, so
+   * the wind, the sky and the sun are the Dart's now. Not with ?conditions=set (tests that need the defaults).
+   */
+  private goLiveIfUntouched(): void {
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('conditions') === 'set') return;
+    const untouched = !this.race && !this.tutorial && !this.replay && this.sim.time < 60 && JSON.stringify(this.scenario) === JSON.stringify(DEFAULT_SCENARIO);
+    if (!untouched) return;
+    this.useLiveNow();
+  }
+
+  /** Restart the current activity in the live conditions of now (forecast, sky, the real clock); false if none covers now. */
+  useLiveNow(): boolean {
+    const w = freshLiveWeather(this.weatherSources);
+    if (!w) return false;
+    const tide = this.tideSources.find((t) => t.kind === 'live');
+    // On the river, a live tide drives the channel stream (it needs the River Dart data); in Start Bay, none.
+    const river = this.scenario.startLocation !== 'start-bay-practice' && this.dartStatus === 'loaded';
+    return this.restart({ ...this.scenario, conditions: liveNowConditions(w, { tide, stream: river, seed: this.scenario.conditions.gusts.seed }) });
   }
 
   /**
@@ -1052,6 +1076,12 @@ export class SimController {
    */
   setLighting(preset: LightingPreset): void {
     const c = this.scenario.conditions;
+    if (preset === 'now') {
+      // Real time: today's live weather and sky if the site has them, else the wind as set at this minute.
+      if (this.useLiveNow()) return;
+      this.restart({ ...this.scenario, conditions: { ...c, startTime: nowStartTime() } });
+      return;
+    }
     const l = lightingStart(c.startTime, preset, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
     this.restart({ ...this.scenario, conditions: { ...c, startTime: l.startTime, sky: { source: 'preset', preset: l.sky } } });
   }

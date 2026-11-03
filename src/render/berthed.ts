@@ -26,6 +26,7 @@ const REF = 10;
 const MAST_TOP = { y: 13.5, z: -0.06 * REF - 0.4 * REF * 0.12 };
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
+/** A cruising sloop at her berth: `canvas` is her sail cover and sprayhood (navy, burgundy, grey, green...). */
 function yachtVariant(topsides: number, boot: number, cover: number): THREE.Group {
   const kit = new Kit();
   const L = REF;
@@ -51,6 +52,16 @@ function yachtVariant(topsides: number, boot: number, cover: number): THREE.Grou
   const boomY = cy + 1.15;
   kit.add(new THREE.CylinderGeometry(0.06, 0.06, 4.2, 5), VMAT.paint, 0xc8ccd0, place(0, boomY, mz + 2.1, 0, Math.PI / 2));
   kit.add(new THREE.CapsuleGeometry(0.22, 3.6, 2, 6).scale(0.9, 1, 1.2), VMAT.canvas, cover, place(0, boomY + 0.25, mz + 2.0, 0, Math.PI / 2));
+  // Sprayhood over the companionway, aft of the coachroof, in the same canvas (as most cruisers in the marinas).
+  const hz = cz + cl / 2 + 0.35;
+  const hood = new THREE.CylinderGeometry(1.0, 1.0, 0.8, 8, 1, true, -Math.PI / 2, Math.PI);
+  hood.rotateX(-Math.PI / 2);
+  hood.scale(1, 0.75, 1);
+  kit.add(hood, VMAT.canvas, cover, place(0, cy, hz));
+  // Its front closed (the clear windows read dark from outside), the aft end open over the cockpit.
+  const front = new THREE.CircleGeometry(1.0, 8, 0, Math.PI);
+  front.scale(1, 0.75, 1);
+  kit.add(front, VMAT.canvas, cover, place(0, cy, hz - 0.4));
   // Guard wires as a thin rail each side; fenders over the side.
   for (const s of [-1, 1]) {
     const wire = h.sheerLine(s, 0.1, 0.05, 0.97).map((p) => p.setY(p.y + 0.6));
@@ -107,14 +118,21 @@ function farModel(kind: 'yacht' | 'motor'): THREE.BufferGeometry {
   return (grp.children[0] as THREE.Mesh).geometry;
 }
 
+/**
+ * The boats' looks, picked evenly by seed: mostly white hulls with coloured canvas, as in the owner's photographs
+ * of the marinas (a navy or cream hull now and then). Colours are estimates (E).
+ */
 const VARIANTS: { kind: 'yacht' | 'motor'; make: () => THREE.Group }[] = [
-  { kind: 'yacht', make: () => yachtVariant(0xffffff, 0x1b2a4a, 0x24476e) },
-  { kind: 'yacht', make: () => yachtVariant(0x1b2a4a, 0xffffff, 0x24476e) },
-  { kind: 'yacht', make: () => yachtVariant(0xf2efe6, 0x8a1c1c, 0x2f5a3a) },
-  { kind: 'yacht', make: () => yachtVariant(0xffffff, 0x8a1c1c, 0x7a2626) },
+  { kind: 'yacht', make: () => yachtVariant(0xffffff, 0x1b2a4a, 0x1f2c4a) },
+  { kind: 'yacht', make: () => yachtVariant(0xffffff, 0x1b2a4a, 0x6e1f2a) },
+  { kind: 'yacht', make: () => yachtVariant(0xfbfbf8, 0x8a1c1c, 0x8c9096) },
+  { kind: 'yacht', make: () => yachtVariant(0xf2efe6, 0x2f5a3a, 0x2f5a3a) },
+  { kind: 'yacht', make: () => yachtVariant(0xffffff, 0x24476e, 0x24476e) },
+  { kind: 'yacht', make: () => yachtVariant(0x1b2a4a, 0xffffff, 0x1f2c4a) },
   { kind: 'motor', make: () => motorVariant(0xffffff, 0x2b2e33, true) },
-  { kind: 'motor', make: () => motorVariant(0x24364e, 0xffffff, false) },
   { kind: 'motor', make: () => motorVariant(0xffffff, 0x24364e, false) },
+  { kind: 'motor', make: () => motorVariant(0xfbfbf8, 0x8c9096, true) },
+  { kind: 'motor', make: () => motorVariant(0x24364e, 0xffffff, false) },
 ];
 
 export class BerthedFleet {
@@ -143,7 +161,9 @@ export class BerthedFleet {
         const im = new THREE.InstancedMesh(m.geometry, m.material, capacity);
         im.count = 0;
         im.frustumCulled = false;
-        im.receiveShadow = true;
+        // No shadows on them, as the plain far-off boats (owner review, 1 Nov 2026: on the owner's graphics card the
+        // detailed boats' painted hulls, which took shadows, drew black, while the far-off ones drew white).
+        im.receiveShadow = false;
         im.name = `berthed-${v.kind}#${vi}`;
         this.group.add(im);
         meshes.push(im);

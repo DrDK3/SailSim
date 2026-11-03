@@ -288,7 +288,13 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       <CoachTip ui={ui} />
-      {ui.paused && <div className="banner paused-pill" role="status">{ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}</div>}
+      {ui.paused && (
+        // Below the toolbar however many rows it wraps onto (it covered the pill on a two-row toolbar), and below
+        // a camera strip if one is showing.
+        <div className="banner paused-pill" role="status" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
+          {ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}
+        </div>
+      )}
       {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
       {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}
       {(ui.dart.issues.length > 0 || ui.dart.status === 'unavailable') && (

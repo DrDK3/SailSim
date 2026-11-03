@@ -16,7 +16,7 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/checkout@v5
@@ -36,7 +36,7 @@ jobs:
           cache: pip
           cache-dependency-path: tools/ingest/requirements.txt
       - run: pip install -r tools/ingest/requirements.txt
-      - name: Weather (Met Office UKV via AWS Open Data; no key)
+      - name: Weather (Met Office UKV via AWS Open Data; no key; 8 hours ahead, as the schedule runs only every few hours)
         run: python -I tools/ingest/weather.py site/live/latest.json || [ $? -eq 3 ]
       - name: Tide (EA gauge; UKHO predictions if a key is set, else derived predictions)
         env:

@@ -126,6 +126,7 @@ export class Kit {
       });
       const merged = mergeGeometries(clean, false);
       if (!merged) continue;
+      sanitiseNormals(merged);
       const mesh = new THREE.Mesh(merged, mat);
       mesh.name = `${name}-${mat === VMAT.glass ? 'glass' : mat === VMAT.paint || mat === VMAT.gloss ? 'body' : 'fittings'}`;
       out.add(mesh);
@@ -133,6 +134,27 @@ export class Kit {
     if (this.parts.has(VMAT.glass)) applyGlass();
     return out;
   }
+}
+
+/**
+ * Degenerate triangles (zero area, at a stem or a closed end) get zero-length normals; normalising one gives NaN
+ * on some graphics cards, which can blacken what it touches. Point them up instead (they cover no pixels).
+ */
+export function sanitiseNormals(g: THREE.BufferGeometry): number {
+  const n = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  if (!n) return 0;
+  let fixed = 0;
+  for (let i = 0; i < n.count; i++) {
+    const x = n.getX(i);
+    const y = n.getY(i);
+    const z = n.getZ(i);
+    const len = Math.hypot(x, y, z);
+    if (len > 1e-6 && Number.isFinite(len)) continue;
+    n.setXYZ(i, 0, 1, 0);
+    fixed++;
+  }
+  if (fixed) n.needsUpdate = true;
+  return fixed;
 }
 
 export function place(x: number, y: number, z: number, yaw = 0, pitch = 0, roll = 0): THREE.Matrix4 {

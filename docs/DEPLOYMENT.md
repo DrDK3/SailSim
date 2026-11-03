@@ -32,6 +32,7 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
 |---|---|---|
 | `index.json` | The list of data files present (schema `squib-live-index/1`). The app reads it first, so it never asks for a file that is not there | With every change below |
 | `latest.json` | Met Office UKV forecast, schema `squib-weather/2`: 10 m wind on a grid over the sailing area every 15 min for 2 h; hourly cloud, visibility, rain, fog, temperature and pressure; regional observations | Every 30 min (hourly overnight) |
+| `latest.json` horizon | Each run publishes 8 hours of forecast: 15-minute steps for 2 hours, then hourly (GitHub runs the 30-minute schedule only every 4–6 hours). The job's time limit is 15 minutes. The app counts a forecast fresh while it covers now and the job ran within 8 hours | Same schedule |
 | `tide.json` | Dartmouth tide: the last 48 h of EA gauge readings, and HW/LW predictions for the next 7 days. Predictions come from UKHO when a key is set, otherwise from our own harmonic predictions | Same schedule |
 | `tide-predicted.json` | 400 days of HW/LW events predicted from harmonic constants derived from the gauge history. Labelled "derived from EA observations; not an official UKHO prediction" | Weekly, once there are 36 days of history |
 | `tide-harmonics.json` | The constants, with their validation (RMS on 7 held-back days) | Weekly |

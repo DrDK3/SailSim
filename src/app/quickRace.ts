@@ -9,6 +9,7 @@ import type { ConditionsSettings } from '../sim/env/conditions';
 import type { SkyPreset } from '../sim/env/sky';
 import type { PracticeKind } from '../sim/course/practice';
 import type { AppScenario, DataSource } from './controller';
+import { RIVER_STREAM, liveNowConditions } from './liveNow';
 
 export type QuickConditions = 'random' | 'live' | 'as-set';
 export type QuickWind = 'any' | 'light' | 'medium' | 'strong';
@@ -50,8 +51,6 @@ export const QUICK_WIND_KN: Record<QuickWind, [number, number]> = {
 const SEQUENCE_S = { 'one-minute': 60, 'three-minute': 180, 'five-minute': 300 } as const;
 /** Skies a random race may have: none that hides the course (fog, mist) (E). */
 const RANDOM_SKIES: SkyPreset[] = ['clear', 'fair', 'fair', 'hazy', 'overcast', 'rain'];
-/** The river's tidal stream in a quick race, random or live (E). */
-const RIVER_STREAM = { floodSetDeg: 0, peakFloodKn: 1.5, peakEbbKn: 2, riverEbbKn: 0 };
 /** Random tide: high water and low water heights as in the app's other scenarios (E: not Dartmouth's tables). */
 const RANDOM_TIDE = { hwHeightM: 4.6, lwHeightM: 1.2 };
 
@@ -118,13 +117,7 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
   let note: string | undefined;
   if (o.conditions === 'live' && live) {
     const river = o.venue === 'river';
-    conditions = {
-      startTime: new Date().toISOString().slice(0, 16) + ':00Z',
-      weather: { source: 'metoffice', snapshot: live.json, replay: false },
-      gusts: { preset: 'from-data', seed: o.seed },
-      ...(liveTide ? { tide: { mode: 'snapshot' as const, snapshot: liveTide.json, useGauge: liveTide.gaugeUsable === true } } : {}),
-      current: river && liveTide ? { mode: 'dart', stream: { ...RIVER_STREAM } } : { mode: 'none' },
-    };
+    conditions = liveNowConditions(live, { tide: liveTide, stream: river, seed: o.seed });
     summary = `live Met Office conditions (${live.label})${liveTide ? ` and ${liveTide.label}` : ''}`;
     if (river && !liveTide) note = NO_LIVE_TIDE_NOTE;
   } else if (o.conditions === 'as-set') {

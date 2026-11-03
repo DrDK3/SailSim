@@ -608,3 +608,7 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
 }
 /* The camera menu: as wide as its usual choices, so the toolbar keeps to one row on a laptop whatever the font. */
 .toolbar .select select { max-width: 168px; text-overflow: ellipsis; }
+
+/* A narrow sheet bar shows the figure alone ("0%"), not a clipped "0% easec" (owner's screenshot, 1 Nov 2026). */
+.sheet-bar { container-type: inline-size; }
+@container (max-width: 96px) { .sheet-word { display: none; } }

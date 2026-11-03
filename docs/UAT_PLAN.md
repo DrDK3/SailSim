@@ -97,6 +97,9 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 | 6.6 | Race → **River: the Range sausage**, 4 AI boats | The start is in open water in the wide part of the Range, clear of the pontoons; no boat starts beside a building. The Hindostan at Sandquay is drawn as a grey ship, and a boat sailed into her stops as at a pier | |
 | 6.7 | Race the river sausage to the finish (or Quick race → River). Then, in a new race, let your boat sail into the bank and stop | The race runs to the end with the ferries and marina boats moving and does not freeze (31 Oct fix). Aground and stopped, the warning says whether the tide will float you off or to press R; the instruments stay inside their panel | |
 | 6.8 | On the published site: Race → Where: the river → Conditions: Live now → Start race | The race starts with the live wind. Until the site publishes a live tide (issue 110) the panel says the river has no tidal stream; once it does, the Tide line under All instruments and conditions shows the live tide | |
+| 6.9 | Race → the river; Chase view from astern | The Squib's rudder hangs on the transom: its head above the transom, the blade into the water, the tiller forward into the cockpit | |
+| 6.10 | Same race: look at the start boat | SAMARITAN: white Southerly with her navy canopy and sail cover, radome on the mast, her name on the bow, the orange flag; lying head to wind | |
+| 6.11 | Same race, in the morning light: look across at Noss and Dart Marina | The berthed boats are mostly white with coloured canvas, none drawn black | |
 
 ## 7. Conditions and weather (10 min)
 
@@ -106,6 +109,8 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 | 7.2 | Library → Fog, Rain, Evening | Visibility, rain streaks and sunset light look right; colours are not washed out | |
 | 7.3 | Scenario → Tide manual; set a low tide and sail near the edge | The boat grounds where the drying areas are; no start is placed on the mud | |
 | 7.4 | Library → the Met Office replay | Wind follows the forecast, labelled as model output with its age | |
+| 7.5 | Open the published site fresh (no scenario chosen) | Within a few seconds it sails in today's live wind and sky, at this minute: the light is the real light (dark after sunset); the bottom line names the Met Office forecast | |
+| 7.6 | Settings → Light → Real time | Restarts now, in the live weather if the site has it | |
 
 ## 8. Library, replays and the editor (10 min)
 

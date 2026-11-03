@@ -3,11 +3,13 @@ import type { ResolvedCourse } from '../sim/course/course';
 import type { Course } from '../sim/course/types';
 import { makeLabel } from './labels';
 import { robotMark, sponsorsFor } from './robotMark';
+import { samaritanModel } from './samaritan';
 
 /**
  * Course marks and lines on the water (floating at y = 0): robotic marks (src/render/robotMark.ts) for the
- * turning marks and the pin, each with a sponsor's name, lying head to wind; the committee boat; the start and
- * finish lines (dashed), lane boundaries, and a ring on the next mark.
+ * turning marks and the pin, each with a sponsor's name, lying head to wind; the committee boat, SAMARITAN
+ * (src/render/samaritan.ts), at anchor head to wind; the start and finish lines (dashed), lane boundaries, and a
+ * ring on the next mark.
  */
 export class CourseScene {
   readonly group = new THREE.Group();
@@ -16,6 +18,8 @@ export class CourseScene {
   private readonly lines: THREE.Object3D[] = [];
   /** The robotic marks, each with a phase for its gentle bob. */
   private readonly robots: { g: THREE.Group; phase: number }[] = [];
+  /** The committee boats, at anchor: they lie head to wind. */
+  private readonly committee: THREE.Object3D[] = [];
 
   constructor(private readonly r: ResolvedCourse, course: Course) {
     this.group.name = 'course';
@@ -28,15 +32,10 @@ export class CourseScene {
       g.position.set(p.e, 0, -p.n);
       g.name = 'course-mark';
       if (m.kind === 'committee-boat') {
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.5 }));
-        hull.position.y = 0.3;
-        const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 3), new THREE.MeshStandardMaterial({ color: 0xdcdcd6 }));
-        cabin.position.set(0, 1.5, 0.5);
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 4), new THREE.MeshStandardMaterial({ color: 0x999999 }));
-        pole.position.set(0, 3, -2);
-        const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), new THREE.MeshStandardMaterial({ color: 0xff7a1a, side: THREE.DoubleSide }));
-        flag.position.set(0.6, 4.6, -2);
-        g.add(hull, cabin, pole, flag);
+        const boat = samaritanModel();
+        boat.name = 'committee-boat';
+        g.add(boat);
+        this.committee.push(boat);
       } else if (m.kind === 'virtual') {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 10), yellow);
         post.position.y = 0.4;
@@ -54,7 +53,10 @@ export class CourseScene {
       }
       this.group.add(g);
       const lab = makeLabel(m.name, '#ffd8b8');
-      lab.position.set(p.e, m.kind === 'committee-boat' ? 7 : 4, -p.n);
+      lab.position.set(p.e, m.kind === 'committee-boat' ? 15.5 : 4, -p.n);
+      // Marks in line from the boat (the top mark beyond the bottom one) would print their labels over each
+      // other: each sits 0, 1 or 2 label heights up on the screen (owner's screenshot, 1 Nov 2026).
+      lab.center.set(0.5, 0.5 - 1.25 * (this.labels.length % 3));
       this.labels.push(lab);
       this.group.add(lab);
     }
@@ -94,5 +96,7 @@ export class CourseScene {
   /** The robotic marks hold station head to wind (`fromDir`, rad, compass: where the wind comes from). */
   setWind(fromDir: number): void {
     for (const r of this.robots) r.g.rotation.y = -fromDir;
+    // At anchor, the bow (−z in the model) points where the wind comes from.
+    for (const b of this.committee) b.rotation.y = -fromDir;
   }
 }

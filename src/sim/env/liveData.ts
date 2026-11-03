@@ -47,7 +47,12 @@ export function parseLiveIndex(json: unknown): LiveIndex {
  *    must cover now.
  */
 export const WEATHER_GRACE_MIN = 15;
-export const WEATHER_JOB_LATE_MIN = 90;
+/**
+ * The job is scheduled every 30 minutes but GitHub has run it only every 4-6 hours (Nov 2026), so each file now
+ * covers 8 hours (tools/ingest/weather.py). A forecast that still covers now is the latest there is: only a job
+ * silent for longer than the file lasts means the feed has stopped.
+ */
+export const WEATHER_JOB_LATE_MIN = 480;
 export const STALE_LIMIT_H = 6;
 export const GAUGE_STALE_MIN = 60;
 

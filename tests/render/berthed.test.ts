@@ -39,3 +39,16 @@ describe('berthed boats', () => {
     expect(drawn(/^berthed-yacht#/)).toBe(2);
   });
 });
+
+describe('marina boats on every graphics card (owner review, 1 Nov 2026)', () => {
+  it('have no zero-length normals and do not take shadows (their painted hulls drew black on the owner\'s card)', () => {
+    const f = new BerthedFleet(4);
+    for (const c of f.group.children) {
+      const m = c as THREE.InstancedMesh;
+      expect(m.receiveShadow).toBe(false);
+      const n = m.geometry.getAttribute('normal');
+      if (!n) continue;
+      for (let i = 0; i < n.count; i++) expect(Math.hypot(n.getX(i), n.getY(i), n.getZ(i))).toBeGreaterThan(0.5);
+    }
+  });
+});
