@@ -21,6 +21,7 @@
     "perf": "tsx tools/perf.ts",
     "ai:polar": "tsx tools/ai-polar.ts",
     "ai:trials": "tsx tools/ai-trials.ts",
+    "envelope": "tsx tools/envelope.ts",
     "check:secrets": "tsx tools/check-secrets.ts dist"
   },
   "dependencies": {

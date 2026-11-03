@@ -27,6 +27,11 @@ export interface QuickRaceOptions {
   wind: QuickWind;
   seed: number;
   sequence: 'one-minute' | 'three-minute' | 'five-minute';
+  /**
+   * River only: sail with the illustrative tidal stream. Off by default (review EN-1, decision D5): its timing
+   * comes from the rise and fall of the tide, which the real Dart stream does not follow.
+   */
+  stream?: boolean;
 }
 
 export const DEFAULT_QUICK_RACE: QuickRaceOptions = {
@@ -64,7 +69,7 @@ export interface RandomConditions {
  * river course, whose legs run along the Range), gusts (stronger winds are more often gusty), a sailing-season
  * afternoon, the sky, and the tide's phase (with its stream).
  */
-export function randomConditions(seed: number, wind: QuickWind, venue: QuickVenue): RandomConditions {
+export function randomConditions(seed: number, wind: QuickWind, venue: QuickVenue, stream = false): RandomConditions {
   const rng = createRng(seed * 7919 + 17);
   const [lo, hi] = QUICK_WIND_KN[wind];
   const twsKn = Math.round((lo + (hi - lo) * rng.next()) * 2) / 2;
@@ -87,7 +92,7 @@ export function randomConditions(seed: number, wind: QuickWind, venue: QuickVenu
     weather: { source: 'manual', twsKn, twdDeg },
     gusts: { preset, seed },
     tide: { mode: 'manual', hwTime: iso(hw), ...RANDOM_TIDE },
-    current: venue === 'river' ? { mode: 'dart', stream: { ...RIVER_STREAM } } : { mode: 'none' },
+    current: venue === 'river' && stream ? { mode: 'dart', stream: { ...RIVER_STREAM } } : { mode: 'none' },
     sky: { source: 'preset', preset: sky },
   };
   const hoursToHw = (hw.getTime() - start.getTime()) / 3600e3;
@@ -117,15 +122,15 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
   let note: string | undefined;
   if (o.conditions === 'live' && live) {
     const river = o.venue === 'river';
-    conditions = liveNowConditions(live, { tide: liveTide, stream: river, seed: o.seed });
+    conditions = liveNowConditions(live, { tide: liveTide, stream: river && !!o.stream, seed: o.seed });
     summary = `live Met Office conditions (${live.label})${liveTide ? ` and ${liveTide.label}` : ''}`;
-    if (river && !liveTide) note = NO_LIVE_TIDE_NOTE;
+    if (river && o.stream && !liveTide) note = NO_LIVE_TIDE_NOTE;
   } else if (o.conditions === 'as-set') {
     conditions = structuredClone(current.conditions);
     summary = 'the conditions as set';
   } else {
     if (o.conditions === 'live') note = 'No live weather is available here (it needs the deployed site and its scheduled job), so the conditions are random.';
-    const r = randomConditions(o.seed, o.wind, o.venue);
+    const r = randomConditions(o.seed, o.wind, o.venue, !!o.stream);
     conditions = r.conditions;
     summary = r.summary;
   }

@@ -289,8 +289,10 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <Num label="Entrance peak ebb" value={cur.stream.peakEbbKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, peakEbbKn: v } } })} />
           <Num label="River outflow" value={cur.stream.riverEbbKn} min={0} max={2} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, riverEbbKn: v } } })} />
           <p className="fine">
-            Provisional model: follows the channel, about twice as fast in the narrows as at the entrance, slack in the creeks.
-            Rates are the mean across the entrance at mid-tide. Not measured current data.
+            Illustrative only: the pattern follows the channel, about twice as fast in the narrows as at the entrance,
+            slack in the creeks. Its timing comes from the rise and fall of the tide, so it goes slack at high and low
+            water and the flood mirrors the ebb: the real Dart stream does not keep that timing. Rates are the mean
+            across the entrance at mid-tide. Not measured current data; not for learning stream tactics.
           </p>
         </>
       )}
@@ -300,7 +302,7 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <Num label="Peak flood" value={cur.stream.peakFloodKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, peakFloodKn: v } } })} />
           <Num label="Peak ebb" value={cur.stream.peakEbbKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, peakEbbKn: v } } })} />
           <Num label="River outflow" value={cur.stream.riverEbbKn} min={0} max={2} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, riverEbbKn: v } } })} />
-          <p className="fine">Provisional model: slack at HW and LW, strongest at mid-tide. Not measured current data.</p>
+          <p className="fine">Illustrative only: slack at high and low water and strongest at mid-tide, a timing real streams need not follow. Not measured current data.</p>
         </>
       )}
 

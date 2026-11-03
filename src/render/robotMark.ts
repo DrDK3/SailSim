@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shared } from './dispose';
 
 /**
  * Robotic ("radio-controlled") racing marks, as now used at regattas in place of anchored inflatables: a
@@ -80,7 +81,7 @@ function bandTexture(name: string): THREE.Texture | undefined {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
-  bandCache.set(name, t);
+  bandCache.set(name, shared(t));
   return t;
 }
 

@@ -168,6 +168,12 @@ export function App({ ctl }: { ctl: SimController }) {
     <div className={`app ${ui.showMinimap ? 'has-minimap' : ''}`}>
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
+      {ui.graphicsLost && (
+        <div className="banner error" role="alert" data-testid="graphics-lost">
+          The browser reset the graphics. Restoring the picture… The simulation is paused and carries on when the picture is back.{' '}
+          <button onClick={() => window.location.reload()}>Reload the page</button>
+        </div>
+      )}
       {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
       <div className="hud-left">
         <Instruments s={ui.snapshot} />
@@ -293,6 +299,13 @@ export function App({ ctl }: { ctl: SimController }) {
         // a camera strip if one is showing.
         <div className="banner paused-pill" role="status" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
           {ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}
+        </div>
+      )}
+      {ui.runningSlow && (
+        // Same place as the paused pill (the two never show together).
+        <div className="banner paused-pill slow-pill" role="status" data-testid="running-slow" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
+          Running slow: {Math.round(ui.runningSlow.ratio * 100)}% of real time
+          {ui.runningSlow.lowered ? ` · graphics lowered to ${ui.runningSlow.lowered[0]!.toUpperCase()}${ui.runningSlow.lowered.slice(1)}` : ''}
         </div>
       )}
       {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}

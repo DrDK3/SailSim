@@ -14,6 +14,24 @@ Measurements were taken in the development container: Chromium with **software W
 
 Phase 6 did not change the physics or the AI, so the difference from Phase 5 is run-to-run variation on this shared machine. The determinism hash of a 7-boat, 400 s race on the River Dart is unchanged after the Phase 6 changes, including the packed grids (§2).
 
+## 1b. Keeping up with real time, GPU memory and lost contexts (review Package 1, 3 Nov 2026)
+
+- **Running slow (review PH-5):** each frame advances the simulation by at most 0.1 s and 12 steps. On a slow device it therefore runs slower than the clock.
+  - The controller measures the share of real time simulated over windows of 3 s of wall time. The frame after a hidden tab returns is left out.
+  - Under 90%, a pill below the toolbar says so ("Running slow: 70% of real time"). It is click-through.
+  - After two slow windows in a row, the graphics step down one preset (Ultra → Balanced → Performance), at most every 30 s. The step-down is not saved.
+  - It stops once the user chooses graphics themselves, and can be switched off in Graphics and sound.
+  - Races stay fair: every boat slows together.
+- **GPU memory (review GR-2):** a course or a fleet boat removed from the scene now gives back its geometries and textures (`src/render/dispose.ts`).
+  - Module-level materials, cached textures and shared geometry are registered as shared and kept.
+  - Measured in software rendering. Before: about +55 geometries a restart, without end (399 → 1,257 over 6 restarts).
+  - After, the same race restarted 8 times (5.5 s each): 439, 449, 459, 460, 460, 460, 460, 460 geometries and 50–51 textures. The first few seconds after a restart stream scenery in.
+  - With different seeds the count follows each course's content (726–846) without growing.
+  - E2E test: `tests/e2e/review.spec.ts`.
+- **Lost WebGL context (review GR-3):** when the browser takes the GPU context away, three.js stops drawing and rebuilds its state when the context returns.
+  - The controller pauses the run (unless already paused) and shows "The browser reset the graphics…", with a Reload button.
+  - It carries on when the picture is back. Tested with `WEBGL_lose_context` (`tests/e2e/review.spec.ts`).
+
 ## 2. Loading: what changed in Phase 6
 
 ### Download size

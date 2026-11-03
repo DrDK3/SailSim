@@ -17,10 +17,11 @@ import type { CommitteeOptions } from './committee';
 import { RaceSession, type EntrySpec } from './session';
 import { PierGrid, pierPieces, type PierInput } from './piers';
 import { structuresInWater } from '../env/structures';
+import { mooringSwingDeg } from './anchored';
 
 /** The parts of the River Dart features the race needs (moored boats, mooring areas, ferries). */
 export interface RaceFeatures {
-  moorings: { e: number; n: number; l: number; a: string }[];
+  moorings: { e: number; n: number; l: number; a: string; h?: number }[];
   mooringAreas: { name: string; ring: [number, number][] }[];
   ferries: (FerryRoute & { name: string; ram: boolean })[];
   /** Piers, jetties and pontoons (solid to the fleet); absent from older data. */
@@ -225,7 +226,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     entries,
     humanController: s.human?.controller,
     humanInput: s.human?.input,
-    moored: s.features?.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })),
+    moored: s.features?.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a, swingDeg: m.h === undefined ? 0 : mooringSwingDeg(m.h) })),
     ferries: s.features?.ferries,
     traffic: s.traffic,
     piers: structures,

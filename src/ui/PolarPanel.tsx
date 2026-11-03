@@ -75,7 +75,9 @@ export function PolarPanel({ onClose }: { onClose: () => void }) {
       </div>
       <p className="fine">
         Model output from estimated coefficients, not measured Squib performance. Steady uniform wind, flat water,
-        autopilot holding each angle and a max-drive sheet setting, {DURATION_S} s per point.
+        autopilot holding each angle, and the crew trimming as your assists and the AI do (auto-trim, easing the
+        main and flattening when overpowered). {DURATION_S} s per point, then a 20 s average. The AI races to these
+        same numbers. A hollow dot (* in the table) means the boat had not settled: speed or heel still swinging.
       </p>
       {progress && <p className="fine" role="status">Computing {progress.tws} kn: {progress.done} / {progress.total} angles…</p>}
       {curves.length > 1 && (
@@ -97,8 +99,8 @@ export function PolarPanel({ onClose }: { onClose: () => void }) {
             {TWA.map((a) => (
               <tr key={a}>
                 <td>{a}°</td>
-                {curves.map((c) => <td key={c.tws}>{c.pts.find((p) => p.twaDeg === a)?.stwKn.toFixed(2) ?? '–'}</td>)}
-                {curves.map((c) => <td key={`h${c.tws}`}>{c.pts.find((p) => p.twaDeg === a)?.heelDeg.toFixed(0) ?? '–'}°</td>)}
+                {curves.map((c) => { const p = c.pts.find((q) => q.twaDeg === a); return <td key={c.tws}>{p ? `${p.stwKn.toFixed(2)}${p.settled ? '' : '*'}` : '–'}</td>; })}
+                {curves.map((c) => { const p = c.pts.find((q) => q.twaDeg === a); return <td key={`h${c.tws}`}>{p ? `${p.heelDeg.toFixed(0)}°${p.settled ? '' : '*'}` : '–'}</td>; })}
               </tr>
             ))}
             {curves.length > 0 && (
@@ -142,7 +144,11 @@ export function PolarPanel({ onClose }: { onClose: () => void }) {
                 const on = hover?.tws === c.tws && hover.p.twaDeg === p.twaDeg;
                 return (
                   <g key={`${c.tws}-${p.twaDeg}`}>
-                    <circle cx={x} cy={y} r={on ? 5.5 : 4} fill={COLOR[c.tws]} className="hover-dot" />
+                    {p.settled ? (
+                      <circle cx={x} cy={y} r={on ? 5.5 : 4} fill={COLOR[c.tws]} className="hover-dot" />
+                    ) : (
+                      <circle cx={x} cy={y} r={on ? 5.5 : 4} fill="var(--chart-surface)" stroke={COLOR[c.tws]} strokeWidth={2} className="hover-dot" data-testid="polar-unsettled" />
+                    )}
                     <circle cx={x} cy={y} r={10} fill="transparent" onPointerEnter={() => setHover({ tws: c.tws, p })} onPointerLeave={() => setHover(null)} />
                   </g>
                 );
@@ -154,6 +160,7 @@ export function PolarPanel({ onClose }: { onClose: () => void }) {
               <div><strong>{hover.p.stwKn.toFixed(2)} kn</strong> STW</div>
               <div className="tooltip-t">TWA {hover.p.twaDeg}° · TWS {hover.tws} kn</div>
               <div className="tooltip-t">heel {hover.p.heelDeg.toFixed(0)}° · VMG {hover.p.vmgKn.toFixed(2)} kn</div>
+              {!hover.p.settled && <div className="tooltip-t">Not steady: speed swings {hover.p.stwRangeKn.toFixed(2)} kn, heel {hover.p.heelRangeDeg.toFixed(0)}° (20 s average shown)</div>}
             </div>
           )}
         </div>

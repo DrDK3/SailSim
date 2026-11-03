@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shared, sharedAll } from './dispose';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BoatParams } from '../sim/boat/params';
 import type { SquibTypeId } from '../sim/boat/squib';
@@ -87,7 +88,7 @@ export interface SquibModelOptions {
 
 /** Draws nothing; marks each boat's deck outline in the stencil so the water is not drawn inside the hull. */
 export const WATER_MASK_ORDER = 1;
-const WATER_MASK_MATERIAL = new THREE.MeshBasicMaterial({
+const WATER_MASK_MATERIAL = shared(new THREE.MeshBasicMaterial({
   colorWrite: false,
   depthWrite: false,
   side: THREE.DoubleSide,
@@ -95,7 +96,7 @@ const WATER_MASK_MATERIAL = new THREE.MeshBasicMaterial({
   stencilRef: 1,
   stencilFunc: THREE.AlwaysStencilFunc,
   stencilZPass: THREE.ReplaceStencilOp,
-});
+}));
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -136,7 +137,7 @@ const BOOT: [number, number] = [0.025, 0.07];
 const STRIPE_DROP: [number, number] = [0.095, 0.035];
 
 /** Materials shared by every boat (the hull's is cloned per boat for its tint). */
-const MAT = {
+const MAT = sharedAll({
   hull: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, clearcoat: 0.8, clearcoatRoughness: 0.25, side: THREE.DoubleSide }),
   deck: new THREE.MeshStandardMaterial({ color: 0xe4dfd2, roughness: 0.85, side: THREE.DoubleSide }),
   well: new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.8, side: THREE.DoubleSide }),
@@ -155,7 +156,7 @@ const MAT = {
   varnish: new THREE.MeshPhysicalMaterial({ color: 0xc8a684, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.15 }),
   tiller: new THREE.MeshPhysicalMaterial({ color: 0xc8a684, roughness: 0.4, clearcoat: 1 }),
   water: new THREE.MeshPhysicalMaterial({ color: 0x3f7c86, roughness: 0.05, transmission: 0, transparent: true, opacity: 0.72, depthWrite: false }),
-};
+});
 // The gelcoat at the waterline stays wet: darker and glossier (materialFx.ts).
 addWetBand(MAT.hull);
 let texturesApplied = false;

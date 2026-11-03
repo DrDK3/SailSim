@@ -178,6 +178,13 @@ K_damping  = −220·p                                (linear structural/viscous
 
 **Righting arm GZ(φ):** an estimated table (E) with initial slope GM = 0.8 m (E), maximum about 0.46 m at 50–60°, and vanishing stability near 115°. It is the shape typical of a ballasted keelboat; no Squib stability curve has been found (`MISSING_INFORMATION.md`).
 
+**Beyond the table, and with the rig in the water (review, 3 Nov 2026).**
+- **The bug:** the table ends at 120° and used to be extrapolated in a straight line, so the capsizing arm grew without limit past it. A boat knocked that far rolled faster and faster until the numbers overflowed. In a river race this hung the program: a later loop never ended on the non-finite values.
+- **The fix:** GZ now runs linearly to zero at 180° (upside down), and the angle is taken round the circle.
+- **The rig in the water (E):** from 75° to 90° of heel the sails and windage fade to nothing, because the mast and sails are in the water. The roll damping rises to 21 times its value as they drag through it (`RIG_IN_WATER`).
+- **Normal sailing is unaffected:** nothing changes below 75° of heel. The determinism reference hash is unchanged.
+- **Tests:** `tests/sim/stability.test.ts`.
+
 **Roll damping** comes mostly from the motion-induced airflow at the sails (§3) and the sway of the keel and rudder (§5). The small linear term covers hull and structural damping.
 
 **Results (free decay, no wind):** the period is 2.10 s against the small-angle theory 2π·√(I44/(m·g·GM)) = 2.09 s. In still air the peaks decay 15° → 9.6° → 6.4° → 4.3°: the foils and the linear term damp it; in wind, the sails add much more.
@@ -375,6 +382,11 @@ Boats in a race (or the user's boat alone, in free sailing) are stepped together
 - **Coefficients:** μ = 0.3. Hard bodies (boats, committee boat, moored boats, ferries): k = 2×10⁵ N/m, c = 5×10³ N s/m. Inflatable marks: k = 3×10⁴ N/m, c = 2×10³ N s/m. All estimates (E).
 - **Timing:** forces are computed from the states at the start of the step and held over it (the `external` force of `Simulation`). The result does not depend on the order of the boats.
 - **Fixed bodies:** marks, moored boats (a box l × l/3, lying to the stream or wind, downstream of the buoy) and ferries (moving on their timetable) do not respond.
+- **Anchored and moored boats (review CO-3, CO-4, `race/anchored.ts`):** one pose function serves the physics and the picture.
+  - A boat at anchor or on a mooring lies head to the stream when it runs and head to the wind in slack water, blended as the stream rises from 0.03 to 0.15 m/s (E). It used to switch at 0.08 m/s.
+  - "The wind" is the **base** wind (the forecast or the set wind, without gusts and oscillating shifts): a boat at anchor answers the mean wind, not each puff. So the pose is a pure function of time, and the renderer and the physics agree at any moment.
+  - In slack water each moored boat is swung by up to ±15° from the wind, a number from the layout. The physics now includes this swing; before, only the picture did.
+  - The committee boat, SAMARITAN, collides with her own hull outline (the Squib plan shape scaled to 10.82 × 3.57 m, E), centred on the line-end mark and lying as above. She used to be a 2.5 m circle.
 - **Heel (realism round):** each contact force also heels the boat, acting at a height above the waterline: topsides 0.55 m (boats, moored boats, ferries), a pontoon's fenders 0.35 m, a jetty's piles 0.25 m, a mark 0.3 m (E).
 - **Piers and pontoons (realism round, `race/piers.ts`):** solid; a line pier is a rectangle per segment (grown by half its width at each end), an outlined one is cut into triangles (ear clipping); 25 m grid. Fixed jetties as hard bodies; floating pontoons k = 8×10⁴ N/m, c = 4×10³ N s/m on their fenders (E).
 - **Quay walls (photo round, `env/quays.ts`):** where houses stand on the town waterfronts, the vertical stone walls the owner's photographs show are put back along the 1 m ODN contour of the 4 m town ground (the LIDAR grids smooth them into ramps). Each wall's face stands 1 m into the water from the contour; it is a fixed pier 1.2 m thick behind the face, so boats meet a wall instead of grounding on a slope. About 2.5 km in the two towns, kept off the ferry slipways, the yacht club's sea wall and the castles' rocks. Where the walls stand and how high they are follow a rule (E).

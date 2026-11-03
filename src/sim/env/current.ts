@@ -52,9 +52,9 @@ export function tidalStream(tide: TideSource, s: TidalStreamSettings): CurrentMo
   const fe = Math.sin(s.floodSetDeg * DEG);
   return {
     kind: 'tidal',
-    label: `Tidal stream (modelled): flood ${s.peakFloodKn} kn → ${Math.round(s.floodSetDeg)}°, ebb ${s.peakEbbKn} kn`,
+    label: `Tidal stream (illustrative, not real timing): flood ${s.peakFloodKn} kn → ${Math.round(s.floodSetDeg)}°, ebb ${s.peakEbbKn} kn`,
     notes: [
-      'Provisional model: rate follows the rate of change of the tide height; not measured current data.',
+      'Illustrative only: the rate follows the rate of change of the tide height, so it is slack at high and low water and the flood mirrors the ebb. Real streams need not keep that timing; not measured current data.',
       `Tide timing from: ${tide.label}.`,
       ...(s.riverEbbKn > 0 ? [`Includes ${s.riverEbbKn} kn river outflow in the ebb direction.`] : []),
     ],
@@ -97,9 +97,9 @@ export function dartStream(tide: TideSource, geo: StreamPattern, s: TidalStreamS
   const last = { t: NaN, flood: 0, river: 0, offshore: { n: 0, e: 0 } };
   return {
     kind: 'tidal',
-    label: `Tidal stream (modelled, channel-following): entrance flood ${s.peakFloodKn} kn, ebb ${s.peakEbbKn} kn`,
+    label: `Tidal stream (illustrative, not real timing; channel-following): entrance flood ${s.peakFloodKn} kn, ebb ${s.peakEbbKn} kn`,
     notes: [
-      'Provisional model: pattern from tidal-prism continuity on estimated depths, scaled to the entrance stream; not measured current data.',
+      'Illustrative only: pattern from tidal-prism continuity on estimated depths, scaled to the entrance stream; its timing (slack at high and low water) is not the real Dart stream\'s; not measured current data.',
       'Rates are the mean across the entrance (castle to castle) at mid-tide; the narrows run faster, creeks and bays slower.',
       ...(extras.depthWeight ? ['Deeper water runs faster than the shallows beside it (depth^(2/3), estimated).'] : []),
       ...(extras.offshore ? ['Offshore in Start Bay the stream runs along the coast: north-east-going from HW−2 to HW+4, south-west-going from LW−2 to LW+4 (DHNA); its rate (0.7 kn at most) is estimated.'] : []),

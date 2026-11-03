@@ -78,7 +78,8 @@ describe('a live quick race on the river', () => {
   const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8')) as unknown;
   const weather: DataSource = { id: 'live/latest.json', kind: 'live', label: 'Live: Met Office UKV', url: 'live/latest.json', json: fixture('metoffice-snapshot-2026-10-22T0715Z.json') };
   const tide: DataSource = { id: 'live/tide.json', kind: 'live', label: 'Live tide: synthetic test predictions', url: 'live/tide.json', json: fixture('tide-snapshot-SYNTHETIC.json'), gaugeUsable: false };
-  const LIVE_RIVER = { ...DEFAULT_QUICK_RACE, venue: 'river' as const, conditions: 'live' as const, competitors: 3 };
+  // With the illustrative stream asked for (it is off by default since the review, decision D5).
+  const LIVE_RIVER = { ...DEFAULT_QUICK_RACE, venue: 'river' as const, conditions: 'live' as const, competitors: 3, stream: true };
   // "Now" within the weather recording, so the live race starts at a time the data covers.
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -97,6 +98,19 @@ describe('a live quick race on the river', () => {
     expect(c.scenario.conditions.current).toEqual({ mode: 'none' });
     expect(c.race?.session.fleet.boats.length).toBe(4);
     expect(() => sail(c, 60)).not.toThrow();
+  }, 120_000);
+
+  it('by default the river race has no tidal stream, and no note about one (review EN-1, decision D5)', () => {
+    const c = riverController();
+    c.weatherSources = [weather];
+    c.tideSources = [tide];
+    const r = c.startQuickRace({ ...LIVE_RIVER, stream: undefined });
+    expect(r!.note).toBeUndefined();
+    expect(c.scenario.conditions.current).toEqual({ mode: 'none' });
+    const q = quickRaceScenario({ ...DEFAULT_QUICK_RACE, venue: 'river', conditions: 'random', seed: 4 }, c.scenario);
+    expect(q.scenario.conditions.current).toEqual({ mode: 'none' });
+    const s = quickRaceScenario({ ...DEFAULT_QUICK_RACE, venue: 'river', conditions: 'random', seed: 4, stream: true }, c.scenario);
+    expect(s.scenario.conditions.current.mode).toBe('dart');
   }, 120_000);
 
   it('with a live tide as well, the river has its tide and channel stream', () => {

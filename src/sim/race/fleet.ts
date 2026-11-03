@@ -1,6 +1,6 @@
 import { DT, type ExternalForce, type Simulation } from '../simulation';
 import { hashNumbers } from '../hash';
-import { bodyToWorld, windFrom, type NE } from '../boat/forces';
+import { bodyToWorld, type NE } from '../boat/forces';
 import type { FerryRoute } from '../env/ferries';
 import { RiverTraffic, type VesselState } from '../env/traffic';
 import type { Environment } from '../env/environment';
@@ -8,6 +8,9 @@ import { boxOutline, circleContact, placeOutline, polygonContact, squibOutline, 
 import { hypot2 } from '../math/hypot';
 import { PIER_CONTACT, PierGrid, pierPieces, type PierInput } from './piers';
 import { impactEnergy } from '../boat/damage';
+import { COMMITTEE_OUTLINE, committeeHeading, mooredBoatPose } from './anchored';
+
+export { mooredBoatPose } from './anchored';
 
 /**
  * Several boats sharing one environment, stepped together at the fixed 10 ms step, with contact between
@@ -37,9 +40,15 @@ export interface CircleObstacle {
   kind: 'mark' | 'committee-boat';
   n: number;
   e: number;
+  /** Contact radius (m); with `hull`, the radius of a circle about the mark that contains the hull. */
   radius: number;
   stiffness: number;
   damping: number;
+  /**
+   * An anchored vessel (the committee boat): her hull outline, centred on the mark, lying head to the stream or
+   * the base wind (src/sim/race/anchored.ts). Without it the obstacle is a circle of `radius`.
+   */
+  hull?: Outline;
 }
 
 /** A boat on a swinging mooring: buoy position, length (m) and kind, from the provisional mooring layout. */
@@ -48,6 +57,8 @@ export interface MooredBoat {
   e: number;
   l: number;
   area: string;
+  /** Her swing from the wind in slack water (deg), from the layout (`mooringSwingDeg`). */
+  swingDeg?: number;
 }
 
 export type ContactKind = 'boat' | 'mark' | 'committee-boat' | 'moored' | 'ferry' | 'pier';
@@ -89,17 +100,9 @@ export function markRadius(kind: string): number | null {
     case 'pin': return 0.9;
     case 'nav-buoy': return 0.9;
     case 'fixed': return 0.4;
-    case 'committee-boat': return 2.5;
+    case 'committee-boat': return COMMITTEE_OUTLINE.radius;
     default: return null;
   }
-}
-
-/** Where a moored boat lies: head to the stream (or, in slack water, the wind), downstream of its buoy. */
-export function mooredBoatPose(m: { n: number; e: number; l: number }, stream: NE, windFromDir: number, jitterDeg = 0): { n: number; e: number; heading: number } {
-  const sp = hypot2(stream.n, stream.e);
-  const bowTo = sp > 0.08 ? Math.atan2(-stream.e, -stream.n) : windFromDir + jitterDeg * (Math.PI / 180);
-  const back = m.l * 0.5 + 2;
-  return { n: m.n - Math.cos(bowTo) * back, e: m.e - Math.sin(bowTo) * back, heading: bowTo };
 }
 
 interface Body {
@@ -126,6 +129,7 @@ export class Fleet {
   private readonly mooredOutline = new Map<number, Outline>();
   private piers?: PierGrid;
   private readonly nearPiers: number[] = [];
+  private readonly hullPts: Vec[] = [];
   readonly events: ContactEvent[] = [];
   time = 0;
   step = 0;
@@ -293,11 +297,11 @@ export class Fleet {
     for (let i = 0; i < this.boats.length; i++) {
       const A = bodies[i]!;
       const oa = this.boats[i]!;
-      // Course marks and the committee boat (fixed circles).
+      // Course marks (fixed circles) and the committee boat (her hull, lying to the stream or the wind).
       for (const m of this.marks) {
         const rr = oa.outline.radius + m.radius;
         if ((A.n - m.n) ** 2 + (A.e - m.e) ** 2 > rr * rr) continue;
-        const c = circleContact(A.pts, m, m.radius);
+        const c = m.hull ? polygonContact(A.pts, placeOutline(m.hull, m.n, m.e, committeeHeading(this.env, this.time, m.n, m.e), this.hullPts)) : circleContact(A.pts, m, m.radius);
         if (!c) continue;
         const va = pointVel(A, c.point);
         const f = force(c, { n: -va.n, e: -va.e }, m.stiffness, m.damping);
@@ -316,7 +320,7 @@ export class Fleet {
               const mb = this.moored[k]!;
               const reach = oa.outline.radius + mb.l + 2;
               if ((A.n - mb.n) ** 2 + (A.e - mb.e) ** 2 > reach * reach) continue;
-              const pose = mooredBoatPose(mb, this.env.current(this.time, mb.n, mb.e), windFrom(this.env.wind(this.time, mb.n, mb.e)).fromDir);
+              const pose = mooredBoatPose(mb, this.env, this.time);
               let ol = this.mooredOutline.get(k);
               if (!ol) this.mooredOutline.set(k, (ol = boxOutline(mb.l, mb.l * 0.33)));
               const c = polygonContact(A.pts, placeOutline(ol, pose.n, pose.e, pose.heading));

@@ -15,6 +15,7 @@ import type { RaceEvent } from '../sim/course/judge';
 import { DART_LEVELS, type CourseIssue } from '../sim/course/validate';
 import { createRace, practiceLineLength, raceStructures, startClearWater, startPositions, type ClearWater } from '../sim/race/setup';
 import { Fleet } from '../sim/race/fleet';
+import { committeeHeading, mooredBoatPose, mooringSwingDeg } from '../sim/race/anchored';
 import type { RaceSession, LogEntry } from '../sim/race/session';
 import type { Flag, PrepFlag, ResultRow } from '../sim/race/committee';
 import type { AiLevel } from '../sim/ai/skipper';
@@ -33,7 +34,7 @@ import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
 import { SoundScape, type AudioSettings } from '../render/audio';
-import type { GraphicsSettings } from '../render/graphics';
+import { presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { lightingStart, type LightingPreset } from './lighting';
 import { freshLiveWeather, liveNowConditions, nowStartTime } from './liveNow';
 
@@ -167,6 +168,11 @@ export interface UiState {
   fps: number;
   physicsMsPerFrame: number;
   webglError?: string;
+  /** The browser has taken the GPU context away: the picture is gone until it is restored (the run is paused). */
+  graphicsLost?: boolean;
+  /** The simulation is not keeping up with real time: the share it manages, and any preset the graphics were lowered to. */
+  runningSlow?: { ratio: number; lowered?: string };
+  autoLowerGraphics: boolean;
   scenarioError?: string;
   race?: RaceUi;
   weatherSources: DataSource[];
@@ -242,6 +248,14 @@ export class SimController {
   private renderTime = 0;
   private raf = 0;
   private paused = false;
+  /** Pace against the wall clock (`watchPace`). */
+  private readonly pace = { wall: 0, sim: 0, slowWindows: 0, lastLowered: -Infinity, skipNext: false };
+  private runningSlow?: { ratio: number; lowered?: GraphicsPreset };
+  /** Step the graphics down when the simulation cannot keep up (a setting; on by default). */
+  autoLowerGraphics = true;
+  /** The GPU context is lost, and whether that (not the user) paused the run. */
+  private graphicsLost = false;
+  private pausedForGraphics = false;
   private held = new Set<string>();
   private listeners = new Set<Listener>();
   private ui!: UiState;
@@ -384,7 +398,7 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...quayPiers(this.dartData?.quays ?? [])] });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a, swingDeg: mooringSwingDeg(m.h) })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...quayPiers(this.dartData?.quays ?? [])] });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;
@@ -917,6 +931,7 @@ export class SimController {
     void this.loadDart();
     try {
       this.view = new SceneView(container, this.sim.params);
+      this.view.onContextChange = (lost) => this.onGraphicsContext(lost);
     } catch (err) {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
@@ -966,12 +981,13 @@ export class SimController {
 
   private frame(now: number): void {
     // Never backwards: a frame's timestamp can fall a little before a clock reading taken on resume.
-    const dt = Math.max(0, Math.min(0.1, (now - this.lastFrame) / 1000));
+    const rawDt = (now - this.lastFrame) / 1000;
+    const dt = Math.max(0, Math.min(0.1, rawDt));
     this.lastFrame = now;
+    let steps = 0;
     if (!this.paused) {
       const t0 = performance.now();
       this.accumulator += dt * this.timeScale;
-      let steps = 0;
       while (this.accumulator >= DT && steps < MAX_STEPS_PER_FRAME * this.timeScale) {
         // Keep (light) snapshots of the last two physics states for render interpolation.
         const last = this.accumulator - DT < DT;
@@ -997,6 +1013,7 @@ export class SimController {
       }
       this.physMs = this.physMs * 0.9 + (performance.now() - t0) * 0.1;
       this.renderTime += dt;
+      this.watchPace(rawDt, steps * DT);
     }
     const alpha = this.paused ? 1 : clamp(this.accumulator / DT, 0, 1);
     const info = this.detailSnap.env;
@@ -1018,9 +1035,12 @@ export class SimController {
             windFromDir: this.currSnap.twdGround,
             windSpeed: this.currSnap.twsGround,
             showLabels: this.showLabels,
+            mooredPose: (m) => mooredBoatPose(m, sim.env, sim.time),
           }
         : undefined,
-      course: this.race ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels } : undefined,
+      course: this.race
+        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e) }
+        : undefined,
       fleet: this.race ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
     });
     this.frames++;
@@ -1040,7 +1060,10 @@ export class SimController {
   private lastBoomT = -1;
   private harbour = { at: -Infinity, value: 0 };
   private onGesture = () => this.sound.resume();
-  private onVisibility = () => this.sound.setHidden(document.hidden);
+  private onVisibility = () => {
+    this.sound.setHidden(document.hidden);
+    this.pace.skipNext = true;
+  };
 
   /** The sounds follow the boat as drawn (the latest physics state). */
   private updateSound(now: number): void {
@@ -1073,8 +1096,15 @@ export class SimController {
     this.publish(true);
   }
 
+  setAutoLowerGraphics(on: boolean): void {
+    this.autoLowerGraphics = on;
+    this.publish(true);
+  }
+
   /** Apply and keep graphics settings (scenery detail and shadows need a reload of the page). */
   setGraphics(g: GraphicsSettings): void {
+    // The user's own choice wins: no automatic lowering for the rest of this visit.
+    this.autoLowerGraphics = false;
     this.view?.applyGraphics(g, true);
     this.publish(true);
   }
@@ -1182,6 +1212,61 @@ export class SimController {
   centreHelm(): void {
     if (this.replay) return;
     this.sim.setInput({ helm: 0 });
+  }
+
+  /**
+   * Keeping up with real time (review PH-5). Each frame may advance at most 0.1 s and 12 steps, so on a slow
+   * device the simulation runs slower than the clock. Over windows of 3 s of wall time (the frame after a hidden
+   * tab returns is left out) the share of real time simulated is measured; under 90% the run is "running
+   * slow", which the UI shows. After two slow windows in a row the graphics step down one preset (not saved),
+   * at most every 30 s, while "lower the graphics when slow" is on.
+   */
+  private watchPace(wallS: number, simS: number): void {
+    const w = this.pace;
+    // The first frame after the tab is shown again spans the time it was hidden: not slowness.
+    if (w.skipNext || wallS > 30 || wallS <= 0) {
+      w.skipNext = false;
+      return;
+    }
+    w.wall += wallS;
+    w.sim += simS / this.timeScale;
+    if (w.wall < 3) return;
+    const ratio = w.sim / w.wall;
+    w.wall = 0;
+    w.sim = 0;
+    const slow = ratio < 0.9;
+    w.slowWindows = slow ? w.slowWindows + 1 : 0;
+    const was = this.runningSlow;
+    this.runningSlow = slow ? { ratio, lowered: was?.lowered } : undefined;
+    if (slow && w.slowWindows >= 2 && this.autoLowerGraphics && this.view && performance.now() - w.lastLowered > 30_000) {
+      const order: GraphicsPreset[] = ['ultra', 'balanced', 'performance'];
+      const g = this.view.graphics;
+      const at = g.preset === 'custom' ? 0 : order.indexOf(g.preset);
+      const next = order[Math.min(order.length - 1, at + 1)]!;
+      if (next !== g.preset) {
+        this.view.applyGraphics(presetSettings(next, g.cameraMotion), false);
+        w.lastLowered = performance.now();
+        this.runningSlow = { ratio, lowered: next };
+      }
+    }
+    if (!!was !== !!this.runningSlow || was?.lowered !== this.runningSlow?.lowered) this.publish(true);
+  }
+
+  /**
+   * The browser took the GPU context away or gave it back (review GR-3): pause while the picture is gone, so
+   * nothing happens unseen, and carry on when it returns (unless the user had paused already).
+   */
+  private onGraphicsContext(lost: boolean): void {
+    this.graphicsLost = lost;
+    if (lost && !this.paused) {
+      this.paused = true;
+      this.pausedForGraphics = true;
+    } else if (!lost && this.pausedForGraphics) {
+      this.paused = false;
+      this.pausedForGraphics = false;
+      this.lastFrame = performance.now();
+    }
+    this.publish(true);
   }
 
   togglePause(): void {
@@ -1367,6 +1452,9 @@ export class SimController {
       fps: this.fps,
       physicsMsPerFrame: this.physMs,
       webglError: this.webglError,
+      graphicsLost: this.graphicsLost,
+      runningSlow: this.paused ? undefined : this.runningSlow,
+      autoLowerGraphics: this.autoLowerGraphics,
       scenarioError: this.scenarioError,
       race: this.raceUi(),
       weatherSources: this.weatherSources,

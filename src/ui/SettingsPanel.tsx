@@ -45,6 +45,10 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
               {g.preset === 'custom' && <span className="fine">Custom</span>}
             </div>
             <p className="fine">{g.preset !== 'custom' ? PRESET_INFO[g.preset].note : 'Your own mix of the options below.'} Measured now: {ui.fps.toFixed(ui.fps < 10 ? 1 : 0)} frames a second.</p>
+            <label className="check">
+              <input type="checkbox" checked={ui.autoLowerGraphics} onChange={(e) => ctl.setAutoLowerGraphics(e.target.checked)} />
+              Lower the graphics when the simulation cannot keep up with real time (until you choose graphics yourself)
+            </label>
             <div className="settings-grid">
               <label>
                 Resolution <span className="fine">{pct(g.resolutionScale)}</span>

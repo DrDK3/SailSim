@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
+import { mooringSwingDeg } from '../sim/race/anchored';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
 import { berthOccupancy, type Berth } from '../sim/env/marinas';
@@ -69,6 +70,11 @@ export interface DartUpdate {
   showLabels: boolean;
   /** The run's river traffic (ferries crabbing in its stream, Dart Marina boats); else ferries alone. */
   traffic?: RiverTraffic;
+  /**
+   * Where a moored boat lies now: the simulation's own pose (src/sim/race/anchored.ts), so the drawn boat is
+   * the one the physics collides with. Without it (tests), boats lie head to the stream or `windFromDir`.
+   */
+  mooredPose?: (m: { n: number; e: number; l: number; swingDeg: number }) => { n: number; e: number; heading: number };
 }
 
 
@@ -778,18 +784,22 @@ export class DartScene {
     return buoys;
   }
 
-  private updateMoorings(stream: (n: number, e: number) => NE, windFromDir: number): void {
+  private updateMoorings(u: DartUpdate): void {
     const f = this.features;
     if (!f || !this.boats || !this.buoys) return;
     const m = new THREE.Matrix4();
     f.moorings.forEach((b, i) => {
-      // Boats on a mooring lie head to the stream; in slack water, head to the wind.
-      const c = stream(b.n, b.e);
-      const sp = Math.hypot(c.n, c.e);
-      const bowTo = sp > 0.08 ? Math.atan2(-c.e, -c.n) : windFromDir + ((b.h % 30) - 15) * (Math.PI / 180);
-      // The buoy is at the bow end of the chain; the boat lies downstream of it.
-      const back = b.l * 0.5 + 2;
-      this.boats!.set(i, { n: b.n - Math.cos(bowTo) * back, e: b.e - Math.sin(bowTo) * back, heading: bowTo, length: b.l, kind: b.k === 'motor' ? 'motor' : 'yacht', seed: b.h, visible: true });
+      const swingDeg = mooringSwingDeg(b.h);
+      let pose = u.mooredPose?.({ n: b.n, e: b.e, l: b.l, swingDeg });
+      if (!pose) {
+        // No simulation pose: head to the stream, in slack water head to the wind; the buoy is at the bow end
+        // of the chain and the boat lies downstream of it.
+        const c = u.stream(b.n, b.e);
+        const bowTo = Math.hypot(c.n, c.e) > 0.08 ? Math.atan2(-c.e, -c.n) : u.windFromDir + swingDeg * (Math.PI / 180);
+        const back = b.l * 0.5 + 2;
+        pose = { n: b.n - Math.cos(bowTo) * back, e: b.e - Math.sin(bowTo) * back, heading: bowTo };
+      }
+      this.boats!.set(i, { n: pose.n, e: pose.e, heading: pose.heading, length: b.l, kind: b.k === 'motor' ? 'motor' : 'yacht', seed: b.h, visible: true });
       m.makeTranslation(b.e, 0.05, -b.n);
       this.buoys!.setMatrixAt(i, m);
     });
@@ -904,7 +914,7 @@ export class DartScene {
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;
-      this.updateMoorings(u.stream, u.windFromDir);
+      this.updateMoorings(u);
       if (u.traffic && u.traffic.berths.length === this.berths.length) this.updateBerths(u.traffic.berthsTaken(u.epochMs));
     }
     this.boats?.setWind(u.windFromDir);

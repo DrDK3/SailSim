@@ -43,7 +43,7 @@ The data must be measured. Values estimated by sailors ("about 5 knots upwind") 
 npm run calibrate -- data/observations/my-log.csv
 ```
 
-For each observation, the tool runs the model to a steady state with the same procedure as the polar (autopilot holding the TWA, max-drive sheet setting, flat water, 120 s). It prints a table of model − observed residuals and the RMS for speed, heel and leeway. Each point takes about 1 s.
+For each observation, the tool runs the model to a steady state with the same procedure as the polar and the AI's target table (`crewPolicyPoint`: autopilot holding the TWA, the crew trimming as the assists do, easing and flattening when overpowered, flat water, 120 s, then a 20 s average). Until 3 Nov 2026 it used a max-drive sheet setting that ignored heel, which is not what a crew does in a breeze (review PH-2). It prints a table of model − observed residuals and the RMS for speed, heel and leeway. Each point takes about 1 s.
 
 Residual patterns point to the knob to use:
 

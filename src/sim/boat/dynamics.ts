@@ -1,4 +1,4 @@
-import { clamp } from '../math/angles';
+import { clamp, smoothstep, wrapPi } from '../math/angles';
 import { interpTable } from '../math/interp';
 import { G } from '../units';
 import { rigFactor, rudderDamage, type Damage } from './damage';
@@ -85,9 +85,31 @@ export interface ForceBreakdown {
   total: BodyForce;
 }
 
-/** Righting arm GZ(φ) (m), odd in φ, from the calibration table. */
+/**
+ * Righting arm GZ(φ) (m), odd in φ, from the calibration table. Beyond the table's last angle (120°) it runs
+ * linearly to zero at 180° (upside down), and the angle is taken round the circle: the table is never
+ * extrapolated. (Linear extrapolation made the capsizing arm grow without limit past 120°, so a boat knocked
+ * that far rolled faster and faster until the numbers overflowed: review, 3 Nov 2026.)
+ */
 export function rightingArm(p: BoatParams, phi: number): number {
-  return Math.sign(phi) * interpTable(p.gz, Math.abs(phi));
+  const a = Math.abs(wrapPi(phi));
+  const last = p.gz[p.gz.length - 1]!;
+  const arm = a <= last[0] ? interpTable(p.gz, a) : last[1] * Math.max(0, (Math.PI - a) / (Math.PI - last[0]));
+  return Math.sign(wrapPi(phi)) * arm;
+}
+
+/**
+ * Knocked down, the rig reaches the water (E): the sails and windage fade from 75° to nothing at 90° of heel,
+ * and the roll damping rises to `1 + extraDamping` times its value as the mast and sails drag through the water.
+ */
+export const RIG_IN_WATER = { fromRad: (75 * Math.PI) / 180, toRad: Math.PI / 2, extraDamping: 20 };
+
+/** The share of the rig still above the water at heel `phi` (1 upright … 0 with the mast in the water). */
+export function rigAboveWater(phi: number): number {
+  const c = Math.abs(Math.cos(phi));
+  // |cos| falls from cos 75° to 0 at 90°; past 90° the rig is under (the boat is beyond the knockdown).
+  if (Math.abs(wrapPi(phi)) >= RIG_IN_WATER.toRad) return 0;
+  return smoothstep(0, Math.cos(RIG_IN_WATER.fromRad), c);
 }
 
 /** An empty force breakdown, to pass to computeForces as `out` and reuse step after step. */
@@ -144,8 +166,9 @@ export function computeForces(
   MAIN_MOTION.boomRate = a.boomRate;
   JIB_MOTION.boomRate = 0;
   const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, s.phi, fluids.rhoAir, MAIN_MOTION, JIB_MOTION, a.mainInverted, o);
-  // A damaged rig drives less (a slack forestay, a bent or broken mast).
-  const rig = rigFactor(a.damage);
+  // A damaged rig drives less (a slack forestay, a bent or broken mast). Knocked down past 75° the sails reach
+  // the water and stop driving (none past 90°): see RIG_IN_WATER.
+  const rig = rigFactor(a.damage) * rigAboveWater(s.phi);
   if (rig < 1) for (const sf of [main, jib]) {
     sf.x *= rig;
     sf.y *= rig;
@@ -154,6 +177,11 @@ export function computeForces(
     sf.boomTorque *= rig;
   }
   const windage = windageForce(p, aw, s.phi, fluids.rhoAir, o.windage);
+  const above = rigAboveWater(s.phi);
+  if (above < 1) {
+    windage.x *= above;
+    windage.y *= above;
+  }
   // Local sway at each foil: yaw (r·x) and roll (the keel swings opposite to the mast: −p·depth).
   const lateral = foilForce(p.lateral, s.u, s.v + s.r * p.lateral.x - s.p * p.clrDepth, 0, s.phi, fluids.rhoWater, o.lateral);
   // The keel's downwash straightens the flow reaching the rudder: only part of the hull's leeway remains.
@@ -191,7 +219,8 @@ export function computeForces(
   r.hydro = -lateral.yPlane * p.clrDepth - rudder.yPlane * p.rudderDepth;
   r.crew = p.crewMass * G * a.crewY * Math.cos(s.phi);
   r.righting = -p.weight * rightingArm(p, s.phi);
-  r.damping = -p.rollLinearDamping * s.p;
+  // The mast and sails dragging through the water once knocked down that far damp the roll strongly (E).
+  r.damping = -p.rollLinearDamping * (1 + RIG_IN_WATER.extraDamping * (1 - rigAboveWater(s.phi))) * s.p;
   r.ground = contact.roll;
   r.water = 0;
   r.total = r.sails + r.hydro + r.crew + r.righting + r.damping + contact.roll;

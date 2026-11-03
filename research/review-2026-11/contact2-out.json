@@ -1,0 +1,54 @@
+{
+ "glancingJetty": {
+  "trace": [
+   "t0 n4.01 hdg70 4.99kn",
+   "t1 n4.84 hdg70 4.57kn",
+   "t2 n5.58 hdg70 4.25kn",
+   "t3 n6.16 hdg75 2.95kn",
+   "t4 n6.29 hdg81 2.55kn",
+   "t5 n6.31 hdg83 2.31kn",
+   "t6 n6.31 hdg83 2.16kn",
+   "t7 n6.31 hdg83 1.95kn",
+   "t8 n6.31 hdg83 1.77kn",
+   "t9 n6.31 hdg83 1.65kn"
+  ],
+  "stepsInContact": 5,
+  "impacts": [
+   "bow:0.76m/s:245J:",
+   "side:0.19m/s:15J:",
+   "side:0.08m/s:3J:",
+   "side:0.03m/s:0J:",
+   "side:0.01m/s:0J:"
+  ],
+  "events": 5
+ },
+ "pinned": {
+  "meanN_last10s": 6.092,
+  "jitter_last10s_m": 0.0019,
+  "heelRange_last10s": [
+   1.3,
+   1.4
+  ],
+  "drift_e_m": 75.19,
+  "impacts": 2,
+  "events": 2
+ },
+ "groundRelease": {
+  "groundedAt_s": 141.01,
+  "releasedAt_s": 1239.01,
+  "trace": [
+   "t0min water0.37 depth11.70 g0 sog3.00",
+   "t10min water0.51 depth0.99 g1 sog0.14",
+   "t20min water0.65 depth0.99 g1 sog0.19"
+  ],
+  "impacts": [
+   "keel:1.09m/s:502J:scraped"
+  ],
+  "damage": {
+   "hull": 0,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 0
+  }
+ }
+}

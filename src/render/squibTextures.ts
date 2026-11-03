@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shared } from './dispose';
 
 /**
  * Canvas-drawn detail for the Squib model: transom lettering, sail cloth (seams, battens, telltales, windows,
@@ -22,7 +23,7 @@ function toTexture(c: HTMLCanvasElement, srgb = true): THREE.CanvasTexture {
 const cache = new Map<string, THREE.Texture>();
 function cached(key: string, make: () => THREE.Texture): THREE.Texture {
   let t = cache.get(key);
-  if (!t) cache.set(key, (t = make()));
+  if (!t) cache.set(key, (t = shared(make())));
   return t;
 }
 

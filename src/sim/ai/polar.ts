@@ -1,4 +1,4 @@
-import { DEG } from '../math/angles';
+import { DEG, wrapPi } from '../math/angles';
 import { knToMs, msToKn } from '../units';
 import { hashNumbers } from '../hash';
 import type { BoatParams } from '../boat/params';
@@ -39,8 +39,36 @@ export function paramsFingerprint(p: BoatParams): string {
   return hashNumbers(nums);
 }
 
-/** Steady speed at one point, as the AI sails (TWA autopilot, auto-trim with heel-limited main). */
-export function aiSteadySpeed(params: BoatParams, twsKn: number, twaDeg: number, durationS = 120): number {
+/** The settled state at one point with the crew policy (see `crewPolicyPoint`). */
+export interface SteadyPoint {
+  twsKn: number;
+  twaDeg: number;
+  /** Means over the averaging window (the last 20 s). */
+  stwKn: number;
+  heelDeg: number;
+  leewayDeg: number;
+  /** Rudder angle holding the course (deg; + = weather helm on either tack). */
+  rudderDeg: number;
+  /** Velocity made good towards the wind (+) or away from it (−), kn. */
+  vmgKn: number;
+  /** Spread (max − min) over the window. */
+  stwRangeKn: number;
+  heelRangeDeg: number;
+  /** Whether the boat had settled: STW within 0.05 kn and heel within 1° over the window. */
+  settled: boolean;
+}
+
+/** Steady-state thresholds (review §4, A-PH-7). */
+export const SETTLED = { stwKn: 0.05, heelDeg: 1 };
+
+/**
+ * The one polar generator (review PH-2, PH-7): the boat's steady state at one true wind speed and angle with
+ * the crew policy the player's assists and the AI use (TWA autopilot; auto-trim on both sails with the
+ * heel-limited main and flattening, `aiSheetInput`; crew assist). Uniform steady wind from 000°, flat water,
+ * no current. Run for `durationS`, then averaged over 20 s, as a boat on the edge of control may oscillate.
+ * MODEL OUTPUT from estimated coefficients, not measured Squib performance.
+ */
+export function crewPolicyPoint(params: BoatParams, twsKn: number, twaDeg: number, durationS = 120): SteadyPoint {
   const sheets = { ease: 0 };
   const target = (twaDeg === 180 ? 179.5 : twaDeg) * DEG;
   const sim = new Simulation({
@@ -49,15 +77,55 @@ export function aiSteadySpeed(params: BoatParams, twsKn: number, twaDeg: number,
     initial: { headingDeg: -twaDeg, speedKn: 3 },
     input: { autoMain: true, autoJib: true, autoCrew: true },
     controller: (s) => ({ helm: autopilotHelm(s, { mode: 'twa', target }), ...aiSheetInput(s, sheets) }),
+    logInputs: false,
   });
   sim.advance(durationS);
-  // Average over the last 20 s (a boat on the edge of control may oscillate).
-  let sum = 0;
-  for (let i = 0; i < 2000; i++) {
+  const N = 2000;
+  let stw = 0;
+  let heel = 0;
+  let lee = 0;
+  let rud = 0;
+  let vmg = 0;
+  let sMin = Infinity;
+  let sMax = -Infinity;
+  let hMin = Infinity;
+  let hMax = -Infinity;
+  for (let i = 0; i < N; i++) {
     sim.stepOnce();
-    sum += Math.hypot(sim.state.u, sim.state.v);
+    const st = sim.state;
+    const sp = Math.hypot(st.u, st.v);
+    const h = Math.abs(st.phi);
+    stw += sp;
+    heel += h;
+    lee += Math.abs(Math.atan2(st.v, Math.max(1e-6, st.u)));
+    // As helm balance (Simulation.helmBalance): > 0 weather helm. The wind blows from 000°, so it is on the
+    // starboard side when −ψ wraps to ≥ 0.
+    rud += (wrapPi(-st.psi) >= 0 ? -1 : 1) * sim.act.rudder;
+    vmg += st.u * Math.cos(st.psi) - st.v * Math.sin(st.psi);
+    sMin = Math.min(sMin, sp);
+    sMax = Math.max(sMax, sp);
+    hMin = Math.min(hMin, h);
+    hMax = Math.max(hMax, h);
   }
-  return msToKn(sum / 2000);
+  const stwRangeKn = msToKn(sMax - sMin);
+  const heelRangeDeg = (hMax - hMin) / DEG;
+  return {
+    twsKn,
+    twaDeg,
+    stwKn: msToKn(stw / N),
+    heelDeg: heel / N / DEG,
+    leewayDeg: lee / N / DEG,
+    rudderDeg: rud / N / DEG,
+    vmgKn: msToKn(vmg / N),
+    stwRangeKn,
+    heelRangeDeg,
+    settled: stwRangeKn < SETTLED.stwKn && heelRangeDeg < SETTLED.heelDeg,
+  };
+}
+
+/** Steady speed at one point, as the AI sails (TWA autopilot, auto-trim with heel-limited main): `crewPolicyPoint`. */
+export function aiSteadySpeed(params: BoatParams, twsKn: number, twaDeg: number, durationS = 120): number {
+  return crewPolicyPoint(params, twsKn, twaDeg, durationS).stwKn;
 }
 
 export function computePolar(params: BoatParams, twsKn = POLAR_TWS_KN, twaDeg = POLAR_TWA_DEG, durationS = 120): PolarData {
