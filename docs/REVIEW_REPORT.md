@@ -39,24 +39,38 @@ The owner asked for a thorough review, with a screenshot of the river race and a
 
 Open: issue 113. Please check UAT 6.11 on the owner's own machine.
 
-## 3. SAMARITAN, the committee boat (done)
+## 3. SAMARITAN, the committee boat (done; rebuilt on 3 Nov after the owner's review)
 
-The grey box at the line's end is now **SAMARITAN** (`src/render/samaritan.ts`), drawn from the owner's photograph:
-- white hull with a navy boot top and sheer stripe;
-- the deck saloon's long band of windows;
-- the navy sprayhood and cockpit canopy, with its clear windows;
-- a navy sail cover (stack pack) on the boom and a navy UV strip on the furled genoa;
-- aluminium mast with two spreaders and a radome, solar panel on the coachroof;
-- pulpit, pushpit and guard wires, bow roller with anchor;
-- her name on both bows;
-- the orange committee flag on a staff at the stern.
+The grey box at the line's end is now **SAMARITAN**, a Southerly 110 deck-saloon sloop (`src/render/samaritan.ts`). The first version (1 Nov) was a generic yacht: the owner found it "too far removed" from the real boat. It was rebuilt from the owner's photograph (P4), matching her layout along her length against the photograph, and from published descriptions of the class (R11, R12):
 
-She lies at anchor head to wind (tested), and the "Start boat" label now sits above her mast.
+- **Layout (photograph):**
+  - the mast stands about 4.7 m from the bow, at the front of the deck saloon;
+  - the saloon runs back from the mast for about 4 m, its aft part under the sprayhood;
+  - the cockpit sits under its enclosure for the last 2.5 m;
+  - the foredeck is long.
+- **Deck saloon (photograph, listings):** its front is raked and its sides lean in. A band of tinted glass wraps round the front either side of the mast and runs along each side as two long windows, with white frames between them.
+- **Hull (listings, reviews):**
+  - deep and high-sided, cream-white, with a navy boot top, a dark rubbing strake and an aluminium toe rail;
+  - four fixed hull portlights, two a side;
+  - a bathing platform at the foot of the transom, with its boarding ladder, and a walk-through gap in the pushpit;
+  - twin rudders, angled out, under the stern.
+- **Deck (photograph):**
+  - the hatches' burgundy covers: one on the saloon roof, a small one and a large one on the foredeck;
+  - the solar panel and a mushroom vent on the saloon roof, just ahead of the sprayhood.
+- **Canvas (photograph):**
+  - the navy sprayhood sits on the saloon's aft part, its raked front carrying two large clear windows with a clear window each side;
+  - aft of the saloon, the navy enclosure steps out over the cockpit and runs to the stern, a soft dome falling away at the back, with a clear window each side;
+  - the navy stack pack runs along the boom over the enclosure.
+- **Rig (photograph):** the mast with two pairs of swept spreaders and the radome about a third of the way up; the furled genoa, white, on the forestay.
+- **Glass:** her own dark tint, as the windows read in the photograph.
+- **Name and flag:** her name on both bows, forward of the portlights; the orange committee flag at the stern.
 
-**Size:** the photograph does not show her model. The Southerly 110's figures are used (10.82 m overall, 3.57 m beam, about 14 m air draft; sources R11), as an estimate (E). No public record of a Southerly named Samaritan was found. If you know her model, I'll set her size to it.
+She lies at anchor head to wind (tested), and the "Start boat" label sits above her mast.
 
-![SAMARITAN at the line's end](img/review-samaritan.jpg)
-![From above](img/review-samaritan-above.jpg)
+![SAMARITAN beside the owner's photograph (flipped so both bows face left)](img/review-samaritan-vs-photo.jpg)
+![From the side, the bow and the quarter](img/review-samaritan-views.jpg)
+
+**Still estimated (E):** the photograph was taken from above, so her side profile, sheer, the colours below the deck edge, the windows' exact shapes, the stern's shape and where her name is painted are estimates. A side-on photograph would let me match them. Her size uses the Southerly 110's published figures (10.82 m overall, 3.57 m beam, about 14 m air draft).
 
 **Not changed:** the race physics still treat the committee boat as a 2.5 m circle at the line's end, so in the picture a boat could pass through her bow or stern (issue 111). Giving her a hull-shaped contact is a protected-engine change, proposed for a later round.
 
@@ -114,7 +128,7 @@ Seen here but not in the owner's screenshot: with this machine's fonts, at 1000 
 
 | Check | Result |
 |---|---|
-| `tests/render/committee.test.ts` (4, new) | The rudder hangs outside the transom, its head above it, the blade 0.8 m deep; the tiller runs forward over the deck; SAMARITAN's size, mast and navy canvas; she replaces the box and lies head to wind |
+| `tests/render/committee.test.ts` (5, new) | The rudder hangs outside the transom, its head above it, the blade 0.8 m deep; the tiller runs forward over the deck; SAMARITAN's size, mast and navy canvas; her tinted glass, burgundy hatch covers and white furled genoa; she replaces the box and lies head to wind |
 | `tests/render/berthed.test.ts` (1 new) | No zero-length normals; no berthed boat takes shadows |
 | `tests/sim/live-now.test.ts` (4, new) | Live conditions start this minute with the forecast's gusts and sky; an untouched session goes live; a started one never switches; a stale forecast is not used; "Real time" light |
 | `tests/e2e/deploy.spec.ts` (updated) | On the production build under a sub-path, with a fresh forecast served: the untouched session goes live at startup |

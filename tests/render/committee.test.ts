@@ -85,6 +85,30 @@ describe('the committee boat SAMARITAN', () => {
     expect(navy).toBeGreaterThan(50);
   });
 
+  it('has what the owner\'s photograph shows: tinted glass, burgundy hatch covers, a white furled genoa', () => {
+    const g = samaritanModel();
+    const glass = g.children.find((c) => c.name === 'samaritan-glass') as THREE.Mesh;
+    const tint = (glass.material as THREE.MeshStandardMaterial).color.getHSL({ h: 0, s: 0, l: 0 });
+    expect(tint.l).toBeLessThan(0.1);
+    // Vertex colours of the canvas parts: burgundy (hatch covers), navy (canopy, stack pack) and the genoa's white.
+    const counts = { burgundy: 0, navy: 0, white: 0 };
+    g.traverse((o) => {
+      const col = (o as THREE.Mesh).geometry?.getAttribute('color');
+      if (!col) return;
+      const c = new THREE.Color();
+      for (let i = 0; i < col.count; i++) {
+        c.setRGB(col.getX(i), col.getY(i), col.getZ(i), THREE.LinearSRGBColorSpace);
+        const hsl = c.getHSL({ h: 0, s: 0, l: 0 });
+        if ((hsl.h > 0.95 || hsl.h < 0.03) && hsl.s > 0.4 && hsl.l < 0.25) counts.burgundy++;
+        else if (hsl.h > 0.55 && hsl.h < 0.7 && hsl.l < 0.12) counts.navy++;
+        else if (hsl.l > 0.8) counts.white++;
+      }
+    });
+    expect(counts.burgundy).toBeGreaterThan(20);
+    expect(counts.navy).toBeGreaterThan(200);
+    expect(counts.white).toBeGreaterThan(1000);
+  });
+
   it('replaces the box at the line end and lies head to wind', () => {
     stubCanvas();
     const course = {
