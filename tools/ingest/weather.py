@@ -2,7 +2,7 @@
 
 Sources (both British Crown copyright, the Met Office, CC BY-SA 4.0; public S3, no keys):
   * MODEL  - Met Office UKV 2 km deterministic forecast. 10 m wind (speed, direction, gust) on a grid over the
-             sailing area every 15 minutes for the next HORIZON_MIN minutes, so a session can follow the
+             sailing area every 15 minutes for two hours, then hourly to HORIZON_MIN minutes, so a session can follow the
              forecast's changes; and, hourly, the sky: total and low cloud, visibility, precipitation and
              rain rate, fog fraction, air temperature and sea-level pressure, at RDYC and as area means.
              A forecast, not a measurement; runs arrive 3-6 h after their run time.
@@ -13,7 +13,7 @@ Schema squib-weather/2 keeps every squib-weather/1 field (model.valid, points, g
 older app builds still read it, and adds model.steps, model.sky and model.horizon.
 
 Usage:
-    python -I tools/ingest/weather.py OUT_JSON [--at 2026-10-22T07:15Z] [--horizon-min 120] [--no-obs]
+    python -I tools/ingest/weather.py OUT_JSON [--at 2026-10-22T07:15Z] [--horizon-min 480] [--no-obs]
 Exit status: 0 = written; 3 = no model run covers the time yet (nothing written; keep the old file);
 1 = error (nothing written).
 """
@@ -50,6 +50,10 @@ RDYC = POINTS["rdyc_kingswear"]
 STATIONS = ("plymouth_mountbatten", "exeter_airport_no_2")
 STEP_MIN = 15
 SKY_EVERY_MIN = 60
+# Fine (STEP_MIN) steps for this long, then hourly ones to the horizon (see valid_times).
+FINE_MIN = 120
+# The scheduled job is meant to run every 30 minutes, but GitHub has run it only every 4-6 hours: publish 8 hours.
+DEFAULT_HORIZON_MIN = 480
 
 # Sky variables: output name, UKV file, conversion from the file's units, decimals.
 SKY_VARS = (
@@ -161,13 +165,29 @@ def sky_step(run, valid):
     return out
 
 
+def valid_times(valid0, horizon_min, fine_min=FINE_MIN):
+    """Forecast times to publish: every STEP_MIN minutes for the first `fine_min`, then on each hour to the
+    horizon. The scheduled job runs every few hours at best (GitHub delays and skips scheduled runs), so the file
+    must cover until the next run; hourly steps beyond the first two hours keep that affordable."""
+    out = []
+    end = valid0 + dt.timedelta(minutes=horizon_min)
+    t = valid0
+    while t <= min(end, valid0 + dt.timedelta(minutes=fine_min)):
+        out.append(t)
+        t += dt.timedelta(minutes=STEP_MIN)
+    t = out[-1].replace(minute=0) + dt.timedelta(hours=1)
+    while t <= end:
+        out.append(t)
+        t += dt.timedelta(hours=1)
+    return out
+
+
 def model_conditions(valid0, horizon_min):
     run = find_model_run(valid0)
     if run is None:
         return {"available": False, "reason": f"no UKV run yet covers {valid0:%Y-%m-%dT%H:%MZ}"}
     steps, first = [], None
-    for k in range(horizon_min // STEP_MIN + 1):
-        valid = valid0 + dt.timedelta(minutes=k * STEP_MIN)
+    for k, valid in enumerate(valid_times(valid0, horizon_min)):
         if k > 0 and not exists(model_file(run, valid, "wind_speed_at_10m")):
             break  # the run ends before the horizon: publish what there is
         speed, direction, gust = wind_step(run, valid)
@@ -180,9 +200,10 @@ def model_conditions(valid0, horizon_min):
             "gust_kn": r(gust.area() * MS_TO_KN, 1),
         })
     sky = []
+    last = dt.datetime.strptime(steps[-1]["valid"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=dt.timezone.utc)
     for k in range(0, horizon_min + 1, SKY_EVERY_MIN):
         valid = valid0 + dt.timedelta(minutes=k)
-        if valid > valid0 + dt.timedelta(minutes=(len(steps) - 1) * STEP_MIN):
+        if valid > last:
             break
         sky.append(sky_step(run, valid))
     speed, direction, gust = first
@@ -317,7 +338,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out_json")
     ap.add_argument("--at", help="UTC time, e.g. 2026-10-22T07:15Z (default: now)")
-    ap.add_argument("--horizon-min", type=int, default=120)
+    ap.add_argument("--horizon-min", type=int, default=DEFAULT_HORIZON_MIN)
     ap.add_argument("--no-obs", action="store_true")
     args = ap.parse_args()
     now = (dt.datetime.strptime(args.at, "%Y-%m-%dT%H:%MZ").replace(tzinfo=dt.timezone.utc)

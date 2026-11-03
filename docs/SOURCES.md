@@ -136,6 +136,14 @@ No photograph of either vessel could be viewed (the image and operator hosts are
 | P3 | The owner's photograph of MV Cardiff Castle under way, and two screenshots of the app showing the faults (supplied in the conversation, 29 Oct 2026) | n/a | Oct 2026 | Direct | Her livery and layout (`cruiserModel` in src/render/traffic.ts): a dark navy hull with a white crest on the bow and a white band at the gunwale; a long main saloon with large windows; the upper deck behind a solid white bulwark, lined with passengers; a raised wheelhouse forward; a tall white mast with a radar and flags; no funnel to be seen. The photograph is small: sizes and the crest's shape are estimates (E) |
 | N1 | Wikipedia, "HMS Cromer (M103)" and "Britannia Royal Naval College" (via search excerpts) | https://en.wikipedia.org/wiki/HMS_Cromer_(M103) ; https://en.wikipedia.org/wiki/Britannia_Royal_Naval_College | n.d. | Excerpt (en.wikipedia.org blocked) | The Hindostan, the college's static training ship moored off Sandquay, is the former Sandown-class minehunter HMS Cromer (M103), 52.5 m by 10.5 m, renamed for the role. OSM maps her as a building; she is drawn as a minehunter on OSM's outline (src/render/traffic.ts `minehunterModel`). Her appearance follows the class in outline only: no photograph or drawing of her was viewed (E) |
 
+## River race review (1 Nov 2026)
+
+| # | Source | URL | Date | Access | Used for |
+|---|---|---|---|---|---|
+| P4 | The owner's photograph of SAMARITAN, the club's committee boat, at her berth (from above: white hull, deck saloon, navy sprayhood and canopy, navy sail cover, radome, solar panel), and a screenshot of the app's river race (supplied in the conversation, 1 Nov 2026) | n/a | 1 Nov 2026 | Owner's photograph (reference) | Samaritan's looks (src/render/samaritan.ts); the black marina hulls, the hidden rudder and the UI faults it showed |
+| R10 | Wikipedia, "Squib (keelboat)"; keelindex.com, "Squib" (via search excerpts) | https://en.wikipedia.org/wiki/Squib_(keelboat) ; https://www.keelindex.com/boat/squib | n.d. | Excerpt | The Squib's rudder is transom-hung (fin keel, transom-hung rudder). Its blade's shape is still an estimate |
+| R11 | Southerly 110 broker listings: De Valk; boats.com; keelindex (via search excerpts) | https://www.devalk.nl/en/yachtbrokerage/351147/SOUTHERLY-110.html ; https://www.boats.com/sailing-boats/2010-southerly-110-9660327 ; https://keelindex.com/boat/southerly-110 | n.d. | Excerpt (listings vary slightly) | 10.82 m overall, 3.57 m beam, air draft about 14 m: Samaritan's principal dimensions, as an estimate until the owner confirms her model. No public record of a Southerly named Samaritan was found |
+
 ## Waves (wind over tide)
 
 | # | Source | Used for |

@@ -104,7 +104,10 @@ describe('live data: index and freshness', () => {
   it('weather: fresh while the forecast covers now and the job runs, then stale, then expired', () => {
     // V2: generated about 14:05Z, steps 14:00Z .. 16:00Z.
     expect(weatherFreshness(V2, at('2026-10-23T14:30:00Z')).status).toBe('fresh');
-    const late = weatherFreshness(V2, at('2026-10-23T15:50:00Z')); // job not updated for 105 min
+    // The job runs every few hours: 105 min after it ran, a forecast that still covers now is fresh.
+    expect(weatherFreshness(V2, at('2026-10-23T15:50:00Z')).status).toBe('fresh');
+    // Silent for longer than a file lasts (8 h), the feed has stopped, though the steps cover now.
+    const late = weatherFreshness({ ...V2, generated: '2026-10-23T05:00:00Z' }, at('2026-10-23T14:30:00Z'));
     expect(late.status).toBe('stale');
     expect(late.message).toContain('not updated');
     const ended = weatherFreshness(V2, at('2026-10-23T16:40:00Z'));

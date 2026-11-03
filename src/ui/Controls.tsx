@@ -39,7 +39,10 @@ function SailRow({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'ma
       <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`}>Ease <Key k={keys.ease} /></Hold>
       <div className="sheet-bar" title={`Sheet eased ${pct(sheet)}`}>
         <div className="sheet-fill" style={{ width: pct(sheet) }} />
-        <span>{pct(sheet)} eased</span>
+        <span>
+          {pct(sheet)}
+          <span className="sheet-word"> eased</span>
+        </span>
       </div>
       <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`}>Trim <Key k={keys.trim} /></Hold>
       <label className="toggle" title={`Auto-trim assist (${sail === 'main' ? 'M' : 'J'})`}>

@@ -143,6 +143,16 @@ class HarmonicsTests(unittest.TestCase):
 
 
 class WeatherAndIndexTests(unittest.TestCase):
+    def test_forecast_times_fine_then_hourly_to_eight_hours(self):
+        t0 = dt.datetime(2026, 11, 1, 9, 30, tzinfo=dt.timezone.utc)
+        times = weather.valid_times(t0, weather.DEFAULT_HORIZON_MIN)
+        self.assertEqual(times[0], t0)
+        # Every 15 minutes for two hours, then on the hour, to eight hours ahead.
+        self.assertEqual([t.minute for t in times[:9]], [30, 45, 0, 15, 30, 45, 0, 15, 30])
+        self.assertTrue(all(t.minute == 0 for t in times[9:]))
+        self.assertEqual(times[-1], dt.datetime(2026, 11, 1, 17, 0, tzinfo=dt.timezone.utc))
+        self.assertTrue(all(b > a for a, b in zip(times, times[1:])))
+
     def test_weather_validation_refuses_bad_values(self):
         grid = [[1.0, 2.0], [3.0, 4.0]]
         good = {"model": {"available": True, "grid": {"lat": grid}, "steps": [

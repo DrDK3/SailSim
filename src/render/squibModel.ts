@@ -118,9 +118,12 @@ const DECK_CAMBER = 0.035;
 const HELM_Z = 1.45;
 const CREW_Z = 0.5;
 const STRAP_X = 0.16;
-/** The tiller extension (m) and its universal joint at the tiller's end, in the rudder's frame. */
+/** The tiller extension (m); its universal joint at the tiller's end is `extensionPivot` (rudder's frame). */
 const EXTENSION = 0.95;
-const EXTENSION_PIVOT = new THREE.Vector3(0, 0.68, -1.03);
+/** How far forward of the physics' rudder position (m) the tiller's end lies: where the helm reaches it. */
+const TILLER_END_FWD = 1.03;
+/** Gap between the transom and the rudder's hinge line (pintles), m (E). */
+const HINGE_AFT = 0.035;
 const STATIONS = 64;
 const SECTION = 22;
 
@@ -239,6 +242,8 @@ export class SquibModel {
   readonly helmBuild: CrewBuild;
   private readonly boom = new THREE.Group();
   private readonly rudder = new THREE.Group();
+  /** The tiller extension's joint at the tiller's end, in the rudder's frame (set with the rudder). */
+  private readonly extensionPivot = new THREE.Vector3();
   private readonly extension = new THREE.Group();
   private readonly crew: CrewFigure[] = [];
   private readonly mainGeo: THREE.BufferGeometry;
@@ -349,7 +354,7 @@ export class SquibModel {
       mainCE: new THREE.Vector3(),
       jibCE: new THREE.Vector3(),
       keel: new THREE.Vector3(0, -p.clrDepth, -p.lateral.x),
-      rudder: new THREE.Vector3(0, -0.3, -p.rudder.x),
+      rudder: new THREE.Vector3(0, -0.3, this.sternZ + HINGE_AFT + 0.15),
       bow: new THREE.Vector3(0, 0.3, BOW_Z),
       masthead: new THREE.Vector3(0, this.mastTopY + 0.4, MAST_Z),
     };
@@ -678,29 +683,56 @@ export class SquibModel {
     return mesh;
   }
 
-  /** Transom-hung rudder: foil blade, stock, pintles and gudgeons, tiller and extension (estimated). */
+  /**
+   * Transom-hung rudder, as the Squib's is (Wikipedia, keelindex: fin keel, transom-hung rudder): the blade hangs
+   * on pintles and gudgeons just aft of the transom, its head rises above the transom's top, and the tiller runs
+   * forward from the head over the aft deck into the cockpit. Blade planform, thickness and heights are
+   * estimated (E); its depth (0.8 m below the waterline) is the physics' rudder-heel contact point. The physics'
+   * rudder force acts at its own position (calibration `geometry.rudderX`), which this drawing does not change.
+   */
   private buildRudder(): void {
-    const z = -this.p.rudder.x;
-    const stations = [0, 0.25, 0.5, 0.75, 1].map((f) => ({ z: 0.0 + 0.02 * f, y: 0.3 - 1.05 * f, chord: f < 0.9 ? 0.32 - 0.04 * f : 0.28 - 0.5 * (f - 0.9) }));
-    const blade = foil(stations, 0.09, MAT.rudder);
+    const z = this.sternZ + HINGE_AFT;
+    const top = sheerAt(1) + DECK_CAMBER; // the transom's top edge
+    const headTop = top + 0.2;
+    // Blade: leading edge on the hinge line, from just under the head to 0.8 m below the waterline; widest
+    // around the waterline, its lower aft corner rounded.
+    const yTop = top - 0.04;
+    const yTip = -0.8;
+    const stations = [0, 0.15, 0.3, 0.5, 0.7, 0.85, 0.94, 1].map((f) => {
+      const chord = f < 0.3 ? 0.24 + 0.4 * f : f < 0.85 ? 0.36 - 0.07 * ((f - 0.3) / 0.55) : 0.29 - 1.1 * (f - 0.85) ** 1.4;
+      return { z: 0.005 + 0.015 * f, y: yTop + (yTip - yTop) * f, chord: Math.max(0.08, chord) };
+    });
+    const blade = foil(stations, 0.11, MAT.rudder);
     blade.name = 'rudder-blade';
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.2), MAT.darkSpar);
-    head.position.set(0, 0.46, 0.08);
-    for (const y of [0.05, 0.38]) {
-      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.06, 8), MAT.steel);
-      pin.position.set(0, y, -0.005);
-      this.rudder.add(pin);
+    // Rudder head (cheeks) above the transom, where the tiller is fixed.
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.075, headTop - top + 0.12, 0.22), this.classic ? MAT.tiller : MAT.darkSpar);
+    head.position.set(0, (headTop + top - 0.12) / 2, 0.08);
+    head.name = 'rudder-head';
+    // Pintles on the blade's leading edge, gudgeon straps on the transom.
+    for (const y of [0.04, top - 0.1]) {
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.07, 8), MAT.steel);
+      pin.position.set(0, y, -0.004);
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.05), MAT.steel);
+      strap.position.set(0, y, -HINGE_AFT + 0.02);
+      this.rudder.add(pin, strap);
     }
-    const tiller = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.026, 1.1, 10), MAT.tiller);
-    tiller.rotation.x = Math.PI / 2 + 0.12;
-    tiller.position.set(0, 0.62, -0.5);
+    // Tiller: from the head forward to its end, where the extension's joint is (as before: within the helm's reach).
+    // It slopes down from the head to its end, which stays where the helm has always held it.
+    this.extensionPivot.set(0, 0.68, -this.p.rudder.x - TILLER_END_FWD - z);
+    const root = new THREE.Vector3(0, headTop - 0.06, 0.05);
+    const end = this.extensionPivot.clone().setY(this.extensionPivot.y - 0.02);
+    const len = root.distanceTo(end) + 0.05;
+    const tiller = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.027, len, 10), MAT.tiller);
+    tiller.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(root).normalize());
+    tiller.position.copy(root).lerp(end, 0.5);
+    tiller.name = 'tiller';
     // Tiller extension (hiking stick) on a universal joint at the tiller's end.
     const ext = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.95, 8), this.classic ? MAT.tiller : MAT.darkSpar);
     ext.position.y = 0.475;
     const grip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), MAT.black);
     grip.position.y = 0.95;
     this.extension.add(ext, grip);
-    this.extension.position.set(0, 0.68, -1.03);
+    this.extension.position.copy(this.extensionPivot);
     this.rudder.add(blade, head, tiller, this.extension);
     this.rudder.position.set(0, 0, z);
     this.rudder.name = 'rudder';
@@ -1119,7 +1151,7 @@ export class SquibModel {
       let pivot: THREE.Vector3 | undefined;
       if (helm) {
         // The extension swings from its joint at the tiller's end towards the hand's natural place in front.
-        pivot = EXTENSION_PIVOT.clone().applyAxisAngle(Y_AXIS, rudder).add(this.rudder.position);
+        pivot = this.extensionPivot.clone().applyAxisAngle(Y_AXIS, rudder).add(this.rudder.position);
         // When that end would be out of reach, the extension is raised (more upright) until it is in reach.
         const shoulder = fr.shoulders[aft]!;
         const natural = shoulder.clone().addScaledVector(fr.front, 0.28).addScaledVector(Y_AXIS, -0.34).sub(pivot);

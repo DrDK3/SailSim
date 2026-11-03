@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { DEFAULT_QUICK_RACE, QUICK_WIND_KN, type QuickRaceOptions } from '../app/quickRace';
+import { freshLiveWeather } from '../app/liveNow';
 import type { AiLevel } from '../sim/ai/skipper';
 
 const KEY = 'squib.quickRace.v1';
 
-function loadOptions(): QuickRaceOptions {
+/** The saved choice, else the defaults: live conditions now when the site has a forecast covering now. */
+function loadOptions(liveNow: boolean): QuickRaceOptions {
+  const base: QuickRaceOptions = { ...DEFAULT_QUICK_RACE, conditions: liveNow ? 'live' : DEFAULT_QUICK_RACE.conditions };
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_QUICK_RACE, ...(JSON.parse(raw) as Partial<QuickRaceOptions>) };
+    if (raw) return { ...base, ...(JSON.parse(raw) as Partial<QuickRaceOptions>) };
   } catch {
     // Storage unavailable or the saved choice unreadable: the defaults.
   }
-  return { ...DEFAULT_QUICK_RACE };
+  return base;
 }
 
 /** Race in one step: how many boats, how good, where, and in what conditions. */
 export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
-  const [o, setO] = useState<QuickRaceOptions>(loadOptions);
+  const [o, setO] = useState<QuickRaceOptions>(() => loadOptions(!!freshLiveWeather(ui.weatherSources)));
   const [message, setMessage] = useState<string>();
   const set = (patch: Partial<QuickRaceOptions>) => setO({ ...o, ...patch });
   const live = ui.weatherSources.some((w) => w.kind === 'live');

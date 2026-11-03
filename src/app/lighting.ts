@@ -6,9 +6,10 @@ import type { SkyPreset } from '../sim/env/sky';
  * real position (src/sim/env/sun.ts), not from a clock, so they suit any date. Choosing one restarts the
  * scenario at that time: the tide and the light stay together, and the wind is kept.
  */
-export type LightingPreset = 'morning' | 'midday' | 'golden' | 'overcast';
+export type LightingPreset = 'now' | 'morning' | 'midday' | 'golden' | 'overcast';
 
 export const LIGHTING_PRESETS: { id: LightingPreset; label: string; detail: string }[] = [
+  { id: 'now', label: 'Real time', detail: "Now at the Dart: the sun where it is at this moment (dark after sunset) and, where the site has it, today's live weather and sky" },
   { id: 'morning', label: 'Clear morning', detail: 'sun about 20° up in the east, clear sky' },
   { id: 'midday', label: 'Bright midday', detail: 'sun at its highest, clear sky' },
   { id: 'golden', label: 'Golden hour', detail: 'sun about 6° up in the west, clear sky' },
@@ -38,6 +39,9 @@ export function lightingStart(startTime: string, preset: LightingPreset, lat: nu
     return m;
   };
   switch (preset) {
+    case 'now':
+      // The controller restarts at this minute (src/app/controller.ts setLighting); as a time of day: now.
+      return { startTime: new Date().toISOString().slice(0, 16) + ':00Z', sky: 'fair' };
     case 'morning':
       return { startTime: at(crossing(Math.min(20, best - 1), -1)), sky: 'clear' };
     case 'midday':
