@@ -181,6 +181,17 @@ The first revision package of the comprehensive review ([COMPREHENSIVE_REVIEW.md
 | 13.6 | Restart a quick race ten times, then sail on | No slow-down or crash builds up over the restarts | |
 | 13.7 | Optional (a developer's console): `document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context').loseContext()` | "The browser reset the graphics…" shows and the run pauses; it carries on by itself when the picture returns (or press Reload) | |
 
+## 14. RDYC courses and marks from the club's documents (10 min)
+
+From the documents the owner supplied on 3 Nov 2026 ([CLUB_DOCUMENTS.md](CLUB_DOCUMENTS.md)).
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 14.1 | Sail out of the harbour towards Castle Ledge with labels on | Homestone (red can, quick red light), Castle Ledge (green cone), Checkstone (red can), West Rock and Mewstone (south cardinals), the yellow 6-knot buoys and RDYC 1–4 (yellow cones) where the club's Course Appendix puts them; also on the minimap | |
+| 14.2 | Quick race → Where: "Start Bay: an RDYC club course for the wind", random conditions | The summary names the course (e.g. "RDYC B1: wind south-west") and says it awaits a club check; SAMARITAN lies at one end of the line, the named buoy at the other | |
+| 14.3 | Sail the course | The marks and roundings match the course string in the appendix (Library → the course's description) | |
+| 14.4 | **For an RDYC member:** Library → Club courses → each course | Compare it with the Course Appendix 2026; if it matches, set it to verified with your name and the date in the course editor, and export it | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

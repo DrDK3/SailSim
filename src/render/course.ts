@@ -21,7 +21,11 @@ export class CourseScene {
   /** The committee boats, at anchor at their marks: they lie as the simulation says (`setCommitteeHeading`). */
   private readonly committee: { boat: THREE.Object3D; n: number; e: number }[] = [];
 
-  constructor(private readonly r: ResolvedCourse, course: Course) {
+  /**
+   * `realMarks`: buoys the harbour scene already draws (src/render/dart.ts). A course mark on one of them (a club
+   * course rounding Homestone, say) gets only its label and highlight here, not a second, orange buoy.
+   */
+  constructor(private readonly r: ResolvedCourse, course: Course, realMarks: readonly { n: number; e: number }[] = []) {
     this.group.name = 'course';
     const orange = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.55 });
     const yellow = new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.55 });
@@ -45,8 +49,8 @@ export class CourseScene {
         const robot = robotMark(0xff7a1a, sponsors.get(m.id)!, m.kind === 'pin' ? 0xff7a1a : undefined);
         g.add(robot);
         this.robots.push({ g: robot, phase: this.robots.length * 1.7 });
-      } else {
-        // Navigation buoys and fixed marks used as course marks.
+      } else if (!realMarks.some((q) => Math.hypot(q.n - p.n, q.e - p.e) < 5)) {
+        // Navigation buoys and fixed marks used as course marks (where no real buoy is drawn).
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.65, 1.8, 20), orange);
         body.position.y = 0.6;
         g.add(body);

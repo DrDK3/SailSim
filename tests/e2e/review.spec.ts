@@ -46,3 +46,25 @@ test('race restarts give their GPU memory back', async ({ page }) => {
   // Before the fix each restart left about 55 geometries behind (over 100 across these two); now the count holds.
   expect(counts[5]! - counts[3]!).toBeLessThan(20);
 });
+
+/**
+ * The club documents round (docs/CLUB_DOCUMENTS.md): a quick race on an RDYC course from the 2026 sailing
+ * instructions. The course is chosen for the wind, labelled as awaiting a club check, and the committee boat
+ * is placed for the wind in the water.
+ */
+test('quick race on an RDYC club course: labelled pending a club check, committee boat in the water', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  await page.goto('/?nowelcome');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status === 'loaded', null, { timeout: 60_000 * CI_SLOW });
+  const r = await page.evaluate(() => window.__squib!.controller.startQuickRace({ competitors: 4, level: 'good', venue: 'rdyc', course: 'windward-leeward', conditions: 'random', wind: 'any', seed: 5, sequence: 'one-minute' }));
+  expect(r?.summary).toMatch(/2026 sailing instructions \(awaiting a club check\)/);
+  const info = await page.evaluate(() => {
+    const c = window.__squib!.controller as unknown as { race?: { course: { id: string; status: string; marks: { id: string; position?: { n: number; e: number } }[] } }; dartData?: { geo?: { bedElevation(n: number, e: number): number } } };
+    const cb = c.race!.course.marks.find((m) => m.id === 'CB')!;
+    return { id: c.race!.course.id, status: c.race!.course.status, depth: c.dartData!.geo!.bedElevation(cb.position!.n, cb.position!.e) };
+  });
+  expect(info.id).toMatch(/^rdyc-2026-[bc]\d$/);
+  expect(info.status).toBe('pending-check');
+  expect(info.depth).toBeLessThan(-5);
+});

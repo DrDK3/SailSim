@@ -873,21 +873,59 @@ export class DartScene {
     return mesh;
   }
 
+  /**
+   * Navigation and club marks: shapes and colours as the documents describe them (red can, green conical,
+   * yellow conical; a south cardinal's yellow-over-black pillar with two cones pointing down, as IALA
+   * buoyage has it); a plain yellow buoy where the shape is not given. Lights flash only where the harbour
+   * guide gives a character (Q = quick, about one flash a second).
+   */
   private buildMarks(f: DartFeatures): void {
+    const mat = (color: number) => new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
     for (const mk of f.marks) {
-      const green = /starboard/i.test(mk.kind);
+      const colour = mk.colour ?? (/starboard/i.test(mk.kind) ? 'green' : 'red');
+      const shape = mk.shape ?? (/starboard/i.test(mk.kind) ? 'cone' : 'can');
       const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.2, 16), new THREE.MeshStandardMaterial({ color: green ? 0x1f8f3a : 0xc0282d, roughness: 0.6 }));
-      body.position.y = 1.0;
-      const light = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0x222222, emissive: green ? 0x33ff66 : 0xff3333, emissiveIntensity: 0 }));
-      light.position.y = 2.35;
-      g.add(body, light);
+      let top: number;
+      if (colour === 'south-cardinal') {
+        const yellow = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 1.1, 16), mat(0xf2c21b));
+        yellow.position.y = 1.25;
+        const black = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 1.0, 16), mat(0x1b1d20));
+        black.position.y = 0.45;
+        const cone = new THREE.ConeGeometry(0.3, 0.45, 12);
+        const c1 = new THREE.Mesh(cone, mat(0x1b1d20));
+        c1.rotation.x = Math.PI;
+        c1.position.y = 2.15;
+        const c2 = new THREE.Mesh(cone, mat(0x1b1d20));
+        c2.rotation.x = Math.PI;
+        c2.position.y = 2.65;
+        g.add(yellow, black, c1, c2);
+        top = 2.95;
+      } else {
+        const hex = colour === 'green' ? 0x1f8f3a : colour === 'yellow' ? 0xf2c21b : 0xc0282d;
+        const body = shape === 'cone'
+          ? new THREE.Mesh(new THREE.ConeGeometry(0.9, 2.2, 16), mat(hex))
+          : shape === 'can'
+            ? new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.75, 1.8, 16), mat(hex))
+            : new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 12), mat(hex));
+        body.position.y = shape === 'unspecified' ? 0.6 : 1.0;
+        g.add(body);
+        top = shape === 'unspecified' ? 1.55 : 2.35;
+      }
       g.position.set(mk.e, 0, -mk.n);
       g.name = 'mark';
       this.floating.add(g);
-      const m = /Fl(?:\((\d+)\))?\s*\w*\s*(\d+)s/.exec(mk.light);
-      this.markLights.push({ mesh: light, flashes: m?.[1] ? Number(m[1]) : 1, period: m?.[2] ? Number(m[2]) : 5 });
-      const lab = makeLabel(`${mk.name} (${mk.light})`, '#bff5c8');
+      if (mk.light) {
+        const glow = colour === 'green' ? 0x33ff66 : colour === 'red' ? 0xff3333 : 0xffffff;
+        const light = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0x222222, emissive: glow, emissiveIntensity: 0 }));
+        light.position.y = top;
+        g.add(light);
+        const fl = /Fl(?:\((\d+)\))?\s*\w*\s*(\d+)s/.exec(mk.light);
+        const quick = /^Q\b/.test(mk.light);
+        this.markLights.push({ mesh: light, flashes: fl?.[1] ? Number(fl[1]) : 1, period: quick ? 1 : fl?.[2] ? Number(fl[2]) : 5 });
+      }
+      // The course letter after the name ("Homestone [H]"), unless the name already ends with it ("RDYC 3").
+      const showId = mk.id && !new RegExp(`\\b${mk.id}$`).test(mk.name);
+      const lab = makeLabel(`${mk.name}${showId ? ` [${mk.id}]` : ''}${mk.light ? ` (${mk.light})` : ''}`, '#bff5c8');
       lab.position.set(mk.e, 5, -mk.n);
       lab.userData.priority = 0;
       this.labels.add(lab);
@@ -928,7 +966,7 @@ export class DartScene {
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {
       const ph = (u.epochMs / 1000) % ml.period;
-      const on = ph < ml.flashes * 1.0 && ph % 1.0 < 0.5;
+      const on = ml.period <= 1 ? ph < 0.4 : ph < ml.flashes * 1.0 && ph % 1.0 < 0.5;
       (ml.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = on ? 3 : 0;
     }
     const cam = u.camera.position;

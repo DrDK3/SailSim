@@ -18,6 +18,7 @@ import { RaceSession, type EntrySpec } from './session';
 import { PierGrid, pierPieces, type PierInput } from './piers';
 import { structuresInWater } from '../env/structures';
 import { mooringSwingDeg } from './anchored';
+import { markPosition, placeCommitteeBoats } from '../course/course';
 
 /** The parts of the River Dart features the race needs (moored boats, mooring areas, ferries). */
 export interface RaceFeatures {
@@ -186,6 +187,8 @@ export function raceStructures(features: RaceFeatures | undefined, geo: DartGeo 
 export interface CreatedRace {
   session: RaceSession;
   warnings: CourseIssue[];
+  /** The course as raced: a club course's committee boat placed for the day's wind. */
+  course: Course;
 }
 
 /** Validate the course on the River Dart data (when given) and build the race. Throws on an invalid course. */
@@ -194,7 +197,19 @@ export function createRace(s: RaceSetup): CreatedRace {
   const env = s.env ?? buildConditions(s.conditions, geo).env;
   const restrictions = s.features ? buildRestrictions(s.features) : undefined;
   const params = squibParams();
-  const v = validateCourse(s.course, {
+  const total = s.aiCount + (s.human ? 1 : 0);
+  // A club course's committee boat anchors where the race officer sets her on the day: square to today's wind
+  // at her outer distance mark, the line long enough for the fleet, in the deeper water (src/sim/course/course.ts).
+  let course = s.course;
+  const placed = course.marks.find((m) => m.placement);
+  if (placed) {
+    const odm = course.marks.find((m) => m.id === placed.placement!.odm);
+    const p = odm ? markPosition(odm.position, DART_PROJECTION) : { n: 0, e: 0 };
+    const w = env.wind(0, p.n, p.e);
+    const windFromDeg = (Math.atan2(-w.e, -w.n) * 180) / Math.PI;
+    course = placeCommitteeBoats(course, { windFromDeg, lineLengthM: practiceLineLength(total), depthAt: geo ? (n, e) => -geo.bedElevation(n, e) : undefined });
+  }
+  const v = validateCourse(course, {
     projection: DART_PROJECTION,
     seabed: geo,
     inDomain: geo ? (n, e) => geo.inDomain(n, e) : undefined,
@@ -204,7 +219,6 @@ export function createRace(s: RaceSetup): CreatedRace {
     lowWaterOdn: -(geo?.cdBelowOdn ?? 2.62),
   });
   if (!v.ok || !v.resolved) throw new Error(`course "${s.course.name}" is not valid: ${v.issues.filter((i) => i.severity === 'error').map((i) => i.message).join(' ')}`);
-  const total = s.aiCount + (s.human ? 1 : 0);
   const structures = raceStructures(s.features, geo);
   const pos = startPositions(v.resolved, total, geo ? startClearWater(geo, env.waterLevel?.(0), params.draft, restrictions?.moorings, structures) : undefined);
   const entries: EntrySpec[] = [];
@@ -220,7 +234,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     params,
     humanParams: s.human?.params,
     seabed: geo,
-    course: s.course,
+    course,
     resolved: v.resolved,
     committee: s.committee,
     entries,
@@ -233,5 +247,5 @@ export function createRace(s: RaceSetup): CreatedRace {
     mooringAreas: restrictions?.moorings,
     seed: s.seed,
   });
-  return { session, warnings: v.issues.filter((i) => i.severity === 'warning') };
+  return { session, warnings: v.issues.filter((i) => i.severity === 'warning'), course };
 }

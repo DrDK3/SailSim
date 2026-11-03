@@ -1324,12 +1324,14 @@ The owner's answers to §11. "Recommended" means the recommendation in §11 was 
 | D11 | Rules scope | Recommended: rule 18 (mark-room), then 19–20; always "simplified, not authoritative" (Package 7) |
 | D12 | Minimum device | Recommended: a 2020 mid-range phone and an integrated-GPU laptop |
 
-**The three documents could not be read.** Their hosts (`96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com`, `squibs.co.uk`, `content.yudu.com`) are blocked by this environment's network policy, both by direct download and by the web-fetch tool (retried once at the owner's request). A web search found no other copy of the 2026 SIs or the class rules.
+**The three documents arrived later the same day.**
 
-Nothing from them has been assumed. Package 2's start-signal sounds, Package 5's sail controls and Package 7's club courses wait for them. To unblock:
-
-- allow the three hosts in the environment's network settings (the cloud environment's Network access, under Allowed domains); or
-- commit the files to the repository, for example under `research/club-docs/`.
+- **How they came:** their hosts were blocked by this environment's network policy, so the owner uploaded them: the RDYC Sailing Programme 2026 (with the SIs and Course Appendix), the National Squib Class Rules 2025 and the Dart Harbour guide 2019.
+- **What they gave** (read in full; [CLUB_DOCUMENTS.md](CLUB_DOCUMENTS.md)):
+  - the club's marks, now on the map;
+  - eight RDYC courses, entered pending a club check, with a quick-race venue that picks the course for the wind;
+  - the class spec, now citing the class rules.
+- **What remains open:** the facts that need positions the documents do not give (the Blackstone Point line, the Club Line, the temporary marks). They are listed in CLUB_DOCUMENTS.md §1.
 
 ## 13. Package 1: what changed
 

@@ -21,6 +21,19 @@ export interface CourseMark {
   position: MarkPosition;
   /** Where the position came from (document, chart, "generated"…). */
   source?: string;
+  /**
+   * A committee boat the race officer anchors on the day (club courses): the line runs from her to `odm`, the
+   * outer distance mark. The simulator places her square to the wind at the ODM, the line long enough for the
+   * fleet (`placeCommitteeBoats`); `position` then holds the place for the course's design wind.
+   */
+  placement?: CommitteePlacement;
+}
+
+export interface CommitteePlacement {
+  /** The outer distance mark (the other end of the line). */
+  odm: string;
+  /** Line length (m); else set for the fleet. */
+  lineLengthM?: number;
 }
 
 export type CourseLeg =
@@ -63,7 +76,10 @@ export interface Course {
   finish: CourseLine;
   /** Lines that must not be crossed (e.g. the sides of a tacking lane). */
   boundaries?: (CourseLine & { label?: string })[];
-  /** The wind the course was designed for (deg true, FROM), when generated relative to the wind. */
+  /**
+   * The wind the course was designed for (deg true, FROM): generated practice courses, and club courses set for
+   * a wind direction (used to place a committee boat that has no fixed position).
+   */
   designWindFromDeg?: number;
 }
 

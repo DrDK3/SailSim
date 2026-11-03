@@ -5,7 +5,7 @@ Do not edit by hand. Tags: V verified (primary, inspected), S(p) primary documen
 S secondary, E estimated, N not established, C calibrated against named observations (docs/CALIBRATION.md).
 Source ids refer to docs/SOURCES.md.
 
-## Class data (13 parameters)
+## Class data (22 parameters)
 
 | Parameter | Value | Unit | Tag | Source | Note |
 |---|---|---|---|---|---|
@@ -13,17 +13,26 @@ Source ids refer to docs/SOURCES.md.
 | `lwl` | 5.18 | m | S | C7 | 17.0 ft |
 | `beam` | 1.867 | m | S | C6 | 6 ft 1.5 in |
 | `draft` | 0.99 | m | S | C7 | 3.25 ft maximum |
-| `minBoatMass` | 680 | kg | S(p) | C1, C6 | Minimum weight including sails and mandatory items |
+| `minBoatMass` | 680 | kg | V | C15 | Minimum weight of the boat, including sails, the mandatory portable equipment and permanently fitted optional items (C.6.1, J.6.1). Up to 30 kg of metal corrector weights (C.6.2), and up to 30 kg more of penalty correctors with NSOA and RYA approval (C.6.3) |
 | `ballastMass` | 375 | kg | S | C7 | Cast iron fin keel |
-| `mainArea` | 10.5 | m2 | S(p) | C4, C8 | Main + jib = 16.5 m2 conflicts with 15.8 m2 upwind total (C6) |
-| `jibArea` | 6 | m2 | S(p) | C4, C8 |  |
-| `spinnakerArea` | 13.5 | m2 | S(p) | C4 | Not modelled in Phase 1 |
-| `mastLength` | 7.695 | m | S(p) | C1 | Datum (overall or above deck) not established |
-| `boomOuterPoint` | 2.743 | m | S(p) | C2 | Used as mainsail foot length; whether min or max is unclear |
-| `spinnakerPoleLength` | 2.14 | m | S(p) | C1 |  |
-| `crewCount` | 2 | - | S | C8 | NSOA says two or three |
+| `mainArea` | 10.5 | m2 | S(p) | C4, C8 | Not stated in the class rules, which give dimensions (G.3.4: leech 6815 mm max; quarter, half, three-quarter and top widths 2320, 1690, 985 and 145 mm max). From those with a luff of about 6.33 m between the mast bands (F.3.6) and a foot of 2.743 m, an ORC-style estimate is about 9.85 m2 (E). Main + jib from the rules is then about 15.5 m2, nearer the 15.8 m2 secondary figure (C6) than 16.5 |
+| `jibArea` | 6 | m2 | S(p) | C4, C8 | Not stated in the class rules (G.4.3: luff 5380, leech 4670, foot 2410 mm max; leech no further out than a straight line). As a triangle from those maxima, about 5.62 m2 (E) |
+| `spinnakerArea` | 13.5 | m2 | S(p) | C4 | Not modelled yet. Not stated in the class rules (G.5.3: luff and leech 4900, foot 3420, half width 3200, three-quarter width 1880 mm max); about 13.3 m2 from those (E), consistent with 13.5 |
+| `mastLength` | 7.695 | m | V | C15 | Maximum, measured from the mast datum point, the heel (F.2.3, F.3.6) |
+| `boomOuterPoint` | 2.743 | m | V | C15 | Maximum outer point distance (C.9.6(a), J.9.6). Used as the mainsail foot length |
+| `spinnakerPoleLength` | 2.14 | m | V | C15 | Maximum, including end fittings (F.5.5) |
+| `crewCount` | 2 | - | V | C15 | The crew shall consist of a minimum of 2 persons (C.2.1, J.2.1); no maximum or weight limit is set |
+| `forestayHeight` | 6.42 | m | V | C15 | 6400–6440 mm (F.3.6); mid-range used |
+| `spinnakerHoistHeightMax` | 6.49 | m | V | C15 | Maximum (F.3.6) |
+| `mastUpperPointHeight` | 7.485 | m | V | C15 | Maximum (F.3.6); the lower point is at 1160 mm minimum |
+| `mastWeightMin` | 16 | kg | V | C15 | Minimum, with centre of gravity at 3400 mm minimum above the heel (F.3.6, F.3.7) |
+| `mainLeechMax` | 6.815 | m | V | C15 | G.3.4 |
+| `jibLuffMax` | 5.38 | m | V | C15 | G.4.3; foot 2.41 m max, leech 4.67 m max |
+| `spinnakerLuffMax` | 4.9 | m | V | C15 | G.5.3; leech the same, foot 3.42 m max, half width 3.2 m max |
+| `forwardFlotation` | 158 | L | V | C15 | Minimum additional flotation fitted forward of the mast (C.5.1(a)(3)) |
+| `headsailFairleadTrackMax` | 0.385 | m | V | C15 | Maximum track length (C.7.4(b)) |
 
-## Calibration coefficients (117 parameters; 116 tag E, 1 tag S)
+## Calibration coefficients (120 parameters; 119 tag E, 1 tag S)
 
 | Parameter | Value | Unit | Tag | Source | Note |
 |---|---|---|---|---|---|
@@ -111,6 +120,9 @@ Source ids refer to docs/SOURCES.md.
 | `hydro.hullDraft` | 0.3 | m | E | estimate | Canoe body draft for cross-flow drag strips |
 | `hydro.yawLinearDamping` | 200 | N m s | E | estimate |  |
 | `hydro.rudderFlowStraightening` | 0.5 | - | E | estimate | Fraction of the hull's leeway removed from the rudder inflow by the keel's downwash (0 = none, 1 = rudder sees no leeway). Typical manoeuvring-model values are of order 0.3-0.6. |
+| `hydro.rudderVentStartDeg` | 45 | deg | E | estimate | Heel beyond which the rudder starts to lose grip: heeled, it works nearer the surface and draws air down its low-pressure side (ventilation) or lifts partly out. Practitioner accounts describe sudden loss of steering at large heel, after which the boat rounds up and comes upright (PBO 'Broaching' and others: SOURCES.md R3). No Squib measurement. |
+| `hydro.rudderVentEndDeg` | 80 | deg | E | estimate | Heel by which the rudder has lost most of its grip (it keeps rudderVentResidual of it) |
+| `hydro.rudderVentResidual` | 0.15 | - | E | estimate | Share of the rudder's force left when fully ventilated |
 | `stability.gm` | 0.8 | m | E | estimate | Metacentric height: initial slope of the GZ curve (righting arm = GM sin(phi) at small angles) |
 | `stability.gzTable` | table (13 rows) | deg -> m | E | estimate | Righting arm GZ versus heel. Initial slope matches GM; shape typical of a ballasted fin-keel dayboat (maximum near 50-60 deg, vanishing stability near 117 deg). Not from a Squib stability test. |
 | `stability.rollRadiusOfGyration` | 0.85 | m | E | estimate | k_xx including mast and rig high up and the keel low down |

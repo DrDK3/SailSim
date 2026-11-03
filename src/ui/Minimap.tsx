@@ -47,7 +47,8 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     if (f) {
       for (const mk of f.marks) {
         const [x, y] = toPx(mk.n, mk.e);
-        ctx.fillStyle = /starboard/i.test(mk.kind) ? '#2fbf5a' : '#e0403a';
+        const c = mk.colour ?? (/starboard/i.test(mk.kind) ? 'green' : 'red');
+        ctx.fillStyle = c === 'green' ? '#2fbf5a' : c === 'yellow' ? '#f2c21b' : c === 'south-cardinal' ? '#d8b020' : '#e0403a';
         ctx.beginPath();
         ctx.moveTo(x, y - 5);
         ctx.lineTo(x - 4, y + 3);

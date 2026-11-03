@@ -6,9 +6,9 @@ Ordered by what it blocks. Uploads can go into this conversation or into `refere
 
 | # | Needed | Why | Who or where |
 |---|---|---|---|
-| A1 | **RDYC Sailing Programme 2026** (PDF), including course plans | Official course definitions, mark names and the new river "gate" | royaldart.co.uk → Club Events (source R1) |
-| A2 | **Current RDYC Sailing Instructions** for club racing, plus amendments and Racing Noticeboard notices | Start and finish definitions, rounding sides, shortening, river safety restrictions | RDYC Racing Noticeboard |
-| A3 | **Mark positions** (lat/lon, with datum) for every RDYC mark, saying which are club marks and which are DHNA navigation buoys, plus any seasonal laid marks | Geographic placement. Without these, "verified" is impossible | Club mark list, race officer GPS, or chart |
+| A1 | **RDYC Sailing Programme 2026** (PDF), including course plans | Official course definitions, mark names and the new river "gate" | royaldart.co.uk → Club Events (source R1) **Received 3 Nov 2026:** the owner supplied the Sailing Programme 2026 (R13; docs/CLUB_DOCUMENTS.md). |
+| A2 | **Current RDYC Sailing Instructions** for club racing, plus amendments and Racing Noticeboard notices | Start and finish definitions, rounding sides, shortening, river safety restrictions | RDYC Racing Noticeboard **Received 3 Nov 2026:** the 2026 SIs and Course Appendix are in the programme (R13). Amendments on the online notice board are not. |
+| A3 | **Mark positions** (lat/lon, with datum) for every RDYC mark, saying which are club marks and which are DHNA navigation buoys, plus any seasonal laid marks | Geographic placement. Without these, "verified" is impossible | Club mark list, race officer GPS, or chart **Received 3 Nov 2026:** approximate WGS84 positions for H, M, R, L, C, X, Y, 1–4, S and W (Course Appendix 7). Still missing: the Blackstone Point flagstaffs, the Club Line pile, T, T1, T2 and MS1. |
 | A4 | Name of the **person who will check** each course implementation against the source | The brief requires a human sign-off before "verified" | You |
 | A5 | Any course restrictions specific to Squibs or the river (no-go areas, ferry-crossing rules, moorings to keep clear of) | The course validator must enforce them | SIs / DHNA / race officer |
 
@@ -16,7 +16,7 @@ Ordered by what it blocks. Uploads can go into this conversation or into `refere
 
 | # | Needed | Why |
 |---|---|---|
-| B1 | **NSOA Class Rules 2025** (PDF) and the measurement form | Confirm the sail areas (16.5 vs 15.8 m²), mast datum, boom limit, sail measurements, keel and rudder dimensions, crew rules |
+| B1 | **NSOA Class Rules 2025** (PDF) and the measurement form | Confirm the sail areas (16.5 vs 15.8 m²), mast datum, boom limit, sail measurements, keel and rudder dimensions, crew rules **Received 3 Nov 2026:** Class Rules 2025 (C16). The rules give sail dimensions, not areas: about 15.5 m² upwind estimated from the maxima (CLUB_DOCUMENTS.md §2). |
 | B2 | Squib **lines plan or hull offsets**, or measured photos (profile, plan, sections) | Hull shape, wetted area, lateral area, centre of lateral resistance |
 | B3 | Keel and rudder **profile drawings or measurements** | Lift-generating areas, aspect ratio, CLR |
 | B4 | **Rig photos** of an RDYC Squib (mast step, spreaders, backstay or runners, shrouds, jib tack, sheeting, kicker, cunningham, outhaul) | Rig geometry and which controls to model |

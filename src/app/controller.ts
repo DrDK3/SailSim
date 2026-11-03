@@ -377,7 +377,7 @@ export class SimController {
           traffic,
         });
         const session = created.session;
-        race = { course, resolved: session.course, session, warnings: created.warnings };
+        race = { course: created.course, resolved: session.course, session, warnings: created.warnings };
         sim = session.fleet.boat('you')!.sim;
       } catch (err) {
         this.scenarioError = (err as Error).message;
@@ -430,7 +430,7 @@ export class SimController {
     this.showResults = false;
     this.resultsShown = false;
     this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
-    this.view?.setCourse(this.race?.resolved, this.race?.course);
+    this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
     this.accumulator = 0;
@@ -915,6 +915,8 @@ export class SimController {
       try {
         this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, quays: data.quays, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
+        // A course already drawn learns which of its marks are real buoys the harbour now draws.
+        if (this.race) this.view.setCourse(this.race.resolved, this.race.course, data.features?.marks);
       } catch (err) {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
       }
@@ -936,7 +938,7 @@ export class SimController {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
     this.view?.setBoatType(isSquibType(this.scenario.boat) ? this.scenario.boat : DEFAULT_SQUIB_TYPE, this.sim.params, this.scenario.helm === 'female' ? 'female' : 'male');
-    this.view?.setCourse(this.race?.resolved, this.race?.course);
+    this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
     this.lastFrame = performance.now();

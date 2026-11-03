@@ -467,12 +467,12 @@ export class SceneView {
   }
 
   /** Show a course (marks, lines), replacing any previous one; undefined removes it. */
-  setCourse(r: ResolvedCourse | undefined, course: Course | undefined): void {
+  setCourse(r: ResolvedCourse | undefined, course: Course | undefined, realMarks: readonly { n: number; e: number }[] = []): void {
     if (this.course) {
       this.scene.remove(this.course.group);
       disposeObject(this.course.group);
     }
-    this.course = r && course ? new CourseScene(r, course) : undefined;
+    this.course = r && course ? new CourseScene(r, course, realMarks) : undefined;
     if (this.course) this.scene.add(this.course.group);
   }
 

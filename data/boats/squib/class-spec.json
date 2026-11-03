@@ -1,20 +1,161 @@
 {
   "_meta": {
     "description": "National Squib principal particulars used by the simulator. Every value carries a source id (see docs/SOURCES.md) and a confidence tag: V verified from primary, S(p) primary document seen only via search excerpt, S secondary, E estimated, N not established.",
-    "updated": "2026-10-22",
-    "toVerify": "All S(p) values must be re-checked against NSOA Class Rules 2025 (docs/MISSING_INFORMATION.md B1)."
+    "updated": "2026-11-03",
+    "classRules": "C16: National Squib Class Rules 2025 (RYA / NSOA), supplied by the owner on 3 Nov 2026. Values tagged V are read from it (rule numbers in the notes). The rules give sail dimensions, not areas: the sail areas stay as before (S(p)) with an estimate from the maximum dimensions in their notes, to be settled in the physics calibration (review Package 5)."
   },
-  "loa": { "value": 5.79, "unit": "m", "tag": "S", "source": "C6, C7", "note": "19 ft" },
-  "lwl": { "value": 5.18, "unit": "m", "tag": "S", "source": "C7", "note": "17.0 ft" },
-  "beam": { "value": 1.867, "unit": "m", "tag": "S", "source": "C6", "note": "6 ft 1.5 in" },
-  "draft": { "value": 0.99, "unit": "m", "tag": "S", "source": "C7", "note": "3.25 ft maximum" },
-  "minBoatMass": { "value": 680, "unit": "kg", "tag": "S(p)", "source": "C1, C6", "note": "Minimum weight including sails and mandatory items" },
-  "ballastMass": { "value": 375, "unit": "kg", "tag": "S", "source": "C7", "note": "Cast iron fin keel" },
-  "mainArea": { "value": 10.5, "unit": "m2", "tag": "S(p)", "source": "C4, C8", "note": "Main + jib = 16.5 m2 conflicts with 15.8 m2 upwind total (C6)" },
-  "jibArea": { "value": 6.0, "unit": "m2", "tag": "S(p)", "source": "C4, C8" },
-  "spinnakerArea": { "value": 13.5, "unit": "m2", "tag": "S(p)", "source": "C4", "note": "Not modelled in Phase 1" },
-  "mastLength": { "value": 7.695, "unit": "m", "tag": "S(p)", "source": "C1", "note": "Datum (overall or above deck) not established" },
-  "boomOuterPoint": { "value": 2.743, "unit": "m", "tag": "S(p)", "source": "C2", "note": "Used as mainsail foot length; whether min or max is unclear" },
-  "spinnakerPoleLength": { "value": 2.14, "unit": "m", "tag": "S(p)", "source": "C1" },
-  "crewCount": { "value": 2, "unit": "-", "tag": "S", "source": "C8", "note": "NSOA says two or three" }
+  "loa": {
+    "value": 5.79,
+    "unit": "m",
+    "tag": "S",
+    "source": "C6, C7",
+    "note": "19 ft"
+  },
+  "lwl": {
+    "value": 5.18,
+    "unit": "m",
+    "tag": "S",
+    "source": "C7",
+    "note": "17.0 ft"
+  },
+  "beam": {
+    "value": 1.867,
+    "unit": "m",
+    "tag": "S",
+    "source": "C6",
+    "note": "6 ft 1.5 in"
+  },
+  "draft": {
+    "value": 0.99,
+    "unit": "m",
+    "tag": "S",
+    "source": "C7",
+    "note": "3.25 ft maximum"
+  },
+  "minBoatMass": {
+    "value": 680,
+    "unit": "kg",
+    "tag": "V",
+    "source": "C16",
+    "note": "Minimum weight of the boat, including sails, the mandatory portable equipment and permanently fitted optional items (C.6.1, J.6.1). Up to 30 kg of metal corrector weights (C.6.2), and up to 30 kg more of penalty correctors with NSOA and RYA approval (C.6.3)"
+  },
+  "ballastMass": {
+    "value": 375,
+    "unit": "kg",
+    "tag": "S",
+    "source": "C7",
+    "note": "Cast iron fin keel"
+  },
+  "mainArea": {
+    "value": 10.5,
+    "unit": "m2",
+    "tag": "S(p)",
+    "source": "C4, C8",
+    "note": "Not stated in the class rules, which give dimensions (G.3.4: leech 6815 mm max; quarter, half, three-quarter and top widths 2320, 1690, 985 and 145 mm max). From those with a luff of about 6.33 m between the mast bands (F.3.6) and a foot of 2.743 m, an ORC-style estimate is about 9.85 m2 (E). Main + jib from the rules is then about 15.5 m2, nearer the 15.8 m2 secondary figure (C6) than 16.5"
+  },
+  "jibArea": {
+    "value": 6.0,
+    "unit": "m2",
+    "tag": "S(p)",
+    "source": "C4, C8",
+    "note": "Not stated in the class rules (G.4.3: luff 5380, leech 4670, foot 2410 mm max; leech no further out than a straight line). As a triangle from those maxima, about 5.62 m2 (E)"
+  },
+  "spinnakerArea": {
+    "value": 13.5,
+    "unit": "m2",
+    "tag": "S(p)",
+    "source": "C4",
+    "note": "Not modelled yet. Not stated in the class rules (G.5.3: luff and leech 4900, foot 3420, half width 3200, three-quarter width 1880 mm max); about 13.3 m2 from those (E), consistent with 13.5"
+  },
+  "mastLength": {
+    "value": 7.695,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "Maximum, measured from the mast datum point, the heel (F.2.3, F.3.6)"
+  },
+  "boomOuterPoint": {
+    "value": 2.743,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "Maximum outer point distance (C.9.6(a), J.9.6). Used as the mainsail foot length"
+  },
+  "spinnakerPoleLength": {
+    "value": 2.14,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "Maximum, including end fittings (F.5.5)"
+  },
+  "crewCount": {
+    "value": 2,
+    "unit": "-",
+    "tag": "V",
+    "source": "C16",
+    "note": "The crew shall consist of a minimum of 2 persons (C.2.1, J.2.1); no maximum or weight limit is set"
+  },
+  "forestayHeight": {
+    "value": 6.42,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "6400–6440 mm (F.3.6); mid-range used"
+  },
+  "spinnakerHoistHeightMax": {
+    "value": 6.49,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "Maximum (F.3.6)"
+  },
+  "mastUpperPointHeight": {
+    "value": 7.485,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "Maximum (F.3.6); the lower point is at 1160 mm minimum"
+  },
+  "mastWeightMin": {
+    "value": 16,
+    "unit": "kg",
+    "tag": "V",
+    "source": "C16",
+    "note": "Minimum, with centre of gravity at 3400 mm minimum above the heel (F.3.6, F.3.7)"
+  },
+  "mainLeechMax": {
+    "value": 6.815,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "G.3.4"
+  },
+  "jibLuffMax": {
+    "value": 5.38,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "G.4.3; foot 2.41 m max, leech 4.67 m max"
+  },
+  "spinnakerLuffMax": {
+    "value": 4.9,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "G.5.3; leech the same, foot 3.42 m max, half width 3.2 m max"
+  },
+  "forwardFlotation": {
+    "value": 158,
+    "unit": "L",
+    "tag": "V",
+    "source": "C16",
+    "note": "Minimum additional flotation fitted forward of the mast (C.5.1(a)(3))"
+  },
+  "headsailFairleadTrackMax": {
+    "value": 0.385,
+    "unit": "m",
+    "tag": "V",
+    "source": "C16",
+    "note": "Maximum track length (C.7.4(b))"
+  }
 }

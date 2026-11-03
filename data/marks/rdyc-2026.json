@@ -1,0 +1,160 @@
+{
+  "schema": "squib-marks/1",
+  "source": {
+    "document": "Royal Dart Yacht Club, Sailing Programme 2026: Course Appendix 2026, section 7 'Marks and approximate positions (WGS84)'",
+    "page": "21 (map on page 22)",
+    "suppliedBy": "the owner, 3 Nov 2026",
+    "note": "Approximate positions as published by the club. Not for navigation. Lights from the Dart Harbour guide 2019 (Dart Harbour and Navigation Authority), Sailing Directions, page 34; marks without a light there have none listed here.",
+    "shapes": "'can' and 'cone' are as the SI describes them (red can, green conical, yellow conical); 'unspecified' where it does not say."
+  },
+  "marks": [
+    {
+      "id": "H",
+      "name": "Homestone",
+      "kind": "port lateral buoy",
+      "shape": "can",
+      "colour": "red",
+      "light": "Q R",
+      "lat": 50.326833,
+      "lon": -3.559167,
+      "position": "50°19.61'N 3°33.55'W"
+    },
+    {
+      "id": "M",
+      "name": "Mewstone",
+      "kind": "south cardinal buoy",
+      "shape": "unspecified",
+      "colour": "south-cardinal",
+      "light": "",
+      "lat": 50.332,
+      "lon": -3.5315,
+      "position": "50°19.92'N 3°31.89'W"
+    },
+    {
+      "id": "R",
+      "name": "West Rock",
+      "kind": "south cardinal buoy",
+      "shape": "unspecified",
+      "colour": "south-cardinal",
+      "light": "",
+      "lat": 50.331,
+      "lon": -3.541167,
+      "position": "50°19.86'N 3°32.47'W",
+      "note": "Pass to seaward except when rounding: the West Rock is awash at low tide about 200 m NW of the buoy (SI Course Appendix 4.2)"
+    },
+    {
+      "id": "L",
+      "name": "Castle Ledge",
+      "kind": "starboard lateral buoy",
+      "shape": "cone",
+      "colour": "green",
+      "light": "Fl G 5s",
+      "lat": 50.333167,
+      "lon": -3.551833,
+      "position": "50°19.99'N 3°33.11'W"
+    },
+    {
+      "id": "C",
+      "name": "Checkstone",
+      "kind": "port lateral buoy",
+      "shape": "can",
+      "colour": "red",
+      "light": "Fl(2) R 5s",
+      "lat": 50.340833,
+      "lon": -3.5635,
+      "position": "50°20.45'N 3°33.81'W"
+    },
+    {
+      "id": "X",
+      "name": "Yellow 6-knot buoy (Wash Point)",
+      "kind": "special mark (6 knot limit)",
+      "shape": "unspecified",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.338333,
+      "lon": -3.555,
+      "position": "50°20.30'N 3°33.3'W",
+      "note": "Off Wash Point, N of Newfoundland Cove"
+    },
+    {
+      "id": "Y",
+      "name": "Yellow 6-knot buoy (Western Blackstone)",
+      "kind": "special mark (6 knot limit)",
+      "shape": "unspecified",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.333,
+      "lon": -3.561,
+      "position": "50°19.98'N 3°33.66'W",
+      "note": "Due N of Homestone, close to W. Blackstone"
+    },
+    {
+      "id": "1",
+      "name": "RDYC 1",
+      "kind": "club racing mark",
+      "shape": "cone",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.3185,
+      "lon": -3.574833,
+      "position": "50°19.11'N 3°34.49'W"
+    },
+    {
+      "id": "2",
+      "name": "RDYC 2",
+      "kind": "club racing mark",
+      "shape": "cone",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.311667,
+      "lon": -3.556667,
+      "position": "50°18.7'N 3°33.4'W"
+    },
+    {
+      "id": "3",
+      "name": "RDYC 3",
+      "kind": "club racing mark",
+      "shape": "cone",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.316667,
+      "lon": -3.541667,
+      "position": "50°19.0'N 3°32.5'W"
+    },
+    {
+      "id": "4",
+      "name": "RDYC 4",
+      "kind": "club racing mark",
+      "shape": "cone",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.326667,
+      "lon": -3.54,
+      "position": "50°19.6'N 3°32.4'W"
+    },
+    {
+      "id": "S",
+      "name": "Skerries",
+      "kind": "port lateral buoy",
+      "shape": "can",
+      "colour": "red",
+      "light": "",
+      "lat": 50.271667,
+      "lon": -3.563,
+      "position": "50°16.3'N 3°33.78'W",
+      "note": "The SI prints '50d 16.3d'N'; read as 50°16.3'N. Outside the simulator's area."
+    },
+    {
+      "id": "W",
+      "name": "Wave buoy (3 M SW of Homestone)",
+      "kind": "wave buoy",
+      "shape": "unspecified",
+      "colour": "yellow",
+      "light": "",
+      "lat": 50.291667,
+      "lon": -3.616167,
+      "position": "50°17.50'N 3°36.97'W",
+      "note": "Two associated orange floats up to 30 m away count as part of the mark (SI). Outside the simulator's area."
+    }
+  ]
+}
