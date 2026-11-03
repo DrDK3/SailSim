@@ -90,7 +90,7 @@ The 2019 harbour guide is older than the club's 2026 programme. Where they overl
 | River courses R1 and R2 | The Club Line's pile, and T1, T2 and MS1, have no positions | The RDYC flagpole and pile positions; T1, T2 and MS1 positions (MS1 is the southernmost yellow ship buoy, H12) |
 | Courses starting and finishing at different marks (B2, B8; most A courses) | The committee boat would have to move after the start | Whether the club moves her, or uses a second boat or mark |
 | Shorten course, lap times, the time limit, DR21-01 | Racing package (P7) | — |
-| VHF start signals (a spoken countdown instead of flags) | UI and audio package (P2) | — |
+| VHF start signals (a spoken countdown instead of flags) | The RRS 26 sound signals are played and captioned since Package 2 round A (the simulator always has a committee boat, SI 9.1). The VHF time checks and countdown (SI 3.3, 3.4, 9.3) are not: the SIs do not give their wording | The usual wording of the race officer's VHF calls, if the club wants them simulated |
 | The 44.3(c) two-point post-race penalty and series discards | Racing package (P7) | — |
 
 ## 2. National Squib Class Rules 2025 (C16)

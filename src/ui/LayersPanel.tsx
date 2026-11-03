@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import type { SimController, UiState } from '../app/controller';
+import { useModal } from './useModal';
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   data: { label: 'Data', cls: 'good' },
@@ -15,8 +17,10 @@ export function LayersPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiSt
   const layers = d?.manifest?.layers ?? [];
   const provisional = layers.filter((l) => l.status !== 'data');
   const notPlaced = d?.features?.marksNotPlaced ?? [];
+  const ref = useRef<HTMLDivElement>(null);
+  useModal(ref, onClose);
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Map layers and sources" onClick={onClose}>
+    <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Map layers and sources" onClick={onClose}>
       <section className="panel layers" onClick={(e) => e.stopPropagation()}>
         <div className="dash-head">
           <h3>River Dart: layers, provisional elements and sources</h3>

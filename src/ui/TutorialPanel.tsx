@@ -36,7 +36,7 @@ export function TutorialPanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
       <h3 ref={heading} tabIndex={-1} data-testid="tutorial-title">
         {t.step.title}
       </h3>
-      <p>{t.step.body}</p>
+      <p>{ui.steering === 'tiller' && t.step.bodyTiller ? t.step.bodyTiller : t.step.body}</p>
       {t.step.hint && <p className="fine">{t.step.hint}</p>}
       {t.step.goal !== undefined && (
         <div className={`tutorial-goal ${t.done ? 'met' : ''}`} role="status" data-testid="tutorial-goal">

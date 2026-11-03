@@ -193,6 +193,16 @@ export class SceneView {
   private chaseDist = 15;
   private camHeave = 0;
   private scenicT = 0;
+  /**
+   * The reader's "reduce motion" setting (review GR-4): a level horizon in every view, no wave heave on the camera,
+   * cuts instead of blends between views, and the scenic view holds still instead of circling.
+   */
+  private reducedMotion = false;
+  private readonly motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
+  private readonly onMotionPref = () => {
+    this.reducedMotion = !!this.motionQuery?.matches;
+    if (this.reducedMotion) this.blend = undefined;
+  };
   private blend?: { p: THREE.Vector3; q: THREE.Quaternion; t: number };
   private readonly ride: WaveRide = { heave: 0, pitch: 0, roll: 0 };
   private readonly rideTarget: WaveRide = { heave: 0, pitch: 0, roll: 0 };
@@ -213,6 +223,8 @@ export class SceneView {
   showForces = false;
 
   constructor(container: HTMLElement, params: BoatParams) {
+    this.onMotionPref();
+    this.motionQuery?.addEventListener('change', this.onMotionPref);
     // Stencil: boats mark their decks so the sea is not drawn inside the hulls (squibModel.ts, water.ts).
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: true });
     this.graphics = loadGraphics(rendererName(this.renderer));
@@ -485,7 +497,7 @@ export class SceneView {
     const was = this.mode;
     this.mode = mode;
     // Blend from the old view to the new one (not into the orbit and drone views, which the mouse flies).
-    this.blend = was !== mode && mode !== 'orbit' && mode !== 'drone' && was !== 'free' ? { p: this.camera.position.clone(), q: this.camera.quaternion.clone(), t: 0 } : undefined;
+    this.blend = !this.reducedMotion && was !== mode && mode !== 'orbit' && mode !== 'drone' && was !== 'free' ? { p: this.camera.position.clone(), q: this.camera.quaternion.clone(), t: 0 } : undefined;
     this.controls.enabled = mode === 'orbit' || mode === 'drone';
     this.controls.enablePan = mode === 'drone';
     this.controls.minDistance = mode === 'drone' ? 10 : 4;
@@ -724,7 +736,8 @@ export class SceneView {
     // The heave the camera follows: a slow average (about 1.5 s) with part of each wave, by the motion setting.
     this.camHeave += (b.y - this.camHeave) * (1 - Math.exp(-dt / 1.5));
     if (moved > 50) this.camHeave = b.y;
-    const motion = this.graphics.cameraMotion;
+    const reduced = this.reducedMotion;
+    const motion = reduced ? 0 : this.graphics.cameraMotion;
     const y = followHeave(this.camHeave, b.y, motion);
     if (this.mode === 'chase') {
       const back = new THREE.Vector3(-Math.sin(this.chaseHeading), 0, Math.cos(this.chaseHeading));
@@ -736,7 +749,7 @@ export class SceneView {
       this.camera.up.set(0, 1, 0);
     } else if (this.mode === 'scenic') {
       // Low and well off, circling slowly: the boat in her setting. Never below the hills' or the water's floor.
-      this.scenicT += dt;
+      if (!reduced) this.scenicT += dt;
       const sp = scenicPose(this.scenicT);
       const dist = sp.distance * (this.chaseDist / 15);
       let cx = b.x + Math.sin(sp.bearing) * dist;
@@ -757,11 +770,14 @@ export class SceneView {
     } else if (this.mode === 'helm') {
       // The helmsman's eye, sitting on the windward side deck aft (that figure is hidden in this view).
       const side = this.crewSide;
-      const eye = new THREE.Vector3(side * 0.8, 1.5, 2.15).applyQuaternion(this.boatRoot.quaternion).add(b);
+      // With reduced motion the eye follows the heading only: no heel, pitch or wave heave.
+      const frame = reduced ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -heading) : this.boatRoot.quaternion;
+      const base = reduced ? new THREE.Vector3(b.x, y, b.z) : b;
+      const eye = new THREE.Vector3(side * 0.8, 1.5, 2.15).applyQuaternion(frame).add(base);
       this.camera.position.copy(eye);
       // Looking where the head is turned (ahead by default), from the boat's frame.
       const [lx, ly, lz] = helmLookDir(this.helmLook.yaw, this.helmLook.pitch);
-      const ahead = new THREE.Vector3(side * 0.2 + lx * 25, 0.9 + ly * 25, lz * 25).applyQuaternion(this.boatRoot.quaternion).add(b);
+      const ahead = new THREE.Vector3(side * 0.2 + lx * 25, 0.9 + ly * 25, lz * 25).applyQuaternion(frame).add(base);
       // The horizon tilts with part of the heel, as it does on board: a sailor's head stays nearer upright
       // than the boat (the fraction is a visual choice, E).
       const boatUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.boatRoot.quaternion);
@@ -870,6 +886,7 @@ export class SceneView {
   };
 
   dispose(): void {
+    this.motionQuery?.removeEventListener('change', this.onMotionPref);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.dispose();

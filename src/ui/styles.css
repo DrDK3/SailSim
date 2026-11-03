@@ -45,8 +45,8 @@
   /* Type */
   --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --fs-2xs: 10.5px;
-  --fs-xs: 11.5px;
+  --fs-2xs: 12px;
+  --fs-xs: 12px;
   --fs-sm: 12.5px;
   --fs-md: 14px;
   --fs-lg: 16px;
@@ -119,9 +119,9 @@ option { background: var(--navy-900); }
 .tack-chip[data-tack='starboard'] { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
 .tack-chip[data-tack='port'] { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-top: 6px; }
-.cell-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cell-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cell-value { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cell-value .unit { font-size: 11px; }
+.cell-value .unit { font-size: 12px; }
 .cell.wide { grid-column: 1 / -1; }
 .cell.wide .cell-value { white-space: normal; font-size: 14px; line-height: 1.3; }
 
@@ -167,7 +167,7 @@ option { background: var(--navy-900); }
 .debug dt { color: var(--muted); }
 .debug dd { margin: 0; font-variant-numeric: tabular-nums; }
 h3 { margin: 0 0 8px; font-size: 14px; }
-.fine { font-size: 11.5px; color: var(--muted); margin: 6px 0; line-height: 1.4; }
+.fine { font-size: 12px; color: var(--muted); margin: 6px 0; line-height: 1.4; }
 .field { display: grid; grid-template-columns: 1fr 120px 64px 28px; align-items: center; gap: 6px; margin: 5px 0; font-size: 12.5px; }
 .field input[type='number'] { width: 64px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-border); border-radius: 5px; padding: 3px 5px; }
 .row { display: flex; gap: 8px; margin-top: 8px; }
@@ -180,7 +180,7 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 
 .banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--panel-border); padding: 10px 16px; border-radius: var(--radius); font-weight: 600; }
 .banner.error { top: 80px; transform: translateX(-50%); color: var(--bad); max-width: 560px; }
-.badge { position: absolute; bottom: 8px; right: 12px; left: 12px; text-align: center; font-size: 11px; color: rgba(238, 243, 246, 0.75); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.badge { position: absolute; bottom: 8px; right: 12px; left: 12px; text-align: center; font-size: 12px; color: rgba(238, 243, 246, 0.75); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); pointer-events: none; }
 
 @media (max-width: 900px) {
   .instruments { width: calc(100% - 24px); }
@@ -194,7 +194,7 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 .conditions { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--panel-border); display: flex; flex-direction: column; gap: 3px; }
 .cond-row { display: grid; grid-template-columns: 86px 1fr; align-items: baseline; gap: 6px; font-size: 12.5px; }
 .cond-value { font-variant-numeric: tabular-nums; }
-.fine-inline { color: var(--muted); font-size: 11.5px; }
+.fine-inline { color: var(--muted); font-size: 12px; }
 .fine.warn-text { color: var(--warn); }
 .live-issues { padding-left: 16px; }
 .chip { display: inline-block; align-self: flex-start; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; margin-top: 3px; }
@@ -220,20 +220,20 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 .chart figcaption { font-size: 12px; margin-bottom: 2px; }
 .chart-title { font-weight: 600; }
 .chart-unit { color: var(--muted); }
-.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0 0 2px; padding: 0; font-size: 11.5px; color: var(--muted); }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0 0 2px; padding: 0; font-size: 12px; color: var(--muted); }
 .legend li { display: flex; align-items: center; gap: 4px; }
 .legend-value { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
-.legend.single { font-size: 11.5px; color: var(--muted); }
+.legend.single { font-size: 12px; color: var(--muted); }
 .chart-plot { position: relative; }
 .chart-plot svg { display: block; outline: none; touch-action: none; }
 .chart-plot svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .chart .grid, .polar .grid { stroke: var(--grid); stroke-width: 1; }
-.tick { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tick { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .crosshair { stroke: rgba(255, 255, 255, 0.45); stroke-width: 1; }
 .hover-dot { stroke: var(--chart-surface); stroke-width: 2; }
 .tooltip {
   position: absolute; top: 4px; pointer-events: none; background: #091319; border: 1px solid var(--panel-border); border-radius: 6px;
-  padding: 4px 7px; font-size: 11.5px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); z-index: 2;
+  padding: 4px 7px; font-size: 12px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); z-index: 2;
 }
 .tooltip-t { color: var(--muted); }
 .tooltip-row { display: flex; align-items: center; gap: 5px; }
@@ -269,7 +269,7 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .notice-inline { font-size: 13px; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn) 15%, transparent); }
 .layers ul { margin: 4px 0 8px; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
 .layers li { margin: 3px 0; }
-.layers .status { display: inline-block; width: auto; padding: 1px 6px; font-size: 11px; }
+.layers .status { display: inline-block; width: auto; padding: 1px 6px; font-size: 12px; }
 .status.bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
 .layers-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .layers-table th, .layers-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
@@ -282,7 +282,7 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 /* Phase 4: race panel, course editor */
 .race { left: 12px; bottom: 34px; width: 238px; font-size: 12px; padding: 8px 10px; }
 .race-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 4px; }
-.race .status { width: auto; padding: 1px 6px; font-size: 11px; }
+.race .status { width: auto; padding: 1px 6px; font-size: 12px; }
 .race-big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .race-row { display: flex; justify-content: space-between; align-items: baseline; }
 .race-elapsed { font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -301,7 +301,7 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .editor-map svg { display: block; border-radius: 8px; border: 1px solid var(--panel-border); max-width: 100%; height: auto; touch-action: none; cursor: grab; }
 .editor-side { flex: 1; min-width: 360px; }
 .editor-side input:not([type='range']):not([type='file']), .editor-side textarea { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-border); border-radius: 5px; padding: 3px 6px; color: inherit; font: inherit; width: 100%; }
-.editor-side textarea { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 11.5px; }
+.editor-side textarea { margin-top: 6px; font-family: ui-monospace, monospace; font-size: 12px; }
 .editor .coords span:last-child, .editor .pair { display: flex; gap: 4px; }
 .row.left { justify-content: flex-start; align-items: center; }
 .row.wrap { flex-wrap: wrap; }
@@ -310,7 +310,7 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .ed-line { stroke: #fff; stroke-width: 2; }
 .ed-line.boundary { stroke: #ffd23f; stroke-dasharray: 6 4; }
 .ed-mark circle { fill: #ff7a1a; stroke: #0b1a24; stroke-width: 1.5; cursor: move; }
-.ed-mark text { fill: #fff; font-size: 11px; paint-order: stroke; stroke: #0b1a24; stroke-width: 3px; pointer-events: none; }
+.ed-mark text { fill: #fff; font-size: 12px; paint-order: stroke; stroke: #0b1a24; stroke-width: 3px; pointer-events: none; }
 .ed-mark.sel circle { stroke: #5fe08a; stroke-width: 3; }
 .ed-mark.bad circle { fill: var(--bad); }
 .ed-legs { padding-left: 20px; margin: 4px 0; }
@@ -333,7 +333,7 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 
 /* Phase 5: race flags, fleet position, results */
 .race-flags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0 4px; }
-.flag { display: inline-block; min-width: 22px; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 700; text-align: center; border: 1px solid rgba(255, 255, 255, 0.35); }
+.flag { display: inline-block; min-width: 22px; padding: 1px 5px; border-radius: 3px; font-size: 12px; font-weight: 700; text-align: center; border: 1px solid rgba(255, 255, 255, 0.35); }
 .flag-class { background: #e8eef2; color: #0b1a24; }
 .flag-p { background: #1d4f91; color: #fff; outline: 2px solid #fff; outline-offset: -5px; }
 .flag-u { background: repeating-conic-gradient(#c0392b 0 25%, #fff 0 50%) 50% / 12px 12px; color: #0b1a24; text-shadow: 0 0 2px #fff; }
@@ -427,7 +427,7 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
 .boat-diff summary { cursor: pointer; }
 .boat-diff table { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .boat-diff td { padding: 2px 4px; vertical-align: top; border-top: 1px solid rgba(255, 255, 255, 0.08); }
-.boat-diff code { font-size: 11px; }
+.boat-diff code { font-size: 12px; }
 
 /*
  * Redesign (less clutter): one visual system - an app bar with the commonest actions and everything else
@@ -446,7 +446,7 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .tb-primary { min-width: 96px; background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
 .tb-primary:hover { background: color-mix(in srgb, var(--accent) 34%, transparent); }
 .tb-help { width: 32px; padding: 0; border-radius: 50%; font-weight: 700; }
-.menu-section { padding: 8px 10px 2px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.menu-section { padding: 8px 10px 2px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .menu-section:first-child { padding-top: 2px; }
 .menu-list { min-width: 250px; }
 
@@ -482,7 +482,7 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 /* Information only: clicks pass through to whatever is under it. */
 .banner.slow-pill { pointer-events: none; font-weight: 500; }
 .badge {
-  left: 12px; right: auto; max-width: min(60%, 760px); text-align: left; bottom: 6px; font-size: 10.5px; color: rgba(238, 243, 246, 0.6);
+  left: 12px; right: auto; max-width: min(60%, 760px); text-align: left; bottom: 6px; font-size: 12px; color: rgba(238, 243, 246, 0.6);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto;
 }
 .badge:hover { color: rgba(238, 243, 246, 0.95); }
@@ -520,13 +520,13 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 @media (max-width: 700px) {
   .hud-left { top: 8px; left: 8px; right: 96px; max-height: calc(100% - 300px); }
   .hud-left .race, .hud-left .instruments, .hud-left .instruments:not(.compact) { width: auto; }
-  .sheet-bar span { font-size: 11px; }
+  .sheet-bar span { font-size: 12px; }
   /* The sail's status and advice on a line of their own (the later flex-basis above would squeeze them). */
   .sail-row .status { flex-basis: 100%; width: auto; white-space: normal; }
   .sheet-bar { min-width: 68px; }
 }
 .toolbar .select select { color: var(--text); min-height: 32px; }
-.minimap-bar { font-size: 11px; }
+.minimap-bar { font-size: 12px; }
 .misc-row .slider-value { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Camera hints (helm look-around, drone): a quiet strip under the app bar, out of the boat's way. */
@@ -614,3 +614,49 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
 /* A narrow sheet bar shows the figure alone ("0%"), not a clipped "0% easec" (owner's screenshot, 1 Nov 2026). */
 .sheet-bar { container-type: inline-size; }
 @container (max-width: 96px) { .sheet-word { display: none; } }
+
+/* Review Package 2 (UX-5): reserved regions. The toolbar keeps clear of the left column (its width is measured
+   into --hud-w by App.tsx), and the column itself stops above the dock (a measured max-height) and scrolls. */
+@media (min-width: 701px) {
+  .toolbar { max-width: calc(100% - var(--hud-w, 340px) - 36px); }
+}
+
+/* Review Package 2 (UX-3, WCAG 2.2 SC 2.5.8): every control at least 24 × 24 CSS px, 44 px where the pointer is a
+   finger; text at least 12 px (the type tokens above and the sizes in this file were raised to match). */
+button.link { min-height: 24px; padding: 2px 4px; }
+.toggle, .slider { min-height: 24px; }
+.toggle input[type='checkbox'] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+input[type='range'] { min-height: 24px; accent-color: var(--accent); }
+@media (pointer: coarse) {
+  button, select { min-height: 44px; }
+  button.link { min-height: 44px; }
+  .toggle, .slider { min-height: 44px; }
+  .toggle input[type='checkbox'] { width: 24px; height: 24px; }
+  input[type='range'] { min-height: 44px; }
+}
+
+/* UX-7: a sail's status and advice wrap onto a second line instead of being cut off ("Stalled · ease the m…"). */
+.sail-row .status { white-space: normal; line-height: 1.2; flex-basis: 150px; }
+
+/* The tiller from above (UX-8, D4): in place of the old helm bar. */
+.tiller-view { justify-content: flex-start; gap: var(--s2); padding: 0 8px; height: 40px; overflow: visible; }
+.tiller-view span { white-space: normal; line-height: 1.2; text-align: left; }
+.tiller-svg { flex-shrink: 0; }
+.tv-hull { fill: rgba(255, 255, 255, 0.06); stroke: rgba(238, 243, 246, 0.55); stroke-width: 1.5; }
+.tv-blade { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
+.tv-tiller { stroke: var(--warn); stroke-width: 3.5; stroke-linecap: round; }
+.tv-stock { fill: var(--text); }
+
+/* First visit: "Have you sailed before?" (D4). */
+.hub-ask { margin: var(--s3) 0 0; padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: var(--r-md); }
+.hub-ask legend { padding: 0 4px; font-weight: 600; }
+.hub-ask .row { flex-wrap: wrap; margin-top: 4px; }
+.hub-ask .fine { margin-bottom: 0; }
+
+/* Over the line at the start (UX-6): which way the nearer end lies, and the choice once flag X is down. */
+.ocs-dir, .ocs-late { display: flex; align-items: center; gap: var(--s2); margin-top: 6px; font-weight: 500; }
+.ocs-arrow { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--bad-tint); font-weight: 700; flex-shrink: 0; }
+
+/* Sound signals in words (GR-6): an empty live region until a horn sounds, so screen readers announce it. */
+.sound-caption:empty { margin: 0; padding: 0; }
+.sound-caption { margin-top: 6px; padding: 3px 8px; border-radius: var(--r-sm); background: var(--accent-tint); font-size: var(--fs-sm); font-weight: 600; }

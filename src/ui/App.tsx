@@ -10,6 +10,7 @@ import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
 import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
+import { Confirm } from './Confirm';
 import { activityOf } from './activity';
 import { ActivityIcon } from './icons';
 import type { CameraMode } from '../render/scene';
@@ -55,7 +56,9 @@ function conditionsText(sc: AppScenario): string {
   const course = sc.course ? (sc.course.source === 'practice' ? ` · practice course (simulated)` : ' · course set') : '';
   const fleet = sc.course && sc.fleet?.aiCount ? ` · ${sc.fleet.aiCount} AI boat${sc.fleet.aiCount === 1 ? '' : 's'}` : '';
   const sky = c.sky?.source === 'preset' && c.sky.preset !== 'clear' ? ` · ${SKY_PRESETS[c.sky.preset].label.toLowerCase()}` : '';
-  return `${wind} · ${c.gusts.preset} gusts · ${tide} · ${cur}${sky}${course}${fleet}`;
+  // "steady wind", "gusty", not "gusty gusts" (UX-7).
+  const gusts = ({ steady: 'steady wind', moderate: 'moderate gusts', shifty: 'shifty', gusty: 'gusty' } as Record<string, string>)[c.gusts.preset] ?? c.gusts.preset;
+  return `${wind} · ${gusts} · ${tide} · ${cur}${sky}${course}${fleet}`;
 }
 
 export function App({ ctl }: { ctl: SimController }) {
@@ -65,6 +68,8 @@ export function App({ ctl }: { ctl: SimController }) {
   const [sideTop, setSideTop] = useState<number>();
   // The camera hint strip sits just below the toolbar, however many rows the toolbar wraps onto.
   const [barTop, setBarTop] = useState<number>();
+  // The left column (instruments, race, coach) stops above the dock and scrolls, whatever their heights (UX-5).
+  const [hudMax, setHudMax] = useState<number>();
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -133,7 +138,11 @@ export function App({ ctl }: { ctl: SimController }) {
     const nav = toolbar.current;
     if (!nav) return;
     const instruments = document.querySelector<HTMLElement>('.hud-left');
+    const dock = document.querySelector<HTMLElement>('.controls, .controls-show');
+    const root = nav.parentElement;
     const place = () => {
+      // The toolbar keeps clear of the left column, however wide the column's panels make it (UX-5).
+      if (instruments && root) root.style.setProperty('--hud-w', `${Math.round(instruments.getBoundingClientRect().width)}px`);
       const r = nav.getBoundingClientRect();
       // On tablets the toolbar sits at the bottom (styles.css): keep the default position then.
       let top = r.top < window.innerHeight / 2 ? r.bottom + 8 : undefined;
@@ -141,17 +150,27 @@ export function App({ ctl }: { ctl: SimController }) {
       // On phones the instruments span the top: open panels (the tutorial too) below them, not over them.
       if (window.innerWidth <= 700 && instruments) top = Math.max(top ?? 0, instruments.getBoundingClientRect().bottom + 8);
       setSideTop(top === undefined ? undefined : Math.round(top));
+      if (instruments) {
+        const h = instruments.getBoundingClientRect();
+        const d = dock?.getBoundingClientRect();
+        // Above the dock where the two share columns of the screen; otherwise down to the bottom edge.
+        const bottom = d && d.height > 0 && d.left < h.right && d.right > h.left ? d.top - 8 : window.innerHeight - 8;
+        setHudMax(Math.max(96, Math.floor(bottom - h.top)));
+      }
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(nav);
     if (instruments) ro.observe(instruments);
+    if (dock) ro.observe(dock);
+    // The window's resize event can come before the new layout; the root's size comes after it.
+    if (root) ro.observe(root);
     window.addEventListener('resize', place);
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', place);
     };
-  }, []);
+  }, [controlsHidden, !!ui.replay]);
 
   useEffect(() => {
     const el = host.current!;
@@ -175,9 +194,9 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
-      <div className="hud-left">
+      <div className="hud-left" style={hudMax === undefined ? undefined : { maxHeight: hudMax }}>
         <Instruments s={ui.snapshot} />
-        {ui.race && <RacePanel race={ui.race} ctl={ctl} />}
+        {ui.race && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
         {ui.race && <CoachCard ctl={ctl} ui={ui} />}
       </div>
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation">
@@ -340,16 +359,9 @@ export function App({ ctl }: { ctl: SimController }) {
         )}
       </Suspense>
       {ui.confirmReset && (
-        <div className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" data-testid="confirm-reset">
-          <section className="panel confirm">
-            <h3 id="reset-title">Restart the race?</h3>
-            <p>The race has started. Resetting goes back to the beginning of the sequence and your progress is lost.</p>
-            <div className="row left">
-              <button className="primary" autoFocus onClick={() => ctl.answerReset(false)}>Keep racing</button>
-              <button onClick={() => ctl.answerReset(true)}>Restart</button>
-            </div>
-          </section>
-        </div>
+        <Confirm id="reset" title="Restart the race?" keep="Keep racing" go="Restart" onAnswer={(yes) => ctl.answerReset(yes)} testId="confirm-reset">
+          The race has started. Resetting goes back to the beginning of the sequence and your progress is lost.
+        </Confirm>
       )}
       {hubOpen && (
         <ExperienceHub
@@ -360,19 +372,14 @@ export function App({ ctl }: { ctl: SimController }) {
           onFree={() => closeHub(() => ctl.leaveTo('Free sailing', () => ctl.freeSail()))}
           onRace={() => closeHub(() => openRace(true))}
           onScenarios={() => closeHub(() => openLibrary(true))}
+          steering={ui.steering}
+          onSteering={(m) => ctl.setSteering(m)}
         />
       )}
       {ui.confirmLeave && (
-        <div className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="leave-title" aria-describedby="leave-text" data-testid="confirm-leave">
-          <section className="panel confirm">
-            <h3 id="leave-title">Leave the race?</h3>
-            <p id="leave-text">The race is under way. {ui.confirmLeave} ends it, and the race is lost.</p>
-            <div className="row left">
-              <button className="primary" autoFocus onClick={() => ctl.answerLeave(false)}>Keep racing</button>
-              <button onClick={() => ctl.answerLeave(true)}>Leave the race</button>
-            </div>
-          </section>
-        </div>
+        <Confirm id="leave" title="Leave the race?" keep="Keep racing" go="Leave the race" onAnswer={(yes) => ctl.answerLeave(yes)} testId="confirm-leave">
+          The race is under way. {ui.confirmLeave} ends it, and the race is lost.
+        </Confirm>
       )}
     </div>
   );

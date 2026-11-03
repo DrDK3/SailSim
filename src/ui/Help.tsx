@@ -1,6 +1,9 @@
+import { useRef } from 'react';
+import { useModal } from './useModal';
+
 const KEYS: [string, string][] = [
-  ['A / ←', 'Steer to port (hold)'],
-  ['D / →', 'Steer to starboard (hold)'],
+  ['A / ←', 'Steer (hold): the bow to port; with tiller steering, the tiller to port, so the bow goes to starboard'],
+  ['D / →', 'Steer the other way (hold). Bow or tiller steering: More → Graphics and sound'],
   ['Shift (held)', 'Hold the helm where it is (no self-centring)'],
   ['Space', 'Centre the helm'],
   ['W / ↑', 'Trim (pull in) the mainsheet'],
@@ -24,8 +27,10 @@ const KEYS: [string, string][] = [
 ];
 
 export function Help({ onClose, onTutorial }: { onClose: () => void; onTutorial: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useModal(ref, onClose);
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Help" onClick={onClose}>
+    <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Help" onClick={onClose}>
       <section className="panel help" onClick={(e) => e.stopPropagation()}>
         <div className="row left help-top">
           <button className="primary" onClick={onTutorial} autoFocus>Start the tutorial</button>

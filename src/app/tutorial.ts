@@ -57,6 +57,8 @@ export interface TutorialStep {
   title: string;
   /** What to do, in a sentence or two. */
   body: string;
+  /** The body for tiller steering (src/app/steering.ts), where it differs. */
+  bodyTiller?: string;
   /** A short extra tip shown under the body. */
   hint?: string;
   targets?: TutorialTarget[];
@@ -81,7 +83,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'steer',
     title: 'Steer',
-    body: 'Hold D or → (or the Stbd button) to turn to starboard, A or ← (Port) to turn to port. The tiller centres itself when you let go. Turn the boat 30° either way.',
+    body: 'Hold D or → (or the ▶ button) to turn the bow to starboard, A or ← (◀) to turn it to port: the keys move the bow, as in a car. On the boat the tiller goes the other way, as the tiller picture in the dock shows. It centres itself when you let go. Turn the boat 30° either way.',
+    bodyTiller: 'You steer as on the boat: push the tiller away from the way you want to go. A or ← (◀) pushes the tiller to port and the bow turns to starboard; D or → (▶) pushes it to starboard and the bow turns to port. Watch the tiller picture in the dock. It centres itself when you let go. Turn the boat 30° either way.',
     hint: 'A boat turns slowly: hold the key for a second or two, then wait.',
     targets: ['helm'],
     goal: (s, m) => angleDiff(s.headingDeg, m.start.headingDeg) >= 30,

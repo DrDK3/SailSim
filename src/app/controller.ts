@@ -1,3 +1,6 @@
+import { signalCaption } from './signalCaption';
+import { ocsGuide, type OcsGuide } from './ocsGuide';
+import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
 import { quayPiers } from '../sim/env/quays';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
@@ -93,6 +96,8 @@ export interface RaceUi {
   toStart: number;
   nextSignal?: string;
   ocs: boolean;
+  /** While OCS after the start: the nearer end of the line and which way it lies (src/app/ocsGuide.ts). */
+  ocsGuide?: OcsGuide;
   mayStart: boolean;
   legIndex: number;
   legCount: number;
@@ -201,6 +206,8 @@ export interface UiState {
   fleet: { id: string; n: number; e: number; heading: number; colour: number; label: string }[];
   /** The user's latest contact with a boat, mark, moored boat or ferry, for 8 s after it happened. */
   contact?: string;
+  /** The latest race-committee sound signal in words, for 5 s after it (the visual equivalent of the horn, GR-6). */
+  soundCaption?: string;
   /** Graphics and sound settings (the panel), and the scenery detail the view was built with. */
   showSettings: boolean;
   graphics?: GraphicsSettings;
@@ -208,6 +215,8 @@ export interface UiState {
   shadowsBuilt?: 'standard' | 'fine';
   audio: AudioSettings;
   audioRunning: boolean;
+  /** Which way the steering keys and buttons move the boat (src/app/steering.ts). */
+  steering: SteeringMode;
 }
 
 type Listener = () => void;
@@ -257,6 +266,7 @@ export class SimController {
   private graphicsLost = false;
   private pausedForGraphics = false;
   private held = new Set<string>();
+  private steeringMode: SteeringMode = loadSteering();
   private listeners = new Set<Listener>();
   private ui!: UiState;
   private lastPublish = 0;
@@ -1060,6 +1070,9 @@ export class SimController {
   readonly sound = new SoundScape();
   private showSettings = false;
   private lastBoomT = -1;
+  /** What the event sounds have played so far (the committee's signal log, contacts, groundings). */
+  private heard = { log: undefined as unknown, signals: 0, contactT: -1, groundT: -1, knockAt: -1 };
+  private caption?: { text: string; t: number };
   private harbour = { at: -Infinity, value: 0 };
   private onGesture = () => this.sound.resume();
   private onVisibility = () => {
@@ -1081,6 +1094,42 @@ export class SimController {
       this.harbour.value = Math.max(0, 1 - Math.sqrt(best) / 180);
     }
     this.sound.update({ aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed, harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended });
+    this.eventSounds();
+  }
+
+  /**
+   * Sounds for events (review GR-6): the race committee's sound signals with a caption, a knock for a contact and a
+   * scrape for a grounding (their banner is the visual equivalent). Each event sounds once; a new run starts over.
+   */
+  private eventSounds(): void {
+    const h = this.heard;
+    const now = this.sim.time;
+    if (now < h.contactT || now < h.groundT) Object.assign(h, { contactT: -1, groundT: -1, knockAt: -1 });
+    const log = this.race?.session.committee.log;
+    if (log !== h.log) Object.assign(h, { log, signals: 0 });
+    if (log) {
+      for (; h.signals < log.length; h.signals++) {
+        const s = log[h.signals]!;
+        const text = signalCaption(s);
+        if (!text) continue;
+        this.sound.horn(s.long ? 1 : s.sounds, !!s.long);
+        this.caption = { text, t: now };
+      }
+    }
+    const events = this.race?.session.fleet.events ?? this.soloFleet?.events ?? [];
+    for (let i = events.length - 1; i >= 0 && events[i]!.t > h.contactT; i--) {
+      const e = events[i]!;
+      if ((e.a === 'you' || e.b === 'you') && now - h.knockAt > 0.4 && now - e.t < 2) {
+        this.sound.knock(e.speed / 3);
+        h.knockAt = now;
+      }
+    }
+    if (events.length) h.contactT = Math.max(h.contactT, events[events.length - 1]!.t);
+    const g = this.sim.impacts[this.sim.impacts.length - 1];
+    if (g && g.what === 'the bottom' && g.t > h.groundT) {
+      if (now - g.t < 2) this.sound.scrape(g.speed / 2);
+      h.groundT = g.t;
+    }
   }
 
   setAudio(a: AudioSettings): void {
@@ -1353,6 +1402,26 @@ export class SimController {
     this.publish(true);
   }
 
+  get steering(): SteeringMode {
+    return this.steeringMode;
+  }
+
+  /** Bow or tiller steering (D4), kept in this browser. Held helm keys are let go, so none sticks. */
+  setSteering(m: SteeringMode): void {
+    this.steeringMode = m;
+    saveSteering(m);
+    this.held.delete('helmLeft');
+    this.held.delete('helmRight');
+    this.publish(true);
+  }
+
+  /** A held key's action; the steering keys follow the steering mode. */
+  private keyAction(code: string): string | undefined {
+    const a = SimController.KEYMAP[code];
+    if (a === 'helmLeft' || a === 'helmRight') return helmAction(a === 'helmLeft' ? 'left' : 'right', this.steeringMode);
+    return a;
+  }
+
   private static readonly KEYMAP: Record<string, string> = {
     ArrowLeft: 'helmLeft', KeyA: 'helmLeft', ArrowRight: 'helmRight', KeyD: 'helmRight',
     ArrowUp: 'mainIn', KeyW: 'mainIn', ArrowDown: 'mainOut', KeyS: 'mainOut',
@@ -1364,7 +1433,7 @@ export class SimController {
     this.sound.resume();
     const t = ev.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
-    const held = SimController.KEYMAP[ev.code];
+    const held = this.keyAction(ev.code);
     if (held) {
       this.press(held, true);
       ev.preventDefault();
@@ -1395,7 +1464,7 @@ export class SimController {
   };
 
   private onKeyUp = (ev: KeyboardEvent) => {
-    const held = SimController.KEYMAP[ev.code];
+    const held = this.keyAction(ev.code);
     if (held) this.press(held, false);
   };
 
@@ -1471,14 +1540,25 @@ export class SimController {
       showResults: this.showResults,
       fleet: (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, n: b.sim.state.n, e: b.sim.state.e, heading: b.sim.state.psi, colour: b.colour, label: b.sailNumber })),
       contact: this.contactText(),
+      soundCaption: this.caption && this.sim.time - this.caption.t < 5 && this.sim.time >= this.caption.t ? this.caption.text : undefined,
       showSettings: this.showSettings,
       graphics: this.view?.graphics,
       sceneryBuilt: this.view?.sceneryBuilt,
       shadowsBuilt: this.view?.shadowsBuilt,
       audio: this.sound.settings,
       audioRunning: this.sound.running,
+      steering: this.steeringMode,
     };
     for (const l of this.listeners) l();
+  }
+
+  /** The nearer end of the starting line from the user's boat, for a boat over the line at the start. */
+  private ocsGuideNow(r: NonNullable<SimController['race']>, s: { n: number; e: number; psi: number }, sinceStartS: number): OcsGuide {
+    const kindOf = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
+    const label = (id: string) => (kindOf(id) === 'committee-boat' ? 'the committee boat' : kindOf(id) === 'pin' ? 'the pin end' : (r.course.marks.find((m) => m.id === id)?.name ?? id));
+    const [a, b] = r.resolved.start;
+    const [ia, ib] = r.course.start.ends;
+    return ocsGuide({ n: s.n, e: s.e, headingRad: s.psi }, [{ ...a, label: label(ia) }, { ...b, label: label(ib) }], sinceStartS);
   }
 
   private raceUi(): RaceUi | undefined {
@@ -1524,6 +1604,7 @@ export class SimController {
       toStart: cm.startTime - t,
       nextSignal: cm.nextSignal(t)?.name,
       ocs: st.ocs,
+      ocsGuide: st.ocs && t >= cm.startTime ? this.ocsGuideNow(r, s, t - cm.startTime) : undefined,
       mayStart: st.mayStart,
       legIndex: st.legIndex,
       legCount: st.legCount,

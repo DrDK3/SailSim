@@ -192,6 +192,19 @@ From the documents the owner supplied on 3 Nov 2026 ([CLUB_DOCUMENTS.md](CLUB_DO
 | 14.3 | Sail the course | The marks and roundings match the course string in the appendix (Library → the course's description) | |
 | 14.4 | **For an RDYC member:** Library → Club courses → each course | Compare it with the Course Appendix 2026; if it matches, set it to verified with your name and the date in the course editor, and export it | |
 
+## 15. Review Package 2, round A: accessibility, the start, steering (15 min)
+
+What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 15.1 | In a private window (a first visit) | The welcome asks "Have you sailed before?". "Yes" gives tiller steering: A pushes the tiller to port and the bow turns to starboard; the tiller drawing in the dock shows it. "Not yet" keeps the keys turning the bow. More → Graphics and sound changes it | |
+| 15.2 | Open Help with the keyboard, then press Tab many times, then Escape | Focus stays inside Help; Escape closes it and focus is back on the Help button; A / D still steer | |
+| 15.3 | Start a quick race on a phone (or a narrow window) and on a short laptop window | The instruments, race panel and coach never cover the sailing controls, the toolbar or the minimap; the left column scrolls instead | |
+| 15.4 | Start a quick race, cross the line before the gun | The race panel says you are over, what to do, and where the nearer end of the line is (with an arrow); after four minutes it says flag X is down and offers Retire | |
+| 15.5 | With sound on, listen through a start sequence; bump a mark; touch the bottom in the river | A horn at each signal (one long one at one minute), its caption in the race panel; a knock at the contact; a scrape on the bottom | |
+| 15.6 | Turn on "reduce motion" in the operating system, then sail in the helm view in a breeze | The horizon stays level and the view does not bob with the waves; camera changes cut instead of sliding | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
