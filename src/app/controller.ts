@@ -854,8 +854,9 @@ export class SimController {
     this.weatherSources = weather;
     this.tideSources = tide;
     this.liveIssues = issues;
-    this.goLiveIfUntouched();
     this.publish(true);
+    // With the River Dart still loading, the switch waits for it (loadDart rebuilds the session anyway).
+    if (this.dartStatus !== 'loading') this.goLiveIfUntouched();
   }
 
   /**
@@ -867,7 +868,13 @@ export class SimController {
     if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('conditions') === 'set') return;
     const untouched = !this.race && !this.tutorial && !this.replay && this.sim.time < 60 && JSON.stringify(this.scenario) === JSON.stringify(DEFAULT_SCENARIO);
     if (!untouched) return;
-    this.useLiveNow();
+    try {
+      this.useLiveNow();
+    } catch (err) {
+      // Never let the switch stop the app: report it with the live data's other problems and sail on as set.
+      this.liveIssues = [...this.liveIssues, `Could not start in the live conditions: ${(err as Error).message}`];
+      this.publish(true);
+    }
   }
 
   /** Restart the current activity in the live conditions of now (forecast, sky, the real clock); false if none covers now. */
@@ -900,6 +907,8 @@ export class SimController {
     }
     // A scenario that needed the Dart (channel stream) may not have started: rebuild either way.
     this.restart(this.scenario);
+    // Live data that arrived while the Dart loaded: switch to it now, in one restart.
+    this.goLiveIfUntouched();
   }
 
   attach(container: HTMLElement): void {

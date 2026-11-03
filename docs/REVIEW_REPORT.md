@@ -94,6 +94,12 @@ These were checked, with evidence:
 
 **Needs:** the deployed site and its scheduled job. In development there is no live data, so the defaults stay.
 
+**CI fix (first push):** the deploy test with a fresh forecast failed on CI (not locally). There, the app switched to live weather while the River Dart data was still loading, and the test's state check timed out; CI's logs and traces are on hosts this environment cannot reach.
+- The live sources are now published before the switch.
+- The switch waits for the Dart data, so the session is rebuilt once.
+- A failure in the switch is caught and reported among the live data's issues instead of stopping the app.
+- The test now also checks the switch, with a longer wait for CI's software renderer.
+
 ## 6. Smaller faults seen in the screenshot (fixed)
 
 - **"Paused (P to resume)" pill:** it sat under the toolbar when the toolbar wrapped to two rows. It now goes below the toolbar's measured edge, and below a camera strip if one shows.
@@ -111,6 +117,7 @@ Seen here but not in the owner's screenshot: with this machine's fonts, at 1000 
 | `tests/render/committee.test.ts` (4, new) | The rudder hangs outside the transom, its head above it, the blade 0.8 m deep; the tiller runs forward over the deck; SAMARITAN's size, mast and navy canvas; she replaces the box and lies head to wind |
 | `tests/render/berthed.test.ts` (1 new) | No zero-length normals; no berthed boat takes shadows |
 | `tests/sim/live-now.test.ts` (4, new) | Live conditions start this minute with the forecast's gusts and sky; an untouched session goes live; a started one never switches; a stale forecast is not used; "Real time" light |
+| `tests/e2e/deploy.spec.ts` (updated) | On the production build under a sub-path, with a fresh forecast served: the untouched session goes live at startup |
 | `tests/sim/live.test.ts` (updated) | A forecast that covers now is fresh 105 minutes after the job ran; silent for over 8 hours, it is stale |
 | `tools/ingest/test_ingest.py` (1 new) | Forecast times: every 15 minutes for 2 hours, then hourly to 8 hours |
 | The ingest against the Met Office's live data (run here) | UKV run 06:00 UTC on 3 Nov: 15 wind steps 10:00–18:00 UTC, 9 sky steps, 104 s; read by the app and fresh for its 8 hours |

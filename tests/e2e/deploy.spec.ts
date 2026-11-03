@@ -124,10 +124,13 @@ async function openScenario(page: Page) {
 test('live data: a current forecast is offered as live; choosing it follows the forecast and its sky', async ({ page, baseURL }) => {
   await serveLive(page, { 'latest.json': await liveForecast(page, baseURL!, 10, 5) });
   const { errors } = await open(page);
-  await expect.poll(async () => (await liveUi(page)).weatherSources.length).toBe(3);
+  // The software renderer on CI draws a frame every few seconds: allow time for the sources and the switch.
+  await expect.poll(async () => (await liveUi(page)).weatherSources.length, { timeout: 60_000 }).toBe(3);
   const ui = await liveUi(page);
   expect(ui.weatherSources[0]).toMatchObject({ kind: 'live', freshness: { status: 'fresh' } });
   expect(ui.liveIssues).toEqual([]);
+  // Real time (review, 1 Nov 2026): untouched, the session has already gone live at this minute.
+  await expect.poll(() => page.evaluate(() => window.__squib!.controller.scenario.conditions.weather.source), { timeout: 60_000 }).toBe('metoffice');
   const panel = await openScenario(page);
   await panel.locator('.field', { hasText: 'Source' }).locator('select').selectOption({ label: ui.weatherSources[0]!.label });
   await expect(panel.getByTestId('weather-freshness')).toContainText('Forecast covers now');
