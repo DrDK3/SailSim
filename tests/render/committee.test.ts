@@ -109,7 +109,7 @@ describe('the committee boat SAMARITAN', () => {
     expect(counts.white).toBeGreaterThan(1000);
   });
 
-  it('replaces the box at the line end and lies head to wind', () => {
+  it('replaces the box at the line end and lies as the simulation says (head to wind here)', () => {
     stubCanvas();
     const course = {
       id: 't', name: 'T', marks: [{ id: 'cb', name: 'Start boat', kind: 'committee-boat' }, { id: 'pin', name: 'Pin', kind: 'pin' }],
@@ -124,8 +124,8 @@ describe('the committee boat SAMARITAN', () => {
       if (o.name === 'committee-boat') boat = o;
     });
     expect(boat).toBeDefined();
-    // Wind from the south-west: the bow (−z in the model) points there.
-    scene.setWind((225 * Math.PI) / 180);
+    // Lying head to a wind from the south-west (src/sim/race/anchored.ts): the bow (−z in the model) points there.
+    scene.setCommitteeHeading(() => (225 * Math.PI) / 180);
     boat!.updateMatrixWorld(true);
     const fwd = new THREE.Vector3(0, 0, -1).transformDirection(boat!.matrixWorld);
     // In the scene, x = east and −z = north: south-west is (−x, +z).

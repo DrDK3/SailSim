@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { shared } from './dispose';
 import { Kit, VMAT, cabin, hull, place } from './vessels';
+import { COMMITTEE_BOAT } from '../sim/race/anchored';
 
 /**
  * The race committee boat: SAMARITAN, a Southerly 110 deck-saloon sloop (Rob Humphreys design, built by
@@ -18,14 +20,15 @@ import { Kit, VMAT, cabin, hull, place } from './vessels';
  * committee boat as a 2.5 m circle at the line's end (OUTSTANDING_ISSUES 111).
  */
 
-export const SAMARITAN = { name: 'SAMARITAN', loa: 10.82, beam: 3.57 };
+/** Her name and size: the simulation's committee boat (src/sim/race/anchored.ts), so the drawing and the contact hull agree. */
+export const SAMARITAN = COMMITTEE_BOAT;
 
 const NAVY = 0x1d2a47;
 const WHITE = 0xf2efe4; // her gelcoat reads warm, cream-white in the photograph
 const ALLOY = 0xd3d6d9;
 const HATCH = 0x6c2430; // the hatch covers' burgundy (photograph)
 /** Her tinted glass (saloon, portlights, the enclosure's clear panels): dark from outside, as in the photograph. */
-const TINT = new THREE.MeshStandardMaterial({ color: 0x0e151d, roughness: 0.22, metalness: 0.15, envMapIntensity: 0.45 });
+const TINT = shared(new THREE.MeshStandardMaterial({ color: 0x0e151d, roughness: 0.22, metalness: 0.15, envMapIntensity: 0.45 }));
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 /** The boat's name for her topsides: navy capitals on a clear background (null without a DOM, e.g. tests). */

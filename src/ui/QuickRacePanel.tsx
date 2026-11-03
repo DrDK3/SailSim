@@ -100,6 +100,12 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
           </select>
         </label>
       )}
+      {o.venue === 'river' && o.conditions !== 'as-set' && (
+        <label className="check">
+          <input type="checkbox" checked={!!o.stream} onChange={(e) => set({ stream: e.target.checked })} data-testid="quick-race-stream" />
+          Illustrative tidal stream (not real timing: it goes slack at high and low water, which the Dart does not)
+        </label>
+      )}
       <label className="field select-field">
         <span>Start sequence</span>
         <select value={o.sequence} onChange={(e) => set({ sequence: e.target.value as QuickRaceOptions['sequence'] })}>
@@ -116,7 +122,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         {o.conditions === 'random'
           ? 'Random conditions are training ranges (wind, gusts, a season afternoon, sky and tide phase), not a record of the Dart.'
           : o.conditions === 'live'
-            ? `Live: the latest Met Office model wind for the area${liveTide ? ' and the Dartmouth tide' : ''}, from the site’s scheduled job.${!liveTide && o.venue === 'river' ? ' No live tide is published yet, so the river has no tidal stream.' : ''}`
+            ? `Live: the latest Met Office model wind for the area${liveTide ? ' and the Dartmouth tide' : ''}, from the site’s scheduled job.${!liveTide && o.venue === 'river' && o.stream ? ' No live tide is published yet, so the river has no tidal stream.' : ''}`
             : 'Uses the wind, tide and sky set in the Scenario panel.'}{' '}
         AI boats and the judging are simplified (not an authoritative rules adjudication).
       </p>

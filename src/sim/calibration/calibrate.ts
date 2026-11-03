@@ -1,14 +1,13 @@
-import { DEG } from '../math/angles';
-import { msToKn } from '../units';
 import type { BoatParams } from '../boat/params';
-import { runScenario } from '../scenario';
+import { crewPolicyPoint } from '../ai/polar';
 
 /**
  * Calibration against observed steady-state sailing points (docs/CALIBRATION.md).
  *
  * An observation is a settled condition: true wind speed and angle, and what the boat did (speed through the
  * water, heel, leeway). The model is run to steady state at each point with the same procedure as the model
- * polar (autopilot holding the TWA, max-drive sheet setting), and residuals are model − observed.
+ * polar and the AI's targets (`crewPolicyPoint`: autopilot holding the TWA, the crew trimming as the assists
+ * do, easing and flattening when overpowered), and residuals are model − observed.
  *
  * Fitting adjusts a small number of dimensionless multipliers ("knobs") on groups of estimated coefficients;
  * it never edits data files. A fitted value is adopted by hand, with tag C and the observation set as source.
@@ -88,20 +87,8 @@ export interface SteadyOptions {
 
 /** The model's settled state at one condition (uniform steady wind, flat water, no current). */
 export function modelPoint(params: BoatParams, twsKn: number, twaDeg: number, o: SteadyOptions = {}): ModelPoint {
-  const sim = runScenario(
-    {
-      name: 'calibration-point',
-      durationS: o.durationS ?? 120,
-      conditions: { twsKn, twdDeg: 0 },
-      initial: { headingDeg: -twaDeg, speedKn: 4 },
-      autopilot: { mode: 'twa', targetDeg: twaDeg },
-      optimiseTrim: true,
-    },
-    undefined,
-    params,
-  );
-  const s = sim.snapshot(false);
-  return { stwKn: msToKn(s.stw), heelDeg: Math.abs(s.heel) / DEG, leewayDeg: Math.abs(s.leeway) / DEG };
+  const p = crewPolicyPoint(params, twsKn, twaDeg, o.durationS ?? 120);
+  return { stwKn: p.stwKn, heelDeg: p.heelDeg, leewayDeg: p.leewayDeg };
 }
 
 export function residuals(params: BoatParams, obs: ObservedPoint[], o: SteadyOptions = {}): Residual[] {

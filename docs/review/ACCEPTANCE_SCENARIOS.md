@@ -13,10 +13,10 @@ These scenarios belong to [COMPREHENSIVE_REVIEW.md](../COMPREHENSIVE_REVIEW.md).
 - **Wind and water:** the default Squib (`squibParams()`), uniform wind from 000°, flat water, no current unless stated.
 - **Seed:** 1.
 - **Crew policy:** auto-trim with flatten and auto crew (the player's assists), unless stated.
-- **Steady-state window:** the last 30 s of a 150 s run.
+- **Steady-state window:** a 20 s average after 120–150 s (the same as the AI's target table).
 - **Settled:** STW varies by less than 0.05 kn and heel by less than 1° in the window.
 
-Package 1 automates these as `npm run envelope`.
+**Automated (Package 1, 3 Nov 2026):** `npm run envelope` (`src/sim/validation/envelope.ts`, about 10 s) runs A-PH-1…6, 8, 11–13 and A-CO-1…5 and 7, and writes `out/envelope.json` and `out/envelope.md`. CI keeps the report as the `behaviour-envelope` artifact. Regression checks: `tests/sim/envelope.test.ts`, `tests/sim/anchored.test.ts`. A-PH-9 and A-PH-10 wait for the spinnaker (Package 5); A-CO-6 is checked through the shared pose function (`tests/sim/anchored.test.ts`).
 
 ## Physics (A-PH)
 

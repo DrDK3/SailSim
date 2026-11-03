@@ -23,6 +23,8 @@ This register belongs to [COMPREHENSIVE_REVIEW.md](../COMPREHENSIVE_REVIEW.md) �
 | — | DHNA (Dart Harbour) hydrographic surveys | Unknown | Survey | Harbour | Unknown: ask | Survey-grade | Candidate (ask, D6) |
 | — | Mooring layout | — | — | — | — | Generated today (L6) | Candidate (ask DHNA) |
 | — | RDYC 2026 programme, SIs, course cards, mark positions | 2026 | — | — | Club documents | Authoritative for club racing | **Blocked** (`royaldart.co.uk`; needed from you) |
+| — | **RDYC sailing instructions** (owner's link, decision D9): a PDF on `96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com` | Unknown until read | — | Club racing | Club document | Authoritative for club racing | **Blocked** (host not allowed in this environment; 3 Nov 2026) |
+| — | **Dart Harbour Guide 2026** (owner's link, decision D6): a flipbook on `content.yudu.com` | 2026 | — | The harbour | Dart Harbour publication | Harbour facts (marks, moorings, rules, contacts) | **Blocked** (host not allowed; 3 Nov 2026) |
 
 ## Weather
 
@@ -52,6 +54,7 @@ This register belongs to [COMPREHENSIVE_REVIEW.md](../COMPREHENSIVE_REVIEW.md) �
 | Source | What | Status |
 |---|---|---|
 | NSOA class rules 2022 / 2024 (excerpts) | Minimum weight, mast, spinnaker pole and hoist, sails carried | Partial |
+| NSOA class rules 2024 (owner's link, decision D9: `squibs.co.uk/squib-class-rules-2024/`) | Full rules, including the permitted controls | **Blocked** (`squibs.co.uk` not allowed in this environment; 3 Nov 2026) |
 | NSOA class rules 2025 | Full rules, including the permitted controls | **Needed** (D9) |
 | keelindex, Wikipedia | Dimensions, ballast, ORC GPH, PY | In use (secondary) |
 | GPS tracks with wind | Measured performance | **Needed** (validation sheet A5) |
@@ -59,6 +62,8 @@ This register belongs to [COMPREHENSIVE_REVIEW.md](../COMPREHENSIVE_REVIEW.md) �
 ## Blocked hosts in this environment
 
 These hosts could not be reached under the environment's network policy:
+
+- the three documents the owner linked on 3 Nov 2026: `96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com`, `squibs.co.uk`, `content.yudu.com`;
 
 - `royaldart.co.uk`, `en.wikipedia.org`, `simplonpc.co.uk`, `dartmouthrailriver.co.uk`;
 - the CI log host `results-receiver.actions.githubusercontent.com` and the CI artifact host `productionresultssa14.blob.core.windows.net`;

@@ -479,6 +479,8 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 
 /* Notices: out of the boat's way */
 .banner.paused-pill { top: 76px; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--panel-strong); }
+/* Information only: clicks pass through to whatever is under it. */
+.banner.slow-pill { pointer-events: none; font-weight: 500; }
 .badge {
   left: 12px; right: auto; max-width: min(60%, 760px); text-align: left; bottom: 6px; font-size: 10.5px; color: rgba(238, 243, 246, 0.6);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto;

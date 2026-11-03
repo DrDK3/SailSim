@@ -45,7 +45,20 @@ export function squibOutline(p: Pick<BoatParams, 'loa' | 'beam'>): Outline {
   return { x, y, radius };
 }
 
-/** A rectangle outline (ferries, committee boats): length along x, centred on the origin. */
+/**
+ * A yacht's waterline-level outline centred on the origin, bow along +x: the Squib's plan shape (fine entry,
+ * full quarters, a transom 0.64 of the beam) scaled to another length and beam (E). Used for the committee boat.
+ */
+export function hullOutline(loa: number, beam: number): Outline {
+  const s = squibOutline({ loa, beam });
+  const shift = loa / 2 - BOW_X;
+  const x = s.x.map((v) => v + shift);
+  let radius = 0;
+  for (let i = 0; i < x.length; i++) radius = Math.max(radius, hypot2(x[i]!, s.y[i]!));
+  return { x, y: s.y, radius };
+}
+
+/** A rectangle outline (ferries, moored boats): length along x, centred on the origin. */
 export function boxOutline(length: number, beam: number): Outline {
   const a = length / 2;
   const b = beam / 2;

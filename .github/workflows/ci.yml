@@ -29,6 +29,15 @@ jobs:
           # Names the build in saved replays (not a secret).
           VITE_BUILD_ID: ${{ github.sha }}
       - run: npm test
+      # The behaviour envelope: every acceptance scenario, as MODEL OUTPUT for the validation sailors (not a
+      # test of realism; docs/review/ACCEPTANCE_SCENARIOS.md). About 10 s.
+      - name: Behaviour envelope
+        run: npm run envelope
+      - uses: actions/upload-artifact@v6
+        with:
+          name: behaviour-envelope
+          path: out/envelope.*
+          retention-days: 30
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'

@@ -11,9 +11,10 @@ All boats share one environment, stepped once per 10 ms tick, and sail with the 
 | Contact with | Model | Coefficients |
 |---|---|---|
 | Another boat | Overlap by the separating-axis test. Normal force k·depth + c·closing speed (never pulling), Coulomb friction μ = 0.3, equal and opposite, at the contact point (gives yaw) | k = 2×10⁵ N/m, c = 5×10³ N s/m (E) |
-| Committee boat, navigation buoy, fixed mark | Fixed circle; same law | as above (E) |
+| Committee boat | SAMARITAN's hull outline (10.82 × 3.57 m), centred on the line-end mark, lying head to the stream or the base wind exactly as drawn (`src/sim/race/anchored.ts`; review CO-3, 3 Nov 2026). Was a 2.5 m circle | as above (E) |
+| Navigation buoy, fixed mark | Fixed circle; same law | as above (E) |
 | Turning mark, pin (robotic marks: an inflatable on twin pontoons, `src/render/robotMark.ts`) | Fixed circle of 0.9 m round the pontoons (was 0.75 m for an anchored inflatable and 0.4 m for the pin buoy), softer | k = 3×10⁴ N/m, c = 2×10³ N s/m (E) |
-| Moored boat | Box l × l/3, lying to the stream (or wind) downstream of its buoy, as drawn | hard (E) |
+| Moored boat | Box l × l/3, lying to the stream (or the base wind, swung by up to ±15° from the layout) downstream of its buoy. The renderer draws the same pose (`anchored.ts`; review CO-4). It used to add its own swing, up to ±15° away from the physics | hard (E) |
 | Ferry, river boat, the paddle steamer | Box on its timetabled track, moving | hard (E) |
 | Pier, jetty, pontoon (and the RDYC pontoon's gangway); the towns' quay walls (photo round, PHYSICS.md §16); buildings standing in the water, such as the Hindostan, BRNC's moored training ship, and huts on pontoons (fix round, `src/sim/env/structures.ts`) | Convex pieces of the outline; floating pontoons softer on their fenders; buildings in the water fixed | PIER_CONTACT (E) |
 
@@ -205,6 +206,17 @@ It never changes the physics.
   - With 10 boats the contacts are mostly port–starboard around the start.
   - With 20 boats they come during the race, at crossings and roundings (no mark-room).
   - See issue 42.
+- **Review Package 1 (3 Nov 2026).** The committee boat became her drawn hull (10.82 m, lying to the stream or the wind) instead of a 2.5 m circle. Trials were re-run, with a same-day baseline from the commit before the change (`dd7d16c`), because results had drifted since 23 Oct:
+  - **Start Bay, seeds 1–100:**
+    - baseline 91 of 100 clean;
+    - after Package 1, 92 of 100, with no committee-boat contact.
+    - **Both are below the 95% criterion.** The drop from 97% predates this package (issue 121). The failures are port–starboard crossings mid-race and two windward-mark touches.
+  - **River, 20 runs:**
+    - baseline 15 of 20 clean;
+    - with the real-size committee boat and no AI change, 12 of 20. Five runs touched her: boats crawling against the stream after finishing, and boats manoeuvring near the line's end before the start, were set onto her bow.
+    - Two AI changes brought it back to 15 of 20 (the remaining failures are boat–boat contacts, a top-mark touch, one grounding, and two committee-boat touches before a start):
+      - on the way to its waiting spot, an AI boat keeps full power when a stream runs (more than 0.2 m/s);
+      - its last-moment reflex keeps 0.75 m more room round the committee boat.
 - **Criterion 12 (performance with AI):** `npm run perf`.
   - **Physics only:** 21 boats on the River Dart, 0.80 ms mean and 1.98 ms p99 per 1/60 s frame.
   - **Full race:** 1 user + 20 AI boats, including the AI and race logic, 1.7 ms mean and about 5 ms p99.

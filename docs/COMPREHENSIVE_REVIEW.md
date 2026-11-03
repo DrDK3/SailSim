@@ -1,6 +1,6 @@
 # Comprehensive review and revision plan
 
-**Status: review gate.** This is a review and specification. No production code has changed since the review began. The baseline is commit `dd7d16c` on `hifi`. Nothing below will be implemented until you approve a package (§10).
+**Status (3 Nov 2026): decisions recorded (§12); Package 1 implemented (§13).** The review itself was written at the gate, against commit `dd7d16c` on `hifi`, before any production change. The owner then took decisions D1–D12 and asked for implementation in the recommended order.
 
 **Companion files:**
 
@@ -23,6 +23,8 @@
 9. [Validation and benchmarking plan](#9-validation-and-benchmarking-plan)
 10. [Revision packages](#10-revision-packages)
 11. [Recommended first package and decisions needed](#11-recommended-first-package-and-decisions-needed)
+12. [Decisions (3 Nov 2026)](#12-decisions-3-nov-2026)
+13. [Package 1: what changed](#13-package-1-what-changed)
 
 ---
 
@@ -1300,3 +1302,73 @@ Everything later is checked against its report.
 | **D12** | Minimum supported device | **A 2020 mid-range phone and an integrated-GPU laptop** | Sets the performance budgets in §9.3 |
 
 **Review gate.** I have stopped here. Tell me which package to implement (P1 recommended, with P2 in parallel if you want), and your answers to whichever decisions you are ready to make. Nothing in production code will change until then.
+
+---
+
+## 12. Decisions (3 Nov 2026)
+
+The owner's answers to §11. "Recommended" means the recommendation in §11 was accepted as written.
+
+| # | Decision | Taken |
+|---|---|---|
+| D1 | Intended players | Recommended: club sailors and learners on the Dart, with an expert setting |
+| D2 | Player controls versus simulated crew | Recommended: the player helms, trims the main and calls tacks, gybes and spinnaker hoists and drops; the crew trims the jib and spinnaker and hikes; experts may take the jib and crew position |
+| D3 | Spinnaker | Recommended: symmetric, crew-handled on the player's call (Package 5) |
+| D4 | Steering convention | Recommended: asked on the first visit; "bow" for non-sailors, "tiller" for sailors; the tiller always shown (Package 2) |
+| D5 | Tidal stream | Recommended: illustrative, labelled, off in races (done in Package 1); then ask UKHO about licensed stream data (Package 4) |
+| D6 | River bathymetry | Acknowledged. The owner also pointed to the **Dart Harbour Guide 2026** (`content.yudu.com/web/1vkfm/0A1vl9e/DartHarbourGuide2026/…`) |
+| D7 | Damage default | Recommended: "Realistic" in races, "Off" in lessons (Package 6) |
+| D8 | Live-data backend | Recommended: one scheduled serverless function on a free tier, keys server-side; GitHub Actions as the fallback (Package 3) |
+| D9 | Validation documents | The owner supplied links to the **RDYC sailing instructions** (a PDF on `96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com`) and the **Squib class rules 2024** (`squibs.co.uk/squib-class-rules-2024/`). The validation sailors are still to be named |
+| D10 | AI information | Recommended: parity at "club"; look-ahead only at "expert", labelled (Package 7) |
+| D11 | Rules scope | Recommended: rule 18 (mark-room), then 19–20; always "simplified, not authoritative" (Package 7) |
+| D12 | Minimum device | Recommended: a 2020 mid-range phone and an integrated-GPU laptop |
+
+**The three documents could not be read.** Their hosts (`96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com`, `squibs.co.uk`, `content.yudu.com`) are blocked by this environment's network policy, both by direct download and by the web-fetch tool (retried once at the owner's request). A web search found no other copy of the 2026 SIs or the class rules.
+
+Nothing from them has been assumed. Package 2's start-signal sounds, Package 5's sail controls and Package 7's club courses wait for them. To unblock:
+
+- allow the three hosts in the environment's network settings (the cloud environment's Network access, under Allowed domains); or
+- commit the files to the repository, for example under `research/club-docs/`.
+
+## 13. Package 1: what changed
+
+Implemented 3 Nov 2026, in the order of §11. Each item lists what changed, how it was checked, and what remains.
+
+| # | Change | Files | Checked by |
+|---|---|---|---|
+| 1.1 | **Behaviour envelope.** `npm run envelope` runs A-PH-1…6, 8, 11–13 and A-CO-1…5, 7 headless in about 10 s, and writes `out/envelope.json` and `out/envelope.md`, labelled "model output, not validation". CI runs it and keeps the report as the `behaviour-envelope` artifact | `src/sim/validation/envelope.ts`, `tools/envelope.ts`, `.github/workflows/ci.yml` | `tests/sim/envelope.test.ts` (determinism) |
+| 1.2 | **One polar generator** (PH-2, PH-7). `crewPolicyPoint` gives the steady state with the crew policy of the player's assists and the AI: auto-trim with easing and flattening. It averages over 20 s and flags points that have not settled. The polar panel, the calibration, `npm run polar` and the AI's table all use it. The AI's table is unchanged (it already used this policy), so no AI behaviour changed. The panel draws unsettled points hollow (* in the table). The synthetic calibration fixture was regenerated with the new procedure | `src/sim/ai/polar.ts`, `src/app/polarWorker.ts`, `src/ui/PolarPanel.tsx`, `src/sim/calibration/calibrate.ts`, `tools/model-polar.ts` | `tests/sim/envelope.test.ts` (the dashboard point equals the AI table within 0.02 kn; 25 kn close-hauled flagged as not steady), `tests/sim/calibration.test.ts` |
+| 1.3 | **The committee boat collides where she is drawn** (CO-3). She is SAMARITAN's hull outline (10.82 × 3.57 m), centred on the line-end mark, lying head to the stream or the base wind. The renderer takes her heading from the same function | `src/sim/race/anchored.ts`, `src/sim/race/fleet.ts`, `src/sim/race/session.ts`, `src/render/course.ts`, `src/render/samaritan.ts` | A-CO-5: contact at 0.2 m overlap, none at 0.2 m clear (`tests/sim/envelope.test.ts`) |
+| 1.4 | **Moored boats: one pose** (CO-4). The physics now includes each boat's slack-water swing from the layout, and the renderer draws the physics' pose. Both lie to the base wind (no gust spin) and blend between wind and stream | `src/sim/race/anchored.ts`, `src/render/dart.ts`, `src/app/controller.ts`, `src/sim/race/setup.ts` | `tests/sim/anchored.test.ts`: contact at 0.2 m overlap with the posed box, none at 0.2 m clear |
+| 1.5 | **Running slow** (PH-5). "Running slow: N% of real time" below the toolbar when the simulation keeps under 90% of the clock. The graphics step down one preset after two slow windows (not saved), never against the user's own choice. A setting turns it off | `src/app/controller.ts`, `src/ui/App.tsx`, `src/ui/SettingsPanel.tsx`, `src/ui/styles.css` | Browser probe in software rendering (the pill shows; screenshot); PERFORMANCE.md §1b |
+| 1.6 | **GPU memory and lost contexts** (GR-2, GR-3). Removed courses, fleet boats and replaced boat models give back their geometries and textures. A lost WebGL context pauses the run, says so and resumes on restore | `src/render/dispose.ts`, `src/render/scene.ts`, `src/render/fleet.ts`, `src/app/controller.ts`, `src/ui/App.tsx` | `tests/e2e/review.spec.ts`. Measured: the geometry count levels off (726–846 over 7 restarts) instead of growing by about 55 a restart |
+| 1.7 | **Contact regression tests**: no tunnelling (8 kn into a 0.3 m jetty, 14 kn into a 0.3 m pile), no energy gain in any collision, a pinned boat still (under 5 mm) | `tests/sim/envelope.test.ts` | Unit tests |
+| 1.8 | **Illustrative stream** (EN-1, D5). The river's stream is labelled "illustrative, not real timing" everywhere and is off by default in quick races on the river (a tick box turns it on). The Scenario panel explains why | `src/app/quickRace.ts`, `src/ui/QuickRacePanel.tsx`, `src/ui/ScenarioPanel.tsx`, `src/sim/env/current.ts` | `tests/sim/river-race.test.ts` |
+
+**The determinism reference hash is unchanged** (`11824f89f479d0f4`): the reference run has no moorings, committee boat or stream changes.
+
+**AI trials** (RACING.md §6). A same-day baseline was run on the commit before Package 1.
+
+| Trial | Baseline (before) | Package 1 |
+|---|---|---|
+| Start Bay, 100 seeds | 91 clean | 92 clean; no committee-boat contact |
+| River, 20 runs | 15 clean | 15 clean |
+
+**Start Bay is below the 95% criterion in both.** The drop from 97% (23 Oct) predates this package (issue 121).
+
+On the river the real-size committee boat first cost three clean runs: boats crawling against the stream were set onto her bow. Two small AI changes recovered them:
+
+- an AI boat keeps full power on the way to its waiting spot when a stream runs;
+- its reflex keeps 0.75 m more room round the committee boat.
+
+**A new finding from the envelope (PH-10, issue 118).** The model's best upwind VMG is at a true wind angle of 30–35° in 6–18 kn. A keelboat usually beats at about 38–45° true (L3). The model may point too high; the Squib sailor's tacking angle (validation sheet B1.5) will tell. This is not tuned in Package 1: it belongs to the calibration in Package 5.
+
+**A physics fault found and fixed while testing (stability beyond 120°).**
+- **Found:** re-running the AI trials, a river race hung. An AI boat manoeuvring near the start line, already heeled past 65°, rolled past 120° (what first knocked it down was not isolated). The righting-arm table was extrapolated beyond its end, so the capsizing arm grew without limit. The roll ran away to infinity, and a later loop never ended.
+- **Fixed:** GZ now goes to zero at 180° and is taken round the circle. Past 75° of heel the rig is in the water: it stops driving and damps the roll (PHYSICS.md §8).
+- **Effect on normal sailing:** none below 75°; the reference hash is unchanged.
+- **Regression tests:** `tests/sim/stability.test.ts`. They fail on the old code.
+
+**Irons (issue 119).** The envelope confirms PH-4: with the helm hard over and the sails on auto-trim, the boat is still within 11° of head to wind after 60 s, going astern.
+

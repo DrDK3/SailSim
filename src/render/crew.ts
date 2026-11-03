@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shared } from './dispose';
 
 /**
  * Sailors in a Squib: an articulated figure, one skinned mesh (one draw call), posed every frame from where
@@ -330,7 +331,7 @@ function buildParts(role: CrewRole, c: CrewColours, build: CrewBuild = 'male'): 
   return b.build();
 }
 
-const MATERIAL = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 });
+const MATERIAL = shared(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 }));
 const geometryCache = new Map<string, THREE.BufferGeometry>();
 
 export class CrewFigure {

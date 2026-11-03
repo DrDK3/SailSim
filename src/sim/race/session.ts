@@ -14,6 +14,7 @@ import type { MooringArea } from '../course/restrictions';
 import { AiSkipper, aiSkill, type AiLevel, type AiWorld } from '../ai/skipper';
 import { Polar } from '../ai/polar';
 import { AI_POLAR } from '../ai/polarData';
+import { COMMITTEE_OUTLINE } from './anchored';
 import { CONTACT, Fleet, markRadius, type CircleObstacle, type ContactEvent, type FleetBoat, type MooredBoat } from './fleet';
 import type { PierInput } from './piers';
 import { placeOutline } from './hull';
@@ -111,6 +112,7 @@ export class RaceSession implements AiWorld {
       this.obstacles.push({
         id: `mark-${m.id}`, label: m.name, kind: m.kind === 'committee-boat' ? 'committee-boat' : 'mark', n: p.n, e: p.e, radius: r,
         stiffness: hard ? CONTACT.hardStiffness : CONTACT.softStiffness, damping: hard ? CONTACT.hardDamping : CONTACT.softDamping,
+        ...(m.kind === 'committee-boat' ? { hull: COMMITTEE_OUTLINE } : {}),
       });
     }
     this.fleet.setObstacles({ marks: this.obstacles, moored: opts.moored, ferries: opts.ferries, traffic: opts.traffic, piers: opts.piers });

@@ -248,7 +248,9 @@ export class AiSkipper {
     }
     for (const m of this.world.obstacles) {
       if (Math.abs(m.n - s.n) > 18 || Math.abs(m.e - s.e) > 18) continue;
-      near.push({ n: m.n, e: m.e, psi: 0, vn: 0, ve: 0, r: 0, circles: [[0, m.radius]] });
+      // The committee boat's circle just contains her hull, whose bow or stern can reach its edge: a margin, so
+      // the reflex acts before the boat is set onto her (review CO-3: she collides at her drawn size).
+      near.push({ n: m.n, e: m.e, psi: 0, vn: 0, ve: 0, r: 0, circles: [[0, m.radius + (m.hull ? 0.75 : 0)]] });
     }
     if (!near.length) return undefined;
     const mv = bodyToWorld(s.u, s.v, s.psi);
@@ -517,7 +519,10 @@ export class AiSkipper {
       }
       const park = this.park;
       if (hypot2(park.n - me.n, park.e - me.e) < 25) return { p: park, label: 'clear of the course', lineWall: false, depower: 1, hold: true };
-      return { p: park, label: 'clear of the course', lineWall: false, depower: 0.3 };
+      // On the way there, eased off a little, unless a stream is running: a boat crawling against it is set
+      // onto whatever lies down-stream of her (the committee boat lying to the stream at the line's end).
+      const cur = sim.env.current(t, me.n, me.e);
+      return { p: park, label: 'clear of the course', lineWall: false, depower: hypot2(cur.n, cur.e) > 0.2 ? 0 : 0.3 };
     }
 
     const cm = W.committee;

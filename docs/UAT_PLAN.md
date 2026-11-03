@@ -167,6 +167,20 @@ UI v2, slice 1 ([UI_V2_REPORT.md](UI_V2_REPORT.md)).
 | 12.5 | Pause, then load a scenario from the Library | The new scenario starts sailing (it does not stay paused) | |
 | 12.6 | **Look and feel** | The colours (deep navy, slate, ocean blue; teal for good, amber for advice, red for warnings) read well over the water; note anything hard to read | |
 
+## 13. Review Package 1: measure and make consistent (15 min)
+
+The first revision package of the comprehensive review ([COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §11 and §13).
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 13.1 | Start a quick race in Start Bay; sail close past the committee boat SAMARITAN's stern, then her bow | You touch her where her hull is drawn, not before and not through her; she lies head to the wind (in a stream, head to the stream) and swings slowly, not with every puff | |
+| 13.2 | On the river, in slack water, sail slowly along a row of moored boats and touch one | The contact comes where the boat is drawn; the boats lie at slightly different angles, as before | |
+| 13.3 | More → Model polar; tick 15 kn and open the Table | The text says the crew trims as your assists and the AI do; the numbers match what the AI races to; any point still swinging shows as a hollow dot (* in the table) | |
+| 13.4 | Quick race → venue River | The stream is off unless you tick "Illustrative tidal stream"; with it ticked, the conditions say "Tidal stream (illustrative, not real timing)" | |
+| 13.5 | On your slowest device, sail a river race with 10 AI boats | If the simulation cannot keep up, "Running slow: N% of real time" shows below the toolbar, and the graphics may step down one preset; choosing graphics yourself stops that | |
+| 13.6 | Restart a quick race ten times, then sail on | No slow-down or crash builds up over the restarts | |
+| 13.7 | Optional (a developer's console): `document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context').loseContext()` | "The browser reset the graphics…" shows and the run pauses; it carries on by itself when the picture returns (or press Reload) | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

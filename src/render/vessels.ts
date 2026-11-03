@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shared, sharedAll } from './dispose';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
@@ -39,14 +40,14 @@ function glassTexture(): THREE.Texture | null {
   return glassTex;
 }
 
-export const VMAT = {
+export const VMAT = sharedAll({
   paint: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.04 }),
   gloss: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.18 }),
   glass: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, metalness: 0.55 }),
   steel: new THREE.MeshStandardMaterial({ color: 0xd4d9de, roughness: 0.25, metalness: 0.9 }),
   rubber: new THREE.MeshStandardMaterial({ color: 0x18191b, roughness: 0.9 }),
   canvas: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }),
-};
+});
 let glassApplied = false;
 function applyGlass(): void {
   if (glassApplied) return;
@@ -604,7 +605,7 @@ export function lifebuoy(kit: Kit, x: number, y: number, z: number, side: number
 }
 
 const LIGHTS = new Map<number, THREE.MeshStandardMaterial>();
-const LIGHT_GEO = new THREE.SphereGeometry(0.1, 8, 6);
+const LIGHT_GEO = shared(new THREE.SphereGeometry(0.1, 8, 6));
 /** Every vessel's lights on (at dusk) or off. */
 export function setLightsOn(on: boolean): void {
   for (const m of LIGHTS.values()) m.emissiveIntensity = on ? 3 : 0;

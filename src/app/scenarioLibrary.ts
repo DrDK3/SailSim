@@ -71,7 +71,7 @@ const BUILT_IN: { id: string; title: string; description: string; needsDart?: bo
     id: 'wind-against-tide',
     title: 'Wind against tide at the entrance',
     description:
-      '12 kn southerly against the ebb between the castles, two hours after high water. The River Dart stream pattern is provisional (docs/PHYSICS.md).',
+      '12 kn southerly against the ebb between the castles, two hours after high water. The River Dart stream is illustrative: the real stream does not keep its timing (docs/PHYSICS.md).',
     needsDart: true,
     scenario: {
       conditions: {

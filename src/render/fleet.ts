@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from './dispose';
 import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
@@ -82,8 +83,12 @@ export class FleetView {
     for (const [id, e] of this.boats) {
       if (!list.some((b) => b.id === id)) {
         this.group.remove(e.root);
-        if (e.wake) this.group.remove(e.wake.mesh);
-        if (e.foam) this.group.remove(e.foam.mesh);
+        disposeObject(e.root);
+        for (const x of [e.wake?.mesh, e.foam?.mesh]) {
+          if (!x) continue;
+          this.group.remove(x);
+          disposeObject(x);
+        }
         this.boats.delete(id);
       }
     }

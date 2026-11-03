@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { runDeterminismState } from '../../src/sim/testing/determinism';
-import { msToKn, runScenario } from '../../src/sim/index';
+import { squibParams } from '../../src/sim/index';
+import { crewPolicyPoint } from '../../src/sim/ai/polar';
 
 /** CI runners draw the scene in software, several times slower (playwright.config.ts). */
 const CI_SLOW = process.env.CI ? 2 : 1;
@@ -154,7 +155,7 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
   const cond = page.getByTestId('conditions');
   await expect(cond).toContainText('Met Office UKV (replay)');
   await expect(page.getByTestId('tide')).toContainText('m CD');
-  await expect(cond).toContainText('Tidal stream (modelled)');
+  await expect(cond).toContainText('Tidal stream (illustrative, not real timing)');
   await expect(page.locator('footer.badge')).toContainText('Met Office UKV model wind (replay)');
   expect(errors).toEqual([]);
 });
@@ -171,9 +172,8 @@ test('polar panel sweeps the model in a worker and matches the Node model', asyn
   await polar.getByRole('button', { name: 'Table' }).click();
   const row90 = polar.locator('.dash-table tbody tr', { hasText: /^90°/ });
   const browserKn = Number(await row90.locator('td').nth(1).textContent());
-  const nodeKn = msToKn(
-    runScenario({ name: 'polar', durationS: 120, conditions: { twsKn: 10, twdDeg: 0 }, initial: { headingDeg: -90, speedKn: 4 }, autopilot: { mode: 'twa', targetDeg: 90 }, optimiseTrim: true }).snapshot().stw,
-  );
+  // The one polar generator (review PH-2, PH-7): the crew policy of the assists and the AI.
+  const nodeKn = crewPolicyPoint(squibParams(), 10, 90, 120).stwKn;
   expect(Math.abs(browserKn - nodeKn)).toBeLessThan(0.006);
   await page.keyboard.press('Escape');
   await expect(polar).toBeHidden();
@@ -212,10 +212,10 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   const panel = page.getByRole('region', { name: 'Scenario settings' });
   await panel.locator('.field', { hasText: /^Tide/ }).locator('select').selectOption('manual');
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('dart');
-  await expect(panel).toContainText('Provisional model: follows the channel');
+  await expect(panel).toContainText('Illustrative only: the pattern follows the channel');
   await panel.getByRole('button', { name: 'Apply and restart' }).click();
   await page.getByRole('button', { name: 'All instruments and conditions' }).click();
-  await expect(page.getByTestId('conditions')).toContainText('Tidal stream (modelled, channel-following)');
+  await expect(page.getByTestId('conditions')).toContainText('Tidal stream (illustrative, not real timing; channel-following)');
   expect(errors).toEqual([]);
 });
 

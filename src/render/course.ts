@@ -18,8 +18,8 @@ export class CourseScene {
   private readonly lines: THREE.Object3D[] = [];
   /** The robotic marks, each with a phase for its gentle bob. */
   private readonly robots: { g: THREE.Group; phase: number }[] = [];
-  /** The committee boats, at anchor: they lie head to wind. */
-  private readonly committee: THREE.Object3D[] = [];
+  /** The committee boats, at anchor at their marks: they lie as the simulation says (`setCommitteeHeading`). */
+  private readonly committee: { boat: THREE.Object3D; n: number; e: number }[] = [];
 
   constructor(private readonly r: ResolvedCourse, course: Course) {
     this.group.name = 'course';
@@ -35,7 +35,7 @@ export class CourseScene {
         const boat = samaritanModel();
         boat.name = 'committee-boat';
         g.add(boat);
-        this.committee.push(boat);
+        this.committee.push({ boat, n: p.n, e: p.e });
       } else if (m.kind === 'virtual') {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 10), yellow);
         post.position.y = 0.4;
@@ -96,7 +96,13 @@ export class CourseScene {
   /** The robotic marks hold station head to wind (`fromDir`, rad, compass: where the wind comes from). */
   setWind(fromDir: number): void {
     for (const r of this.robots) r.g.rotation.y = -fromDir;
-    // At anchor, the bow (−z in the model) points where the wind comes from.
-    for (const b of this.committee) b.rotation.y = -fromDir;
+  }
+
+  /**
+   * The committee boats' headings (rad, compass) at their marks, from the simulation (src/sim/race/anchored.ts):
+   * the hull drawn is the hull boats hit. The bow (−z in the model) points along the heading.
+   */
+  setCommitteeHeading(headingAt: (n: number, e: number) => number): void {
+    for (const c of this.committee) c.boat.rotation.y = -headingAt(c.n, c.e);
   }
 }

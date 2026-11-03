@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject } from './dispose';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { BoatSnapshot } from '../sim/simulation';
@@ -33,7 +34,7 @@ export interface SceneEnvironment {
   sea?: (n: number, e: number) => SeaSample;
   /** River Dart state (when the geodata is loaded). */
   dart?: Omit<DartUpdate, 'camera' | 'time'>;
-  course?: { nextLeg: number; phase: string; showLabels: boolean };
+  course?: { nextLeg: number; phase: string; showLabels: boolean; committeeHeading?: (n: number, e: number) => number };
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
 }
@@ -222,6 +223,10 @@ export class SceneView {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
+    // The browser may take the GPU context away (memory pressure, a backgrounded tab on a phone, a driver
+    // reset): three.js stops drawing and rebuilds its GPU state when the context comes back (review GR-3).
+    this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
 
     this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 25000);
     this.camera.position.set(0, 6, 16);
@@ -303,6 +308,7 @@ export class SceneView {
     if (this.boat.type === type && this.boat.helmBuild === helm) return;
     this.boat.group.remove(this.arrows.bodyGroup);
     this.boatRoot.remove(this.boat.group);
+    disposeObject(this.boat.group);
     this.boat = new SquibModel(params, { type, helm });
     this.boatRoot.add(this.boat.group);
     this.boat.group.add(this.arrows.bodyGroup);
@@ -462,7 +468,10 @@ export class SceneView {
 
   /** Show a course (marks, lines), replacing any previous one; undefined removes it. */
   setCourse(r: ResolvedCourse | undefined, course: Course | undefined): void {
-    if (this.course) this.scene.remove(this.course.group);
+    if (this.course) {
+      this.scene.remove(this.course.group);
+      disposeObject(this.course.group);
+    }
     this.course = r && course ? new CourseScene(r, course) : undefined;
     if (this.course) this.scene.add(this.course.group);
   }
@@ -701,6 +710,7 @@ export class SceneView {
     }
     if (this.course && env?.course) {
       this.course.setWind(curr.twdGround);
+      if (env.course.committeeHeading) this.course.setCommitteeHeading(env.course.committeeHeading);
       this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
     }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
@@ -839,7 +849,29 @@ export class SceneView {
     this.floats.instanceMatrix.needsUpdate = true;
   }
 
+  /** Told when the browser takes the GPU context away (true) and when it gives it back (false). */
+  onContextChange?: (lost: boolean) => void;
+  private lost = false;
+
+  /** Whether the GPU context is lost (nothing is drawn until it is restored). */
+  get contextLost(): boolean {
+    return this.lost;
+  }
+
+  private readonly onContextLost = (ev: Event) => {
+    ev.preventDefault(); // allow the browser to restore it
+    this.lost = true;
+    this.onContextChange?.(true);
+  };
+
+  private readonly onContextRestored = () => {
+    this.lost = false;
+    this.onContextChange?.(false);
+  };
+
   dispose(): void {
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
