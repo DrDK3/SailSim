@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--enable-precise-memory-info'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const reqs = []; page.on('response', async (r) => { try { const b = await r.body(); reqs.push([r.url().replace('http://localhost:5173/', ''), b.length]); } catch { /* */ } });
+await page.goto('http://localhost:5173/?nowelcome');
+await page.getByTestId('stw').waitFor({ timeout: 120000 });
+await page.waitForFunction(() => window.__squib?.controller.getState().dart.status !== 'loading', null, { timeout: 400000 });
+await page.waitForTimeout(3000);
+const m1 = await page.evaluate(() => ({ heapMB: Math.round(performance.memory.usedJSHeapSize / 1e6), info: window.__squib.controller.view.renderer.info.memory }));
+await page.evaluate(() => window.__squib.controller.startQuickRace({ competitors: 10, level: 'good', venue: 'river', course: 'windward-leeward', conditions: 'random', wind: 'any', seed: 3, sequence: 'one-minute' }));
+await page.waitForTimeout(4000);
+const phys = await page.evaluate(() => { const c = window.__squib.controller; if (!c.getState().paused) c.togglePause(); const t0 = performance.now(); window.__squib.advance(60); return (performance.now() - t0) / 6000; });
+const m2 = await page.evaluate(() => ({ heapMB: Math.round(performance.memory.usedJSHeapSize / 1e6), info: window.__squib.controller.view.renderer.info.memory }));
+console.log(JSON.stringify({ freeSail: m1, river10AI: m2, physicsMsPerStep_10AI_inBrowser: +phys.toFixed(3) }));
+await browser.close();

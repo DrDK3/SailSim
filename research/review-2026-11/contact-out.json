@@ -1,0 +1,165 @@
+{
+ "headOn6kn": {
+  "label": "head-on 3+3 kn",
+  "ke0_J": 2096,
+  "keMaxDuringOrAfter_J": 1543,
+  "keEnd_J": 501,
+  "minCentreDist_m": 1.9,
+  "endSpeeds_kn": [
+   1.47,
+   1.47
+  ],
+  "endHeadings": [
+   337,
+   157
+  ],
+  "events": 3,
+  "damageA": {
+   "hull": 0,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 0
+  },
+  "impactsA": [
+   "B:bow:1.56m/s:512J:scraped",
+   "B:bow:0.24m/s:12J:",
+   "B:side:0.08m/s:1J:"
+  ]
+ },
+ "headOn12kn": {
+  "label": "head-on 6+6 kn",
+  "ke0_J": 8384,
+  "keMaxDuringOrAfter_J": 4997,
+  "keEnd_J": 1271,
+  "minCentreDist_m": 1.91,
+  "endSpeeds_kn": [
+   2.34,
+   2.34
+  ],
+  "endHeadings": [
+   338,
+   158
+  ],
+  "events": 2,
+  "damageA": {
+   "hull": 0.12946379382471818,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 0.0014461039243139923
+  },
+  "impactsA": [
+   "B:bow:2.74m/s:1577J:hull cracked: leaking",
+   "B:bow:0.39m/s:32J:"
+  ]
+ },
+ "tbone4kn": {
+  "label": "T-bone: A 4 kn into B side",
+  "ke0_J": 1863,
+  "keMaxDuringOrAfter_J": 1285,
+  "keEnd_J": 16,
+  "minCentreDist_m": 3.79,
+  "endSpeeds_kn": [
+   0.05,
+   0.37
+  ],
+  "endHeadings": [
+   5,
+   102
+  ],
+  "events": 1,
+  "damageA": {
+   "hull": 0,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 0
+  },
+  "impactsA": [
+   "B:bow:1.81m/s:691J:scraped"
+  ]
+ },
+ "glancing": {
+  "label": "glancing 15° at 4 kn",
+  "ke0_J": 1863,
+  "keMaxDuringOrAfter_J": 1461,
+  "keEnd_J": 772,
+  "minCentreDist_m": 2.71,
+  "endSpeeds_kn": [
+   2.52,
+   0.55
+  ],
+  "endHeadings": [
+   357,
+   354
+  ],
+  "events": 1,
+  "damageA": {
+   "hull": 0,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 0
+  },
+  "impactsA": [
+   "B:bow:0.70m/s:102J:"
+  ]
+ },
+ "pier8kn": {
+  "label": "8 kn square into a 0.3 m jetty",
+  "maxBowCentreN_m": 4.7,
+  "jettyFace_n": 7.85,
+  "passedThrough": false,
+  "endN": -2.86,
+  "endSpeed_kn": 2.89,
+  "endHeading": 0,
+  "contactOnOffToggles": 2,
+  "damage": {
+   "hull": 0.4442509634517628,
+   "rudder": 0,
+   "rig": 0.1206882225888221,
+   "bilge": 4.331973411248517
+  },
+  "impacts": [
+   "bow:2.87m/s:3466J:hull cracked: leaking/rig damaged (forestay)"
+  ]
+ },
+ "pier5kn20deg": {
+  "label": "5 kn at 70° (glancing 20°) to a jetty",
+  "maxBowCentreN_m": 4.26,
+  "jettyFace_n": 7.25,
+  "passedThrough": false,
+  "endN": 4.26,
+  "endSpeed_kn": 3.43,
+  "endHeading": 70,
+  "contactOnOffToggles": 0,
+  "damage": {
+   "hull": 0,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 0
+  },
+  "impacts": []
+ },
+ "pinnedByWind": {
+  "label": "pinned: 18 kn wind from 180 pressing onto the jetty, sails auto",
+  "maxBowCentreN_m": 7.17,
+  "jettyFace_n": 7.25,
+  "passedThrough": false,
+  "endN": -31.47,
+  "endSpeed_kn": 5.24,
+  "endHeading": 144,
+  "contactOnOffToggles": 12,
+  "damage": {
+   "hull": 0.20909465781409092,
+   "rudder": 0,
+   "rig": 0,
+   "bilge": 8.372595902144917
+  },
+  "impacts": [
+   "bow:2.21m/s:2055J:hull cracked: leaking",
+   "bow:0.96m/s:390J:scraped",
+   "bow:0.27m/s:30J:",
+   "side:0.33m/s:46J:",
+   "side:0.21m/s:18J:",
+   "side:0.05m/s:1J:"
+  ]
+ }
+}

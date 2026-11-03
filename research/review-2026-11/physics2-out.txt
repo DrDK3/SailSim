@@ -1,0 +1,16 @@
+residuary table (Fn, R/W): [[0,0],[0.1,0.0002],[0.15,0.0005],[0.2,0.0012],[0.25,0.0025],[0.3,0.0055],[0.35,0.0125],[0.4,0.03],[0.45,0.062],[0.5,0.095],[0.55,0.125],[0.6,0.145],[0.7,0.17],[0.8,0.185]]
+residuary x0.8 6kn/60°: 4.27 6kn/90°: 4.52 | 12kn/60°: 5.79 12kn/90°: 6.18 | 18kn/60°: 5.20 18kn/90°: 7.64
+residuary x1.2 6kn/60°: 4.05 6kn/90°: 4.28 | 12kn/60°: 5.50 12kn/90°: 5.78 | 18kn/60°: 4.62 18kn/90°: 6.80
+base           6kn/60°: 4.17 6kn/90°: 4.38 | 12kn/60°: 5.63 12kn/90°: 5.94 | 18kn/60°: 4.94 18kn/90°: 7.14
+t0 twa42 stw3.0 heel-8 boom27 luffMain0.00 rud0 water0
+t15 twa44 stw4.3 heel-20 boom4 luffMain0.86 rud2 water17
+t30 twa44 stw4.4 heel-34 boom2 luffMain0.76 rud2 water16
+t45 twa44 stw4.4 heel-44 boom2 luffMain0.82 rud1 water17
+t60 twa43 stw4.5 heel-50 boom2 luffMain0.84 rud0 water23
+t75 twa43 stw4.4 heel-47 boom24 luffMain0.00 rud1 water36
+t90 twa43 stw4.4 heel-30 boom57 luffMain0.14 rud3 water37
+t105 twa44 stw4.6 heel-9 boom60 luffMain0.03 rud4 water34
+t120 twa44 stw4.6 heel5 boom51 luffMain0.00 rud4 water32
+t135 twa45 stw4.4 heel13 boom36 luffMain0.08 rud3 water29
+t150 twa44 stw4.2 heel11 boom28 luffMain0.05 rud3 water27
+auto trim + flatten 22 kn: t0 stw3.0 heel-26 boom13 | t30 stw5.7 heel-25 boom12 | t60 stw5.7 heel-25 boom12 | t90 stw5.7 heel-25 boom12 | t120 stw5.7 heel-25 boom12 | t150 stw5.7 heel-25 boom12

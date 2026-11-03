@@ -1,0 +1,223 @@
+{
+ "symmetry": [
+  {
+   "twa": 45,
+   "stw": [
+    4.91,
+    4.91
+   ],
+   "heel": [
+    -8.9,
+    8.9
+   ],
+   "leeway": [
+    -4.3,
+    4.3
+   ],
+   "rudder": [
+    -1.5,
+    1.5
+   ]
+  },
+  {
+   "twa": 90,
+   "stw": [
+    5.57,
+    5.57
+   ],
+   "heel": [
+    0.1,
+    -0.1
+   ],
+   "leeway": [
+    -1.5,
+    1.5
+   ],
+   "rudder": [
+    -1.2,
+    1.2
+   ]
+  },
+  {
+   "twa": 150,
+   "stw": [
+    4.32,
+    4.32
+   ],
+   "heel": [
+    0,
+    0
+   ],
+   "leeway": [
+    -0.3,
+    0.3
+   ],
+   "rudder": [
+    -0.8,
+    0.8
+   ]
+  }
+ ],
+ "forceBalance": {
+  "stw": 5.29,
+  "totalX_N": 0,
+  "totalY_N": 0,
+  "totalN_Nm": 0,
+  "drive_N": 295.9,
+  "hull_N": 297.7
+ },
+ "currentDrift": {
+  "stw": 0.22,
+  "sog": 1.01,
+  "cog": 77.3,
+  "east_m": 60.8,
+  "expected_east_m": 61.7
+ },
+ "coastNoWind": {
+  "t_to_3kn": 9.200000000000001,
+  "t_to_1kn": 59.9,
+  "dist_m_to_1kn": "61.2",
+  "monotonic": true
+ },
+ "accel10kn60": {
+  "final_kn": 5.28,
+  "t50": 4.6000000000000005,
+  "t90": 10
+ },
+ "tack10": {
+  "from_kn": 4.78,
+  "min_kn": 2.45,
+  "turn_s": 8.6,
+  "recover90_s": 13.6,
+  "end_kn": 4.78,
+  "windward_loss_m": 11.8
+ },
+ "tack6": {
+  "from_kn": 3.47,
+  "min_kn": 1.7,
+  "turn_s": 11,
+  "recover90_s": 27.4,
+  "end_kn": 3.45,
+  "windward_loss_m": 14
+ },
+ "tack15": {
+  "from_kn": 5.3,
+  "min_kn": 2.82,
+  "turn_s": 12.3,
+  "recover90_s": 12.4,
+  "end_kn": 5.3,
+  "windward_loss_m": 10.1
+ },
+ "gybe10": {
+  "from_kn": 4.28,
+  "min_kn": 3.16,
+  "turn_s": 5.8,
+  "recover90_s": 8.9,
+  "end_kn": 4.28,
+  "windward_loss_m": -2.8
+ },
+ "gybe18": {
+  "from_kn": 5.92,
+  "min_kn": 4.68,
+  "turn_s": 4.4,
+  "recover90_s": 4.5,
+  "end_kn": 5.92,
+  "windward_loss_m": -1.7
+ },
+ "turnCircle": {
+  "diameter_m": 17.3,
+  "meanSpeed_kn": 2.69
+ },
+ "closeHauled": [
+  {
+   "tws": 6,
+   "stw": 3.47,
+   "heel": 0.1,
+   "leeway": 3.6,
+   "rudder": 0.4,
+   "helmBalance": 0.4
+  },
+  {
+   "tws": 10,
+   "stw": 4.79,
+   "heel": 8.5,
+   "leeway": 4.6,
+   "rudder": 1.3,
+   "helmBalance": 1.3
+  },
+  {
+   "tws": 14,
+   "stw": 5.21,
+   "heel": 23.3,
+   "leeway": 6,
+   "rudder": 3.2,
+   "helmBalance": 3.2
+  },
+  {
+   "tws": 18,
+   "stw": 4.92,
+   "heel": 42.9,
+   "leeway": 7.9,
+   "rudder": 5.5,
+   "helmBalance": 5.5
+  },
+  {
+   "tws": 22,
+   "stw": 4.23,
+   "heel": 11.2,
+   "leeway": 0.3,
+   "rudder": 2.6,
+   "helmBalance": -2
+  }
+ ],
+ "downwind10": [
+  {
+   "twa": 120,
+   "stw": 5.15
+  },
+  {
+   "twa": 135,
+   "stw": 4.85
+  },
+  {
+   "twa": 150,
+   "stw": 4.32
+  },
+  {
+   "twa": 165,
+   "stw": 4.14
+  },
+  {
+   "twa": 178,
+   "stw": 3.94
+  }
+ ],
+ "circularRandom": {
+  "tws8": {
+   "avg_s_per_nm": 874,
+   "avg_kn": 4.12
+  },
+  "tws12": {
+   "avg_s_per_nm": 710,
+   "avg_kn": 5.07
+  },
+  "referenceORC_GPH_s_per_nm": 880.1
+ },
+ "sensitivity12": [
+  {
+   "name": "friction form factor",
+   "minus20": 5.14,
+   "plus20": 4.99
+  },
+  {
+   "name": "main clMax",
+   "minus20": 5.02,
+   "plus20": 5.09
+  },
+  {
+   "name": "sail areas",
+   "minus20": 4.86,
+   "plus20": 5.22
+  }
+ ]
+}
