@@ -15,6 +15,9 @@ async function ready(page: Page): Promise<string[]> {
 
 test("today's challenge: the short course against three AI boats; the start-line view looks along the line from the committee boat", async ({ page }) => {
   test.setTimeout(180_000 * CI_SLOW);
+  // With reduced motion the view cuts to a new camera instead of blending over several frames (seconds each
+  // in software rendering).
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const errors = await ready(page);
   await page.getByRole('button', { name: 'Race', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Race set-up' });
@@ -26,7 +29,7 @@ test("today's challenge: the short course against three AI boats; the start-line
   expect(st.scenario.course).toEqual({ source: 'practice', kind: 'windward-leeward', legM: 220, laps: 1 });
   // The start-line view: just outside the committee boat end, looking along the line at the pin.
   await page.locator('select[title="Camera (C cycles)"]').selectOption('line');
-  // The camera moves there on the next frames (a short blend from the chase view); software rendering is slow.
+  // The camera moves there on the next frame drawn.
   const pose = () =>
     page.evaluate(() => {
       const c = window.__squib!.controller as unknown as { race: { resolved: { start: [{ n: number; e: number }, { n: number; e: number }] }; course: { start: { ends: [string, string] }; marks: { id: string; kind: string }[] } }; cameraInfo(): { position: number[] } };
