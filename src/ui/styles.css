@@ -618,15 +618,19 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
 /* Review Package 2 (UX-5): reserved regions. The toolbar keeps clear of the left column (its width is measured
    into --hud-w by App.tsx), and the column itself stops above the dock (a measured max-height) and scrolls. */
 /* Owner review, 4 Nov 2026: the toolbar is one row sized to its content (it wrapped to two rows with blank space).
-   App.tsx picks the fullest form that fits beside the left column: full, compact (shorter labels), minimal (Library
-   and Scenario in More), tiny (the activity as its icon), or menu (everything behind the Menu button, as on a phone). */
+   App.tsx picks the fullest form that fits beside the left column: full; compact (the activity as its icon, Reset
+   without its label, a narrower camera menu); minimal (tighter spacing); or menu (everything behind the Menu
+   button, as on a phone). Race, Library and Scenario stay on the bar in every form but the menu. */
 @media (min-width: 701px) {
   .toolbar { flex-wrap: nowrap; max-width: none; justify-content: flex-start; white-space: nowrap; }
   .toolbar .tb-group { flex-wrap: nowrap; }
-  .toolbar:is([data-density='compact'], [data-density='minimal'], [data-density='tiny']) .tb-label { display: none; }
-  .toolbar:is([data-density='compact'], [data-density='minimal'], [data-density='tiny']) .select select { max-width: 118px; }
-  .toolbar:is([data-density='minimal'], [data-density='tiny']) .tb-secondary { display: none; }
-  .toolbar[data-density='tiny'] .activity-chip .chip-label { display: none; }
+  .toolbar:is([data-density='compact'], [data-density='minimal']) .tb-label { display: none; }
+  .toolbar:is([data-density='compact'], [data-density='minimal']) .select select { max-width: 118px; }
+  .toolbar:is([data-density='compact'], [data-density='minimal']) .activity-chip .chip-label { display: none; }
+  .toolbar[data-density='minimal'] { gap: 4px; padding: 4px; }
+  .toolbar[data-density='minimal'] .tb-group { gap: 4px; }
+  .toolbar[data-density='minimal'] .tb-group + .tb-group { padding-left: 4px; }
+  .toolbar[data-density='minimal'] button { padding-left: 8px; padding-right: 8px; }
   .toolbar[data-density='menu'] .tb-toggle { display: inline-flex; }
   .toolbar[data-density='menu']:not(.open) .tb-items { display: none; }
   .toolbar[data-density='menu'].open { flex-direction: column; align-items: stretch; z-index: 30; }

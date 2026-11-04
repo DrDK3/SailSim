@@ -71,7 +71,7 @@ export function App({ ctl }: { ctl: SimController }) {
   // The left column (instruments, race, coach) stops above the dock and scrolls, whatever their heights (UX-5).
   const [hudMax, setHudMax] = useState<number>();
   // How much of the toolbar shows on one row (owner review, 4 Nov 2026: no wrapping, no blank space).
-  const [density, setDensity] = useState<'full' | 'compact' | 'minimal' | 'tiny' | 'menu'>('full');
+  const [density, setDensity] = useState<'full' | 'compact' | 'minimal' | 'menu'>('full');
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -150,7 +150,7 @@ export function App({ ctl }: { ctl: SimController }) {
       if (window.innerWidth > 700 && instruments) {
         const avail = window.innerWidth - instruments.getBoundingClientRect().right - 12 - 12;
         let d: typeof density = 'menu';
-        for (const k of ['full', 'compact', 'minimal', 'tiny'] as const) {
+        for (const k of ['full', 'compact', 'minimal'] as const) {
           nav.dataset.density = k;
           if (nav.offsetWidth <= avail) {
             d = k;
@@ -278,13 +278,6 @@ export function App({ ctl }: { ctl: SimController }) {
               label="More"
               title="Tutorial, course editor, what is shown, and physics tools"
               items={[
-                // In the narrowest one-row toolbar, Library and Scenario live here.
-                ...(density === 'minimal' || density === 'tiny'
-                  ? [
-                      { section: 'Set up', label: 'Library', checked: libraryOpen, onSelect: () => openLibrary(!libraryOpen) },
-                      { label: 'Scenario', checked: scenarioOpen, onSelect: () => openScenario(!scenarioOpen) },
-                    ]
-                  : []),
                 { section: 'Learn and plan', label: 'Tutorial', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
                 { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },

@@ -94,6 +94,21 @@ export function measureMaterials(renderer: THREE.WebGLRenderer, scene: THREE.Sce
   cam.updateMatrixWorld();
   const prevTarget = renderer.getRenderTarget();
   const prevAutoClear = renderer.autoClear;
+  // Draw only the probes, in the scene's own lights, reflections and shadow set-up (the shadow maps are reused,
+  // not redrawn): the rest of the scene is hidden for the moment, so the check costs a few small draws.
+  const hidden: THREE.Object3D[] = [];
+  for (const o of scene.children) {
+    if (o === rig || (o as THREE.Light).isLight || !o.visible) continue;
+    let holdsLight = false;
+    o.traverse((c) => {
+      if ((c as THREE.Light).isLight) holdsLight = true;
+    });
+    if (holdsLight) continue;
+    o.visible = false;
+    hidden.push(o);
+  }
+  const prevShadowUpdate = renderer.shadowMap.autoUpdate;
+  renderer.shadowMap.autoUpdate = false;
   const px = new Uint8Array(8 * 8 * 4);
   const out: ProbeColour[] = [];
   try {
@@ -116,6 +131,8 @@ export function measureMaterials(renderer: THREE.WebGLRenderer, scene: THREE.Sce
       p.visible = false;
     }
   } finally {
+    for (const o of hidden) o.visible = true;
+    renderer.shadowMap.autoUpdate = prevShadowUpdate;
     renderer.setRenderTarget(prevTarget);
     renderer.autoClear = prevAutoClear;
     scene.remove(rig);

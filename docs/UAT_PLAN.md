@@ -212,7 +212,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 16.1 | Help (?) | The build line at the bottom names the commit and the time it was made | |
 | 16.2 | More → Graphics and sound → Graphics check, 10 s after loading in daylight | "Painted surfaces draw correctly", or the fault and the mode chosen. Copy the report and send it | |
 | 16.3 | Look at the marina boats, the racing marks and SAMARITAN | White hulls; orange marks with sponsor bands; SAMARITAN white with her navy canopy | |
-| 16.4 | Make the window narrower and wider | The top bar stays on one row; labels shorten, then Library and Scenario move into More, then a Menu button | |
+| 16.4 | Make the window narrower and wider | The top bar stays on one row; the activity becomes its icon and Reset loses its label, then the spacing tightens, then a Menu button; Race, Library and Scenario stay on the bar | |
 | 16.5 | Sail past the RDYC | Dinghies standing in their rack on the pontoon; buff stone wall; white bargeboards; the light-rendered houses beside the club; pines on the hill | |
 | 16.6 | Sail past Bayard's Cove | The round stone fort at the end of the quay with its gunports | |
 | 16.7 | Watch the Higher Ferry cross both ways | Her cabin stays on the same side; her cables come up out of the water through her ends; up to 36 cars | |

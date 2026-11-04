@@ -973,8 +973,9 @@ export class SimController {
     window.addEventListener('pointerdown', this.onGesture);
     document.addEventListener('visibilitychange', this.onVisibility);
     void this.discoverSources();
-    // The graphics check, once the scene has been drawn for a while (owner review, 4 Nov 2026).
-    this.checkTimer = window.setTimeout(() => this.runMaterialCheck(), 8000);
+    // The graphics check, once the scene has been drawn for a while (owner review, 4 Nov 2026), on a graphics card
+    // (the fault was seen on one; a software renderer draws these surfaces correctly). Settings runs it anywhere.
+    if (this.view && !/swiftshader|llvmpipe|software|basic render/i.test(this.view.gpuName)) this.checkTimer = window.setTimeout(() => this.runMaterialCheck(), 8000);
     this.publish(true);
   }
 

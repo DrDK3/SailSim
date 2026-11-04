@@ -21,7 +21,7 @@ This review compares the simulator with published guidance on onboarding and ret
 
 | Area | Today | Against the guidance | Change |
 |---|---|---|---|
-| **Top bar** | Since round A it was capped beside the instruments, so on laptop screens it wrapped onto two rows with blank space (the owner's screenshot) | Clutter and wasted space distract (G7) | **Done in this round:** one row sized to its content. As space shrinks, labels shorten, then Library and Scenario move into More, then the activity shows as its icon, then everything goes behind a Menu button as on a phone |
+| **Top bar** | Since round A it was capped beside the instruments, so on laptop screens it wrapped onto two rows with blank space (the owner's screenshot) | Clutter and wasted space distract (G7) | **Done in this round:** one row sized to its content. As space shrinks, the activity shows as its icon and Reset loses its label, then the spacing tightens, then everything goes behind a Menu button as on a phone. Race, Library and Scenario always stay on the bar |
 | First visit | Welcome hub with four routes; one steering question | Good (G1). The first action is choosing a route, not sailing (G2) | Round B: "Sail now" as the first, largest action; the lesson starts in the water within 10 s |
 | Lessons | One long tutorial (U9) | Too much at once (G3); no end moment (G5) | Round B: six short lessons (§8.1 of the review), each ending with a result card and a "next lesson" prompt |
 | Goals and feedback | The coach's briefing and debrief; results table | Feedback exists (G4); no visible progress | Round B: lesson ticks and personal bests (best race time, best start), kept in this browser |
