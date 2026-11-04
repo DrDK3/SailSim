@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { judge, lambertOf, type ProbeColour } from '../../src/render/gpuCheck';
+import { rendererName } from '../../src/render/sunlight';
 
 /** Owner review, 4 Nov 2026: painted hulls and marks drew black on the owner's graphics card. */
 describe('graphics check', () => {
@@ -28,5 +29,13 @@ describe('graphics check', () => {
     expect(l.vertexColors).toBe(true);
     expect(l.side).toBe(THREE.DoubleSide);
     expect(l.opacity).toBe(0.5);
+  });
+
+  it('asks the graphics driver for its name once (each query waits for all the drawing queued before it)', () => {
+    let queries = 0;
+    const gl = { RENDERER: 0x1f01, getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 0x9246 }), getParameter: () => (queries++, 'Test card') };
+    const renderer = { getContext: () => gl } as unknown as THREE.WebGLRenderer;
+    for (let i = 0; i < 50; i++) expect(rendererName(renderer)).toBe('Test card');
+    expect(queries).toBe(1);
   });
 });

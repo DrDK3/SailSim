@@ -54,7 +54,6 @@ test('keyboard helm and sheet controls change the boat', async ({ page }) => {
 });
 
 test('on-screen buttons, pause, help and scenario panel work', async ({ page }) => {
-  test.setTimeout(240_000 * CI_SLOW);
   await open(page);
   await page.getByRole('button', { name: /Steer to port/ }).dispatchEvent('pointerdown');
   await page.evaluate(() => window.__squib!.advance(1));
@@ -68,11 +67,10 @@ test('on-screen buttons, pause, help and scenario panel work', async ({ page }) 
   expect((await snap(page)).t).toBe(tPaused);
   await page.getByTestId('pause').click();
 
-  // Help is loaded on first use; in software rendering its load waits on slow frames.
   await page.keyboard.press('KeyH');
-  await expect(page.getByRole('dialog', { name: 'Help' })).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await expect(page.getByRole('dialog', { name: 'Help' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Help' })).toBeHidden({ timeout: 15_000 * CI_SLOW });
+  await expect(page.getByRole('dialog', { name: 'Help' })).toBeHidden();
 
   await page.getByRole('button', { name: 'Scenario' }).click();
   const tws = page.locator('.scenario .field', { hasText: 'True wind speed' }).locator('input[type="number"]');

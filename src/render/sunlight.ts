@@ -14,11 +14,21 @@ import { CSM } from 'three/addons/csm/CSM.js';
 
 export type ShadowQuality = 'high' | 'low';
 
-/** The graphics renderer's name (e.g. "ANGLE (Apple, M2)", "SwiftShader"). */
+const names = new WeakMap<THREE.WebGLRenderer, string>();
+
+/**
+ * The graphics renderer's name (e.g. "ANGLE (Apple, M2)", "SwiftShader"), read once per renderer: asking the
+ * graphics driver waits for all the drawing queued before it, which under software rendering takes seconds.
+ */
 export function rendererName(renderer: THREE.WebGLRenderer): string {
-  const gl = renderer.getContext();
-  const info = gl.getExtension('WEBGL_debug_renderer_info');
-  return String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  let name = names.get(renderer);
+  if (name === undefined) {
+    const gl = renderer.getContext();
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    name = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    names.set(renderer, name);
+  }
+  return name;
 }
 
 /**

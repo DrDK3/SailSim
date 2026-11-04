@@ -1414,6 +1414,7 @@ Added before Package 2 round B, at the owner's request. Each item lists its stat
   - If the painted ones come out black, the app tries drawing without sky reflections, then with simpler materials, and keeps the first that works for that card.
   - Settings → Graphics check shows the result and copies a report.
   - It runs by itself only on a graphics card, about 8 s after loading in daylight. Its test draws hide the rest of the scene and reuse the shadow maps, so it costs a few small draws. The first version redrew the whole scene and its shadows eight times, which stalled software rendering in CI.
+  - The Settings panel shows the card's name. The first version asked the graphics driver for it with every interface update (ten a second); each query waits for all the drawing queued before it. In software rendering that kept the page busy for 10–25 s of every 20 s (measured with the browser's profiler), and on a real card it stalled the drawing ten times a second. The name is now read once (`rendererName` in `src/render/sunlight.ts`; `tests/render/gpuCheck.test.ts`). With that, the page's script time is the same as before this round: about 0.2 s in 20 s.
 
 | Earlier change | Where | Seen here, real-card path |
 |---|---|---|
