@@ -794,29 +794,40 @@ export class SceneView {
   checkMaterials(simulateFault = false): MaterialCheck | undefined {
     if (this.sunIntensity < 0.6) return undefined;
     const name = this.gpuName;
-    const measure = (mode: string) => {
-      const c = measureMaterials(this.renderer, this.scene, this.sunDir, name, mode, () => {
-        if (this.materialFix === 'simple-materials') this.simplifyMaterials(this.scene);
-        this.sun.prepareNow(this.scene);
-      });
-      if (simulateFault && mode === 'as built') Object.assign(c, { fault: true, reason: 'simulated fault (test)' });
+    const label = { none: 'as built', 'no-reflections': 'no reflections', 'simple-materials': 'simple materials' } as const;
+    // Each drawing mode is tried on the test spheres alone. The scene itself changes mode at most once, at the end:
+    // every change recompiles all its shaders, a pause of seconds on some cards.
+    const measure = (fix: MaterialFix) => {
+      const prepare = (probes: THREE.Object3D) => {
+        if (fix === 'simple-materials') {
+          probes.traverse((o) => {
+            const mesh = o as THREE.Mesh;
+            const m = mesh.material as THREE.Material | undefined;
+            if (!mesh.isMesh || !(m instanceof THREE.MeshStandardMaterial) || m.map || !this.sun.isPlain(m)) return;
+            mesh.material = lambertOf(m);
+            m.dispose();
+          });
+        }
+        this.sun.prepareNow(probes);
+      };
+      const c = measureMaterials(this.renderer, this.scene, this.sunDir, name, label[fix], prepare, fix === 'no-reflections' ? null : (this.envMap ?? null));
+      if (simulateFault && fix === 'none') Object.assign(c, { fault: true, reason: 'simulated fault (test)' });
       this.materialChecks.push(c);
       return c;
     };
-    const label = { none: 'as built', 'no-reflections': 'no reflections', 'simple-materials': 'simple materials' } as const;
-    let c = measure(label[this.materialFix]);
+    let c = measure(this.materialFix);
     if (!c.fault) return c;
     for (const fix of ['no-reflections', 'simple-materials'] as const) {
       if (fix === this.materialFix) continue;
-      this.setMaterialFix(fix);
-      c = measure(label[fix]);
-      if (!c.fault) {
+      const t = measure(fix);
+      if (!t.fault) {
+        this.setMaterialFix(fix);
         saveFix(name, fix);
-        return c;
+        return t;
       }
+      c = t;
     }
-    // Nothing helped: draw as built, as before, and say so in the report.
-    this.setMaterialFix('none');
+    // Nothing helped: the scene is left as it is, and the report says so.
     return c;
   }
 

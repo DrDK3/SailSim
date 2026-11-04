@@ -267,7 +267,7 @@ export class SimController {
   private raf = 0;
   private paused = false;
   /** Pace against the wall clock (`watchPace`). */
-  private readonly pace = { wall: 0, sim: 0, slowWindows: 0, lastLowered: -Infinity, skipNext: false };
+  private readonly pace = { wall: 0, sim: 0, slowWindows: 0, lastLowered: -Infinity, skipFrames: 0 };
   private runningSlow?: { ratio: number; lowered?: GraphicsPreset };
   /** Step the graphics down when the simulation cannot keep up (a setting; on by default). */
   autoLowerGraphics = true;
@@ -934,6 +934,7 @@ export class SimController {
       try {
         this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, quays: data.quays, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
+        this.settlePace();
         // A course already drawn learns which of its marks are real buoys the harbour now draws.
         if (this.race) this.view.setCourse(this.race.resolved, this.race.course, data.features?.marks);
       } catch (err) {
@@ -991,6 +992,7 @@ export class SimController {
     const simulate = new URLSearchParams(location.search).get('gpucheck') === 'fault';
     const c = this.view.checkMaterials(simulate);
     if (c) this.lastMaterialCheck = c;
+    this.settlePace();
     this.publish(true);
     return c;
   }
@@ -1000,6 +1002,7 @@ export class SimController {
     if (!this.view) return;
     this.view.setMaterialFix(fix);
     saveFix(this.view.gpuName, fix);
+    this.settlePace();
     this.publish(true);
   }
 
@@ -1132,7 +1135,7 @@ export class SimController {
   private onGesture = () => this.sound.resume();
   private onVisibility = () => {
     this.sound.setHidden(document.hidden);
-    this.pace.skipNext = true;
+    this.pace.skipFrames = Math.max(this.pace.skipFrames, 1);
   };
 
   /** The sounds follow the boat as drawn (the latest physics state). */
@@ -1212,6 +1215,7 @@ export class SimController {
     // The user's own choice wins: no automatic lowering for the rest of this visit.
     this.autoLowerGraphics = false;
     this.view?.applyGraphics(g, true);
+    this.settlePace();
     this.publish(true);
   }
 
@@ -1321,6 +1325,19 @@ export class SimController {
   }
 
   /**
+   * A one-off pause the app makes itself (new shaders compiled after the river scene arrives, a change of drawing
+   * mode or graphics, the graphics check): leave its frames out and start the measurement again, so it is not
+   * taken for a device too slow to keep up (which would lower the graphics for nothing).
+   */
+  private settlePace(frames = 4): void {
+    const w = this.pace;
+    w.skipFrames = Math.max(w.skipFrames, frames);
+    w.wall = 0;
+    w.sim = 0;
+    w.slowWindows = 0;
+  }
+
+  /**
    * Keeping up with real time (review PH-5). Each frame may advance at most 0.1 s and 12 steps, so on a slow
    * device the simulation runs slower than the clock. Over windows of 3 s of wall time (the frame after a hidden
    * tab returns is left out) the share of real time simulated is measured; under 90% the run is "running
@@ -1330,8 +1347,8 @@ export class SimController {
   private watchPace(wallS: number, simS: number): void {
     const w = this.pace;
     // The first frame after the tab is shown again spans the time it was hidden: not slowness.
-    if (w.skipNext || wallS > 30 || wallS <= 0) {
-      w.skipNext = false;
+    if (w.skipFrames > 0 || wallS > 30 || wallS <= 0) {
+      w.skipFrames = Math.max(0, w.skipFrames - 1);
       return;
     }
     w.wall += wallS;
@@ -1352,6 +1369,8 @@ export class SimController {
       if (next !== g.preset) {
         this.view.applyGraphics(presetSettings(next, g.cameraMotion), false);
         w.lastLowered = performance.now();
+        // Its own recompiling is not more slowness (the next step down is still at least 30 s away).
+        w.skipFrames = Math.max(w.skipFrames, 4);
         this.runningSlow = { ratio, lowered: next };
       }
     }

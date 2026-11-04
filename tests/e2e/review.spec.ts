@@ -138,11 +138,21 @@ test('graphics check: painted surfaces measured; a simulated fault is fixed by a
   const r = await page.evaluate(() => {
     const c = window.__squib!.controller;
     c.setMaterialMode('none');
+    // Count the scene's own changes of drawing mode (each recompiles every shader in it).
+    const view = (c as unknown as { view: { setMaterialFix(f: string): void } }).view;
+    const switches: string[] = [];
+    const setFix = view.setMaterialFix.bind(view);
+    view.setMaterialFix = (f: string) => {
+      switches.push(f);
+      setFix(f);
+    };
     const check = c.runMaterialCheck();
-    return { check, mode: c.getState().materialMode, report: c.materialReport() };
+    return { check, switches, mode: c.getState().materialMode, report: c.materialReport() };
   });
   expect(r.check?.fault).toBe(false);
   expect(r.mode).not.toBe('none');
+  // The modes are tried on the test spheres; the scene changes once, to the mode that works.
+  expect(r.switches).toEqual([r.mode]);
   expect(r.report).toMatch(/FAULT: simulated fault/);
   expect(r.report).toMatch(/white vertex colour \(as the hulls\): 0\.9/);
   // In Settings: the result, the mode in use, and the build.
@@ -150,4 +160,46 @@ test('graphics check: painted surfaces measured; a simulated fault is fixed by a
   // The panel's code loads on first use: slow in software rendering.
   await expect(page.getByTestId('gpu-check')).toContainText('Painted surfaces draw correctly', { timeout: 30_000 * CI_SLOW });
   await expect(page.getByTestId('gpu-check')).toContainText(/build production-/);
+});
+
+/**
+ * Owner review, 4 Nov 2026: "running slow, graphics lowered". A pause the app makes itself (the graphics check, a
+ * change of drawing mode, the river scene's new shaders) is left out of the pace measurement; the same pause from
+ * anything else still counts.
+ */
+test('running slow: the app\'s own pauses are not taken for a slow device', async ({ page }) => {
+  await page.goto('/?nowelcome');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  const r = await page.evaluate(() => {
+    type C = { frame(now: number): void; settlePace(frames?: number): void; runMaterialCheck(): unknown; getState(): { runningSlow?: unknown }; view: { render: (...a: unknown[]) => void } };
+    const c = window.__squib!.controller as unknown as C;
+    const draw = c.view.render;
+    // Physics and the pace only: drawing in software takes seconds a frame.
+    c.view.render = () => {};
+    try {
+      let t = performance.now() + 1000;
+      const run = (seconds: number) => {
+        for (let i = 0; i < seconds / 0.016; i++) c.frame((t += 16));
+      };
+      c.frame(t);
+      c.settlePace(0);
+      run(3.2);
+      const steady = c.getState().runningSlow;
+      // A pause of 2.5 s the app makes itself.
+      c.runMaterialCheck();
+      c.frame((t += 2500));
+      run(3.2);
+      const ownPause = c.getState().runningSlow;
+      // The same pause from anything else.
+      c.frame((t += 2500));
+      run(0.6);
+      const otherPause = c.getState().runningSlow;
+      return { steady, ownPause, otherPause };
+    } finally {
+      c.view.render = draw;
+    }
+  });
+  expect(r.steady).toBeUndefined();
+  expect(r.ownPause).toBeUndefined();
+  expect(r.otherPause).toBeDefined();
 });
