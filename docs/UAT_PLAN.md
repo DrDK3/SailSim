@@ -205,6 +205,18 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 15.5 | With sound on, listen through a start sequence; bump a mark; touch the bottom in the river | A horn at each signal (one long one at one minute), its caption in the race panel; a knock at the contact; a scrape on the bottom | |
 | 15.6 | Turn on "reduce motion" in the operating system, then sail in the helm view in a breeze | The horizon stays level and the view does not bob with the waves; camera changes cut instead of sliding | |
 
+## 16. The owner's improvements of 4 Nov 2026 (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 16.1 | Help (?) | The build line at the bottom names the commit and the time it was made | |
+| 16.2 | More → Graphics and sound → Graphics check, 10 s after loading in daylight | "Painted surfaces draw correctly", or the fault and the mode chosen. Copy the report and send it | |
+| 16.3 | Look at the marina boats, the racing marks and SAMARITAN | White hulls; orange marks with sponsor bands; SAMARITAN white with her navy canopy | |
+| 16.4 | Make the window narrower and wider | The top bar stays on one row; the activity becomes its icon and Reset loses its label, then the spacing tightens, then a Menu button; Race, Library and Scenario stay on the bar | |
+| 16.5 | Sail past the RDYC | Dinghies standing in their rack on the pontoon; buff stone wall; white bargeboards; the light-rendered houses beside the club; pines on the hill | |
+| 16.6 | Sail past Bayard's Cove | The round stone fort at the end of the quay with its gunports | |
+| 16.7 | Watch the Higher Ferry cross both ways | Her cabin stays on the same side; her cables come up out of the water through her ends; up to 36 cars | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

@@ -219,10 +219,10 @@ const SERVICES: Record<string, ServiceSpec> = {
     notes: 'Floats of 8 cars worked by the tugs Hauley IV-VI (F1), lashed alongside (F3); float and tug sizes, speed and loading times estimated (E); timetable and refit from the operator (S).',
   },
   'Dartmouth Higher Ferry': {
-    kind: 'floating-bridge', label: 'Higher Ferry (floating bridge)', length: 50, beam: 16, ram: true,
+    kind: 'floating-bridge', label: 'Higher Ferry (cable ferry)', length: 52, beam: 18, ram: true,
     vMax: 2.5, accel: 0.08, decel: 0.1, dwell: [90, 210], cable: true,
     hours: () => ({ a: [6 * 60 + 30, 22 * 60 + 45], b: [6 * 60 + 35, 22 * 60 + 50] }),
-    notes: 'A cable ferry (2009, Pendennis, F5; on two cables, F6); about a 3-minute crossing (operator, S). Size, hours and loading times estimated (E).',
+    notes: 'A double-ended cable ferry carrying up to 36 cars, in service since June 2009 (Wikipedia, via search, 4 Nov 2026; Pendennis, F5); she hauls herself across on her two cables (F6), about a 3-minute crossing (operator, S). Size from the capacity, hours and loading times estimated (E).',
   },
   'Dartmouth Pedestrian Ferry': {
     kind: 'passenger-ferry', label: 'Passenger ferry Dartmouth–Kingswear', length: 18, beam: 5.2, ram: false,

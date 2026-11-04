@@ -266,7 +266,26 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
 
 // ------------------------------------------------------------------ the Higher Ferry
 
-/** The Higher Ferry: a cable ferry with three car lanes, a lounge and control cabin to starboard, big ramps. */
+/** Across the Higher Ferry (m, + to starboard): where her two cables run through her sheaves (E). */
+export function bridgeSheaveX(beam: number): [number, number] {
+  return [-(beam / 2 - 3), beam / 2 - 3];
+}
+
+const UP_Y = new THREE.Vector3(0, 1, 0);
+/** Stretch a unit-height cylinder between two points. */
+function placeRod(m: THREE.Object3D, p0: THREE.Vector3, p1: THREE.Vector3): void {
+  const d = p1.clone().sub(p0);
+  const len = d.length();
+  m.position.copy(p0).addScaledVector(d, 0.5);
+  m.scale.set(1, Math.max(len, 1e-3), 1);
+  if (len > 1e-6) m.quaternion.setFromUnitVectors(UP_Y, d.divideScalar(len));
+}
+
+/**
+ * The Higher Ferry: a double-ended cable ferry carrying up to 36 cars (Wikipedia, via search, 4 Nov 2026): four
+ * lanes of nine, a lounge and control cabin along one side, big ramps at both ends, and the sheaves her two
+ * cables run through (she hauls herself across on them). Hull size from the capacity (E).
+ */
 function bridgeModel(length: number, beam: number): THREE.Group {
   const g = new THREE.Group();
   const kit = new Kit();
@@ -277,8 +296,9 @@ function bridgeModel(length: number, beam: number): THREE.Group {
   const deckY = h.deck(0);
   const deckL = length - 3;
   const sup = 3.2; // width of the starboard superstructure
-  // Lanes and the port walkway.
-  for (const x of [-beam / 2 + 1.6, -beam / 2 + 1.6 + 3.3, -beam / 2 + 1.6 + 6.6, beam / 2 - sup - 0.4]) kit.box(0.12, 0.01, deckL - 4, VMAT.paint, C.yellow, x, deckY + 0.05, 0);
+  // Lanes (four of 3.2 m) and the walkway on the other side.
+  const lane0 = -beam / 2 + 1.3;
+  for (let i = 0; i <= 4; i++) kit.box(0.12, 0.01, deckL - 4, VMAT.paint, C.yellow, lane0 + i * 3.2, deckY + 0.05, 0);
   rail(kit, [V(-beam / 2 + 0.15, deckY, -deckL / 2 + 0.5), V(-beam / 2 + 0.15, deckY, deckL / 2 - 0.5)], 1.1, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
   // Lounge along the starboard side, the control cabin above it (windows all round), mast, lifebuoys.
   const sx = beam / 2 - sup / 2 - 0.1;
@@ -287,13 +307,14 @@ function bridgeModel(length: number, beam: number): THREE.Group {
   cabin(kit, { x: sx, z: 0, y: deckY + 2.72, length: 6, width: sup + 0.3, height: 2.1, rFront: 0.5, rBack: 0.5, colour: C.white, windows: [0.4, 0.92], front: [0.35, 0.94], roof: { overhang: 0.25, thickness: 0.12, colour: C.navy } });
   mast(kit, sx, deckY + 4.95, 0, 2.4, { radar: false });
   for (const z of [-8, 8]) lifebuoy(kit, beam / 2 - 0.08, deckY + 1.2, z, 1);
-  // Cable sheaves at each end (she runs on two cables, F6).
-  for (const e of [-1, 1]) for (const x of [-beam / 2 + 2.5, beam / 2 - sup - 1.0]) kit.box(0.9, 0.9, 1.4, VMAT.paint, C.navy, x, deckY + 0.3, e * (deckL / 2 - 0.4));
-  // Cars in three lanes; people at the lounge windows and on the walkway.
+  // Cable sheaves at each end (she runs on two cables, F6): where the cables come up out of the water.
+  for (const e of [-1, 1]) for (const x of bridgeSheaveX(beam)) kit.box(0.9, 0.9, 1.4, VMAT.paint, C.navy, x, deckY + 0.3, e * (deckL / 2 - 0.4));
+  // Cars: four lanes of up to nine (36 cars), a few spaces empty; people on the walkway.
   let k = 0;
-  for (let lane = 0; lane < 3; lane++) for (let i = 0; i < 6; i++) {
-    if ((lane * 7 + i * 3) % 5 === 4) continue;
-    car(kit, -beam / 2 + 1.6 + 1.65 + lane * 3.3, deckY + 0.05, -deckL / 2 + 5 + i * 5.6, k++ * 3 + lane);
+  const pitch = Math.min(5.0, (deckL - 6) / 9);
+  for (let lane = 0; lane < 4; lane++) for (let i = 0; i < 9; i++) {
+    if ((lane * 7 + i * 3) % 6 === 5) continue;
+    car(kit, lane0 + 1.6 + lane * 3.2, deckY + 0.05, -deckL / 2 + 3 + pitch / 2 + i * pitch, k++ * 3 + lane);
   }
   for (let i = 0; i < 3; i++) addPerson(kit, -beam / 2 + 0.7, deckY + 0.04, -6 + i * 5, -Math.PI / 2, 20 + i);
   g.add(kit.build('higher-ferry'));
@@ -822,10 +843,72 @@ export class TrafficView {
   /** The paddle steamer's coal smoke. */
   private readonly smoke = new Exhaust();
   private lastTime?: number;
+  /** The Higher Ferry's two cables, slip to slip (set by the Dart scene): the route ends and the ground. */
+  private cableRoutes = new Map<string, { a: [number, number]; b: [number, number] }>();
+  private groundAt?: (e: number, n: number) => number;
+  private readonly cableRods = new Map<string, THREE.Mesh[]>();
+  private readonly cableMat = new THREE.MeshStandardMaterial({ color: 0x1c1f22, roughness: 0.6, metalness: 0.4 });
+  private readonly cableGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
 
   constructor() {
     this.group.name = 'traffic';
     this.group.add(this.smoke.group);
+  }
+
+  /**
+   * The cable ferry's route ends (the slips), by service name, and the ground (m, scene height before the tide):
+   * her cables run from the top of one slip down to the bed, up through her sheaves, and on to the other slip.
+   */
+  setCables(routes: { name: string; a: [number, number]; b: [number, number] }[], groundAt: (e: number, n: number) => number): void {
+    this.cableRoutes = new Map(routes.map((r) => [r.name, { a: r.a, b: r.b }]));
+    this.groundAt = groundAt;
+  }
+
+  /** The cables for a cable ferry at `s`, drawn as rods: shore, bed, a steep rise to the sheave at one end, and back at the other. */
+  private updateCables(s: VesselState, waterLevel: number): void {
+    const r = this.cableRoutes.get(s.name);
+    if (!r) return;
+    let rods = this.cableRods.get(s.id);
+    if (!rods) {
+      rods = Array.from({ length: 12 }, () => {
+        const m = new THREE.Mesh(this.cableGeo, this.cableMat);
+        m.name = 'ferry-cable';
+        this.group.add(m);
+        return m;
+      });
+      this.cableRods.set(s.id, rods);
+    }
+    const len = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+    const ue = (r.b[0] - r.a[0]) / len;
+    const un = (r.b[1] - r.a[1]) / len;
+    // Starboard of the A-to-B bearing.
+    const se = un;
+    const sn = -ue;
+    const at = (e: number, n: number, y: number) => new THREE.Vector3(e, y, -n);
+    const ground = (e: number, n: number) => (this.groundAt ? this.groundAt(e, n) - waterLevel : 0.5) + 0.12;
+    const half = s.length / 2 - 1.2;
+    let k = 0;
+    for (const x of bridgeSheaveX(s.beam)) {
+      const shoreA = [r.a[0] - ue * 14 + se * x, r.a[1] - un * 14 + sn * x] as const;
+      const shoreB = [r.b[0] + ue * 14 + se * x, r.b[1] + un * 14 + sn * x] as const;
+      const bedA = at(r.a[0] + ue * 8 + se * x, r.a[1] + un * 8 + sn * x, -2.5);
+      const bedB = at(r.b[0] - ue * 8 + se * x, r.b[1] - un * 8 + sn * x, -2.5);
+      const sheaveA = at(s.e - ue * half + se * x, s.n - un * half + sn * x, 1.0);
+      const sheaveB = at(s.e + ue * half + se * x, s.n + un * half + sn * x, 1.0);
+      // Out of the sheave the cable drops steeply under her weight, then lies on the bed to the slip (E).
+      // (Measured along the route from each slip, and never past the bed point near the slip.)
+      const sA = (s.e - r.a[0]) * ue + (s.n - r.a[1]) * un;
+      const dA = Math.max(8, sA - half - 10);
+      const dB = Math.min(len - 8, sA + half + 10);
+      const dropA = at(r.a[0] + ue * dA + se * x, r.a[1] + un * dA + sn * x, -3);
+      const dropB = at(r.a[0] + ue * dB + se * x, r.a[1] + un * dB + sn * x, -3);
+      placeRod(rods[k++]!, at(shoreA[0], shoreA[1], ground(shoreA[0], shoreA[1])), bedA);
+      placeRod(rods[k++]!, bedA, dropA);
+      placeRod(rods[k++]!, dropA, sheaveA);
+      placeRod(rods[k++]!, sheaveB, dropB);
+      placeRod(rods[k++]!, dropB, bedB);
+      placeRod(rods[k++]!, bedB, at(shoreB[0], shoreB[1], ground(shoreB[0], shoreB[1])));
+    }
   }
 
   private build(s: VesselState): Entry {
@@ -876,7 +959,7 @@ export class TrafficView {
   }
 
   /** `wind`: where the true wind comes from (rad, compass) and its speed (m/s), for the ensigns; else they fly aft. */
-  update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean, wind?: { fromDir: number; speed: number }): void {
+  update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean, wind?: { fromDir: number; speed: number }, waterLevel = 0): void {
     const stamp = time;
     const lit = this.day < 0.35;
     setLightsOn(lit);
@@ -890,7 +973,14 @@ export class TrafficView {
       e.root.visible = true;
       const bob = 0.04 * Math.sin(time * 1.3 + s.e * 0.1);
       e.root.position.set(s.e, bob, -s.n);
-      e.root.rotation.set(0.01 * Math.sin(time * 0.9 + s.n), -s.heading, 0.012 * Math.sin(time * 1.1 + s.e));
+      // A cable ferry is double-ended and never turns: her cabin stays on the same side whichever way she crosses.
+      let hdg = s.heading;
+      if (s.kind === 'floating-bridge') {
+        const r = this.cableRoutes.get(s.name);
+        hdg = r ? Math.atan2(r.b[0] - r.a[0], r.b[1] - r.a[1]) : ((s.heading % Math.PI) + Math.PI) % Math.PI;
+        this.updateCables(s, waterLevel);
+      }
+      e.root.rotation.set(0.01 * Math.sin(time * 0.9 + s.n), -hdg, 0.012 * Math.sin(time * 1.1 + s.e));
       for (const r of e.ramps) {
         // Down onto the slip (tilted below the deck) when loading; raised for the crossing.
         const end = r.name === 'ramp-bow' ? -1 : 1;

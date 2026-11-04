@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { useModal } from './useModal';
 import { PRESETS, matchPreset, presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
@@ -28,6 +28,7 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   const ref = useRef<HTMLDivElement>(null);
   useModal(ref, onClose);
+  const [copied, setCopied] = useState(false);
   return (
     <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Graphics and sound" onClick={onClose}>
       <section className="panel settings" onClick={(e) => e.stopPropagation()} data-testid="settings-panel">
@@ -117,6 +118,47 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             </div>
           </>
         )}
+        <h4>Graphics check</h4>
+        <div data-testid="gpu-check">
+          <p className="fine">
+            Measures how this graphics card draws painted surfaces (hulls, racing marks) and, if they come out black, uses the first drawing mode that
+            fixes it. On a graphics card it runs by itself in daylight, 8 s after loading.
+          </p>
+          <p>
+            {ui.materialCheck ? (
+              <>
+                <strong>{ui.materialCheck.fault ? 'Fault found' : 'Painted surfaces draw correctly'}</strong> ({ui.materialCheck.mode}):{' '}
+                {ui.materialCheck.reason}.
+              </>
+            ) : (
+              'Not measured yet.'
+            )}
+          </p>
+          <label>
+            Drawing mode{' '}
+            <select value={ui.materialMode ?? 'none'} onChange={(e) => ctl.setMaterialMode(e.target.value as 'none' | 'no-reflections' | 'simple-materials')}>
+              <option value="none">As built</option>
+              <option value="no-reflections">Without sky reflections</option>
+              <option value="simple-materials">Simple materials</option>
+            </select>
+          </label>
+          <div className="row left">
+            <button onClick={() => ctl.runMaterialCheck()}>Run the check</button>
+            <button
+              onClick={() => {
+                const text = ctl.materialReport();
+                void navigator.clipboard?.writeText(text).catch(() => undefined);
+                setCopied(true);
+              }}
+              data-testid="gpu-copy"
+            >
+              {copied ? 'Report copied' : 'Copy the report'}
+            </button>
+          </div>
+          <p className="fine">
+            Graphics card: {ui.gpuName ?? 'unknown'} · build {ui.build.id} ({ui.build.time})
+          </p>
+        </div>
         <h4>Steering</h4>
         <div className="row left" role="radiogroup" aria-label="Steering keys">
           <label className="check">

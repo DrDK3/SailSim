@@ -10,8 +10,10 @@ import { CAR_SPEED, ROAD_WIDTH, StreetLife, TOWNS, along, carGeometry, type Road
 import { personPartsGeometry } from '../../src/render/people';
 import type { DartFeatures } from '../../src/app/geoLoader';
 import { standingSpots } from '../../src/render/dart';
+import { BAYARDS_FORT, fortPortBearings, withBayardsFort } from '../../src/render/bayards';
 
-const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as DartFeatures;
+// As the app loads them: Bayard's Cove Fort's footprint added (src/render/bayards.ts).
+const features = withBayardsFort(JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as DartFeatures);
 const roads = JSON.parse(readFileSync(new URL('../../public/geo/roads.json', import.meta.url), 'utf8')) as RoadsData;
 const manifest = JSON.parse(readFileSync(new URL('../../public/geo/manifest.json', import.meta.url), 'utf8'));
 
@@ -29,6 +31,16 @@ describe('landmarks', () => {
     expect(named('kingswear-castle')).toBe('Kingswear Castle');
     expect(named('dartmouth-castle')).toBe('Dartmouth Castle');
     expect(named('st-petrox')).toBe('St. Petrox');
+    expect(named('bayards-fort')).toBe("Bayard's Cove Fort");
+  });
+
+  it("Bayard's Cove Fort: on the waterline at its published position, eleven gunports facing the river", () => {
+    // 50.34789 N, 3.57749 W projects to about (-292 E, -13 N): the fort's centre is within 5 m of it.
+    expect(Math.hypot(BAYARDS_FORT.centre[0] + 292, BAYARDS_FORT.centre[1] + 13)).toBeLessThan(5);
+    const ports = fortPortBearings();
+    expect(ports).toHaveLength(11);
+    // Each gunport faces between north-east and south-west through east (the river side).
+    for (const b of ports) expect(Math.sin(b)).toBeGreaterThan(-0.7);
   });
 
   it('BRNC: brick with stone dressings, a perimeter roof, and the clock tower inside its footprint', () => {

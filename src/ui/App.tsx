@@ -70,6 +70,8 @@ export function App({ ctl }: { ctl: SimController }) {
   const [barTop, setBarTop] = useState<number>();
   // The left column (instruments, race, coach) stops above the dock and scrolls, whatever their heights (UX-5).
   const [hudMax, setHudMax] = useState<number>();
+  // How much of the toolbar shows on one row (owner review, 4 Nov 2026: no wrapping, no blank space).
+  const [density, setDensity] = useState<'full' | 'compact' | 'minimal' | 'menu'>('full');
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -143,6 +145,24 @@ export function App({ ctl }: { ctl: SimController }) {
     const place = () => {
       // The toolbar keeps clear of the left column, however wide the column's panels make it (UX-5).
       if (instruments && root) root.style.setProperty('--hud-w', `${Math.round(instruments.getBoundingClientRect().width)}px`);
+      // One row, sized to its content: the fullest form that fits beside the left column (labels shorten, then
+      // the less used buttons move into More, then everything goes behind the Menu button as on a phone).
+      if (window.innerWidth > 700 && instruments) {
+        const avail = window.innerWidth - instruments.getBoundingClientRect().right - 12 - 12;
+        let d: typeof density = 'menu';
+        for (const k of ['full', 'compact', 'minimal'] as const) {
+          nav.dataset.density = k;
+          if (nav.offsetWidth <= avail) {
+            d = k;
+            break;
+          }
+        }
+        nav.dataset.density = d;
+        setDensity(d);
+      } else {
+        nav.dataset.density = 'menu';
+        setDensity('menu');
+      }
       const r = nav.getBoundingClientRect();
       // On tablets the toolbar sits at the bottom (styles.css): keep the default position then.
       let top = r.top < window.innerHeight / 2 ? r.bottom + 8 : undefined;
@@ -199,7 +219,7 @@ export function App({ ctl }: { ctl: SimController }) {
         {ui.race && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
         {ui.race && <CoachCard ctl={ctl} ui={ui} />}
       </div>
-      <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation">
+      <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation" data-density={density}>
         <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
@@ -230,9 +250,9 @@ export function App({ ctl }: { ctl: SimController }) {
               <span className="icon" aria-hidden="true">{ui.paused ? '▶' : '❚❚'}</span>
               {ui.paused ? 'Resume' : 'Pause'}
             </button>
-            <button onClick={() => ctl.requestReset()} title="Reset to the scenario start (R)">
+            <button onClick={() => ctl.requestReset()} title="Reset to the scenario start (R)" aria-label="Reset">
               <span className="icon" aria-hidden="true">↺</span>
-              Reset
+              <span className="tb-label">Reset</span>
             </button>
             <label className="select">
               <span className="sr-only">Camera</span>
@@ -249,8 +269,8 @@ export function App({ ctl }: { ctl: SimController }) {
           {/* Setting up a sail: ready-made scenarios, or your own. */}
           <div className="tb-group">
             <button aria-pressed={raceOpen} onClick={() => openRace(!raceOpen)} title="Quick race: choose how many AI boats, where, and random or live conditions">Race</button>
-            <button aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
-            <button aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
+            <button className="tb-secondary" aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
+            <button className="tb-secondary" aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
           </div>
           {/* Everything else, one click further away. */}
           <div className="tb-group">
@@ -351,6 +371,7 @@ export function App({ ctl }: { ctl: SimController }) {
         {ui.showHelp && (
           <Help
             onClose={() => ctl.toggleHelp(false)}
+            build={ui.build}
             onTutorial={() => {
               ctl.toggleHelp(false);
               startTutorial();

@@ -140,17 +140,27 @@ export const LANDMARKS: LandmarkSpec[] = [
     source: 'Royal Dart Yacht Club clubhouse, Priory Street, Kingswear (1881): ground-floor bar and dining area opening onto a riverside terrace; upstairs a formal dining room, the Quarter Deck function room and a large balcony overlooking the harbour (Wikipedia, via search). Modelled from the owner\'s photographs of the river front (October 2026, src/render/rdyc.ts): a red-brick wing with its gable to the river (bay window, RDYC sign, porch), a round turret with a conical roof, a white balcony on posts over the terrace, a white-rendered south wing, the flagstaff, a stone sea wall. Proportions E.',
   },
   {
+    id: 'bayards-fort',
+    at: [-290, -13],
+    // Drawn by src/render/bayards.ts (an open round tower with its gunports); the footprint is added in
+    // src/app/geoLoader.ts so that boats meet its wall.
+    walls: 0x8a8170,
+    roof: 0x5c6e3a,
+    win: WIN.none,
+    source: "Bayard's Cove Fort, Dartmouth: a small Tudor artillery blockhouse protecting the town quay, a round tower with eleven gunports for heavy guns round its ground floor close to sea level, managed by English Heritage (English Heritage; Historic England; Wikipedia; via search, 4 Nov 2026). Position 50.34789 N, 3.57749 W. Size and height judged from the owner's photographs (E).",
+  },
+  {
     id: 'rdyc-north',
     at: [-3, 20],
-    // North of the club: red brick and clay tile with white gables and bay windows (owner's photographs).
-    walls: 0xa55a44,
-    roof: 0x9a4a32,
+    // North of the club, behind the hedge and the sea wall: cream render under slate, set back and lower than the
+    // clubhouse (owner's photographs, 28 Oct 2026; re-read 4 Nov 2026: the earlier red brick and clay tile made
+    // a block that dominated the club, which the photographs do not show).
+    walls: 0xeee8d8,
+    roof: SLATE,
     win: WIN.sash,
-    shape: 'p',
-    roofDrop: 3.6,
-    // Three storeys on the club's terrace level (the data's 2.0 to 9.6 m ODN is too low beside the photographs).
-    heights: { base: 3.0, eaves: 9.6, top: 13.2 },
-    source: "The houses immediately north of the club on Priory Street: red brick, clay-tile roofs, white gables, three storeys (the owner's photographs, October 2026). Heights, roof form and colours E.",
+    shape: 'g',
+    heights: { base: 3.0, eaves: 8.0, top: 11.0 },
+    source: "The houses immediately north of the club on Priory Street: light render under slate, behind a hedge and the sea wall (the owner's photographs, October 2026). Heights, roof form and colours E.",
   },
   {
     id: 'rdyc-south',

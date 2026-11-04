@@ -124,3 +124,30 @@ test('the one-minute signal and the start have captions in the race panel', asyn
   await page.evaluate(() => window.__squib!.advance(8));
   await expect(page.getByTestId('sound-caption')).toBeEmpty();
 });
+
+/**
+ * Owner review, 4 Nov 2026: painted hulls and racing marks drew black on the owner's graphics card. The graphics
+ * check measures painted surfaces where the app runs; here (software rendering) they draw correctly. With the
+ * fault simulated, it finds a drawing mode that fixes it and keeps it, and the report says so.
+ */
+test('graphics check: painted surfaces measured; a simulated fault is fixed by another drawing mode', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  await page.goto('/?nowelcome&gpucheck=fault');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 * CI_SLOW });
+  const r = await page.evaluate(() => {
+    const c = window.__squib!.controller;
+    c.setMaterialMode('none');
+    const check = c.runMaterialCheck();
+    return { check, mode: c.getState().materialMode, report: c.materialReport() };
+  });
+  expect(r.check?.fault).toBe(false);
+  expect(r.mode).not.toBe('none');
+  expect(r.report).toMatch(/FAULT: simulated fault/);
+  expect(r.report).toMatch(/white vertex colour \(as the hulls\): 0\.9/);
+  // In Settings: the result, the mode in use, and the build.
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
+  // The panel's code loads on first use: slow in software rendering.
+  await expect(page.getByTestId('gpu-check')).toContainText('Painted surfaces draw correctly', { timeout: 30_000 * CI_SLOW });
+  await expect(page.getByTestId('gpu-check')).toContainText(/build production-/);
+});

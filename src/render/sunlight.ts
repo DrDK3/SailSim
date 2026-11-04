@@ -14,11 +14,21 @@ import { CSM } from 'three/addons/csm/CSM.js';
 
 export type ShadowQuality = 'high' | 'low';
 
-/** The graphics renderer's name (e.g. "ANGLE (Apple, M2)", "SwiftShader"). */
+const names = new WeakMap<THREE.WebGLRenderer, string>();
+
+/**
+ * The graphics renderer's name (e.g. "ANGLE (Apple, M2)", "SwiftShader"), read once per renderer: asking the
+ * graphics driver waits for all the drawing queued before it, which under software rendering takes seconds.
+ */
 export function rendererName(renderer: THREE.WebGLRenderer): string {
-  const gl = renderer.getContext();
-  const info = gl.getExtension('WEBGL_debug_renderer_info');
-  return String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  let name = names.get(renderer);
+  if (name === undefined) {
+    const gl = renderer.getContext();
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    name = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    names.set(renderer, name);
+  }
+  return name;
 }
 
 /**
@@ -106,6 +116,20 @@ export class SunLight {
     this.uniforms.cameraNear.value = this.camera.near;
     this.uniforms.shadowFar.value = Math.min(this.camera.far, MAX_FAR);
     this.prepare(this.scene);
+  }
+
+  /** Set up any new lit material in `root` for the cascades now (the graphics check's probes, before drawing). */
+  prepareNow(root: THREE.Object3D): void {
+    if (this.csm) this.prepare(root);
+  }
+
+  /**
+   * Whether a material has none of the simulator's own shader additions (buildings, terrain, trees, sails…), only
+   * possibly the cascades' set-up: such a material can be redrawn with a simpler lighting model.
+   */
+  isPlain(m: THREE.Material): boolean {
+    const base = this.bases.get(m.onBeforeCompile) ?? m.onBeforeCompile;
+    return base === THREE.Material.prototype.onBeforeCompile;
   }
 
   /** The camera's projection changed (resize): re-split the cascades. */

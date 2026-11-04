@@ -1,3 +1,4 @@
+import { lambertOf, loadFix, measureMaterials, saveFix, type MaterialCheck, type MaterialFix } from './gpuCheck';
 import * as THREE from 'three';
 import { disposeObject } from './dispose';
 import { Sky } from 'three/addons/objects/Sky.js';
@@ -198,6 +199,10 @@ export class SceneView {
    * cuts instead of blends between views, and the scenic view holds still instead of circling.
    */
   private reducedMotion = false;
+  /** How painted surfaces are drawn on this graphics card (gpuCheck.ts), and the measurements made. */
+  private materialFix: MaterialFix = 'none';
+  private readonly lambertCache = new WeakMap<THREE.Material, THREE.Material>();
+  readonly materialChecks: MaterialCheck[] = [];
   private readonly motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
   private readonly onMotionPref = () => {
     this.reducedMotion = !!this.motionQuery?.matches;
@@ -228,6 +233,9 @@ export class SceneView {
     // Stencil: boats mark their decks so the sea is not drawn inside the hulls (squibModel.ts, water.ts).
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: true });
     this.graphics = loadGraphics(rendererName(this.renderer));
+    // A fix found for this graphics card on an earlier visit (gpuCheck.ts): applied before anything is drawn.
+    const fix = loadFix(rendererName(this.renderer));
+    if (fix && fix !== 'none') this.materialFix = fix;
     this.renderer.setPixelRatio(pixelRatioFor(this.graphics, window.devicePixelRatio));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -355,7 +363,7 @@ export class SceneView {
     const old = this.envMap;
     this.envMap = this.pmrem.fromScene(skyScene, 0.02).texture;
     if (disc) disc.value = shown;
-    this.scene.environment = this.envMap;
+    this.scene.environment = this.materialFix === 'no-reflections' ? null : this.envMap;
     // The water reflects the same sky (so a golden or grey sky shows in it); set before the old map goes.
     this.water?.setEnv(this.envMap);
     old?.dispose();
@@ -707,6 +715,7 @@ export class SceneView {
 
     if (this.graphics.atmosphere && this.horizon) this.updateFogColour();
     this.updateSunThrough(time);
+    if (this.materialFix === 'simple-materials') this.simplifyMaterials(this.scene);
     this.sun.update(this.boatRoot.position);
     this.water.update(time, this.camera);
     // Clouds and rain drift with the wind (Three.js xz direction the air moves to).
@@ -727,6 +736,88 @@ export class SceneView {
     }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** The graphics card's name, as the browser reports it. */
+  get gpuName(): string {
+    return rendererName(this.renderer);
+  }
+
+  get materialMode(): MaterialFix {
+    return this.materialFix;
+  }
+
+  /**
+   * Draw painted surfaces as built, without the sky's reflections, or with simpler (Lambert) materials (owner
+   * review, 4 Nov 2026: painted hulls and marks drew black on the owner's card; gpuCheck.ts).
+   */
+  setMaterialFix(fix: MaterialFix): void {
+    if (fix === this.materialFix) return;
+    const was = this.materialFix;
+    this.materialFix = fix;
+    this.scene.environment = fix === 'no-reflections' ? null : (this.envMap ?? null);
+    if (was === 'simple-materials') this.restoreMaterials(this.scene);
+    if (fix === 'simple-materials') this.simplifyMaterials(this.scene);
+  }
+
+  /** Swap every plain PBR material without a texture for its Lambert copy (shared materials share one copy). */
+  private simplifyMaterials(root: THREE.Object3D): void {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      const m = mesh.material as THREE.Material;
+      if (!(m instanceof THREE.MeshStandardMaterial) || m.map || !this.sun.isPlain(m)) return;
+      let l = this.lambertCache.get(m);
+      if (!l) {
+        l = lambertOf(m);
+        l.userData.original = m;
+        this.lambertCache.set(m, l);
+      }
+      mesh.material = l;
+    });
+  }
+
+  private restoreMaterials(root: THREE.Object3D): void {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      const orig = (mesh.material as THREE.Material).userData?.original as THREE.Material | undefined;
+      if (orig) mesh.material = orig;
+    });
+  }
+
+  /**
+   * Measure how this card draws painted surfaces and, when they come out black, find the first fix that works
+   * (no reflections, then simple materials) and keep it (gpuCheck.ts). Only in daylight (the measurement needs
+   * the sun); returns undefined at night.
+   */
+  checkMaterials(simulateFault = false): MaterialCheck | undefined {
+    if (this.sunIntensity < 0.6) return undefined;
+    const name = this.gpuName;
+    const measure = (mode: string) => {
+      const c = measureMaterials(this.renderer, this.scene, this.sunDir, name, mode, () => {
+        if (this.materialFix === 'simple-materials') this.simplifyMaterials(this.scene);
+        this.sun.prepareNow(this.scene);
+      });
+      if (simulateFault && mode === 'as built') Object.assign(c, { fault: true, reason: 'simulated fault (test)' });
+      this.materialChecks.push(c);
+      return c;
+    };
+    const label = { none: 'as built', 'no-reflections': 'no reflections', 'simple-materials': 'simple materials' } as const;
+    let c = measure(label[this.materialFix]);
+    if (!c.fault) return c;
+    for (const fix of ['no-reflections', 'simple-materials'] as const) {
+      if (fix === this.materialFix) continue;
+      this.setMaterialFix(fix);
+      c = measure(label[fix]);
+      if (!c.fault) {
+        saveFix(name, fix);
+        return c;
+      }
+    }
+    // Nothing helped: draw as built, as before, and say so in the report.
+    this.setMaterialFix('none');
+    return c;
   }
 
   private updateCamera(heading: number, dt: number, moved: number, heel = 0): void {

@@ -63,6 +63,7 @@ This register belongs to [COMPREHENSIVE_REVIEW.md](../COMPREHENSIVE_REVIEW.md) Â
 These hosts could not be reached under the environment's network policy:
 
 - the hosts of the three documents the owner linked on 3 Nov 2026 (`96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com`, `squibs.co.uk`, `content.yudu.com`); the owner then uploaded the documents;
+- `geograph.org.uk`, `dkfb.co.uk` (the Higher Ferry's operator) and `www.gov.uk` (the MAIB report on the cable ferry), 4 Nov 2026;
 - `royaldart.co.uk`, `en.wikipedia.org`, `simplonpc.co.uk`, `dartmouthrailriver.co.uk`;
 - the CI log host `results-receiver.actions.githubusercontent.com` and the CI artifact host `productionresultssa14.blob.core.windows.net`;
 - broker and review sites (403 or DNS failure): `devalk.nl`, `boats.com`, `sailboat-cruising.com`, boatshed, `practical-sailor.com`, `sailmagazine.com`;
