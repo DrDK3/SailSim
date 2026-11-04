@@ -26,18 +26,22 @@ test("today's challenge: the short course against three AI boats; the start-line
   expect(st.scenario.course).toEqual({ source: 'practice', kind: 'windward-leeward', legM: 220, laps: 1 });
   // The start-line view: just outside the committee boat end, looking along the line at the pin.
   await page.locator('select[title="Camera (C cycles)"]').selectOption('line');
-  const pose = await page.evaluate(() => {
-    const c = window.__squib!.controller as unknown as { race: { resolved: { start: [{ n: number; e: number }, { n: number; e: number }] }; course: { start: { ends: [string, string] }; marks: { id: string; kind: string }[] } }; cameraInfo(): { position: number[]; target: number[] } };
-    const [a, b] = c.race.resolved.start;
-    const rcFirst = c.race.course.marks.find((m) => m.id === c.race.course.start.ends[0])?.kind === 'committee-boat';
-    return { rc: rcFirst ? a : b, pin: rcFirst ? b : a, cam: c.cameraInfo().position };
-  });
-  const [x, y, z] = pose.cam as [number, number, number];
-  // three.js: x = east, z = −north.
-  expect(Math.hypot(x - pose.rc.e, -z - pose.rc.n)).toBeLessThan(20);
-  expect(y).toBeGreaterThan(1);
-  const toPin = Math.hypot(x - pose.pin.e, -z - pose.pin.n);
-  expect(toPin).toBeGreaterThan(Math.hypot(pose.pin.e - pose.rc.e, pose.pin.n - pose.rc.n));
+  // The camera moves there on the next frames (a short blend from the chase view); software rendering is slow.
+  const pose = () =>
+    page.evaluate(() => {
+      const c = window.__squib!.controller as unknown as { race: { resolved: { start: [{ n: number; e: number }, { n: number; e: number }] }; course: { start: { ends: [string, string] }; marks: { id: string; kind: string }[] } }; cameraInfo(): { position: number[] } };
+      const [a, b] = c.race.resolved.start;
+      const rcFirst = c.race.course.marks.find((m) => m.id === c.race.course.start.ends[0])?.kind === 'committee-boat';
+      const rc = rcFirst ? a : b;
+      const pin = rcFirst ? b : a;
+      const [x, y, z] = c.cameraInfo().position as [number, number, number];
+      // three.js: x = east, z = −north.
+      return { fromRc: Math.hypot(x - rc.e, -z - rc.n), toPin: Math.hypot(x - pin.e, -z - pin.n), line: Math.hypot(pin.e - rc.e, pin.n - rc.n), y };
+    });
+  await expect.poll(async () => (await pose()).fromRc, { timeout: 60_000 * CI_SLOW }).toBeLessThan(20);
+  const p = await pose();
+  expect(p.y).toBeGreaterThan(1);
+  expect(p.toPin).toBeGreaterThan(p.line);
   expect(errors).toEqual([]);
 });
 
