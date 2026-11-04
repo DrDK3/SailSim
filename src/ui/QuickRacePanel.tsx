@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
-import { DEFAULT_QUICK_RACE, QUICK_WIND_KN, type QuickRaceOptions } from '../app/quickRace';
+import { DEFAULT_QUICK_RACE, QUICK_WIND_KN, SHORT_COURSE_LEG_M, dailyChallenge, type QuickCourse, type QuickRaceOptions } from '../app/quickRace';
 import { freshLiveWeather } from '../app/liveNow';
+import { allCourses, PRACTICE_KINDS } from '../app/courseLibrary';
+import { loadBests } from '../app/bests';
+import { mmss } from '../app/lessons';
 import type { AiLevel } from '../sim/ai/skipper';
+import type { PrepFlag } from '../sim/race/committee';
 
 const KEY = 'squib.quickRace.v1';
 
@@ -11,14 +15,31 @@ function loadOptions(liveNow: boolean): QuickRaceOptions {
   const base: QuickRaceOptions = { ...DEFAULT_QUICK_RACE, conditions: liveNow ? 'live' : DEFAULT_QUICK_RACE.conditions };
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...base, ...(JSON.parse(raw) as Partial<QuickRaceOptions>) };
+    if (raw) {
+      const o = { ...base, ...(JSON.parse(raw) as Partial<QuickRaceOptions>) };
+      delete o.challenge;
+      return o;
+    }
   } catch {
     // Storage unavailable or the saved choice unreadable: the defaults.
   }
   return base;
 }
 
-/** Race in one step: how many boats, how good, where, and in what conditions. */
+/** The course choice as one select value. */
+const courseValue = (o: QuickRaceOptions) => (o.venue === 'start-bay' ? `bay:${o.course}` : o.venue === 'library' ? `lib:${o.libraryId ?? ''}` : o.venue);
+
+function fromCourseValue(v: string, o: QuickRaceOptions): QuickRaceOptions {
+  const base = { ...o, laps: undefined, legM: undefined };
+  if (v.startsWith('bay:')) return { ...base, venue: 'start-bay', course: v.slice(4) as QuickCourse };
+  if (v.startsWith('lib:')) return { ...base, venue: 'library', libraryId: v.slice(4) };
+  return { ...base, venue: v as QuickRaceOptions['venue'] };
+}
+
+/**
+ * The race set-up (review U4): every race option in one place (the Scenario panel no longer has its own), with
+ * today's challenge and your bests.
+ */
 export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
   const [o, setO] = useState<QuickRaceOptions>(() => loadOptions(!!freshLiveWeather(ui.weatherSources)));
   const [message, setMessage] = useState<string>();
@@ -26,14 +47,19 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
   const live = ui.weatherSources.some((w) => w.kind === 'live');
   const liveTide = ui.tideSources.some((t) => t.kind === 'live');
   const river = ui.dart.status === 'loaded';
+  const challenge = dailyChallenge();
+  const bests = loadBests();
+  const todayBest = bests.races[challenge.key];
+  const practice = o.venue === 'start-bay' && o.course !== 'short' ? PRACTICE_KINDS.find((k) => k.kind === o.course) : undefined;
+  const library = allCourses();
 
-  const start = (reroll: boolean) => {
-    const opts = reroll ? { ...o, seed: 1 + Math.floor(Math.random() * 9998) } : o;
-    if (reroll) setO(opts);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(opts));
-    } catch {
-      // Not remembered: storage is unavailable.
+  const start = (opts: QuickRaceOptions, remember = true) => {
+    if (remember) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(opts));
+      } catch {
+        // Not remembered: storage is unavailable.
+      }
     }
     ctl.leaveTo('Starting a new race', () => {
       const r = ctl.startQuickRace(opts);
@@ -44,13 +70,27 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
       }
     });
   };
+  const startNew = (reroll: boolean) => {
+    const opts = reroll ? { ...o, seed: 1 + Math.floor(Math.random() * 9998) } : o;
+    if (reroll) setO(opts);
+    start(opts);
+  };
 
   return (
-    <section className="panel quick-race" aria-label="Quick race">
+    <section className="panel quick-race" aria-label="Race set-up">
       <div className="race-head">
-        <h3>Quick race</h3>
-        <button onClick={onClose} aria-label="Close quick race">Close</button>
+        <h3>Race</h3>
+        <button onClick={onClose} aria-label="Close the race set-up">Close</button>
       </div>
+
+      <div className="challenge" data-testid="daily-challenge">
+        <div>
+          <strong>Today’s challenge</strong> <span className="fine-inline">· {challenge.day}</span>
+          <p className="fine">Three AI boats on the short course in a moderate breeze: the same race for everyone today.{todayBest ? ` Your best today: ${mmss(todayBest.timeS)}.` : ''}</p>
+        </div>
+        <button className="primary" onClick={() => start(challenge.options, false)} data-testid="challenge-start">Sail it</button>
+      </div>
+
       <label className="field">
         <span>Competitors</span>
         <span className="qr-count">
@@ -67,21 +107,31 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         </select>
       </label>
       <label className="field select-field">
-        <span>Where</span>
-        <select value={o.venue} onChange={(e) => set({ venue: e.target.value as QuickRaceOptions['venue'] })}>
-          <option value="start-bay">Start Bay (open water, any wind)</option>
-          <option value="river" disabled={!river}>The river: the Range, off Dart Marina{river ? '' : ' (needs the River Dart data)'}</option>
-          <option value="rdyc" disabled={!river}>Start Bay: an RDYC club course for the wind{river ? '' : ' (needs the River Dart data)'}</option>
+        <span>Course</span>
+        <select aria-label="Course" value={courseValue(o)} onChange={(e) => setO(fromCourseValue(e.target.value, o))} data-testid="race-course">
+          <optgroup label="Start Bay (simulated courses, laid to the wind)">
+            <option value="bay:short">Short course: one beat and one run, about 5 minutes</option>
+            {PRACTICE_KINDS.map((k) => (
+              <option key={k.kind} value={`bay:${k.kind}`}>{k.label}</option>
+            ))}
+          </optgroup>
+          <optgroup label="The Dart">
+            <option value="river" disabled={!river}>The river: the Range, off Dart Marina{river ? '' : ' (needs the River Dart data)'}</option>
+            <option value="rdyc" disabled={!river}>Start Bay: an RDYC club course for the wind{river ? '' : ' (needs the River Dart data)'}</option>
+          </optgroup>
+          <optgroup label="Course library">
+            {library.map((c) => (
+              <option key={`${c.group}-${c.id}`} value={`lib:${c.id}`}>{c.group === 'user' ? 'Mine: ' : ''}{c.name}</option>
+            ))}
+          </optgroup>
         </select>
       </label>
       {o.venue === 'start-bay' && (
-        <label className="field select-field">
-          <span>Course</span>
-          <select value={o.course} onChange={(e) => set({ course: e.target.value as QuickRaceOptions['course'] })}>
-            <option value="windward-leeward">Windward–leeward, 2 laps</option>
-            <option value="triangle">Triangle, 2 laps</option>
-          </select>
-        </label>
+        <p className="fine">
+          {o.course === 'short'
+            ? `A ${SHORT_COURSE_LEG_M} m windward–leeward, one lap. AI Squibs take about 5 minutes in a moderate breeze, longer in light air (model output).`
+            : `${practice?.description ?? ''} Laid at the start position, relative to the wind there. Simulated: not an RDYC course.`}
+        </p>
       )}
       <label className="field select-field">
         <span>Conditions</span>
@@ -112,21 +162,90 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         <select value={o.sequence} onChange={(e) => set({ sequence: e.target.value as QuickRaceOptions['sequence'] })}>
           <option value="one-minute">1 minute</option>
           <option value="three-minute">3 minutes</option>
-          <option value="five-minute">5 minutes</option>
+          <option value="five-minute">5 minutes (warning, preparatory, one-minute)</option>
         </select>
       </label>
+      <details className="more-options">
+        <summary>More options: laps, leg length, start time, preparatory flag</summary>
+        <label className="field">
+          <span>Laps</span>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            step={1}
+            value={o.venue === 'start-bay' && o.course === 'short' ? 1 : o.laps ?? ''}
+            placeholder="course's own"
+            disabled={o.venue === 'start-bay' && o.course === 'short'}
+            onChange={(e) => set({ laps: e.target.value === '' ? undefined : Number(e.target.value) })}
+            aria-label="Laps"
+          />
+        </label>
+        {o.venue === 'start-bay' && (
+          <label className="field">
+            <span>Leg length</span>
+            <input
+              type="number"
+              min={80}
+              max={1500}
+              step={20}
+              value={o.legM ?? (o.course === 'short' ? SHORT_COURSE_LEG_M : practice?.legM ?? '')}
+              onChange={(e) => set({ legM: e.target.value === '' ? undefined : Number(e.target.value) })}
+              aria-label="Leg length (m)"
+            />
+            <span className="unit">m</span>
+          </label>
+        )}
+        <label className="field">
+          <span>Start signal after</span>
+          <input
+            type="number"
+            min={20}
+            max={600}
+            step={10}
+            value={o.startInS ?? ''}
+            placeholder={`${{ 'one-minute': 60, 'three-minute': 180, 'five-minute': 300 }[o.sequence] + 30}`}
+            onChange={(e) => set({ startInS: e.target.value === '' ? undefined : Number(e.target.value) })}
+            aria-label="Start signal after (s)"
+          />
+          <span className="unit">s</span>
+        </label>
+        <label className="field select-field">
+          <span>Preparatory flag</span>
+          <select aria-label="Preparatory flag" value={o.prepFlag ?? 'P'} onChange={(e) => set({ prepFlag: e.target.value as PrepFlag })}>
+            <option value="P">P (no starting penalty)</option>
+            <option value="U">U (rule 30.3)</option>
+            <option value="black">Black flag (rule 30.4)</option>
+          </select>
+        </label>
+      </details>
       <div className="row left wrap">
-        <button className="primary" onClick={() => start(o.conditions === 'random')} data-testid="quick-race-start">Start race</button>
-        {o.conditions === 'random' && <button onClick={() => start(false)} title={`Sail the same random conditions again (seed ${o.seed})`}>Same conditions again</button>}
+        <button className="primary" onClick={() => startNew(o.conditions === 'random')} data-testid="quick-race-start">Start race</button>
+        {o.conditions === 'random' && <button onClick={() => startNew(false)} title={`Sail the same random conditions again (seed ${o.seed})`}>Same conditions again</button>}
       </div>
+      {(Object.keys(bests.races).length > 0 || bests.start) && (
+        <details className="bests" data-testid="bests">
+          <summary>Your bests (kept in this browser)</summary>
+          <ul>
+            {bests.start && <li>Best start: {bests.start.delayS.toFixed(1)} s after the signal</li>}
+            {Object.entries(bests.races)
+              .sort((a, b) => b[1].at.localeCompare(a[1].at))
+              .slice(0, 8)
+              .map(([k, r]) => (
+                <li key={k}>{r.label}: {mmss(r.timeS)}</li>
+              ))}
+          </ul>
+          <p className="fine">Conditions differ from race to race. Nothing is sent anywhere: a shared table would need a server.</p>
+        </details>
+      )}
       <p className="fine">
         {o.conditions === 'random'
           ? 'Random conditions are training ranges (wind, gusts, a season afternoon, sky and tide phase), not a record of the Dart.'
           : o.conditions === 'live'
             ? `Live: the latest Met Office model wind for the area${liveTide ? ' and the Dartmouth tide' : ''}, from the site’s scheduled job.${!liveTide && o.venue === 'river' && o.stream ? ' No live tide is published yet, so the river has no tidal stream.' : ''}`
-            : 'Uses the wind, tide and sky set in the Scenario panel.'}{' '}
-{o.venue === 'rdyc' && ' RDYC courses were entered from the club\u2019s 2026 sailing instructions and await a check by a club member; the club gives approximate mark positions, and where the committee boat anchors is the simulator\u2019s choice.'}{' '}
-        AI boats and the judging are simplified (not an authoritative rules adjudication).
+            : 'Uses the wind, tide, sky, boat and start time set in the Scenario panel.'}{' '}
+        {o.venue === 'rdyc' && 'RDYC courses were entered from the club’s 2026 sailing instructions and await a check by a club member; the club gives approximate mark positions, and where the committee boat anchors is the simulator’s choice. '}
+        AI Squibs sail with the same physics and controls as you and follow a simplified subset of the racing rules (not an authoritative rules adjudication). Their sail numbers are invented. Starting sequence per rule 26; recalls per rule 29.
       </p>
       {message && <p className="fine" role="status">{message}</p>}
     </section>

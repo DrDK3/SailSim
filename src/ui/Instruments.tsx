@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { damageSummary } from '../sim/boat/damage';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { EnvironmentInfo } from '../sim/env/environment';
@@ -35,10 +35,16 @@ function Cell({ label, value, unit, title, tutorial, wide }: { label: string; va
   );
 }
 
-export function Instruments({ s }: { s: BoatSnapshot }) {
+export function Instruments({ s, level }: { s: BoatSnapshot; level?: string }) {
   const tack = s.mainSide === 1 ? 'Starboard' : 'Port';
   const aground = agroundText(s);
   const [more, setMore] = useState(initialMore);
+  // A change of interface level sets the default (all instruments at Expert): follow it.
+  const lastLevel = useRef(level);
+  useEffect(() => {
+    if (lastLevel.current !== level) setMore(initialMore());
+    lastLevel.current = level;
+  }, [level]);
   const toggleMore = () => {
     setMore(!more);
     try {

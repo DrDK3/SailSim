@@ -16,6 +16,8 @@ import { WakeTrail, HullFoam, BowSpray } from './boatWater';
 import { SUN_THROUGH } from './materialFx';
 import { DEFAULT_CAMERA_MOTION, loadGraphics, pixelRatioFor, saveGraphics, type GraphicsSettings } from './graphics';
 import { ForceArrows } from './arrows';
+import { TeachingOverlay } from './teaching';
+import type { OverlayPart } from '../app/lessons';
 import type { DartScene, DartUpdate } from './dart';
 import { CourseScene } from './course';
 import { FleetView, type FleetPose } from './fleet';
@@ -25,7 +27,7 @@ import type { SkyState } from '../sim/env/sky';
 import { daylight } from '../sim/env/sun';
 import { CloudDome, Rain } from './weather';
 
-export type CameraMode = 'chase' | 'scenic' | 'helm' | 'orbit' | 'drone' | 'top' | 'free';
+export type CameraMode = 'chase' | 'scenic' | 'helm' | 'orbit' | 'drone' | 'top' | 'line' | 'free';
 
 /** Environment state the scene shows (read-only from the simulation). */
 export interface SceneEnvironment {
@@ -39,7 +41,7 @@ export interface SceneEnvironment {
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
 }
-export const CAMERA_MODES: CameraMode[] = ['chase', 'scenic', 'helm', 'orbit', 'drone', 'top'];
+export const CAMERA_MODES: CameraMode[] = ['chase', 'scenic', 'helm', 'orbit', 'drone', 'top', 'line'];
 
 /**
  * Helm view: how much of the boat's heel tilts the view at the usual camera motion (0 = horizon level, 1 = fixed
@@ -164,6 +166,8 @@ export class SceneView {
   bowDrop = 0;
   graphics: GraphicsSettings;
   private readonly arrows: ForceArrows;
+  /** The teaching overlay (heading, course over ground, stream, winds, VMG, a lesson's buoy): src/render/teaching.ts. */
+  readonly teaching = new TeachingOverlay();
   private readonly floats: THREE.InstancedMesh;
   private readonly sun: SunLight;
 
@@ -313,6 +317,7 @@ export class SceneView {
     this.arrows = new ForceArrows();
     this.boat.group.add(this.arrows.bodyGroup);
     this.scene.add(this.arrows.worldGroup);
+    this.scene.add(this.teaching.group);
 
     // Reference floats (lobster-pot buoys) on a jittered grid around the boat: visual motion cues only.
     const floatGeo = new THREE.SphereGeometry(0.22, 12, 8);
@@ -494,6 +499,21 @@ export class SceneView {
     }
     this.course = r && course ? new CourseScene(r, course, realMarks) : undefined;
     if (this.course) this.scene.add(this.course.group);
+    // The start line, committee boat end first (the end whose mark is the committee boat; else the second end,
+    // as the practice courses lay it).
+    if (r && course) {
+      const kindOf = (id: string) => course.marks.find((m) => m.id === id)?.kind;
+      const [a, b] = r.start;
+      this.startLine = kindOf(course.start.ends[0]) === 'committee-boat' ? [a, b] : [b, a];
+    } else this.startLine = undefined;
+    if (!this.startLine && this.mode === 'line') this.setCameraMode('chase');
+  }
+
+  /** The start line (committee boat end first), when there is a course: for the start-line view. */
+  private startLine?: [{ n: number; e: number }, { n: number; e: number }];
+
+  get hasStartLine(): boolean {
+    return !!this.startLine;
   }
 
   /** The other boats to draw (id, sail-number label, hull colour); an empty list removes them. */
@@ -710,6 +730,7 @@ export class SceneView {
     }
     this.arrows.visible = this.showForces;
     if (this.showForces) this.arrows.update(curr, this.boat.anchors, this.boatRoot.position);
+    this.teaching.update(curr, this.boatRoot.position, 0);
     this.updateFloats(x, z, time);
     this.updateCamera(heading, frameDt, moved, heel);
 
@@ -886,6 +907,17 @@ export class SceneView {
       this.camera.up.set(0, 1, 0).lerp(boatUp, Math.min(0.8, (HELM_HEEL_FRACTION * motion) / DEFAULT_CAMERA_MOTION)).normalize();
       this.camera.lookAt(ahead);
       this.camera.up.set(0, 1, 0);
+    } else if (this.mode === 'line' && this.startLine) {
+      // The start-line view (review §8.6): from just outside the committee boat end, looking along the line to
+      // the pin, a little above the water, so you can judge whether you are over.
+      const [rc, pin] = this.startLine;
+      const dn = pin.n - rc.n;
+      const de = pin.e - rc.e;
+      const len = Math.hypot(dn, de) || 1;
+      const eye = new THREE.Vector3(rc.e - (de / len) * 12, 4, -(rc.n - (dn / len) * 12));
+      this.camera.position.copy(eye);
+      this.camera.up.set(0, 1, 0);
+      this.camera.lookAt(pin.e, 1.2, -pin.n);
     } else if (this.mode === 'top') {
       this.camera.position.set(b.x, 48, b.z + 0.01);
       this.camera.up.set(0, 0, -1);
@@ -987,7 +1019,13 @@ export class SceneView {
     this.onContextChange?.(false);
   };
 
+  /** The teaching overlay's parts and a lesson's buoy (src/app/lessons.ts). */
+  setTeaching(parts: OverlayPart[], target?: { n: number; e: number }): void {
+    this.teaching.set(parts, target);
+  }
+
   dispose(): void {
+    this.teaching.dispose();
     this.motionQuery?.removeEventListener('change', this.onMotionPref);
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);

@@ -22,20 +22,20 @@ This review compares the simulator with published guidance on onboarding and ret
 | Area | Today | Against the guidance | Change |
 |---|---|---|---|
 | **Top bar** | Since round A it was capped beside the instruments, so on laptop screens it wrapped onto two rows with blank space (the owner's screenshot) | Clutter and wasted space distract (G7) | **Done in this round:** one row sized to its content. As space shrinks, the activity shows as its icon and Reset loses its label, then the spacing tightens, then everything goes behind a Menu button as on a phone. Race, Library and Scenario always stay on the bar |
-| First visit | Welcome hub with four routes; one steering question | Good (G1). The first action is choosing a route, not sailing (G2) | Round B: "Sail now" as the first, largest action; the lesson starts in the water within 10 s |
-| Lessons | One long tutorial (U9) | Too much at once (G3); no end moment (G5) | Round B: six short lessons (§8.1 of the review), each ending with a result card and a "next lesson" prompt |
-| Goals and feedback | The coach's briefing and debrief; results table | Feedback exists (G4); no visible progress | Round B: lesson ticks and personal bests (best race time, best start), kept in this browser |
-| Session length | Quick races take about 15–25 minutes | Comparable products use 5–10 minute races (G8) | Round B: a "short course" option of about 5 minutes (one beat and one run) |
-| HUD | Instruments, race panel, coach, dock, minimap; parts can be hidden | Mostly good (G7); status words already lead ("Stalled · ease the main") | Round B: interface levels (Learn, Club, Expert) choose what shows by default |
-| Challenges and rankings | None | A main retention driver in comparable products (G8) | **Needs a service.** Shared leaderboards need a server and storage (paid or free-tier infrastructure; decision D8's backend could host it). Without one: local personal bests and a daily seeded challenge that is the same for everyone on the same day, with no shared table |
+| First visit | Welcome hub with four routes; one steering question | Good (G1). The first action is choosing a route, not sailing (G2) | **Done in round B:** "Sail now" is the first, largest, focused action; for a newcomer it starts lesson 1 with the boat already sailing |
+| Lessons | One long tutorial (U9) | Too much at once (G3); no end moment (G5) | **Done in round B:** six short lessons (§8.1 of the review), each ending with a result card and a "next lesson" prompt |
+| Goals and feedback | The coach's briefing and debrief; results table | Feedback exists (G4); no visible progress | **Done in round B:** lesson ticks and best lesson times; personal bests (best time per course, best start), kept in this browser |
+| Session length | Quick races take about 15–25 minutes | Comparable products use 5–10 minute races (G8) | **Done in round B:** a 220 m short course, one beat and one run, now the default: AI boats take 3.5–6.5 min at 10–14 kn (model output), longer in light air |
+| HUD | Instruments, race panel, coach, dock, minimap; parts can be hidden | Mostly good (G7); status words already lead ("Stalled · ease the main") | **Done in round B:** interface levels (Learn, Club, Expert) choose what shows by default; the teaching overlay at Learn |
+| Challenges and rankings | None | A main retention driver in comparable products (G8) | **Needs a service.** Shared leaderboards need a server and storage (paid or free-tier infrastructure; decision D8's backend could host it). **Done in round B without one:** local personal bests and a daily seeded challenge that is the same for everyone on the same day, with no shared table |
 | Measurement | None | G6 | **Needs a service or consent.** Analytics need a provider and a privacy notice; not proposed without the owner's decision |
 
 ## 3. Recommendations, in order
 
 1. **Done:** the one-row top bar (above).
-2. **Round B:** "Sail now" first, then six short lessons with result cards (G1–G5).
-3. **Round B:** interface levels and a short-course quick race (G7, G8).
-4. **Round B:** personal bests and a daily seeded challenge, kept in the browser (no service needed).
+2. **Done in round B:** "Sail now" first, then six short lessons with result cards (G1–G5).
+3. **Done in round B:** interface levels and a short-course race (G7, G8).
+4. **Done in round B:** personal bests and a daily seeded challenge, kept in the browser (no service needed).
 5. **Decision for the owner:** shared leaderboards and analytics need a server, storage and a privacy notice. Their costs belong with decision D8 (live-data backend).
 
 ## Sources

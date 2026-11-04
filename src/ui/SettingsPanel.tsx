@@ -1,3 +1,4 @@
+import { LEVELS } from '../app/level';
 import { useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { useModal } from './useModal';
@@ -159,6 +160,15 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             Graphics card: {ui.gpuName ?? 'unknown'} · build {ui.build.id} ({ui.build.time})
           </p>
         </div>
+        <h4>Interface level</h4>
+        <div className="row left wrap" role="radiogroup" aria-label="Interface level" data-testid="level">
+          {LEVELS.map((l) => (
+            <label key={l.id} className="check" title={l.text}>
+              <input type="radio" name="level" checked={ui.level === l.id} onChange={() => ctl.setLevel(l.id)} /> {l.label}
+            </label>
+          ))}
+        </div>
+        <p className="fine">{LEVELS.find((l) => l.id === ui.level)?.text} It sets what is shown by default; each part can still be switched on or off.</p>
         <h4>Steering</h4>
         <div className="row left" role="radiogroup" aria-label="Steering keys">
           <label className="check">

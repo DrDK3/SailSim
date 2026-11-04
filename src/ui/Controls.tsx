@@ -95,6 +95,8 @@ function SailRow({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'ma
 export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState; onHide?: () => void }) {
   const s = ui.snapshot;
   const tillerMode = ui.steering === 'tiller';
+  // At the Learn level the dock leaves out its advanced controls (src/app/level.ts); the keys still work.
+  const advanced = ui.level !== 'learn';
   return (
     <section className="panel controls" aria-label="Sailing controls">
       <div className="controls-sails">
@@ -114,17 +116,19 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
             <input type="checkbox" checked={s.input.autoCrew} onChange={(e) => ctl.setInput({ autoCrew: e.target.checked })} />
             Auto crew
           </label>
-          {!s.input.autoCrew && (
+          {advanced && !s.input.autoCrew && (
             <label className="slider" title="Crew weight out to windward">
               Hike
               <input type="range" min={0} max={1} step={0.05} value={s.input.crewHike} onChange={(e) => ctl.setInput({ crewHike: Number(e.target.value) })} />
             </label>
           )}
-          <label className="slider" title="Flatten the sails to depower in a breeze: cunningham, outhaul and kicker on, leech twisted open. Less heel and weather helm, less power (Z flatter, Shift+Z fuller)" data-tutorial="flatten">
-            Flatten <Key k="Z" />
-            <input type="range" min={0} max={1} step={0.05} value={s.input.flatten ?? 0} aria-valuetext={pct(s.input.flatten ?? 0)} onChange={(e) => ctl.setInput({ flatten: Number(e.target.value) })} />
-            <span className="slider-value">{pct(s.input.flatten ?? 0)}</span>
-          </label>
+          {advanced && (
+            <label className="slider" title="Flatten the sails to depower in a breeze: cunningham, outhaul and kicker on, leech twisted open. Less heel and weather helm, less power (Z flatter, Shift+Z fuller)" data-tutorial="flatten">
+              Flatten <Key k="Z" />
+              <input type="range" min={0} max={1} step={0.05} value={s.input.flatten ?? 0} aria-valuetext={pct(s.input.flatten ?? 0)} onChange={(e) => ctl.setInput({ flatten: Number(e.target.value) })} />
+              <span className="slider-value">{pct(s.input.flatten ?? 0)}</span>
+            </label>
+          )}
         </div>
       </div>
       {onHide && (

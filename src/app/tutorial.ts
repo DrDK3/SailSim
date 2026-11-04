@@ -1,34 +1,17 @@
-import type { AppScenario } from './controller';
 import type { ControlInput } from '../sim/simulation';
 import type { SailState } from './sailStatus';
 
 /**
- * The interactive tutorial: a short course in sailing the Squib, in open water with a steady breeze. Each
- * step states a goal that is checked against the simulation (heading, true wind angle, speed, which side the
- * mainsail is on, how the main is drawing), so it moves on when you have done it. You can also step back,
- * skip a step or leave at any time.
+ * The step engine behind the lessons (src/app/lessons.ts, review U9 and §8.1): each step states a goal that is
+ * checked against the simulation (heading, true wind angle, speed, which side the mainsail is on, how the sails
+ * are drawing, the stream, the start), so it moves on when you have done it. You can also step back, skip a step
+ * or leave at any time. Steps may time what you do (a tack, the start) into the lesson's record, which the
+ * lesson's result card reports.
  *
  * Pure logic (no DOM): the controller feeds it a sample of the boat every 0.1 s of simulated time.
  */
 
-/** Open water in Start Bay, 10 kn steady south-westerly, no current: predictable for learning (E). */
-export const TUTORIAL_SCENARIO: AppScenario = {
-  conditions: {
-    startTime: '2026-07-15T13:00:00Z',
-    weather: { source: 'manual', twsKn: 10, twdDeg: 225 },
-    gusts: { preset: 'steady', seed: 1 },
-    current: { mode: 'none' },
-    sky: { source: 'preset', preset: 'fair' },
-  },
-  startLocation: 'start-bay-practice',
-  startHeadingDeg: 165,
-  startSpeedKn: 3,
-};
-
-/** The boat starts with the main and jib on auto-trim and the crew on auto; the trimming step hands over the main. */
-export const TUTORIAL_INPUT: ControlInput = { helm: 0, mainSheet: 0.35, jibSheet: 0.35, autoMain: true, autoJib: true, crewHike: 0.6, autoCrew: true };
-
-/** What the tutorial sees of the boat. Angles in degrees, speeds in knots. */
+/** What a lesson sees of the boat. Angles in degrees, speeds in knots, positions in local metres. */
 export interface TutorialSample {
   t: number;
   headingDeg: number;
@@ -41,16 +24,34 @@ export interface TutorialSample {
   autoMain: boolean;
   autoCrew: boolean;
   crewHike: number;
+  /** Optional detail (the lessons use them; older samples may leave them out). */
+  n?: number;
+  e?: number;
+  sogKn?: number;
+  vmgKn?: number;
+  awsKn?: number;
+  jib?: SailState;
+  autoJib?: boolean;
+  /** Distance to the lesson's target buoy, when it has one. */
+  targetDistM?: number;
+  /** In a race: seconds to the start signal (negative after it), over the line early, and when this boat started. */
+  race?: { toStart: number; ocs: boolean; startedAt?: number; signalAt: number };
 }
 
-interface StepMemory {
+export interface StepMemory {
   start: TutorialSample;
   sawLuffing: boolean;
+  sawJibLuffing: boolean;
   crewChanged: boolean;
+  /** Scratch values a step keeps while it runs (e.g. when a tack began). */
+  v: Record<string, number>;
 }
 
 /** Highlightable parts of the screen (elements carry data-tutorial="…"). */
-export type TutorialTarget = 'compass' | 'speed' | 'twa' | 'helm' | 'main' | 'jib' | 'crew' | 'release' | 'library' | 'help';
+export type TutorialTarget = 'compass' | 'speed' | 'twa' | 'helm' | 'main' | 'jib' | 'crew' | 'release' | 'library' | 'help' | 'race';
+
+/** What a lesson records as you sail (timings, speeds), for its result card. */
+export type LessonRecord = Record<string, number>;
 
 export interface TutorialStep {
   id: string;
@@ -68,100 +69,13 @@ export interface TutorialStep {
   goal?: (s: TutorialSample, m: StepMemory) => boolean;
   /** Seconds the goal must hold without a break. */
   holdS?: number;
+  /** Called with every sample before the goal is checked: to time a manoeuvre. */
+  observe?: (s: TutorialSample, m: StepMemory) => void;
+  /** Called once when the goal is met: to note a result in the lesson's record. */
+  onDone?: (s: TutorialSample, m: StepMemory, rec: LessonRecord) => void;
+  /** A live value shown on the card while the step runs (e.g. "SOG 3.2 kn · STW 4.1 kn"). */
+  readout?: (s: TutorialSample) => string | undefined;
 }
-
-const angleDiff = (a: number, b: number) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
-
-export const TUTORIAL_STEPS: TutorialStep[] = [
-  {
-    id: 'welcome',
-    title: 'Welcome aboard',
-    body: 'You are helming a Squib, a 5.8 m keelboat, in open water off Dartmouth with a steady 10-knot breeze. The compass shows the wind: the blue arrow is the true wind, the purple one the wind you feel as you sail.',
-    hint: 'The simulation is running. Press Next when you are ready.',
-    targets: ['compass', 'speed'],
-  },
-  {
-    id: 'steer',
-    title: 'Steer',
-    body: 'Hold D or → (or the ▶ button) to turn the bow to starboard, A or ← (◀) to turn it to port: the keys move the bow, as in a car. On the boat the tiller goes the other way, as the tiller picture in the dock shows. It centres itself when you let go. Turn the boat 30° either way.',
-    bodyTiller: 'You steer as on the boat: push the tiller away from the way you want to go. A or ← (◀) pushes the tiller to port and the bow turns to starboard; D or → (▶) pushes it to starboard and the bow turns to port. Watch the tiller picture in the dock. It centres itself when you let go. Turn the boat 30° either way.',
-    hint: 'A boat turns slowly: hold the key for a second or two, then wait.',
-    targets: ['helm'],
-    goal: (s, m) => angleDiff(s.headingDeg, m.start.headingDeg) >= 30,
-  },
-  {
-    id: 'reach',
-    title: 'Sail across the wind',
-    body: 'Steer until the wind comes across the side of the boat: a true wind angle (TWA) between 80° and 100°. This is a beam reach, the easiest and often fastest point of sail. Hold it for 5 seconds.',
-    targets: ['twa', 'helm'],
-    goal: (s) => s.twaDeg >= 80 && s.twaDeg <= 100,
-    holdS: 5,
-  },
-  {
-    id: 'trim',
-    title: 'Trim the mainsail',
-    body: 'Auto-trim for the main is now off: the sheet is yours. Ease the main (S or ↓) until its status says Luffing, then pull it in (W or ↑) until it just says Drawing again. That is the sweet spot.',
-    hint: 'Luffing: the sail flaps and stops driving. Stalled: pulled in too far, the air breaks away.',
-    targets: ['main'],
-    input: { autoMain: false },
-    goal: (s, m) => m.sawLuffing && s.main === 'drawing',
-    holdS: 3,
-  },
-  {
-    id: 'upwind',
-    title: 'Sail towards the wind',
-    body: 'Turn towards the wind until the TWA is about 45° (between 38° and 55°), pulling the main in as you turn. This is close-hauled: a boat cannot sail straight into the wind. Keep the speed above 2.5 kn for 5 seconds.',
-    hint: 'If the sails luff and the boat slows, you are pointing too high: bear away a little.',
-    targets: ['twa', 'main', 'helm'],
-    goal: (s) => s.twaDeg >= 38 && s.twaDeg <= 55 && s.stwKn >= 2.5,
-    holdS: 5,
-  },
-  {
-    id: 'tack',
-    title: 'Tack',
-    body: 'Turn the bow through the wind so the wind comes from the other side. Keep turning until the sails fill on the new side and the boat picks up speed. That is a tack.',
-    hint: 'Turn decisively: if you stop with the bow into the wind, the boat drifts to a halt ("in irons").',
-    targets: ['helm', 'compass'],
-    goal: (s, m) => s.mainSide !== m.start.mainSide && s.twaDeg < 90 && s.stwKn > 1.0,
-  },
-  {
-    id: 'run',
-    title: 'Turn away from the wind',
-    body: 'Bear away until the wind is behind you: a TWA of 150° or more. Ease the main right out as you turn. This is a run. Hold it for 3 seconds.',
-    targets: ['twa', 'main'],
-    goal: (s) => s.twaDeg >= 150,
-    holdS: 3,
-  },
-  {
-    id: 'gybe',
-    title: 'Gybe',
-    body: 'Keep turning gently the same way, so the stern passes through the wind. The boom swings across to the other side: that is a gybe. In a real boat, duck!',
-    hint: 'Turn slowly. With the main far out, the boom crosses fast.',
-    targets: ['helm', 'main'],
-    goal: (s, m) => s.mainSide !== m.start.mainSide && s.twaDeg >= 100,
-  },
-  {
-    id: 'crew',
-    title: 'Crew weight',
-    body: 'Wind pressure heels the boat; the crew sitting out keeps it upright. Auto crew does this for you. Turn it off (K, or the Auto crew box) and move the Hike slider to see the heel change, then turn Auto crew back on.',
-    targets: ['crew'],
-    goal: (s, m) => m.crewChanged && s.autoCrew,
-  },
-  {
-    id: 'stop',
-    title: 'Stop the boat',
-    body: 'A boat has no brakes. To stop, let both sheets go (X, or Release sheets) and turn towards the wind until the sails flap. With no drive the boat slows down. Slow down to below 1 knot.',
-    hint: 'Letting the sheets go on a run is not enough: the wind still pushes the sails. Head up into the wind.',
-    targets: ['release', 'helm'],
-    goal: (s) => s.stwKn < 1.0,
-  },
-  {
-    id: 'done',
-    title: 'You can sail!',
-    body: 'That is the basics: steer, trim, tack, gybe and stop. Next, try a scenario from the Library (fog, a fresh breeze, a practice race against AI boats), or sail on the River Dart. Help (H) lists every key.',
-    targets: ['library', 'help'],
-  },
-];
 
 export interface TutorialState {
   index: number;
@@ -171,7 +85,11 @@ export interface TutorialState {
   done: boolean;
   /** 0 … 1: how far through the hold time the goal is. */
   progress: number;
+  /** The step's live value, if it has one. */
+  readout?: string;
 }
+
+export const angleDiff = (a: number, b: number) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
 
 /** Runs the steps: feed it samples; it reports the current step and whether its goal is met. */
 export class Tutorial {
@@ -180,21 +98,35 @@ export class Tutorial {
   private heldS = 0;
   private doneAt?: number;
   private last?: TutorialSample;
+  /** What the steps have recorded (timings, speeds), for the lesson's result card. */
+  readonly record: LessonRecord = {};
   /** Inputs the controller should apply when a step begins. */
   pendingInput?: Partial<ControlInput>;
 
-  constructor(readonly steps: TutorialStep[] = TUTORIAL_STEPS) {
+  constructor(readonly steps: TutorialStep[]) {
     this.pendingInput = steps[0]?.input;
   }
 
   get state(): TutorialState {
     const step = this.steps[this.index]!;
     const done = this.doneAt !== undefined;
-    return { index: this.index, total: this.steps.length, step, done, progress: done ? 1 : step.holdS ? Math.min(1, this.heldS / step.holdS) : 0 };
+    return {
+      index: this.index,
+      total: this.steps.length,
+      step,
+      done,
+      progress: done ? 1 : step.holdS ? Math.min(1, this.heldS / step.holdS) : 0,
+      readout: this.last && step.readout ? step.readout(this.last) : undefined,
+    };
   }
 
   get finished(): boolean {
     return this.index >= this.steps.length - 1 && this.doneAt !== undefined;
+  }
+
+  /** The latest sample (the controller's clock for the lesson's time). */
+  get latest(): TutorialSample | undefined {
+    return this.last;
   }
 
   /** Check the goal against a new sample (every 0.1 s of simulated time). */
@@ -202,15 +134,20 @@ export class Tutorial {
     const prev = this.last;
     this.last = s;
     const step = this.steps[this.index]!;
-    if (!this.mem) this.mem = { start: s, sawLuffing: false, crewChanged: false };
+    if (!this.mem) this.mem = { start: s, sawLuffing: false, sawJibLuffing: false, crewChanged: false, v: {} };
     const m = this.mem;
     if (s.main === 'luffing') m.sawLuffing = true;
+    if (s.jib === 'luffing') m.sawJibLuffing = true;
     if (!s.autoCrew && Math.abs(s.crewHike - m.start.crewHike) > 0.15) m.crewChanged = true;
     if (!step.goal || this.doneAt !== undefined) return;
+    step.observe?.(s, m);
     const dt = prev ? Math.max(0, s.t - prev.t) : 0;
     if (step.goal(s, m)) {
       this.heldS += dt;
-      if (this.heldS + 1e-9 >= (step.holdS ?? 0)) this.doneAt = s.t;
+      if (this.heldS + 1e-9 >= (step.holdS ?? 0)) {
+        this.doneAt = s.t;
+        step.onDone?.(s, m, this.record);
+      }
     } else this.heldS = 0;
   }
 
@@ -224,6 +161,14 @@ export class Tutorial {
     else this.doneAt ??= this.last?.t ?? 0;
   }
 
+  /** Start the current step's measuring again (after a Reset: "turn 30° from where you began" means from the new start). */
+  restartStep(): void {
+    this.mem = undefined;
+    this.heldS = 0;
+    this.doneAt = undefined;
+    this.pendingInput = this.steps[this.index]!.input;
+  }
+
   back(): void {
     if (this.index > 0) this.go(this.index - 1);
   }
@@ -234,7 +179,7 @@ export class Tutorial {
     this.heldS = 0;
     this.doneAt = undefined;
     this.pendingInput = this.steps[i]!.input;
-    // An explanation-only step is complete as soon as it is shown (Next moves on).
+    // An explanation-only last step (the result) is complete as soon as it is shown.
     if (!this.steps[i]!.goal && i === this.steps.length - 1) this.doneAt = this.last?.t ?? 0;
   }
 }

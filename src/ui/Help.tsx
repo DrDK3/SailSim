@@ -33,7 +33,7 @@ export function Help({ onClose, onTutorial, build }: { onClose: () => void; onTu
     <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Help" onClick={onClose}>
       <section className="panel help" onClick={(e) => e.stopPropagation()}>
         <div className="row left help-top">
-          <button className="primary" onClick={onTutorial} autoFocus>Start the tutorial</button>
+          <button className="primary" onClick={onTutorial} autoFocus>Start a lesson</button>
           <span className="fine">A step-by-step lesson: steer, trim, tack, gybe and stop (about 5 minutes).</span>
         </div>
         <h3>How to sail</h3>

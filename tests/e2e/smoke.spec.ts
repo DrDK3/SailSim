@@ -267,17 +267,23 @@ test('Phase 3: without the River Dart data the app falls back to open water and 
   await expect.poll(async () => (await snap(page)).t, { timeout: 20_000 }).toBeGreaterThan(t0);
 });
 
-test('Phase 4: a practice course from the scenario panel: countdown, start signal, and a start when the boat crosses', async ({ page }) => {
+test('Phase 4: a practice course from the race set-up (the Scenario panel points there): countdown, start signal, and a start when the boat crosses', async ({ page }) => {
   const errors = await open(page);
+  // One race set-up (review U4): the Scenario panel no longer has its own course and fleet options.
   await page.getByRole('button', { name: 'Scenario' }).click();
-  const panel = page.getByRole('region', { name: 'Scenario settings' });
-  const course = panel.getByRole('combobox', { name: 'Course' });
-  await expect(course.locator('option[value="club"]')).toHaveAttribute('disabled', '');
-  await expect(course.locator('option[value="club"]')).toContainText('none entered yet');
-  await course.selectOption('practice:windward-leeward');
+  const scenario = page.getByRole('region', { name: 'Scenario settings' });
+  await expect(scenario.getByTestId('scenario-course')).toContainText('set in Race');
+  await scenario.getByRole('button', { name: 'Race set-up…' }).click();
+  const panel = page.getByRole('region', { name: 'Race set-up' });
+  await expect(panel).toBeVisible();
+  await panel.getByLabel('Number of AI competitors').fill('0');
+  await panel.getByRole('combobox', { name: 'Course' }).selectOption('bay:windward-leeward');
   await expect(panel).toContainText('Simulated: not an RDYC course');
-  await panel.locator('.field', { hasText: 'Start signal after' }).locator('input[type="number"]').fill('20');
-  await panel.getByRole('button', { name: 'Apply and restart' }).click();
+  await panel.locator('.field', { hasText: 'Conditions' }).locator('select').selectOption('as-set');
+  await panel.locator('.field', { hasText: 'Start sequence' }).locator('select').selectOption('one-minute');
+  await panel.getByText('More options').click();
+  await panel.getByLabel('Start signal after (s)').fill('20');
+  await panel.getByTestId('quick-race-start').click();
   const race = page.getByTestId('race-panel');
   await expect(race).toContainText('Windward–leeward (simulated)');
   await expect(race).toContainText('Simulated course');
@@ -347,16 +353,18 @@ test('Phase 4: course editor: add a mark, live check, import, export', async ({ 
 test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, results', async ({ page }) => {
   test.setTimeout(240_000 * CI_SLOW);
   const errors = await open(page);
-  await page.getByRole('button', { name: 'Scenario' }).click();
-  const panel = page.getByRole('region', { name: 'Scenario settings' });
-  await panel.getByRole('combobox', { name: 'Course' }).selectOption('practice:windward-leeward');
-  const num = (label: string) => panel.locator('.field', { hasText: label }).locator('input[type="number"]');
-  await num('Leg length').fill('200');
-  await num('Laps').fill('1');
-  await num('Start signal after').fill('60');
-  await num('AI boats').fill('3');
-  await panel.getByRole('combobox', { name: 'AI level' }).selectOption('expert');
-  await panel.getByRole('button', { name: 'Apply and restart' }).click();
+  await page.getByRole('button', { name: 'Race', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Race set-up' });
+  await panel.getByLabel('Number of AI competitors').fill('3');
+  await panel.locator('.field', { hasText: 'Their level' }).locator('select').selectOption('expert');
+  await panel.getByRole('combobox', { name: 'Course' }).selectOption('bay:windward-leeward');
+  await panel.locator('.field', { hasText: 'Conditions' }).locator('select').selectOption('as-set');
+  await panel.locator('.field', { hasText: 'Start sequence' }).locator('select').selectOption('one-minute');
+  await panel.getByText('More options').click();
+  await panel.getByLabel('Leg length (m)').fill('200');
+  await panel.getByLabel('Laps').fill('1');
+  await panel.getByLabel('Start signal after (s)').fill('60');
+  await panel.getByTestId('quick-race-start').click();
   const race = page.getByTestId('race-panel');
   await expect(race).toContainText('Windward–leeward (simulated)');
   // One-minute sequence: the class flag is up.

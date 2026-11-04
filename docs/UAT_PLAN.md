@@ -217,6 +217,21 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 16.6 | Sail past Bayard's Cove | The round stone fort at the end of the quay with its gunports | |
 | 16.7 | Watch the Higher Ferry cross both ways | Her cabin stays on the same side; her cables come up out of the water through her ends; up to 36 cars | |
 
+## 17. Package 2, round B: lessons, one race set-up, levels (20 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 17.1 | In a private window (a first visit), look at the welcome | "Have you sailed before?" with Not yet / Yes, I sail / I race; "Sail now" first and largest | |
+| 17.2 | Answer Not yet, then Sail now | Lesson 1 starts at once, the boat sailing; the heading and course-over-ground lines and a yellow buoy labelled Target on the water | |
+| 17.3 | Sail lesson 1 to the end | Each step moves on when done; the buoy's distance counts down; a result card with your time and "Next: The wind" | |
+| 17.4 | Sail lessons 2 to 6 (or Skip step through them) | Lesson 2 reports the apparent wind on each point of sail; lesson 4 times your tacks against the model's 8.6 s; lesson 5 starts a race and reports your start; lesson 6 shows STW against SOG in a stream | |
+| 17.5 | More → Lessons → All lessons | Six lessons, those done ticked with your best time | |
+| 17.6 | Race | Today's challenge at the top; the short course by default; every option of the old Scenario race section under More options | |
+| 17.7 | Sail today's challenge to the finish | Your time, and "Your first time on Today's challenge" (a later, faster finish says "New personal best") | |
+| 17.8 | During a race, camera menu → Start line | The view from beside the committee boat looking along the line to the pin | |
+| 17.9 | More → Graphics and sound → Interface level: try Learn, Club, Expert | Learn: the teaching overlay on and no Flatten slider; Expert: all instruments and no coach; Club: as before | |
+| 17.10 | Look at the compass | The two wind arrows marked T (solid) and A (dashed) | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

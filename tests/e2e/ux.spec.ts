@@ -20,21 +20,26 @@ async function ready(page: Page): Promise<string[]> {
 test.describe('first visit', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('the welcome offers the tutorial; the tutorial teaches step by step and moves on when the goal is met', async ({ page }) => {
+  test('the welcome puts "Sail now" first: for a newcomer it starts lesson 1, step by step, moving on when the goal is met', async ({ page }) => {
     test.setTimeout(180_000 * CI_SLOW);
     const errors = await ready(page);
-    // The welcome is the experience hub: four ways in, the lesson first.
+    // The welcome is the experience hub: one question, "Sail now" first and largest, then four ways in.
     const welcome = page.getByRole('dialog', { name: 'Squib sailing simulator' });
     await expect(welcome).toBeVisible();
-    await expect(welcome.getByRole('button', { name: 'Learn to sail' })).toBeFocused();
-    for (const door of ['Free sailing', 'Race against AI', 'Scenarios']) await expect(welcome.getByRole('button', { name: door })).toBeVisible();
-    await welcome.getByRole('button', { name: 'Learn to sail' }).click();
+    await expect(page.getByTestId('sail-now')).toBeFocused();
+    // Not answered yet: a newcomer (Learn), so Sail now is lesson 1.
+    await expect(page.getByTestId('steer-bow')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('sail-now')).toContainText('Lesson 1');
+    for (const door of ['Learn to sail', 'Free sailing', 'Race against AI', 'Scenarios']) await expect(welcome.getByRole('button', { name: door })).toBeVisible();
+    await page.getByTestId('sail-now').click();
     await expect(welcome).toBeHidden();
 
     const card = page.getByTestId('tutorial');
-    await expect(card).toContainText('step 1 of 11');
-    await expect(page.getByTestId('tutorial-title')).toHaveText('Welcome aboard');
+    await expect(card).toContainText('Lesson 1 of 6 · Steering · step 1 of 4');
+    await expect(page.getByTestId('tutorial-title')).toHaveText('Your heading');
     await expect(page.locator('[data-tutorial="compass"]')).toHaveClass(/tutorial-target/);
+    // The teaching overlay shows the heading and course-over-ground lines and the buoy to sail to.
+    expect(await page.evaluate(() => (window.__squib!.controller as unknown as { view: { teaching: { shown: string[] } } }).view.teaching.shown)).toEqual(['heading', 'cog', 'target']);
     await card.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByTestId('tutorial-title')).toHaveText('Steer');
     await expect(page.locator('[data-tutorial="helm"]')).toHaveClass(/tutorial-target/);
@@ -49,16 +54,38 @@ test.describe('first visit', () => {
     await page.keyboard.up('KeyD');
     await expect(page.getByTestId('tutorial-goal')).toContainText('Done');
     await page.evaluate(() => window.__squib!.advance(2.2));
-    await expect(page.getByTestId('tutorial-title')).toHaveText('Sail across the wind');
-    await expect(card).toContainText('step 3 of 11');
+    await expect(page.getByTestId('tutorial-title')).toHaveText('Sail to the buoy');
+    await expect(card).toContainText('step 3 of 4');
+    await expect(page.getByTestId('lesson-readout')).toContainText(/Buoy \d+ m away/);
 
-    await card.getByRole('button', { name: 'End the tutorial' }).click();
+    await card.getByRole('button', { name: 'End the lesson' }).click();
     await expect(card).toBeHidden();
-    // Seen once: no welcome on the next visit.
+    // Seen once: no welcome on the next visit; the level chosen is kept.
     await page.reload();
     await expect(page.getByTestId('stw')).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Squib sailing simulator' })).toHaveCount(0);
+    expect(await page.evaluate(() => window.__squib!.controller.getState().level)).toBe('learn');
     expect(errors).toEqual([]);
+  });
+
+  test('a lesson ends on a result card that offers the next lesson; the list of lessons shows what is done', async ({ page }) => {
+    test.setTimeout(180_000 * CI_SLOW);
+    await ready(page);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__squib!.controller.startLesson('steer'));
+    const card = page.getByTestId('tutorial');
+    for (let i = 0; i < 3; i++) await card.getByRole('button', { name: /^(Next|Skip step)$/ }).click();
+    await expect(page.getByTestId('tutorial-title')).toHaveText('✓ Lesson 1 complete: Steering');
+    await expect(page.getByTestId('lesson-result')).toContainText('You skipped the buoy');
+    await expect(page.getByTestId('lesson-next')).toHaveText('Next: The wind');
+    await card.getByRole('button', { name: 'All lessons' }).click();
+    const list = page.getByTestId('lesson-list');
+    await expect(list.locator('li')).toHaveCount(6);
+    await expect(list.locator('li').first()).toHaveClass(/done/);
+    await card.getByRole('button', { name: 'Back to the lesson' }).click();
+    await page.getByTestId('lesson-next').click();
+    await expect(card).toContainText('Lesson 2 of 6 · The wind');
+    await expect(page.getByTestId('activity')).toContainText('Lesson 2');
   });
 
   test('"Just sail" (or Escape) closes the welcome without starting anything', async ({ page }) => {

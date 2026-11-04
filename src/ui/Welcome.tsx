@@ -3,6 +3,7 @@ import type { Activity } from './activity';
 import { IconLearn, IconRace, IconSail, IconScenarios } from './icons';
 import { useModal } from './useModal';
 import type { SteeringMode } from '../app/steering';
+import type { InterfaceLevel } from '../app/level';
 
 const KEY = 'squib.welcomed.v1';
 
@@ -52,10 +53,18 @@ function freeText(a: Activity): string {
   }
 }
 
+/** The first-visit question's answers: each sets the interface level (U5) and the steering keys (D4). */
+const ANSWERS: { id: string; label: string; level: InterfaceLevel; steering: SteeringMode }[] = [
+  { id: 'steer-bow', label: 'Not yet', level: 'learn', steering: 'bow' },
+  { id: 'steer-tiller', label: 'Yes, I sail', level: 'club', steering: 'tiller' },
+  { id: 'level-expert', label: 'I race', level: 'expert', steering: 'tiller' },
+];
+
 /**
- * The experience hub: the four ways in (learn, sail freely, race, ready-made scenarios), each opening the
- * simulator's existing, working feature. Shown by itself on the first visit only; afterwards the activity button
- * in the toolbar brings it back. The water stays live behind it.
+ * The experience hub: on the first visit, one question and "Sail now" as the first, largest action (review UI
+ * benchmark G1–G2: into the water within seconds; for a newcomer that is lesson 1); then the four ways in (learn,
+ * sail freely, race, ready-made scenarios), each opening the simulator's existing, working feature. Afterwards
+ * the activity button in the toolbar brings it back. The water stays live behind it.
  */
 export function ExperienceHub({
   first,
@@ -65,19 +74,30 @@ export function ExperienceHub({
   onFree,
   onRace,
   onScenarios,
+  onSailNow,
   steering,
-  onSteering,
+  level,
+  onAnswer,
+  lessonsDone,
 }: {
   first: boolean;
   steering: SteeringMode;
-  onSteering: (m: SteeringMode) => void;
+  level: InterfaceLevel;
+  onAnswer: (level: InterfaceLevel, steering: SteeringMode) => void;
   activity: Activity;
   onClose: () => void;
   onLearn: () => void;
   onFree: () => void;
   onRace: () => void;
   onScenarios: () => void;
+  onSailNow: () => void;
+  lessonsDone: number;
 }) {
+  const sailNow = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (first) sailNow.current?.focus();
+  }, [first]);
+  const answer = ANSWERS.find((a) => a.level === level && a.steering === steering);
   const ref = useRef<HTMLDivElement>(null);
   useModal(ref, onClose);
   return (
@@ -99,24 +119,31 @@ export function ExperienceHub({
           </p>
         ) : null}
         {first && (
-          // Decision D4: one question on the first visit sets how the steering keys work (Settings changes it later).
+          // One question on the first visit sets the steering keys (decision D4) and the interface level (U5);
+          // Settings changes either later.
           <fieldset className="hub-ask" data-testid="steering-ask">
             <legend>Have you sailed before?</legend>
-            <div className="row left">
-              <button aria-pressed={steering === 'tiller'} onClick={() => onSteering('tiller')} data-testid="steer-tiller">
-                Yes: steer with the tiller, as on the boat
-              </button>
-              <button aria-pressed={steering === 'bow'} onClick={() => onSteering('bow')} data-testid="steer-bow">
-                Not yet: the keys turn the bow
-              </button>
+            <div className="row left wrap">
+              {ANSWERS.map((a) => (
+                <button key={a.id} aria-pressed={answer?.id === a.id} onClick={() => onAnswer(a.level, a.steering)} data-testid={a.id}>
+                  {a.label}
+                </button>
+              ))}
             </div>
             <p className="fine">
               {steering === 'tiller'
                 ? 'A / ← push the tiller to port, so the bow turns to starboard, as when you helm a Squib.'
                 : 'A / ← turn the bow to port and D / → to starboard. The tiller picture in the dock shows what a real tiller would do.'}{' '}
-              You can change this in More → Graphics and sound.
+              {level === 'learn' ? 'Lessons and the teaching overlay come first.' : level === 'expert' ? 'Every instrument is shown; the coach is off.' : 'The main instruments and the race coach.'}{' '}
+              You can change both in More → Graphics and sound.
             </p>
           </fieldset>
+        )}
+        {first && (
+          <button ref={sailNow} className="primary sail-now" onClick={onSailNow} data-testid="sail-now">
+            <span className="sail-now-title">Sail now</span>
+            <span className="sail-now-text">{level === 'learn' ? 'Lesson 1, steering: in the water at once, about 3 minutes' : 'Free sailing in Start Bay, the wind as set'}</span>
+          </button>
         )}
         {!first && (
           <p className="hub-now" data-testid="hub-now">
@@ -130,8 +157,7 @@ export function ExperienceHub({
             id="learn"
             title="Learn to sail"
             icon={<IconLearn />}
-            focus={first}
-            text="An interactive lesson: steer, sail across the wind, trim, tack, gybe and stop, each step checked as you sail. About five minutes."
+            text={`Six short lessons, each checked as you sail: steering, the wind, trim, tacking and gybing, the start, the stream. ${lessonsDone ? `${lessonsDone} of 6 done.` : 'About 3–5 minutes each.'}`}
             onClick={onLearn}
           />
           <Door id="free" title="Free sailing" icon={<IconSail />} focus={!first} text={freeText(activity)} onClick={onFree} />
@@ -139,7 +165,7 @@ export function ExperienceHub({
             id="race"
             title="Race against AI"
             icon={<IconRace />}
-            text="Up to 20 AI Squibs in Start Bay or on the river: choose the fleet, its level, the course, the start sequence and the conditions."
+            text="Today’s challenge, or up to 20 AI Squibs on a five-minute short course, the river, an RDYC course or your own: the fleet, the start and the conditions."
             onClick={onRace}
           />
           <Door
