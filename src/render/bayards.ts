@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { stoneTex } from './rdyc';
 
 /**
@@ -49,21 +50,21 @@ export function buildBayardsCoveFort(): THREE.Group {
   const turf = new THREE.MeshStandardMaterial({ color: 0x5c6e3a, roughness: 1 });
   const [ce, cn] = f.centre;
   const h = f.topM - f.footM;
-  // The wall: an open cylinder, outside and inside faces, and its wall-head.
-  const outer = new THREE.Mesh(new THREE.CylinderGeometry(f.radius, f.radius * 1.04, h, 48, 1, true), stone);
-  outer.position.set(ce, f.footM + h / 2, -cn);
+  // One mesh per material, so a few draws: the wall's outer face and wall-head; its inner face; the grass on the
+  // wall-head and the floor inside (the photographs show it green on top); the dark gunports and doorway.
+  const at = (y: number) => new THREE.Matrix4().makeTranslation(ce, y, -cn);
+  const outerGeo = new THREE.CylinderGeometry(f.radius, f.radius * 1.04, h, 48, 1, true).toNonIndexed().applyMatrix4(at(f.footM + h / 2));
+  const headGeo = new THREE.RingGeometry(f.radius - f.thickness, f.radius, 48).rotateX(-Math.PI / 2).toNonIndexed().applyMatrix4(at(f.topM));
+  const outer = new THREE.Mesh(mergeGeometries([outerGeo, headGeo]), stone);
   outer.castShadow = outer.receiveShadow = true;
-  const innerGeo = new THREE.CylinderGeometry(f.radius - f.thickness, f.radius - f.thickness, h, 40, 1, true);
-  const inner = new THREE.Mesh(innerGeo, new THREE.MeshStandardMaterial({ map: tex ?? null, color: tex ? 0x9c917f : 0x7a7264, roughness: 0.95, side: THREE.BackSide }));
-  inner.position.copy(outer.position);
-  const head = new THREE.Mesh(new THREE.RingGeometry(f.radius - f.thickness, f.radius, 48).rotateX(-Math.PI / 2), stone);
-  head.position.set(ce, f.topM, -cn);
-  // Grass on the wall-head and on the floor inside (the photographs show it green on top).
-  const tufts = new THREE.Mesh(new THREE.RingGeometry(f.radius - f.thickness + 0.2, f.radius - 0.25, 40).rotateX(-Math.PI / 2), turf);
-  tufts.position.set(ce, f.topM + 0.04, -cn);
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(f.radius - f.thickness, 32).rotateX(-Math.PI / 2), turf);
-  floor.position.set(ce, 3.2, -cn);
-  g.add(outer, inner, head, tufts, floor);
+  const inner = new THREE.Mesh(
+    new THREE.CylinderGeometry(f.radius - f.thickness, f.radius - f.thickness, h, 40, 1, true).applyMatrix4(at(f.footM + h / 2)),
+    new THREE.MeshStandardMaterial({ map: tex ?? null, color: tex ? 0x9c917f : 0x7a7264, roughness: 0.95, side: THREE.BackSide }),
+  );
+  const tuftsGeo = new THREE.RingGeometry(f.radius - f.thickness + 0.2, f.radius - 0.25, 40).rotateX(-Math.PI / 2).toNonIndexed().applyMatrix4(at(f.topM + 0.04));
+  const floorGeo = new THREE.CircleGeometry(f.radius - f.thickness, 32).rotateX(-Math.PI / 2).toNonIndexed().applyMatrix4(at(3.2));
+  const grass = new THREE.Mesh(mergeGeometries([tuftsGeo, floorGeo]), turf);
+  g.add(outer, inner, grass);
   // The gunports: round-headed openings, dark inside, round the river side at the quay's level.
   const portW = 0.95;
   const portH = f.portHeadM - f.portSillM;
@@ -73,22 +74,22 @@ export function buildBayardsCoveFort(): THREE.Group {
   shape.lineTo(portW / 2, portH - portW / 2);
   shape.absarc(0, portH - portW / 2, portW / 2, 0, Math.PI, false);
   shape.lineTo(-portW / 2, 0);
-  const portGeo = new THREE.ShapeGeometry(shape, 8);
+  const UP = new THREE.Vector3(0, 1, 0);
+  const one = new THREE.Vector3(1, 1, 1);
+  const openings: THREE.BufferGeometry[] = [];
   for (const b of fortPortBearings()) {
-    const port = new THREE.Mesh(portGeo, dark);
     // On the outer face, facing out along the bearing (three.js: e = x, n = -z).
     const ox = Math.sin(b);
     const on = Math.cos(b);
-    port.position.set(ce + ox * (f.radius + 0.03), f.portSillM, -(cn + on * (f.radius + 0.03)));
-    port.rotation.y = Math.atan2(ox, -on);
-    port.name = 'bayards-gunport';
-    g.add(port);
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(ce + ox * (f.radius + 0.03), f.portSillM, -(cn + on * (f.radius + 0.03))), new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(ox, -on)), one);
+    openings.push(new THREE.ShapeGeometry(shape, 8).toNonIndexed().applyMatrix4(m));
   }
   // The doorway on the landward (west) side, from the quay.
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.3), dark);
-  door.position.set(ce - f.radius - 0.03, 3.2 + 1.15, -cn);
-  door.rotation.y = -Math.PI / 2;
-  g.add(door);
+  const doorM = new THREE.Matrix4().compose(new THREE.Vector3(ce - f.radius - 0.03, 3.2 + 1.15, -cn), new THREE.Quaternion().setFromAxisAngle(UP, -Math.PI / 2), one);
+  openings.push(new THREE.PlaneGeometry(1.3, 2.3).toNonIndexed().applyMatrix4(doorM));
+  const ports = new THREE.Mesh(mergeGeometries(openings), dark);
+  ports.name = 'bayards-gunports';
+  g.add(ports);
   return g;
 }
 

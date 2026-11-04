@@ -1019,24 +1019,28 @@ export function buildRdycPines(groundAt: (e: number, n: number) => number): THRE
   g.name = 'rdyc-pines';
   const bark = new THREE.MeshStandardMaterial({ color: 0x8a5a3c, roughness: 0.9 });
   const needles = new THREE.MeshStandardMaterial({ color: 0x2c4228, roughness: 0.95 });
+  // One mesh for the trunks and one for the crowns (two draws, not two dozen).
+  const trunks: THREE.BufferGeometry[] = [];
+  const crowns: THREE.BufferGeometry[] = [];
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
   for (const [i, p] of RDYC_PINES.entries()) {
     const y0 = groundAt(p.e, p.n) - 0.3;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.38, p.h * 0.82, 8), bark);
-    trunk.position.set(p.e, y0 + p.h * 0.41, -p.n);
-    trunk.rotation.z = 0.05 * Math.sin(i * 2.1);
-    trunk.castShadow = true;
-    g.add(trunk);
+    q.setFromEuler(new THREE.Euler(0, 0, 0.05 * Math.sin(i * 2.1)));
+    trunks.push(new THREE.CylinderGeometry(0.22, 0.38, p.h * 0.82, 8).applyMatrix4(m.compose(new THREE.Vector3(p.e, y0 + p.h * 0.41, -p.n), q, new THREE.Vector3(1, 1, 1))));
     // The crown: a few flattened clumps, wider than tall, at the top.
     for (let k = 0; k < 5; k++) {
       const a = (k / 5) * Math.PI * 2 + i;
       const r = k === 0 ? 0 : 2.2 + 0.6 * Math.sin(i + k);
-      const clump = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 7), needles);
       const w = k === 0 ? 3.6 : 2.4;
-      clump.scale.set(w, w * 0.45, w);
-      clump.position.set(p.e + Math.cos(a) * r, y0 + p.h * (k === 0 ? 0.92 : 0.84 + 0.04 * Math.cos(k)), -(p.n + Math.sin(a) * r));
-      clump.castShadow = true;
-      g.add(clump);
+      const at = new THREE.Vector3(p.e + Math.cos(a) * r, y0 + p.h * (k === 0 ? 0.92 : 0.84 + 0.04 * Math.cos(k)), -(p.n + Math.sin(a) * r));
+      crowns.push(new THREE.SphereGeometry(1, 10, 7).applyMatrix4(m.compose(at, new THREE.Quaternion(), new THREE.Vector3(w, w * 0.45, w))));
     }
+  }
+  for (const [geos, mat] of [[trunks, bark], [crowns, needles]] as const) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos as THREE.BufferGeometry[]), mat);
+    mesh.castShadow = true;
+    g.add(mesh);
   }
   return g;
 }
