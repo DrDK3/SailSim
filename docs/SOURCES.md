@@ -136,6 +136,16 @@ No photograph of either vessel could be viewed (the image and operator hosts are
 | P3 | The owner's photograph of MV Cardiff Castle under way, and two screenshots of the app showing the faults (supplied in the conversation, 29 Oct 2026) | n/a | Oct 2026 | Direct | Her livery and layout (`cruiserModel` in src/render/traffic.ts): a dark navy hull with a white crest on the bow and a white band at the gunwale; a long main saloon with large windows; the upper deck behind a solid white bulwark, lined with passengers; a raised wheelhouse forward; a tall white mast with a radar and flags; no funnel to be seen. The photograph is small: sizes and the crest's shape are estimates (E) |
 | N1 | Wikipedia, "HMS Cromer (M103)" and "Britannia Royal Naval College" (via search excerpts) | https://en.wikipedia.org/wiki/HMS_Cromer_(M103) ; https://en.wikipedia.org/wiki/Britannia_Royal_Naval_College | n.d. | Excerpt (en.wikipedia.org blocked) | The Hindostan, the college's static training ship moored off Sandquay, is the former Sandown-class minehunter HMS Cromer (M103), 52.5 m by 10.5 m, renamed for the role. OSM maps her as a building; she is drawn as a minehunter on OSM's outline (src/render/traffic.ts `minehunterModel`). Her appearance follows the class in outline only: no photograph or drawing of her was viewed (E) |
 
+## Documents supplied by the owner (3 Nov 2026)
+
+Read in full; not stored in the repository (the publishers' copyright). What each says, rule by rule, is in [CLUB_DOCUMENTS.md](CLUB_DOCUMENTS.md).
+
+| # | Source | Where | Date | Access | Used for |
+|---|---|---|---|---|---|
+| R13 | Royal Dart Yacht Club, *Sailing Programme 2026* (programme, NoR, SIs, Course Appendix 2026) | PDF from the owner (club file `64c2dc_9343f52e07974ba68e6885e6291f1fc5.pdf`) | 2026 | **Read in full** | Squibs as Class 3 and their start order; RRS 26 five-minute starts with VHF signals; lines (BP, CB, Club Line); **mark positions (WGS84)**; courses A–F, R, CT, WT, Z; restricted areas; time limits; post-race penalty; scoring |
+| C16 | RYA / NSOA, *National Squib Class Rules 2025* | PDF from the owner | 2 Jan 2025 | **Read in full** | Minimum weight 680 kg; crew of at least 2; correctors; sails carried; standing rigging fixed while racing; backstay, kicker, Cunningham and barber haulers permitted; mast, boom, pole, sail dimensions; flotation |
+| H12 | Dart Harbour and Navigation Authority, *Dart Harbour guide* | PDF from the owner | 2019 | **Read in full** | Entrance stream rates; offshore stream timing (NE HW−2 to HW+4, SW LW−2 to LW+4); buoy lights; ferries restricted in their ability to manoeuvre; 6-knot limit; main stream buoys MS1–MS5; Admiralty Chart 2253 reference |
+
 ## River race review (1 Nov 2026)
 
 | # | Source | URL | Date | Access | Used for |

@@ -54,7 +54,7 @@ function describe(e: RaceEvent): { text: string; tone: 'good' | 'warn' | 'bad' |
   }
 }
 
-export function RacePanel({ race, ctl }: { race: RaceUi; ctl: SimController }) {
+export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimController; caption?: string }) {
   const st = STATUS[race.courseStatus];
   const start = race.startTime;
   const signalTime = race.events.find((e) => e.type === 'signal' && e.name === 'start')?.t;
@@ -74,6 +74,14 @@ export function RacePanel({ race, ctl }: { race: RaceUi; ctl: SimController }) {
           <span className="race-pos" data-testid="position">{ordinal(race.position)} of {race.fleetSize}</span>
         )}
       </div>
+      {/* The horn in words (GR-6): every sound signal has a caption while it sounds. */}
+      <div className="sound-caption" role="status" aria-live="polite" data-testid="sound-caption">
+        {caption && (
+          <>
+            <span aria-hidden="true">🔊</span> {caption}
+          </>
+        )}
+      </div>
       {race.disqualified && <div className="race-alert bad" role="alert">{race.disqualified}</div>}
       {race.penaltyOwed > 0 && (
         <div className="race-alert warn" role="alert" data-testid="penalty">
@@ -89,7 +97,22 @@ export function RacePanel({ race, ctl }: { race: RaceUi; ctl: SimController }) {
               {race.nextSignal && race.nextSignal !== 'start' && <div className="fine-inline">next: {race.nextSignal} signal</div>}
             </>
           ) : race.ocs ? (
-            <div className="race-alert bad" role="alert">OCS: return completely to the pre-start side, then start</div>
+            <div className="race-alert bad" role="alert" data-testid="ocs-guide">
+              <strong>Over the line at the start (OCS).</strong> Sail back until your hull is completely on the pre-start side of the line, round
+              either end, then start.
+              {race.ocsGuide && (
+                <span className="ocs-dir">
+                  <span className="ocs-arrow" aria-hidden="true" style={{ transform: `rotate(${Math.round(race.ocsGuide.relDeg)}deg)` }}>↑</span>
+                  Nearer end: {race.ocsGuide.end}, {Math.round(race.ocsGuide.distanceM)} m, {race.ocsGuide.direction}.
+                </span>
+              )}
+              {race.ocsGuide?.recallFlagDown && (
+                <span className="ocs-late">
+                  Flag X is down (rule 29.1). You can still come back and start, or retire.{' '}
+                  <button className="link" onClick={() => ctl.retire()}>Retire</button>
+                </span>
+              )}
+            </div>
           ) : (
             <div className="race-alert warn">Start signal made {clock(-race.toStart)} ago: cross the line to start</div>
           )}

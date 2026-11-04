@@ -98,7 +98,8 @@ test('leaving a race that has started asks first: keep racing loses nothing; lea
   await page.keyboard.press('Escape');
   await expect(ask).toBeHidden();
   await expect(page.getByTestId('race-panel')).toBeVisible();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  // Escape closes only the question, the top layer; the library stays open behind it (review UX-2).
+  await expect(lib).toBeVisible();
   await lib.getByRole('button', { name: 'Load Fog in the harbour' }).click();
   await ask.getByRole('button', { name: 'Leave the race' }).click();
   await expect(lib.getByTestId('library-message')).toContainText('Started "Fog in the harbour"');

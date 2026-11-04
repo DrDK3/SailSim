@@ -5,7 +5,9 @@
  */
 import { createRng } from '../sim/math/rng';
 import type { AiLevel } from '../sim/ai/skipper';
-import type { ConditionsSettings } from '../sim/env/conditions';
+import { buildConditions, type ConditionsSettings } from '../sim/env/conditions';
+import { clubMarkLocal } from '../sim/course/clubMarks';
+import { builtInCourses, type LibraryEntry } from './courseLibrary';
 import type { SkyPreset } from '../sim/env/sky';
 import type { PracticeKind } from '../sim/course/practice';
 import type { AppScenario, DataSource } from './controller';
@@ -13,7 +15,8 @@ import { RIVER_STREAM, liveNowConditions } from './liveNow';
 
 export type QuickConditions = 'random' | 'live' | 'as-set';
 export type QuickWind = 'any' | 'light' | 'medium' | 'strong';
-export type QuickVenue = 'start-bay' | 'river';
+/** Start Bay (a practice course), the river (the Range sausage), or Start Bay on an RDYC club course for the wind. */
+export type QuickVenue = 'start-bay' | 'river' | 'rdyc';
 
 export interface QuickRaceOptions {
   /** AI boats to race against (0 = sail the course alone). */
@@ -135,18 +138,42 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
     summary = r.summary;
   }
   const river = o.venue === 'river';
+  // An RDYC course: the one set for the wind nearest today's at the entrance (as the race officer chooses from
+  // the course appendix), sailed from the committee boat placed for that wind.
+  let club: LibraryEntry | undefined;
+  if (o.venue === 'rdyc') {
+    const at = clubMarkLocal('H') ?? { n: -1900, e: 870 };
+    const w = buildConditions(conditions).env.wind(0, at.n, at.e);
+    club = clubCourseForWind((Math.atan2(-w.e, -w.n) * 180) / Math.PI, Math.hypot(w.n, w.e) / 0.514444);
+  }
   const startInS = SEQUENCE_S[o.sequence] + 30;
   const scenario: AppScenario = {
     conditions,
-    startLocation: river ? 'dart-marina' : 'start-bay-practice',
+    startLocation: river ? 'dart-marina' : club ? 'start-bay' : 'start-bay-practice',
     startHeadingDeg: 0,
     startSpeedKn: 2,
-    course: river ? { source: 'library', id: 'sim-river-range' } : { source: 'practice', kind: o.course },
+    course: river ? { source: 'library', id: 'sim-river-range' } : club ? { source: 'library', id: club.id } : { source: 'practice', kind: o.course },
     race: { sequence: o.sequence, startInS },
     fleet: { aiCount: competitors, level: o.level, prepFlag: 'P' },
     boat: current.boat,
     helm: current.helm,
   };
   const who = competitors === 0 ? 'alone' : `against ${competitors} AI boat${competitors === 1 ? '' : 's'} (${o.level})`;
-  return { scenario, summary: `${river ? 'River race' : 'Start Bay race'} ${who}: ${summary}`, note };
+  const where = river ? 'River race' : club ? `${club.course.name.replace(/ \(club course\)$/, '')}, from the club's 2026 sailing instructions (awaiting a club check)` : 'Start Bay race';
+  return { scenario, summary: `${where} ${who}: ${summary}`, note };
+}
+
+/**
+ * The RDYC course for the wind, among the club courses entered from the 2026 course appendix (data/courses/
+ * club): the appendix sets courses by wind direction, Group B for the usual breeze (Classes 2 and 3) and
+ * Group C "for light winds". The nearest direction wins, a course of the other group counting 20° further off
+ * (light = under 8 kn, a simulator threshold, E). North-west, whose courses use the temporary mark T, is not
+ * entered yet.
+ */
+export function clubCourseForWind(windFromDeg: number, twsKn = 10, courses: LibraryEntry[] = builtInCourses()): LibraryEntry | undefined {
+  const club = courses.filter((c) => c.group === 'club' && c.course.designWindFromDeg !== undefined);
+  const want = twsKn < 8 ? 'c' : 'b';
+  const group = (c: LibraryEntry) => /-([a-z])\d+$/.exec(c.id)?.[1];
+  const score = (c: LibraryEntry) => Math.abs((((c.course.designWindFromDeg! - windFromDeg) % 360) + 540) % 360 - 180) + (group(c) === want ? 0 : 20);
+  return club.sort((a, b) => score(a) - score(b) || a.id.localeCompare(b.id))[0];
 }

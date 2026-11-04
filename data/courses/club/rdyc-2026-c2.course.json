@@ -1,0 +1,92 @@
+{
+  "schema": "squib-course/1",
+  "id": "rdyc-2026-c2",
+  "name": "RDYC C2: wind south (club course)",
+  "description": "Start at H 2s 1s [Hs] 2s finish at H. 4.4 NM; shortened course 2.6 NM, finishing at Homestone (H). Course Group C: short inshore courses with a committee boat, for light winds, used for all classes. Shorten course and lap times are not simulated.",
+  "status": "pending-check",
+  "designWindFromDeg": 180,
+  "provenance": {
+    "kind": "club-document",
+    "document": "Royal Dart Yacht Club, Sailing Programme 2026: Sailing Instructions 2026 and Course Appendix 2026",
+    "reference": "Course Appendix 2026: Courses in Start Bay & River Dart, wind south, course C2 (page 24); marks, section 7 (page 21); start and finish lines, section 3 (page 20)",
+    "enteredBy": "Claude (AI assistant), from the PDF the owner supplied on 3 Nov 2026",
+    "enteredOn": "2026-11-03",
+    "notes": "Mark positions are the club's approximate positions. The committee boat's position is not in the document: the simulator places her (see the CB mark). Distance computed from the mark positions agrees with the stated distance within 0.15 NM. Awaiting a check by a named RDYC member against the document."
+  },
+  "marks": [
+    {
+      "id": "CB",
+      "name": "Committee boat",
+      "kind": "committee-boat",
+      "placement": {
+        "odm": "H"
+      },
+      "source": "Course Appendix 3: the line runs between the committee boat's orange-flag staff and the course side of the ODM. Where she anchors is the race officer's choice on the day: the simulator places her square to the wind at the ODM, the line long enough for the fleet, in the deeper water (E)."
+    },
+    {
+      "id": "H",
+      "name": "Homestone (H)",
+      "kind": "nav-buoy",
+      "position": {
+        "lat": 50.326833,
+        "lon": -3.559167
+      },
+      "source": "Course Appendix 7: port lateral buoy, approximate position 50°19.61'N 3°33.55'W (WGS84)"
+    },
+    {
+      "id": "2",
+      "name": "RDYC 2 (2)",
+      "kind": "nav-buoy",
+      "position": {
+        "lat": 50.311667,
+        "lon": -3.556667
+      },
+      "source": "Course Appendix 7: club racing mark, approximate position 50°18.7'N 3°33.4'W (WGS84)"
+    },
+    {
+      "id": "1",
+      "name": "RDYC 1 (1)",
+      "kind": "nav-buoy",
+      "position": {
+        "lat": 50.3185,
+        "lon": -3.574833
+      },
+      "source": "Course Appendix 7: club racing mark, approximate position 50°19.11'N 3°34.49'W (WGS84)"
+    }
+  ],
+  "start": {
+    "ends": [
+      "CB",
+      "H"
+    ]
+  },
+  "legs": [
+    {
+      "type": "mark",
+      "mark": "2",
+      "rounding": "starboard"
+    },
+    {
+      "type": "mark",
+      "mark": "1",
+      "rounding": "starboard"
+    },
+    {
+      "type": "mark",
+      "mark": "H",
+      "rounding": "starboard"
+    },
+    {
+      "type": "mark",
+      "mark": "2",
+      "rounding": "starboard"
+    }
+  ],
+  "laps": 1,
+  "finish": {
+    "ends": [
+      "CB",
+      "H"
+    ]
+  }
+}

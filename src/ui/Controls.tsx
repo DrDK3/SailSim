@@ -2,6 +2,36 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { sailAdvice, sailState } from '../app/sailStatus';
+import { helmAction, type SteeringMode } from '../app/steering';
+
+/**
+ * The tiller from above (review UX-8): the after end of the cockpit, the rudder blade and the tiller, at the
+ * simulation's rudder angle. The bow turns the way the blade's trailing edge points, so the tiller always lies
+ * the other way: push the tiller to port and the bow goes to starboard. Drawn in both steering modes.
+ */
+export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMode }) {
+  const d = (Math.abs(rudder) * 180) / Math.PI;
+  const centred = d < 0.5;
+  const bow = rudder > 0 ? 'starboard' : 'port';
+  const tiller = rudder > 0 ? 'port' : 'starboard';
+  // The picture exaggerates the angle a little so that small helm movements show.
+  const a = Math.max(-1.2, Math.min(1.2, rudder * 1.5));
+  const stock = { x: 0, y: 30 };
+  const tip = { x: -Math.sin(a) * 25, y: stock.y - Math.cos(a) * 25 };
+  const blade = { x: Math.sin(a) * 9, y: stock.y + Math.cos(a) * 9 };
+  const text = centred ? 'Tiller centred' : `Tiller ${Math.round(d)}° to ${tiller} · bow turning to ${bow}`;
+  return (
+    <div className="rudder-bar tiller-view" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} (More → Graphics and sound to change)`} data-testid="tiller">
+      <svg viewBox="-34 -2 68 44" width="58" height="38" aria-hidden="true" className="tiller-svg">
+        <path className="tv-hull" d="M -30 -2 L -27 28 Q -24 36 -16 37 L 16 37 Q 24 36 27 28 L 30 -2" />
+        <line className="tv-blade" x1={stock.x} y1={stock.y} x2={blade.x} y2={blade.y} />
+        <line className="tv-tiller" x1={stock.x} y1={stock.y} x2={tip.x} y2={tip.y} />
+        <circle className="tv-stock" cx={stock.x} cy={stock.y} r="2.2" />
+      </svg>
+      <span>{text}</span>
+    </div>
+  );
+}
 
 function Hold({ ctl, action, children, label }: { ctl: SimController; action: string; children: ReactNode; label: string }) {
   const on = (e: ReactPointerEvent) => {
@@ -64,7 +94,7 @@ function SailRow({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'ma
 
 export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState; onHide?: () => void }) {
   const s = ui.snapshot;
-  const rudderPct = (s.rudder / ctl.sim.params.rudder.maxAngle) * 50 + 50;
+  const tillerMode = ui.steering === 'tiller';
   return (
     <section className="panel controls" aria-label="Sailing controls">
       <div className="controls-sails">
@@ -73,12 +103,9 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
       </div>
       <div className="controls-boat">
         <div className="helm-row" data-tutorial="helm">
-          <Hold ctl={ctl} action="helmLeft" label="Steer to port (A / ←)">◀ <Key k="A" /></Hold>
-          <div className="rudder-bar" title="Rudder angle">
-            <div className="rudder-mark" style={{ left: `${rudderPct}%` }} />
-            <span>Helm {deg(Math.abs(s.rudder))}° {s.rudder > 0.01 ? 'to stbd' : s.rudder < -0.01 ? 'to port' : ''}</span>
-          </div>
-          <Hold ctl={ctl} action="helmRight" label="Steer to starboard (D / →)"><Key k="D" /> ▶</Hold>
+          <Hold ctl={ctl} action={helmAction('left', ui.steering)} label={tillerMode ? 'Tiller to port, bow to starboard (A / ←)' : 'Steer to port (A / ←)'}>◀ <Key k="A" /></Hold>
+          <TillerView rudder={s.rudder} mode={ui.steering} />
+          <Hold ctl={ctl} action={helmAction('right', ui.steering)} label={tillerMode ? 'Tiller to starboard, bow to port (D / →)' : 'Steer to starboard (D / →)'}><Key k="D" /> ▶</Hold>
           <button onClick={() => ctl.centreHelm()} title="Centre the helm (Space)">Centre</button>
         </div>
         <div className="misc-row">

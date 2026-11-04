@@ -1,3 +1,4 @@
+import { withClubMarks, type FeatureMark } from '../sim/course/clubMarks';
 import { DartGeo, type DartManifest } from '../sim/geo/dart';
 import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
 import type { RoadsData } from '../render/population';
@@ -41,7 +42,7 @@ export interface DartFeatures {
     units: number;
     note: string;
   }[];
-  marks: { name: string; kind: string; light: string; e: number; n: number; tag: string; source: string }[];
+  marks: FeatureMark[];
   marksNotPlaced: { name: string; kind: string; light: string; reason: string }[];
 }
 
@@ -164,7 +165,8 @@ export async function loadDartData(base = BASE): Promise<DartData> {
       out.geo = new DartGeo(m, elev.value, curBuf);
     }
   }
-  if (feat.status === 'fulfilled') out.features = feat.value;
+  // The club's racing marks and the buoys its courses use (RDYC Sailing Programme 2026), with the geodata's marks.
+  if (feat.status === 'fulfilled') out.features = withClubMarks(feat.value, out.geo ? (n, e) => out.geo!.inDomain(n, e) : undefined);
   else issue('features.json', feat.reason, 'No buildings, piers, moorings, ferries, marks or landmark labels.');
   if (drape.status === 'fulfilled') out.drape = drape.value;
   else issue(m.drape.file, drape.reason, 'Terrain drawn in plain colours (no satellite colour).');

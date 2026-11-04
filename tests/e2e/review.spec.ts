@@ -46,3 +46,81 @@ test('race restarts give their GPU memory back', async ({ page }) => {
   // Before the fix each restart left about 55 geometries behind (over 100 across these two); now the count holds.
   expect(counts[5]! - counts[3]!).toBeLessThan(20);
 });
+
+/**
+ * The club documents round (docs/CLUB_DOCUMENTS.md): a quick race on an RDYC course from the 2026 sailing
+ * instructions. The course is chosen for the wind, labelled as awaiting a club check, and the committee boat
+ * is placed for the wind in the water.
+ */
+test('quick race on an RDYC club course: labelled pending a club check, committee boat in the water', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  await page.goto('/?nowelcome');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status === 'loaded', null, { timeout: 60_000 * CI_SLOW });
+  const r = await page.evaluate(() => window.__squib!.controller.startQuickRace({ competitors: 4, level: 'good', venue: 'rdyc', course: 'windward-leeward', conditions: 'random', wind: 'any', seed: 5, sequence: 'one-minute' }));
+  expect(r?.summary).toMatch(/2026 sailing instructions \(awaiting a club check\)/);
+  const info = await page.evaluate(() => {
+    const c = window.__squib!.controller as unknown as { race?: { course: { id: string; status: string; marks: { id: string; position?: { n: number; e: number } }[] } }; dartData?: { geo?: { bedElevation(n: number, e: number): number } } };
+    const cb = c.race!.course.marks.find((m) => m.id === 'CB')!;
+    return { id: c.race!.course.id, status: c.race!.course.status, depth: c.dartData!.geo!.bedElevation(cb.position!.n, cb.position!.e) };
+  });
+  expect(info.id).toMatch(/^rdyc-2026-[bc]\d$/);
+  expect(info.status).toBe('pending-check');
+  expect(info.depth).toBeLessThan(-5);
+});
+
+/**
+ * Package 2 (UX-6): a boat over the line at her starting signal is told how to clear herself: sail back to the
+ * pre-start side round either end, the nearer end and which way it lies. (Guidance only: rules 28.1 and 29.1 as
+ * the simulator applies them, not an adjudication.)
+ */
+test('over the line at the start: the race panel names the nearer end and which way it lies', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  await page.goto('/?nowelcome');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 * CI_SLOW });
+  await page.evaluate(() => window.__squib!.controller.startQuickRace({ competitors: 1, level: 'good', venue: 'start-bay', course: 'windward-leeward', conditions: 'random', wind: 'any', seed: 3, sequence: 'one-minute' }));
+  await page.evaluate(() => window.__squib!.controller.togglePause());
+  const toStart = await page.evaluate(() => window.__squib!.controller.getState().race!.toStart);
+  await page.evaluate((s) => window.__squib!.advance(s), toStart - 3);
+  // Put the boat 30 m over the line, towards the first mark, three seconds before the gun.
+  await page.evaluate(() => {
+    const c = window.__squib!.controller as unknown as { race: { resolved: { start: { n: number; e: number }[]; legs: { target: { n: number; e: number } }[] } }; sim: { state: { n: number; e: number; psi: number } } };
+    const [a, b] = c.race.resolved.start as [{ n: number; e: number }, { n: number; e: number }];
+    const mid = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    let nn = -(b.e - a.e);
+    let ne = b.n - a.n;
+    const len = Math.hypot(nn, ne);
+    nn /= len;
+    ne /= len;
+    const mark = c.race.resolved.legs[0]!.target;
+    if ((mark.n - mid.n) * nn + (mark.e - mid.e) * ne < 0) {
+      nn = -nn;
+      ne = -ne;
+    }
+    c.sim.state.n = mid.n + nn * 30;
+    c.sim.state.e = mid.e + ne * 30;
+  });
+  await page.evaluate(() => window.__squib!.advance(6));
+  const guide = page.getByTestId('ocs-guide');
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText('Over the line at the start');
+  await expect(guide).toContainText(/Nearer end: (the committee boat|the pin end|.+), \d+ m, (ahead|astern|\d+° to (port|starboard))\./);
+});
+
+/** Package 2 (GR-6): the start sequence's sound signals are shown in words while they sound. */
+test('the one-minute signal and the start have captions in the race panel', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  await page.goto('/?nowelcome');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 * CI_SLOW });
+  await page.evaluate(() => window.__squib!.controller.startQuickRace({ competitors: 1, level: 'good', venue: 'start-bay', course: 'windward-leeward', conditions: 'random', wind: 'any', seed: 3, sequence: 'one-minute' }));
+  await page.evaluate(() => window.__squib!.controller.togglePause());
+  const toStart = await page.evaluate(() => window.__squib!.controller.getState().race!.toStart);
+  await page.evaluate((s) => window.__squib!.advance(s), toStart - 59);
+  await expect(page.getByTestId('sound-caption')).toHaveText(/One long sound: one-minute signal/);
+  await page.evaluate(() => window.__squib!.advance(60));
+  await expect(page.getByTestId('sound-caption')).toHaveText(/One sound: starting signal|One sound: individual recall \(flag X\)/);
+  await page.evaluate(() => window.__squib!.advance(8));
+  await expect(page.getByTestId('sound-caption')).toBeEmpty();
+});

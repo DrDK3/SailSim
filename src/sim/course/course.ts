@@ -1,4 +1,4 @@
-import type { LocalProjection } from '../geo/projection';
+import { DART_PROJECTION, type LocalProjection } from '../geo/projection';
 import { midpoint } from './geometry';
 import { COURSE_SCHEMA, type Course, type CourseLeg, type LocalPoint, type Rounding } from './types';
 
@@ -36,7 +36,12 @@ export function parseCourse(json: unknown): { course?: Course; errors: string[] 
       const p = mk.position as Record<string, unknown> | undefined;
       const ll = p && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat as number) <= 90 && Math.abs(p.lon as number) <= 180;
       const ne = p && Number.isFinite(p.n) && Number.isFinite(p.e);
-      if (!ll && !ne) errors.push(`mark ${mk.id}: position must be {lat, lon} or {n, e}`);
+      const pl = mk.placement as Record<string, unknown> | undefined;
+      if (pl !== undefined) {
+        if (mk.kind !== 'committee-boat') errors.push(`mark ${mk.id}: only a committee boat can be placed on the day`);
+        if (typeof pl?.odm !== 'string') errors.push(`mark ${mk.id}: placement needs "odm", the outer distance mark`);
+        if (pl?.lineLengthM !== undefined && !(Number(pl.lineLengthM) >= 20)) errors.push(`mark ${mk.id}: placement line length must be at least 20 m`);
+      } else if (!ll && !ne) errors.push(`mark ${mk.id}: position must be {lat, lon} or {n, e}`);
     });
   }
   const ref = (id: unknown, where: string) => {
@@ -76,7 +81,40 @@ export function parseCourse(json: unknown): { course?: Course; errors: string[] 
     else o.boundaries.forEach((b, i) => line(b, `boundaries[${i}]`));
   }
   if (o.designWindFromDeg !== undefined && !Number.isFinite(o.designWindFromDeg)) errors.push('"designWindFromDeg" must be a number');
-  return errors.length ? { errors } : { course: o as unknown as Course, errors };
+  if (Array.isArray(marks)) {
+    for (const m of marks as Record<string, unknown>[]) {
+      const pl = m?.placement as { odm?: unknown } | undefined;
+      if (pl && typeof pl.odm === 'string' && !ids.has(pl.odm)) errors.push(`mark ${String(m.id)}: placement ODM "${pl.odm}" is not a mark of the course`);
+      if (pl && pl.odm === m.id) errors.push(`mark ${String(m.id)}: a committee boat cannot be her own ODM`);
+    }
+  }
+  if (errors.length) return { errors };
+  // A committee boat placed on the day lies, until a race places her, as she would for the design wind.
+  const course = o as unknown as Course;
+  // (Only when she has no position yet: a race's own placement, re-parsed by the validator, is kept.)
+  return { course: course.marks.some((m) => m.placement && !m.position) ? placeCommitteeBoats(course, { windFromDeg: course.designWindFromDeg ?? 0, onlyMissing: true }) : course, errors };
+}
+
+/**
+ * Place the committee boats a club course leaves to the race officer (`placement`): on a line square to the
+ * wind through the outer distance mark, `lineLengthM` away (the placement's, else `o.lineLengthM`, else
+ * 150 m), on whichever side has the deeper water (`depthAt`, m), else the side to the right looking downwind.
+ * THE SIMULATOR'S CHOICE (E): the sailing instructions leave where the boat anchors to the race officer.
+ */
+export function placeCommitteeBoats(course: Course, o: { windFromDeg: number; lineLengthM?: number; depthAt?: (n: number, e: number) => number; onlyMissing?: boolean }, proj: LocalProjection = DART_PROJECTION): Course {
+  if (!course.marks.some((m) => m.placement)) return course;
+  const marks = course.marks.map((m) => {
+    if (!m.placement || (o.onlyMissing && m.position)) return m;
+    const odm = course.marks.find((x) => x.id === m.placement!.odm);
+    if (!odm || odm.placement) return m;
+    const p = markPosition(odm.position, proj);
+    const L = m.placement.lineLengthM ?? o.lineLengthM ?? 150;
+    const w = (o.windFromDeg * Math.PI) / 180;
+    const cands = [w - Math.PI / 2, w + Math.PI / 2].map((a) => ({ n: p.n + L * Math.cos(a), e: p.e + L * Math.sin(a) }));
+    const best = o.depthAt ? (o.depthAt(cands[1]!.n, cands[1]!.e) > o.depthAt(cands[0]!.n, cands[0]!.e) ? cands[1]! : cands[0]!) : cands[0]!;
+    return { ...m, position: { n: Math.round(best.n * 10) / 10, e: Math.round(best.e * 10) / 10 } };
+  });
+  return { ...course, marks };
 }
 
 /** One leg of the expanded course (all laps), with the geometry the judge needs. */

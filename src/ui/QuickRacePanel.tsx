@@ -71,6 +71,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         <select value={o.venue} onChange={(e) => set({ venue: e.target.value as QuickRaceOptions['venue'] })}>
           <option value="start-bay">Start Bay (open water, any wind)</option>
           <option value="river" disabled={!river}>The river: the Range, off Dart Marina{river ? '' : ' (needs the River Dart data)'}</option>
+          <option value="rdyc" disabled={!river}>Start Bay: an RDYC club course for the wind{river ? '' : ' (needs the River Dart data)'}</option>
         </select>
       </label>
       {o.venue === 'start-bay' && (
@@ -124,6 +125,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
           : o.conditions === 'live'
             ? `Live: the latest Met Office model wind for the area${liveTide ? ' and the Dartmouth tide' : ''}, from the site’s scheduled job.${!liveTide && o.venue === 'river' && o.stream ? ' No live tide is published yet, so the river has no tidal stream.' : ''}`
             : 'Uses the wind, tide and sky set in the Scenario panel.'}{' '}
+{o.venue === 'rdyc' && ' RDYC courses were entered from the club\u2019s 2026 sailing instructions and await a check by a club member; the club gives approximate mark positions, and where the committee boat anchors is the simulator\u2019s choice.'}{' '}
         AI boats and the judging are simplified (not an authoritative rules adjudication).
       </p>
       {message && <p className="fine" role="status">{message}</p>}

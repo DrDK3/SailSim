@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { Activity } from './activity';
 import { IconLearn, IconRace, IconSail, IconScenarios } from './icons';
+import { useModal } from './useModal';
+import type { SteeringMode } from '../app/steering';
 
 const KEY = 'squib.welcomed.v1';
 
@@ -63,8 +65,12 @@ export function ExperienceHub({
   onFree,
   onRace,
   onScenarios,
+  steering,
+  onSteering,
 }: {
   first: boolean;
+  steering: SteeringMode;
+  onSteering: (m: SteeringMode) => void;
   activity: Activity;
   onClose: () => void;
   onLearn: () => void;
@@ -72,8 +78,10 @@ export function ExperienceHub({
   onRace: () => void;
   onScenarios: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useModal(ref, onClose);
   return (
-    <div className="overlay hub-overlay" role="dialog" aria-modal="true" aria-labelledby="welcome-title" onKeyDown={(e) => e.key === 'Escape' && onClose()} onClick={onClose}>
+    <div ref={ref} className="overlay hub-overlay" role="dialog" aria-modal="true" aria-labelledby="welcome-title" onClick={onClose}>
       <section className="panel hub" onClick={(e) => e.stopPropagation()}>
         <div className="hub-head">
           <div>
@@ -89,7 +97,28 @@ export function ExperienceHub({
             Sail a National Squib, the 5.8 m keelboat raced at the Royal Dart Yacht Club, on the River Dart and in Start Bay. The boat moves by a
             physics model whose coefficients are still estimates, and the wind can come from the Met Office forecast.
           </p>
-        ) : (
+        ) : null}
+        {first && (
+          // Decision D4: one question on the first visit sets how the steering keys work (Settings changes it later).
+          <fieldset className="hub-ask" data-testid="steering-ask">
+            <legend>Have you sailed before?</legend>
+            <div className="row left">
+              <button aria-pressed={steering === 'tiller'} onClick={() => onSteering('tiller')} data-testid="steer-tiller">
+                Yes: steer with the tiller, as on the boat
+              </button>
+              <button aria-pressed={steering === 'bow'} onClick={() => onSteering('bow')} data-testid="steer-bow">
+                Not yet: the keys turn the bow
+              </button>
+            </div>
+            <p className="fine">
+              {steering === 'tiller'
+                ? 'A / ← push the tiller to port, so the bow turns to starboard, as when you helm a Squib.'
+                : 'A / ← turn the bow to port and D / → to starboard. The tiller picture in the dock shows what a real tiller would do.'}{' '}
+              You can change this in More → Graphics and sound.
+            </p>
+          </fieldset>
+        )}
+        {!first && (
           <p className="hub-now" data-testid="hub-now">
             Now: <strong>{activity.label}</strong>
             {activity.detail && <span className="fine-inline"> · {activity.detail}</span>}

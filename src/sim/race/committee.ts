@@ -5,8 +5,11 @@ import { cross } from '../course/geometry';
 /**
  * Race committee: the starting system, recalls, the finishing window and results for ONE race of one class.
  *
- * Rules followed (RRS 2025–2028 as checked against secondary copies, see docs/RACING.md and SOURCES RR5–RR9;
- * the club's sailing instructions are NOT available, so every SI-dependent choice is a labelled default):
+ * Rules followed (RRS 2025–2028 as checked against secondary copies, see docs/RACING.md and SOURCES RR5–RR9).
+ * The RDYC Sailing Instructions 2026 (SOURCES R13, docs/CLUB_DOCUMENTS.md) start races with RRS 26 and the warning
+ * signal 5 minutes before the start (SI 9.1); starting signals may also be made on VHF (SI 3.4), and when no
+ * committee boat is out a competitor broadcasts the times on VHF with no visual or sound signals (SI 9.3, not
+ * modelled). Choices the SIs leave open remain labelled defaults (E):
  *  - Rule 26: warning 5 min (class flag), preparatory 4 min (P, U or black flag), one-minute (preparatory
  *    flag removed), start (class flag removed). Times are from the visual signals.
  *  - Rule 29.1: flag X when a boat is on the course side at her starting signal, until all such boats are

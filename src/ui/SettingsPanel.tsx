@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import type { SimController, UiState } from '../app/controller';
+import { useModal } from './useModal';
 import { PRESETS, matchPreset, presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { LIGHTING_PRESETS } from '../app/lighting';
 import type { AudioSettings } from '../render/audio';
@@ -24,8 +26,10 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
   const setA = (change: Partial<AudioSettings>) => ctl.setAudio({ ...a, ...change });
   const needsReload = !!g && ((!!ui.sceneryBuilt && g.scenery !== ui.sceneryBuilt) || (!!ui.shadowsBuilt && g.shadows !== ui.shadowsBuilt));
   const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const ref = useRef<HTMLDivElement>(null);
+  useModal(ref, onClose);
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Graphics and sound" onClick={onClose}>
+    <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Graphics and sound" onClick={onClose}>
       <section className="panel settings" onClick={(e) => e.stopPropagation()} data-testid="settings-panel">
         <div className="dash-head">
           <h3>Graphics and sound</h3>
@@ -113,6 +117,15 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             </div>
           </>
         )}
+        <h4>Steering</h4>
+        <div className="row left" role="radiogroup" aria-label="Steering keys">
+          <label className="check">
+            <input type="radio" name="steering" checked={ui.steering === 'bow'} onChange={() => ctl.setSteering('bow')} /> Turn the bow (A / ← bow to port)
+          </label>
+          <label className="check">
+            <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
+          </label>
+        </div>
         <h4>Sound</h4>
         <div className="settings-grid">
           <label className="check">

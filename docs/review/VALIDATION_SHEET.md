@@ -168,8 +168,8 @@ Documents please.
 
 | # | Question | Answer / document |
 |---|---|---|
-| C5.1 | The 2026 sailing instructions and course cards for the Wednesday river series and the Saturday Start Bay races | |
-| C5.2 | Mark positions (laid and fixed), and how the "gate" mentioned in the 2026 programme works | |
+| C5.1 | ~~The 2026 sailing instructions and course cards~~ Received (Sailing Programme 2026). Are there amendments on the online notice board since printing? | |
+| C5.2 | Received for the fixed marks. Still needed: the two white flagstaffs at Blackstone Point (the BP line), the Club Line's outermost downriver pontoon pile, and where T, T1, T2 and MS1 are usually laid. Is "Gate H" set with the committee boat where she started? | |
 | C5.3 | Starting: line between which marks, the sequence (5-4-1-0?), sound signals, recalls | |
 | C5.4 | The committee boat: where SAMARITAN lies on the line, how she is anchored, which end is "the boat end" | |
 | C5.5 | Any club rules about ferries, the chain ferries and commercial traffic during races | |

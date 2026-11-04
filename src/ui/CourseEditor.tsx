@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
+import { useModal } from './useModal';
 import { allCourses, deleteUserCourse, saveUserCourse, PRACTICE_KINDS } from '../app/courseLibrary';
 import { markPosition, parseCourse } from '../sim/course/course';
 import { practiceCourse } from '../sim/course/practice';
@@ -167,8 +168,10 @@ export function CourseEditor({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const prov = course.provenance;
   const setProv = (patch: Partial<Course['provenance']>) => update((c) => ({ ...c, provenance: { ...c.provenance, ...patch } }));
 
+  const dialog = useRef<HTMLDivElement>(null);
+  useModal(dialog, onClose);
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Course editor">
+    <div ref={dialog} className="overlay" role="dialog" aria-modal="true" aria-label="Course editor">
       <section className="panel editor" onClick={(e) => e.stopPropagation()}>
         <div className="dash-head">
           <h3>Course editor</h3>

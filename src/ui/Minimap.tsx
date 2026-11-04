@@ -47,13 +47,32 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     if (f) {
       for (const mk of f.marks) {
         const [x, y] = toPx(mk.n, mk.e);
-        ctx.fillStyle = /starboard/i.test(mk.kind) ? '#2fbf5a' : '#e0403a';
+        const c = mk.colour ?? (/starboard/i.test(mk.kind) ? 'green' : 'red');
+        const shape = mk.shape ?? (/starboard/i.test(mk.kind) ? 'cone' : 'can');
+        ctx.fillStyle = c === 'green' ? '#2fbf5a' : c === 'yellow' ? '#f2c21b' : c === 'south-cardinal' ? '#d8b020' : '#e0403a';
+        ctx.strokeStyle = '#0b1a24';
+        ctx.lineWidth = 1;
+        // The shape as on a chart, not the colour alone (review U8): a can square, a cone pointed, a cardinal a
+        // diamond, a buoy of unstated shape round.
         ctx.beginPath();
-        ctx.moveTo(x, y - 5);
-        ctx.lineTo(x - 4, y + 3);
-        ctx.lineTo(x + 4, y + 3);
-        ctx.closePath();
+        if (c === 'south-cardinal') {
+          ctx.moveTo(x, y - 5);
+          ctx.lineTo(x + 4, y);
+          ctx.lineTo(x, y + 5);
+          ctx.lineTo(x - 4, y);
+          ctx.closePath();
+        } else if (shape === 'cone') {
+          ctx.moveTo(x, y - 5);
+          ctx.lineTo(x - 4, y + 3);
+          ctx.lineTo(x + 4, y + 3);
+          ctx.closePath();
+        } else if (shape === 'can') {
+          ctx.rect(x - 3.5, y - 3.5, 7, 7);
+        } else {
+          ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        }
         ctx.fill();
+        ctx.stroke();
       }
       const epoch = (ctl.sim.env.startEpochMs ?? 0) + s.t * 1000;
       for (const fs of ctl.traffic ? ctl.traffic.states(epoch) : ferryStates(f.ferries, epoch)) {

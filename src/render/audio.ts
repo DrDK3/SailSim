@@ -328,6 +328,80 @@ export class SoundScape {
     }
   }
 
+  /**
+   * The race committee's sound signals (RRS 26 and 29; review GR-6): `count` short blasts of a horn, or one long
+   * one (the one-minute signal). A short sound is about 0.7 s, a long one 2 s (the lengths are not set by the
+   * rules: E). Made in the browser like the rest; nothing is downloaded.
+   */
+  horn(count: number, long = false): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.buses || count < 1) return;
+    const len = long ? 2 : 0.7;
+    for (let i = 0; i < count; i++) {
+      const t = ctx.currentTime + 0.05 + i * (len + 0.35);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.04);
+      g.gain.setValueAtTime(0.22, t + len - 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 1400;
+      f.connect(g).connect(this.buses.effects);
+      // An air horn's reedy tone: two detuned saw waves a little apart.
+      for (const hz of [262, 266.5]) {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = hz;
+        o.connect(f);
+        o.start(t);
+        o.stop(t + len + 0.02);
+      }
+    }
+  }
+
+  /** A knock on the hull (contact with a boat, mark or pontoon): a dull thump, louder the harder. */
+  knock(severity: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.buses) return;
+    const level = 0.15 + 0.35 * Math.min(1, Math.max(0, severity));
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + 0.18);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(level, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    o.connect(g).connect(this.buses.effects);
+    o.start(t);
+    o.stop(t + 0.3);
+    this.burst(this.buses.effects, level * 0.6, 900, 0.12);
+  }
+
+  /** The keel on the bottom: a low grinding scrape of filtered noise for the length of the grounding. */
+  scrape(severity: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.buses || !this.noise) return;
+    const t = ctx.currentTime;
+    const len = 0.5 + 0.6 * Math.min(1, severity);
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(320, t);
+    f.frequency.linearRampToValueAtTime(140, t + len);
+    f.Q.value = 2.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25 + 0.25 * Math.min(1, severity), t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    s.connect(f).connect(g).connect(this.buses.effects);
+    s.start(t, Math.random() * 1.5);
+    s.stop(t + len + 0.05);
+  }
+
   /** The page was hidden or shown again: hidden, the frames stop, so the sound pauses too. */
   setHidden(hidden: boolean): void {
     if (!this.ctx) return;

@@ -26,7 +26,7 @@ All boats share one environment, stepped once per 10 ms tick, and sail with the 
 
 | Item | What the simulator does | Basis |
 |---|---|---|
-| Starting sequence | Warning 5 min: class flag, one sound. Preparatory 4 min: P, U or black flag, one sound. One minute: preparatory flag down, one long sound. Start: class flag down. Times from the visual signals. Also a 3-minute and a 1-minute practice sequence | Rule 26 (default 5-4-1-0; SIs may change it) |
+| Starting sequence | Warning 5 min: class flag, one sound. Preparatory 4 min: P, U or black flag, one sound. One minute: preparatory flag down, one long sound. Start: class flag down. Times from the visual signals. Also a 3-minute and a 1-minute practice sequence. Since review Package 2 the sounds are played (a procedural horn) and captioned in the race panel | Rule 26 (default 5-4-1-0). The RDYC SIs 2026 use rule 26 with the warning 5 min before the start (SI 9.1; docs/CLUB_DOCUMENTS.md) |
 | Individual recall | Flag X with one sound when a boat is on the course side at her starting signal. Down when every such boat has returned completely, or 4 minutes after the start, whichever is earlier. Not with U or black flag | Rule 29.1 |
 | General recall | First Substitute, two sounds. The new warning signal comes one minute after it is lowered | Rule 29.2 |
 | When to recall | The committee may recall when it cannot identify OCS boats. Here every boat is identified, so it is a **policy (E)**: recall when at least 3 boats and 30% of the fleet are OCS. Lowered 60 s after the start (E). After a recall the next start uses flag U (E; a setting) | Rule 29.2, simulation policy |

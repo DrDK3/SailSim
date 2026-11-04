@@ -9,7 +9,7 @@
 | **Practice** | Generated at the start position, relative to the wind: windward–leeward, triangle, tacking lane, gybing slalom, mark-rounding drill (`src/sim/course/practice.ts`) | `simulated` | "… (simulated)", amber "Simulated course" chip |
 | **Simulated library** | Fixed practice courses shipped with the app (`data/courses/simulated/*.course.json`). One so far: *River: the Range sausage*, a windward–leeward up and down the Range between Sandquay and Noss. Its start lies in the wide part of the Range, clear of the Sandquay pontoons, the Hindostan and Dart Marina (moved 180 m upriver in the fix round, 29 Oct 2026) | `simulated` | as above |
 | **User** | Drawn or imported in the course editor; saved in the viewer's browser only (export to keep or share) | `simulated` (or club statuses, see below) | "Mine: …" |
-| **Club (RDYC)** | Entered from official club documents (`data/courses/club/`) | `pending-check` → `verified` | **None yet**: no RDYC documents have been made available |
+| **Club (RDYC)** | Entered from official club documents (`data/courses/club/`) | `pending-check` → `verified` | **Eight** (B1, B5, B6, C1–C4, C8), entered on 3 Nov 2026 from the club's Course Appendix 2026; all pending check ([CLUB_DOCUMENTS.md](CLUB_DOCUMENTS.md)) |
 
 No course is presented as an RDYC course unless it was entered from a named club document. A course becomes `verified` only when a named person has checked it against that document on a stated date.
 
@@ -40,6 +40,8 @@ No course is presented as an RDYC course unless it was entered from a named club
 | Field | Meaning |
 |---|---|
 | `marks[].position` | `{lat, lon}` (WGS84, as in club documents) or `{n, e}`: metres north and east of the RDYC origin, in the app's Transverse Mercator frame (`GEODATA.md`) |
+| `marks[].placement` | A committee boat with no fixed position (club courses): `{ "odm": "L" }` names her outer distance mark. The simulator places her on the day: square to the wind at the ODM, the line 100 m or 2.5 boat lengths per boat if longer, on the deeper side (`placeCommitteeBoats`, E). Without a `position`, the file is given one for its `designWindFromDeg` when loaded |
+| `designWindFromDeg` | The wind the course is set for (deg, from): generated courses, and club courses chosen by wind direction |
 | `marks[].kind` | `inflatable`, `pin`, `committee-boat`, `nav-buoy`, `fixed` or `virtual` (boundary ends: drawn as small posts) |
 | `start`, `finish` | Lines between two marks. The course side of the start is the side the first mark is on. The finish is crossed from the side the last mark is on |
 | `legs` | One lap: `mark` legs (leave the mark to `port` or `starboard`) or `gate` legs (sail between the two marks from the direction of the previous mark) |

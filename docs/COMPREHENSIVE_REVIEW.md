@@ -1324,12 +1324,14 @@ The owner's answers to §11. "Recommended" means the recommendation in §11 was 
 | D11 | Rules scope | Recommended: rule 18 (mark-room), then 19–20; always "simplified, not authoritative" (Package 7) |
 | D12 | Minimum device | Recommended: a 2020 mid-range phone and an integrated-GPU laptop |
 
-**The three documents could not be read.** Their hosts (`96479e17-8f8d-45ff-8102-d5349efe7f23.filesusr.com`, `squibs.co.uk`, `content.yudu.com`) are blocked by this environment's network policy, both by direct download and by the web-fetch tool (retried once at the owner's request). A web search found no other copy of the 2026 SIs or the class rules.
+**The three documents arrived later the same day.**
 
-Nothing from them has been assumed. Package 2's start-signal sounds, Package 5's sail controls and Package 7's club courses wait for them. To unblock:
-
-- allow the three hosts in the environment's network settings (the cloud environment's Network access, under Allowed domains); or
-- commit the files to the repository, for example under `research/club-docs/`.
+- **How they came:** their hosts were blocked by this environment's network policy, so the owner uploaded them: the RDYC Sailing Programme 2026 (with the SIs and Course Appendix), the National Squib Class Rules 2025 and the Dart Harbour guide 2019.
+- **What they gave** (read in full; [CLUB_DOCUMENTS.md](CLUB_DOCUMENTS.md)):
+  - the club's marks, now on the map;
+  - eight RDYC courses, entered pending a club check, with a quick-race venue that picks the course for the wind;
+  - the class spec, now citing the class rules.
+- **What remains open:** the facts that need positions the documents do not give (the Blackstone Point line, the Club Line, the temporary marks). They are listed in CLUB_DOCUMENTS.md §1.
 
 ## 13. Package 1: what changed
 
@@ -1372,3 +1374,23 @@ On the river the real-size committee boat first cost three clean runs: boats cra
 
 **Irons (issue 119).** The envelope confirms PH-4: with the helm hard over and the sails on auto-trim, the boat is still within 11° of head to wind after 60 s, going astern.
 
+
+## 14. Package 2, round A: what changed
+
+Implemented 3 Nov 2026. Package 2 is split into two rounds. Round A covers accessibility, layout, the start and the steering choice; round B (next) covers the lessons (§8.1), the teaching overlays (UX-9), the two overlapping race set-ups (U4), the interface level (U5), the start-line camera (§8.6) and the remaining colour-only distinctions (U8). **The physics is unchanged: the determinism hash is still `11824f89f479d0f4`.**
+
+| Finding | Change | Files | Checked by |
+|---|---|---|---|
+| UX-2 | **Dialogs keep the keyboard in.** Every modal (welcome, help, settings, layers, course editor, the two confirmations) makes the rest of the app `inert`, moves focus in (an autofocus button, else the heading), wraps Tab, closes on Escape and gives focus back to what opened it | `src/ui/useModal.ts` (new), `src/ui/Confirm.tsx` (new), the dialog components | `tests/e2e/a11y.spec.ts`: 12 Tab and Shift+Tab presses stay in Help; Escape returns focus to the Help button; the sailing keys work afterwards |
+| UX-3 | **Targets and text.** Every control is at least 24 × 24 CSS px (44 px where the pointer is a finger); text at least 12 px (the type tokens and every smaller size raised) | `src/ui/styles.css` | `tests/e2e/a11y.spec.ts`: every visible control and text in the HUD, dock, race panel and coach, racing, at 1280 × 800 and 390 × 844 |
+| UX-5 | **Reserved regions.** The left column (instruments, race panel, coach) stops above the dock and scrolls; the toolbar keeps clear of the column's measured width | `src/ui/App.tsx`, `src/ui/styles.css` | `tests/e2e/layout.spec.ts`: no overlap and nothing off screen at 360 × 640, 390 × 844, 1000 × 560, 1280 × 800 and 1920 × 1080, sailing and racing. Before: three overlaps, all racing (phones and 1000 × 560) |
+| UX-6 | **Over the line at the start.** The race panel says what to do (back to the pre-start side round either end, then start), names the nearer end with its distance and direction from the bow, with an arrow, and once flag X is down (rule 29.1) says you can still come back and start, or retire | `src/app/ocsGuide.ts` (new), `src/app/controller.ts`, `src/ui/RacePanel.tsx` | `tests/sim/ocsGuide.test.ts`; `tests/e2e/review.spec.ts` (a boat put 30 m over the line before the gun) |
+| UX-7 | "gusty gusts" in the footer is now "gusty", and the steady preset reads "steady wind"; a sail's status and advice wrap instead of being cut off; the coach card scrolls within the left column instead of being cut off | `src/ui/App.tsx`, `src/ui/styles.css` | Layout test; screenshot |
+| UX-8, D4 | **Steering choice.** The first visit asks "Have you sailed before?": sailors get tiller steering (A / ← push the tiller to port, so the bow turns to starboard), others keep bow steering. Graphics and sound changes it. A drawing of the tiller from above, at the simulation's rudder angle, replaces the helm bar in both modes. The tutorial's steering step explains the mode in use. Recordings keep the helm, not the keys, so replays are the same either way | `src/app/steering.ts` (new), `src/app/controller.ts`, `src/ui/Controls.tsx`, `src/ui/Welcome.tsx`, `src/ui/SettingsPanel.tsx`, `src/app/tutorial.ts`, `src/ui/TutorialPanel.tsx` | `tests/sim/steering.test.ts`; `tests/e2e/a11y.spec.ts` (first visit: choose tiller, A gives a positive rudder, the tiller drawing says "to port · bow turning to starboard", kept after a reload) |
+| GR-4 | **Reduced motion.** With the reader's "reduce motion" setting the camera keeps a level horizon in every view, does not ride the waves, cuts instead of blending between views, and the scenic view holds still. It follows the setting if it changes | `src/render/scene.ts` | `tests/e2e/a11y.spec.ts`: helm view, 16 kn on a beam reach, heeled: 12 frames with the camera's right vector level (under 0.001) and under 1 cm of height change a frame. Without the setting the same test fails (0.021), so it measures something |
+| U8 (part) | **Minimap marks by shape**, as on a chart: a can square, a cone pointed, a cardinal a diamond, a buoy of unstated shape round, each outlined; not colour alone | `src/ui/Minimap.tsx` | Code; screenshot |
+| GR-6 | **Sounds for events.** The race committee's sound signals (one sound, one long sound, two sounds, as RRS 26 and 29), a knock for a contact and a scrape for a grounding, all made in the browser. Every sound signal is captioned in the race panel ("One long sound: one-minute signal") in a live region. Contacts and groundings already have their banner | `src/render/audio.ts`, `src/app/signalCaption.ts` (new), `src/app/controller.ts`, `src/ui/RacePanel.tsx` | `tests/sim/signalCaption.test.ts` (a five-minute sequence gives four captions, in order); `tests/e2e/review.spec.ts` (captions at the one-minute signal and the start, gone 8 s later). The sounds themselves were not heard here: the test browser has no audio output |
+
+**The club's sailing instructions on signals** (R13, docs/CLUB_DOCUMENTS.md): races start under RRS 26 with the warning signal 5 minutes before the start (SI 9.1). Starting signals may also be made on VHF (SI 3.4). When no committee boat is out, a competitor broadcasts the times on VHF and no visual or sound signals are made (SI 9.3). The simulator always has a committee boat, so it makes the RRS 26 flags and sounds. The VHF broadcasts are not simulated: the SIs do not give their wording.
+
+**Not inspected on a real GPU or with real speakers.** All screenshots come from software rendering, and the sounds were checked only by code and by their captions (GR-1).
