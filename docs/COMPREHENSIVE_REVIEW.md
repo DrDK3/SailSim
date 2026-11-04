@@ -1394,3 +1394,49 @@ Implemented 3 Nov 2026. Package 2 is split into two rounds. Round A covers acces
 **The club's sailing instructions on signals** (R13, docs/CLUB_DOCUMENTS.md): races start under RRS 26 with the warning signal 5 minutes before the start (SI 9.1). Starting signals may also be made on VHF (SI 3.4). When no committee boat is out, a competitor broadcasts the times on VHF and no visual or sound signals are made (SI 9.3). The simulator always has a committee boat, so it makes the RRS 26 flags and sounds. The VHF broadcasts are not simulated: the SIs do not give their wording.
 
 **Not inspected on a real GPU or with real speakers.** All screenshots come from software rendering, and the sounds were checked only by code and by their captions (GR-1).
+
+## 15. The owner's required improvements (4 Nov 2026)
+
+Added before Package 2 round B, at the owner's request. Each item lists its status, what changed, how it was checked and what remains. **The physics is unchanged** (determinism hash `11824f89f479d0f4`).
+
+### 15.1 Audit: have the earlier changes reached the owner?
+
+- **Deployed.** All rounds up to Package 2 round A are merged and deployed: `main` holds `749dc1c`, and the Deploy run of 07:20 UTC on 4 Nov succeeded. Help and Settings now show the build's commit and time, so the owner can tell which version is running.
+- **Why the owner and this review saw different pictures.** Every check here runs in software rendering. On a software renderer the app picks the Performance preset (low scenery, single shadow map). On a graphics card it picks Balanced (high scenery, cascaded shadows, sky reflections). "Running slow" then lowers software rendering further.
+  - The real-card path was therefore forced here (`?quality=high` with Balanced stored).
+  - Every earlier change was photographed on it: SAMARITAN, the robotic marks on both courses, the marina boats at Darthaven and Dart Marina, and the RDYC. All draw as intended.
+- **The black surfaces are real, and specific to the owner's card.** The owner's 1 Nov screenshot (built after the robotic marks of 28 Oct) shows:
+  - the marks' orange bodies and flags black, beside a correct textured white sponsor band;
+  - the marina boats' hulls black, beside correct masts and coloured covers in the **same draw call**.
+- **What was ruled out.** The geometry has no NaN or zero-length normals and correct colours (inspected), and shadows are honoured under the cascades. So particular surfaces shade black on that card, for a cause that cannot be reproduced here.
+- **What changed.** The app now **measures** painted surfaces on the card it runs on (`src/render/gpuCheck.ts`).
+  - Test spheres painted as the hulls and marks are drawn in the real scene and read back, against unlit references.
+  - If the painted ones come out black, the app tries drawing without sky reflections, then with simpler materials, and keeps the first that works for that card.
+  - Settings → Graphics check shows the result and copies a report.
+
+| Earlier change | Where | Seen here, real-card path |
+|---|---|---|
+| SAMARITAN, Southerly 110 with navy canopy (3 Nov) | Committee boat, both courses | Yes |
+| Robotic marks with sponsors (28 Oct) | Start Bay and river courses | Yes: orange with sponsor bands |
+| Marina boats white with coloured covers (1 Nov) | Darthaven, Dart Marina, Noss | Yes: white |
+| RDYC rebuilt to the photographs (28 Oct) | Kingswear | Yes; improved again below |
+| Lower Ferry tug and float to the photographs (photo round) | Both slips | Yes |
+
+### 15.2 Changes
+
+| Item | Change | Files | Checked by |
+|---|---|---|---|
+| Black hulls and marks | Graphics check with automatic fallbacks; a build stamp | `src/render/gpuCheck.ts` (new), `src/render/scene.ts`, `src/render/sunlight.ts`, `src/app/controller.ts`, `src/ui/SettingsPanel.tsx`, `src/ui/Help.tsx`, `vite.config.ts` | `tests/render/gpuCheck.test.ts`; `tests/e2e/review.spec.ts` (a simulated fault is fixed by another mode; Settings shows the result and the build) |
+| Top bar | One row sized to its content. As space shrinks: shorter labels; then Library and Scenario move into More; then the activity shows as its icon; then a Menu button | `src/ui/App.tsx`, `src/ui/styles.css` | Screenshots at 1920, 1440, 1280, 1100 and 1000 px wide; `tests/e2e/layout.spec.ts` (no overlaps at five sizes) |
+| UI review against best-in-class practice | [UI_BENCHMARK.md](review/UI_BENCHMARK.md): guidance on onboarding and retention, where the simulator stands, recommendations for round B; what needs a service (leaderboards, analytics) | docs | Desk review with sources |
+| RDYC recognisable | From the owner's photographs: dinghies standing on their transoms in a rack (they were lying as striped rolls); warm buff rubble for the sea wall (was grey); wider white bargeboards, a taller finial and a king post on the river gable; the neighbour north of the club in light render under slate (red brick and clay tile made a block that dominated the club); four Scots pines on the hill behind | `src/render/rdyc.ts`, `src/render/landmarks.ts`, `src/render/dart.ts` | `tests/render/rdyc.test.ts`; screenshots from the photographs' viewpoints |
+| Bayard's Cove and its fort | The fort as itself: an open round rubble tower on the waterline at its published position, with eleven round-headed gunports facing the river and a doorway from the quay. Its footprint makes it solid to boats. The quays and sea walls in warmer stone, as photographed | `src/render/bayards.ts` (new), `src/app/geoLoader.ts`, `src/render/landmarks.ts`, `src/render/rdyc.ts` | `tests/render/landmarks.test.ts` (position within 5 m of the published coordinates; eleven ports facing the river); screenshots |
+| Higher Ferry | Up to 36 cars in four lanes (was 18 in three), on a larger estimated hull. She no longer turns round at each slip: a double-ended cable ferry keeps her cabin on the same side. Her two cables now run from each slipway down to the bed and up through her sheaves, following her as she crosses (they lay under the surface across the river, unattached) | `src/render/traffic.ts`, `src/sim/env/traffic.ts`, `src/render/dart.ts` | `tests/sim/traffic.test.ts`; screenshots |
+| Lower Ferry | Re-checked against the sources and the owner's photographs: floats of up to 8 cars pushed and pulled by tugs (F1, F8); the tug alongside, swinging end for end at the slips (F3). No change found necessary this round | — | Screenshot at the Dartmouth slip |
+| Noss, Sandquay | **Not done.** The building data has only the old shipyard sheds at Noss, not the 2023 buildings, and no photographs of Sandquay were available. Positions must not be invented. Sourced facts recorded (NO1, SQ1) | — | Issues 123 and 124: photographs needed |
+
+### 15.3 What the owner can do to close the black-surface fault
+
+1. Open the simulator, wait 10 s in daylight, then open More → Graphics and sound.
+2. Under "Graphics check", read the result. It names the drawing mode the app chose, if it found a fault.
+3. Press "Copy the report" and paste it into the conversation. It holds the card's name, the browser, the build and the measured colours, so the cause can be fixed directly.

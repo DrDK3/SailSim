@@ -22,6 +22,7 @@
     "tests",
     "vite.config.ts",
     "playwright.config.ts",
-    "src/app/hooks.d.ts"
+    "src/app/hooks.d.ts",
+    "src/app/build.d.ts"
   ]
 }

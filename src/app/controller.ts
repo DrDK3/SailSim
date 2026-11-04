@@ -1,3 +1,4 @@
+import { saveFix, type MaterialCheck, type MaterialFix } from '../render/gpuCheck';
 import { signalCaption } from './signalCaption';
 import { ocsGuide, type OcsGuide } from './ocsGuide';
 import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
@@ -217,6 +218,12 @@ export interface UiState {
   audioRunning: boolean;
   /** Which way the steering keys and buttons move the boat (src/app/steering.ts). */
   steering: SteeringMode;
+  /** The graphics check of painted surfaces on this card (src/render/gpuCheck.ts), and the mode in use. */
+  materialCheck?: { fault: boolean; reason: string; mode: string; at: string };
+  materialMode?: MaterialFix;
+  gpuName?: string;
+  /** This build: the commit it was made from and when. */
+  build: { id: string; time: string };
 }
 
 type Listener = () => void;
@@ -228,6 +235,8 @@ const SHEET_RATE = 0.35;
 const MAX_STEPS_PER_FRAME = 12;
 /** Identifies the build in recordings (Vite's mode and the package version; a commit id when CI provides one). */
 const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
+/** When this build was made (vite.config.ts), shown with the build id so the owner can tell which version runs. */
+const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 'unknown';
 /** Fills a partial starting input to a full one for the recording. */
 const DEFAULT_INPUT_FOR_RECORD: ControlInput = { helm: 0, mainSheet: 0.3, jibSheet: 0.3, autoMain: false, autoJib: true, crewHike: 0.6, autoCrew: true, flatten: 0 };
 
@@ -964,10 +973,55 @@ export class SimController {
     window.addEventListener('pointerdown', this.onGesture);
     document.addEventListener('visibilitychange', this.onVisibility);
     void this.discoverSources();
+    // The graphics check, once the scene has been drawn for a while (owner review, 4 Nov 2026).
+    this.checkTimer = window.setTimeout(() => this.runMaterialCheck(), 8000);
     this.publish(true);
   }
 
+  private checkTimer = 0;
+  private lastMaterialCheck?: MaterialCheck;
+
+  /**
+   * Measure how this graphics card draws painted surfaces and apply the first fix that works if they come out
+   * black (src/render/gpuCheck.ts). `?gpucheck=fault` simulates the fault (tests).
+   */
+  runMaterialCheck(): MaterialCheck | undefined {
+    if (!this.view) return undefined;
+    const simulate = new URLSearchParams(location.search).get('gpucheck') === 'fault';
+    const c = this.view.checkMaterials(simulate);
+    if (c) this.lastMaterialCheck = c;
+    this.publish(true);
+    return c;
+  }
+
+  /** Draw painted surfaces as built, without reflections, or with simple materials (Settings). */
+  setMaterialMode(fix: MaterialFix): void {
+    if (!this.view) return;
+    this.view.setMaterialFix(fix);
+    saveFix(this.view.gpuName, fix);
+    this.publish(true);
+  }
+
+  /** Everything the graphics check measured, as text to paste into a message. */
+  materialReport(): string {
+    const v = this.view;
+    const lines = [
+      `Squib simulator graphics check`,
+      `Build: ${BUILD_ID} (${BUILD_TIME})`,
+      `Graphics card: ${v?.gpuName ?? 'unknown'}`,
+      `Browser: ${navigator.userAgent}`,
+      `Screen: ${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}× · preset ${v?.graphics.preset} · shadows ${v?.quality} · mode ${v?.materialMode}`,
+    ];
+    for (const c of v?.materialChecks ?? []) {
+      lines.push(`${c.at} [${c.mode}] ${c.fault ? 'FAULT' : 'ok'}: ${c.reason}`);
+      for (const p of c.probes) lines.push(`  ${p.name}: ${p.rgb.map((x) => x.toFixed(3)).join(' ')}`);
+    }
+    if (!v?.materialChecks.length) lines.push('No measurement yet (it runs in daylight, 8 s after loading).');
+    return lines.join('\n');
+  }
+
   detach(): void {
+    window.clearTimeout(this.checkTimer);
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
@@ -1548,6 +1602,10 @@ export class SimController {
       audio: this.sound.settings,
       audioRunning: this.sound.running,
       steering: this.steeringMode,
+      materialCheck: this.lastMaterialCheck && { fault: this.lastMaterialCheck.fault, reason: this.lastMaterialCheck.reason, mode: this.lastMaterialCheck.mode, at: this.lastMaterialCheck.at },
+      materialMode: this.view?.materialMode,
+      gpuName: this.view?.gpuName,
+      build: { id: BUILD_ID, time: BUILD_TIME },
     };
     for (const l of this.listeners) l();
   }

@@ -146,6 +146,21 @@ Read in full; not stored in the repository (the publishers' copyright). What eac
 | C16 | RYA / NSOA, *National Squib Class Rules 2025* | PDF from the owner | 2 Jan 2025 | **Read in full** | Minimum weight 680 kg; crew of at least 2; correctors; sails carried; standing rigging fixed while racing; backstay, kicker, Cunningham and barber haulers permitted; mast, boom, pole, sail dimensions; flotation |
 | H12 | Dart Harbour and Navigation Authority, *Dart Harbour guide* | PDF from the owner | 2019 | **Read in full** | Entrance stream rates; offshore stream timing (NE HW−2 to HW+4, SW LW−2 to LW+4); buoy lights; ferries restricted in their ability to manoeuvre; 6-knot limit; main stream buoys MS1–MS5; Admiralty Chart 2253 reference |
 
+## Owner review (4 Nov 2026): places, ferries and the club
+
+Found by web search on 4 Nov 2026. `geograph.org.uk`, `dkfb.co.uk` and `www.gov.uk` were blocked here, so only search excerpts were read.
+
+| ID | Source | URL | Date | Kind | What it gives |
+|---|---|---|---|---|---|
+| B1 | Wikipedia, "Bayard's Cove Fort"; Sygic; Ancient Monuments (scheduled monument record) | https://en.wikipedia.org/wiki/Bayard%27s_Cove_Fort | n.d. | Excerpt | Position 50°20′52″N 3°34′39″W (50.34789, −3.57749) |
+| B2 | English Heritage, Historic England, Britain Express, Castellogy (via search) | https://www.english-heritage.org.uk/visit/places/bayards-cove-fort/history/ | n.d. | Excerpt | A small Tudor artillery blockhouse protecting the town quay; probably a round tower like the gun tower at Dartmouth Castle; eleven gunports for heavy artillery round the ground floor close to sea level; managed by English Heritage. No dimensions published in the excerpts |
+| F7 | Wikipedia, "Dartmouth Higher Ferry" (via search) | https://en.wikipedia.org/wiki/Dartmouth_Higher_Ferry | n.d. | Excerpt | The 2009 vessel carries up to 36 cars, in service late June 2009, a conventional cable ferry using its cables for propulsion and guidance; its predecessor (No. 7, 1960) carried 18 cars with paddle wheels |
+| F8 | South Hams District Council notices and South Hams Today (via search) | https://southhams.gov.uk/ferry-and-harbour/dartmouth-lower-ferry | 2022–2026 | Excerpt | Lower Ferry: floats Tom Avis and Tom Casey; tugs Hauley V and VI named in the 2022 refit notice (IV in older sources) |
+| NO1 | Marine Industry News, Premier Marinas, PBO, YBW (via search) | https://marineindustrynews.co.uk/premier-marinas-noss-on-dart-officially-opens/ | 2018–2023 | Excerpt | Noss on Dart, the former Philip & Son shipyard: Premier Marinas bought the site in 2016. The redevelopment opened in May 2023 with 23 commercial buildings, solar power on all buildings, a new quay wall and a boatyard with a 75-tonne hoist. The hotel and homes are later phases |
+| SQ1 | Torbay Weekly, "New Sandquay pontoon unveiled" (via search) | https://www.torbayweekly.co.uk/news/local-news/new-sandquay-pontoon-unveiled-to-support-future-royal-navy-officer-training-8667833 | n.d. | Excerpt | BRNC's Sandquay base: 69 m of heavy-duty pontoons and an 18 m steel access bridge for Royal Navy training vessels. The Dart lifeboat station and Dart Marina are on Sandquay Road |
+| RD1 | Wikipedia, "Royal Dart Yacht Club" (via search) | https://en.wikipedia.org/wiki/Royal_Dart_Yacht_Club | n.d. | Excerpt | Purpose-built clubhouse completed 1881. A ground-floor bar and dining area opening onto the riverside terrace; upstairs the dining room, the Quarter Deck function room and a large balcony |
+| P3 | The owner's four photographs of Bayard's Cove (4 Nov 2026) | n/a | 2026 | Direct | The round stone fort at the water's edge at the south end of the quay; arched gunports; the stone quay wall; pastel houses under slate roofs climbing the hill. Reference only, nothing copied |
+
 ## River race review (1 Nov 2026)
 
 | # | Source | URL | Date | Access | Used for |

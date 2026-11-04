@@ -1,3 +1,4 @@
+import { buildBayardsCoveFort } from './bayards';
 import * as THREE from 'three';
 import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
@@ -18,7 +19,7 @@ import { StreetLife, TOWNS, type RoadsData } from './population';
 import { quayMesh } from './quays';
 import { fillBehindQuays, type QuayWall } from '../sim/env/quays';
 import { RoadNetwork } from './roads';
-import { buildRdycClub, buildRdycPontoonGear, rdycPlatformAt, type RdycClub } from './rdyc';
+import { buildRdycClub, buildRdycPines, buildRdycPontoonGear, rdycPlatformAt, type RdycClub } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -481,7 +482,7 @@ export class DartScene {
       // Landmarks as themselves (src/render/landmarks.ts); churches and chapels in stone with tall windows; the
       // marina buildings at Noss; shopfronts on the named buildings of the town streets.
       // The yacht club is modelled as itself (src/render/rdyc.ts), added after the loop.
-      if (spec?.id === 'rdyc') return;
+      if (spec?.id === 'rdyc' || spec?.id === 'bayards-fort') return;
       // The Hindostan is a moored ship that OSM maps as a building: drawn as a ship below (buildShips).
       if (MOORED_SHIPS.has(b.n ?? '')) return;
       const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
@@ -747,7 +748,12 @@ export class DartScene {
       const club = buildRdycClub();
       this.club = club;
       this.fixed.add(club.group);
+      this.fixed.add(buildRdycPines((e, n) => this.groundAt(e, n)));
       this.ensigns.push(new ClubEnsign(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
+    }
+    // Bayard's Cove Fort as itself (src/render/bayards.ts).
+    if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'bayards-fort')) {
+      this.fixed.add(buildBayardsCoveFort());
     }
   }
 
@@ -815,18 +821,11 @@ export class DartScene {
   /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
   private buildFerries(f: DartFeatures): void {
     this.floating.add(this.traffic.group);
-    const cable = new THREE.MeshStandardMaterial({ color: 0x1c1f22, roughness: 0.6, metalness: 0.4 });
-    for (const fr of f.ferries.filter((x) => /Higher Ferry/.test(x.name))) {
-      const [a, b] = [fr.route[0]!, fr.route[fr.route.length - 1]!];
-      const dx = b[0] - a[0];
-      const dn = b[1] - a[1];
-      const len = Math.hypot(dx, dn);
-      const off = { e: (-dn / len) * 5, n: (dx / len) * 5 };
-      for (const s of [-1, 1]) {
-        const pts = [0, 0.15, 0.5, 0.85, 1].map((t) => new THREE.Vector3(a[0] + dx * t + s * off.e, t === 0 || t === 1 ? 0.2 : -0.08, -(a[1] + dn * t + s * off.n)));
-        this.floating.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.06, 5, false), cable));
-      }
-    }
+    // The Higher Ferry's two cables, slip to slip, drawn with the ferry (src/render/traffic.ts).
+    this.traffic.setCables(
+      f.ferries.filter((x) => /Higher Ferry/.test(x.name) && x.route.length >= 2).map((fr) => ({ name: fr.name, a: fr.route[0]! as [number, number], b: fr.route[fr.route.length - 1]! as [number, number] })),
+      (e, n) => this.groundAt(e, n),
+    );
     this.fixed.add(this.buildSlipways(f));
   }
 
@@ -961,7 +960,7 @@ export class DartScene {
     this.railway?.update(u.epochMs, u.time, { e: -Math.sin(u.windFromDir) * 3, n: -Math.cos(u.windFromDir) * 3 });
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
-      this.traffic.update(states, u.time, u.camera, u.showLabels, u.windSpeed !== undefined ? { fromDir: u.windFromDir, speed: u.windSpeed } : undefined);
+      this.traffic.update(states, u.time, u.camera, u.showLabels, u.windSpeed !== undefined ? { fromDir: u.windFromDir, speed: u.windSpeed } : undefined, u.waterLevel);
     }
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {

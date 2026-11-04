@@ -108,6 +108,20 @@ export class SunLight {
     this.prepare(this.scene);
   }
 
+  /** Set up any new lit material in `root` for the cascades now (the graphics check's probes, before drawing). */
+  prepareNow(root: THREE.Object3D): void {
+    if (this.csm) this.prepare(root);
+  }
+
+  /**
+   * Whether a material has none of the simulator's own shader additions (buildings, terrain, trees, sails…), only
+   * possibly the cascades' set-up: such a material can be redrawn with a simpler lighting model.
+   */
+  isPlain(m: THREE.Material): boolean {
+    const base = this.bases.get(m.onBeforeCompile) ?? m.onBeforeCompile;
+    return base === THREE.Material.prototype.onBeforeCompile;
+  }
+
   /** The camera's projection changed (resize): re-split the cascades. */
   resize(): void {
     this.csm?.updateFrustums();

@@ -26,7 +26,7 @@ const KEYS: [string, string][] = [
   ['H or ?', 'This help'],
 ];
 
-export function Help({ onClose, onTutorial }: { onClose: () => void; onTutorial: () => void }) {
+export function Help({ onClose, onTutorial, build }: { onClose: () => void; onTutorial: () => void; build?: { id: string; time: string } }) {
   const ref = useRef<HTMLDivElement>(null);
   useModal(ref, onClose);
   return (
@@ -71,6 +71,11 @@ export function Help({ onClose, onTutorial }: { onClose: () => void; onTutorial:
           calibration. Weather and tide sources are labelled in the instruments. Not for navigation or performance
           prediction.
         </p>
+        {build && (
+          <p className="fine" data-testid="build-stamp">
+            This build: {build.id}, made {build.time}.
+          </p>
+        )}
         <button className="primary" onClick={onClose}>Close</button>
       </section>
     </div>
