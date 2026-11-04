@@ -136,7 +136,8 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   // Import the exported file (with a changed wind): it starts.
   const changed = { ...exported, title: 'Imported', scenario: { ...exported.scenario, conditions: { ...exported.scenario.conditions, weather: { source: 'manual', twsKn: 7, twdDeg: 45 } } } };
   await lib.getByLabel('Import scenario file').setInputFiles({ name: 'imported.scenario.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(changed)) });
-  await expect(lib.getByTestId('library-message')).toContainText('Imported and started "Imported"');
+  // Importing restarts the run (a whole new session): in software rendering that keeps the page busy for a while.
+  await expect(lib.getByTestId('library-message')).toContainText('Imported and started "Imported"', { timeout: 60_000 * CI_SLOW });
   expect(await page.evaluate(() => window.__squib!.controller.scenario.conditions.weather)).toEqual({ source: 'manual', twsKn: 7, twdDeg: 45 });
   // Bad files: a reason, and the run carries on.
   await lib.getByLabel('Import scenario file').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"schema":"squib-scenario/1","title":"x","scenario":{}}') });
