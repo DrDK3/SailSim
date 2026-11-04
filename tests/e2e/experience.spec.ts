@@ -39,14 +39,14 @@ test('the activity button opens the hub; each door opens the feature it names, a
   // Race against AI: the race set-up.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Race against AI' }).click();
-  await expect(page.getByRole('region', { name: 'Quick race' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Library' })).toHaveCount(0);
 
-  // Learn to sail: the tutorial, and the button says so.
+  // Learn to sail: the next lesson, and the button says so.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Learn to sail' }).click();
   await expect(page.getByTestId('tutorial')).toBeVisible();
-  await expect(chip).toContainText('Tutorial');
+  await expect(chip).toContainText('Lesson 1');
 
   // Free sailing from the lesson: it ends, the boat sails on (no restart).
   const step = await page.evaluate(() => window.__squib!.controller.sim.step);

@@ -136,6 +136,9 @@ option { background: var(--navy-900); }
 .compass .wind.app { stroke: var(--app-wind); }
 .compass .wind-head.true { fill: var(--true-wind); }
 .compass .wind-head.app { fill: var(--app-wind); }
+.compass .wind-letter { font-size: 12px; font-weight: 700; }
+.compass .wind-letter.true { fill: var(--true-wind); }
+.compass .wind-letter.app { fill: var(--app-wind); }
 
 /* Toolbar */
 .toolbar { top: 12px; right: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; max-width: calc(100% - 410px); justify-content: flex-end; }
@@ -389,6 +392,15 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
 .tutorial-goal { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
 .tutorial-goal progress { flex: 1; height: 6px; accent-color: var(--accent); }
 .tutorial-goal.met { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); font-weight: 600; }
+.lesson-readout { margin-top: 6px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+.lesson-result { margin: 6px 0; padding-left: 18px; line-height: 1.45; }
+.lesson-result .best { color: var(--good); font-weight: 600; }
+.lesson-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
+.lesson-list li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; }
+.lesson-tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, 0.1); }
+.lesson-list li.done .lesson-tick { background: color-mix(in srgb, var(--good) 30%, transparent); color: var(--good); }
+.lesson-text { display: flex; flex-direction: column; font-size: 13px; line-height: 1.35; }
+.lesson-summary { opacity: 0.8; font-size: 12px; }
 .tutorial-target { outline: 2px solid var(--warn); outline-offset: 3px; border-radius: 8px; animation: tutorial-pulse 1.6s ease-in-out infinite; }
 @keyframes tutorial-pulse { 50% { outline-color: color-mix(in srgb, var(--warn) 25%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .tutorial-target { animation: none; } }
@@ -558,6 +570,12 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .coach-tip.tone-warn .coach-tip-label { color: var(--warn); }
 .coach-tip.tone-good .coach-tip-label { color: var(--good); }
 .coach-head button.link { font-size: 12px; }
+.quick-race .challenge { display: flex; gap: var(--s2); align-items: center; justify-content: space-between; padding: 8px 10px; margin: 4px 0 8px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.quick-race .challenge p { margin: 2px 0 0; }
+.quick-race .more-options, .quick-race .bests { margin: 6px 0; }
+.quick-race .more-options summary, .quick-race .bests summary { cursor: pointer; font-size: 13px; }
+.quick-race .bests ul { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+.race-best { margin: 6px 0; padding: 6px 8px; border-radius: 6px; font-size: 12.5px; background: color-mix(in srgb, var(--good) 14%, transparent); }
 .quick-race .qr-count { display: flex; align-items: center; gap: var(--s2); }
 .quick-race .qr-count input { flex: 1; min-width: 120px; }
 .quick-race .qr-count output { min-width: 11em; font-variant-numeric: tabular-nums; }
@@ -667,6 +685,9 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 /* First visit: "Have you sailed before?" (D4). */
 .hub-ask { margin: var(--s3) 0 0; padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: var(--r-md); }
 .hub-ask legend { padding: 0 4px; font-weight: 600; }
+.sail-now { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; margin-top: var(--s3); padding: 12px 16px; border-radius: var(--r-md); text-align: left; }
+.sail-now-title { font-size: 18px; font-weight: 700; }
+.sail-now-text { font-size: 13px; opacity: 0.9; }
 .hub-ask .row { flex-wrap: wrap; margin-top: 4px; }
 .hub-ask .fine { margin-bottom: 0; }
 

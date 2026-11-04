@@ -68,10 +68,20 @@ function probeMeshes(): THREE.Mesh[] {
 
 /**
  * Draw each probe alone in `scene` (high above it, out of the shadow cascades) seen from the sun's side, and read
- * back its colour. `prepare` is called after the probes are added, so the scene can set up their materials as it
- * does its own (the shadow cascades), before they are drawn.
+ * back its colour. `prepare` is called with the probes' group after they are added, so the scene can set up their
+ * materials as it does its own (the shadow cascades; simpler materials for that mode), before they are drawn.
+ * `environment`, when given, stands in for the scene's reflections while the probes are drawn (null: none), so a
+ * drawing mode can be tried on the probes alone, without changing (and recompiling) the whole scene.
  */
-export function measureMaterials(renderer: THREE.WebGLRenderer, scene: THREE.Scene, sunDir: THREE.Vector3, rendererName: string, mode: string, prepare?: () => void): MaterialCheck {
+export function measureMaterials(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  sunDir: THREE.Vector3,
+  rendererName: string,
+  mode: string,
+  prepare?: (probes: THREE.Object3D) => void,
+  environment?: THREE.Texture | null,
+): MaterialCheck {
   const probes = probeMeshes();
   const rig = new THREE.Group();
   rig.name = 'gpu-check';
@@ -81,7 +91,9 @@ export function measureMaterials(renderer: THREE.WebGLRenderer, scene: THREE.Sce
     rig.add(p);
   }
   scene.add(rig);
-  prepare?.();
+  prepare?.(rig);
+  const prevEnvironment = scene.environment;
+  if (environment !== undefined) scene.environment = environment;
   const rt = new THREE.WebGLRenderTarget(24, 24, { type: THREE.UnsignedByteType });
   const cam = new THREE.PerspectiveCamera(20, 1, 0.1, 50);
   const toSun = sunDir.clone().normalize();
@@ -132,11 +144,12 @@ export function measureMaterials(renderer: THREE.WebGLRenderer, scene: THREE.Sce
     }
   } finally {
     for (const o of hidden) o.visible = true;
+    scene.environment = prevEnvironment;
     renderer.shadowMap.autoUpdate = prevShadowUpdate;
     renderer.setRenderTarget(prevTarget);
     renderer.autoClear = prevAutoClear;
     scene.remove(rig);
-    for (const p of probes) {
+    for (const p of rig.children as THREE.Mesh[]) {
       p.geometry.dispose();
       const m = p.material as THREE.MeshStandardMaterial;
       m.map?.dispose();

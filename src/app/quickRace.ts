@@ -1,30 +1,55 @@
 /**
- * Quick race: a race set up in one step: how many AI boats, how good, where, and the conditions (random, live
- * now, or as they are set). Random conditions are drawn from a seed, so a race can be sailed again; they are
- * training ranges chosen for this app (E), not a climatology of the Dart.
+ * The race set-up (review U4: one set-up instead of two): how many AI boats, how good, which course (a short
+ * five-minute course, practice courses, the river, an RDYC club course for the wind, or any course in the
+ * library, your own included), laps, leg length, the start sequence and preparatory flag, and the conditions
+ * (random, live now, or as set in Scenario). Random conditions are drawn from a seed, so a race can be sailed
+ * again; they are training ranges chosen for this app (E), not a climatology of the Dart. Today's challenge is
+ * the same seeded race for everyone on the same day.
  */
 import { createRng } from '../sim/math/rng';
 import type { AiLevel } from '../sim/ai/skipper';
 import { buildConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clubMarkLocal } from '../sim/course/clubMarks';
-import { builtInCourses, type LibraryEntry } from './courseLibrary';
+import { allCourses, builtInCourses, type LibraryEntry } from './courseLibrary';
 import type { SkyPreset } from '../sim/env/sky';
 import type { PracticeKind } from '../sim/course/practice';
 import type { AppScenario, DataSource } from './controller';
+import type { PrepFlag } from '../sim/race/committee';
 import { RIVER_STREAM, liveNowConditions } from './liveNow';
 
 export type QuickConditions = 'random' | 'live' | 'as-set';
 export type QuickWind = 'any' | 'light' | 'medium' | 'strong';
-/** Start Bay (a practice course), the river (the Range sausage), or Start Bay on an RDYC club course for the wind. */
-export type QuickVenue = 'start-bay' | 'river' | 'rdyc';
+/**
+ * Start Bay (a practice course), the river (the Range sausage), Start Bay on an RDYC club course for the wind, or
+ * a course from the library (the course editor's own included).
+ */
+export type QuickVenue = 'start-bay' | 'river' | 'rdyc' | 'library';
+
+/** Start Bay courses: the short course (one beat and one run) and the practice courses. */
+export type QuickCourse = 'short' | Extract<PracticeKind, 'windward-leeward' | 'triangle' | 'tacking-lane' | 'gybing-slalom' | 'rounding-drill'>;
+
+/**
+ * The short course: one beat and one run on a 220 m windward–leeward. AI Squibs (good) take about 5 minutes in
+ * a moderate breeze, longer in light air (measured in tests/sim/raceSetup.test.ts; model output).
+ */
+export const SHORT_COURSE_LEG_M = 220;
 
 export interface QuickRaceOptions {
   /** AI boats to race against (0 = sail the course alone). */
   competitors: number;
   level: AiLevel;
   venue: QuickVenue;
-  /** Practice course in Start Bay (the river uses its own course). */
-  course: Extract<PracticeKind, 'windward-leeward' | 'triangle'>;
+  /** Course in Start Bay (the river, RDYC and library venues use their own). */
+  course: QuickCourse;
+  /** The library course, for the library venue. */
+  libraryId?: string;
+  /** Laps (the course's own when not set; the short course is always one). */
+  laps?: number;
+  /** Leg length of a practice course, m (the course's own when not set). */
+  legM?: number;
+  prepFlag?: PrepFlag;
+  /** Seconds from the beginning to the start signal (the sequence plus 30 s when not set). */
+  startInS?: number;
   conditions: QuickConditions;
   /** Wind strength band for random conditions. */
   wind: QuickWind;
@@ -35,13 +60,15 @@ export interface QuickRaceOptions {
    * comes from the rise and fall of the tide, which the real Dart stream does not follow.
    */
   stream?: boolean;
+  /** Today's challenge: its key ("challenge:2026-11-04"), so its best time is kept apart. */
+  challenge?: string;
 }
 
 export const DEFAULT_QUICK_RACE: QuickRaceOptions = {
   competitors: 5,
   level: 'good',
   venue: 'start-bay',
-  course: 'windward-leeward',
+  course: 'short',
   conditions: 'random',
   wind: 'any',
   seed: 1,
@@ -138,6 +165,7 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
     summary = r.summary;
   }
   const river = o.venue === 'river';
+  const library = o.venue === 'library' && o.libraryId ? builtInOrUserCourse(o.libraryId) : undefined;
   // An RDYC course: the one set for the wind nearest today's at the entrance (as the race officer chooses from
   // the course appendix), sailed from the committee boat placed for that wind.
   let club: LibraryEntry | undefined;
@@ -146,20 +174,39 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
     const w = buildConditions(conditions).env.wind(0, at.n, at.e);
     club = clubCourseForWind((Math.atan2(-w.e, -w.n) * 180) / Math.PI, Math.hypot(w.n, w.e) / 0.514444);
   }
-  const startInS = SEQUENCE_S[o.sequence] + 30;
+  const startInS = o.startInS !== undefined ? Math.max(20, Math.min(600, Math.round(o.startInS))) : SEQUENCE_S[o.sequence] + 30;
+  const laps = o.laps !== undefined ? Math.max(1, Math.min(10, Math.round(o.laps))) : undefined;
+  const lapsPart = laps !== undefined ? { laps } : {};
+  const course: AppScenario['course'] = river
+    ? { source: 'library', id: 'sim-river-range', ...lapsPart }
+    : club
+      ? { source: 'library', id: club.id, ...lapsPart }
+      : library
+        ? { source: 'library', id: library.id, ...lapsPart }
+        : o.course === 'short'
+          ? { source: 'practice', kind: 'windward-leeward', legM: o.legM ?? SHORT_COURSE_LEG_M, laps: 1 }
+          : { source: 'practice', kind: o.course, ...(o.legM !== undefined ? { legM: o.legM } : {}), ...lapsPart };
   const scenario: AppScenario = {
     conditions,
-    startLocation: river ? 'dart-marina' : club ? 'start-bay' : 'start-bay-practice',
+    startLocation: river ? 'dart-marina' : club || library ? 'start-bay' : 'start-bay-practice',
     startHeadingDeg: 0,
     startSpeedKn: 2,
-    course: river ? { source: 'library', id: 'sim-river-range' } : club ? { source: 'library', id: club.id } : { source: 'practice', kind: o.course },
+    course,
     race: { sequence: o.sequence, startInS },
-    fleet: { aiCount: competitors, level: o.level, prepFlag: 'P' },
+    fleet: { aiCount: competitors, level: o.level, prepFlag: o.prepFlag ?? 'P' },
     boat: current.boat,
     helm: current.helm,
   };
   const who = competitors === 0 ? 'alone' : `against ${competitors} AI boat${competitors === 1 ? '' : 's'} (${o.level})`;
-  const where = river ? 'River race' : club ? `${club.course.name.replace(/ \(club course\)$/, '')}, from the club's 2026 sailing instructions (awaiting a club check)` : 'Start Bay race';
+  const where = river
+    ? 'River race'
+    : club
+      ? `${club.course.name.replace(/ \(club course\)$/, '')}, from the club's 2026 sailing instructions (awaiting a club check)`
+      : library
+        ? library.course.name
+        : o.course === 'short'
+          ? 'Short course'
+          : 'Start Bay race';
   return { scenario, summary: `${where} ${who}: ${summary}`, note };
 }
 
@@ -176,4 +223,24 @@ export function clubCourseForWind(windFromDeg: number, twsKn = 10, courses: Libr
   const group = (c: LibraryEntry) => /-([a-z])\d+$/.exec(c.id)?.[1];
   const score = (c: LibraryEntry) => Math.abs((((c.course.designWindFromDeg! - windFromDeg) % 360) + 540) % 360 - 180) + (group(c) === want ? 0 : 20);
   return club.sort((a, b) => score(a) - score(b) || a.id.localeCompare(b.id))[0];
+}
+
+/** A course in the library (built-in or your own), by id. */
+function builtInOrUserCourse(id: string): LibraryEntry | undefined {
+  return allCourses().find((c) => c.id === id);
+}
+
+/**
+ * Today's challenge: the same seeded race for everyone on the same (UTC) day: three good AI boats on the short
+ * course in a moderate random breeze, with a one-minute sequence. Its best time is kept apart in this browser.
+ * No server: nobody else's times are seen (shared tables need a service: docs/review/UI_BENCHMARK.md).
+ */
+export function dailyChallenge(now = new Date()): { key: string; day: string; options: QuickRaceOptions } {
+  const day = now.toISOString().slice(0, 10);
+  const seed = (Number(day.replace(/-/g, '')) % 9973) + 1;
+  return {
+    key: `challenge:${day}`,
+    day,
+    options: { competitors: 3, level: 'good', venue: 'start-bay', course: 'short', conditions: 'random', wind: 'medium', seed, sequence: 'one-minute', challenge: `challenge:${day}` },
+  };
 }

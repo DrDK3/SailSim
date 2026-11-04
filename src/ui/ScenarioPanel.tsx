@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { START_LOCATIONS, type AppScenario, type SimController, type StartLocationId, type UiState } from '../app/controller';
 import type { ConditionsSettings } from '../sim/env/conditions';
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
-import { allCourses, PRACTICE_KINDS } from '../app/courseLibrary';
+import { PRACTICE_KINDS } from '../app/courseLibrary';
 import { dataAgeMinutes } from '../sim/env/weather';
-import type { AiLevel } from '../sim/ai/skipper';
-import type { PrepFlag } from '../sim/race/committee';
 import { SKY_PRESETS, type SkyPreset } from '../sim/env/sky';
 import { DEFAULT_SQUIB_TYPE, SQUIB_TYPES, type SquibTypeId } from '../sim/boat/squib';
 
@@ -80,7 +78,7 @@ function ageText(validIso: string | undefined): string {
   return `${Math.round(age / 1440)} days old`;
 }
 
-export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
+export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController; ui: UiState; onClose: () => void; onRace?: () => void }) {
   const [draft, setDraft] = useState<AppScenario>(() => structuredClone(ui.scenario));
   const c = draft.conditions;
   const setC = (patch: Partial<ConditionsSettings>) => setDraft({ ...draft, conditions: { ...c, ...patch } });
@@ -306,78 +304,26 @@ export function ScenarioPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         </>
       )}
 
-      <h4>Course and start</h4>
-      <label className="field select-field">
-        <span>Course</span>
-        <select
-          aria-label="Course"
-          value={draft.course ? (draft.course.source === 'practice' ? `practice:${draft.course.kind}` : draft.course.source === 'library' ? `library:${draft.course.id}` : 'inline') : 'none'}
-          onChange={(e) => {
-            const v = e.target.value;
-            const race = draft.race ?? { sequence: 'one-minute' as const, startInS: 90 };
-            if (v === 'none') setDraft({ ...draft, course: undefined });
-            else if (v.startsWith('practice:')) setDraft({ ...draft, course: { source: 'practice', kind: v.slice(9) as (typeof PRACTICE_KINDS)[number]['kind'] }, race, startLocation: 'start-bay-practice' });
-            else if (v.startsWith('library:')) setDraft({ ...draft, course: { source: 'library', id: v.slice(8) }, race });
-          }}
-        >
-          <option value="none">None (free sailing)</option>
-          <optgroup label="Practice courses (simulated, laid at the start position)">
-            {PRACTICE_KINDS.map((k) => <option key={k.kind} value={`practice:${k.kind}`}>{k.label}</option>)}
-          </optgroup>
-          <optgroup label="Course library">
-            {allCourses().map((c) => <option key={`${c.group}-${c.id}`} value={`library:${c.id}`}>{c.group === 'user' ? 'Mine: ' : ''}{c.name}</option>)}
-          </optgroup>
-          <option value="club" disabled>Club courses: none entered yet (RDYC documents needed)</option>
-          {draft.course?.source === 'inline' && <option value="inline">From the editor</option>}
-        </select>
-      </label>
-      {draft.course?.source === 'practice' && (
-        <>
-          <p className="fine">{PRACTICE_KINDS.find((k) => k.kind === (draft.course as { kind: string }).kind)?.description} Laid at the start position, relative to the wind there. Simulated: not an RDYC course.</p>
-          <Num label="Leg length" value={draft.course.legM ?? PRACTICE_KINDS.find((k) => k.kind === (draft.course as { kind: string }).kind)!.legM} min={80} max={1500} step={20} unit="m" onChange={(v) => setDraft({ ...draft, course: { ...(draft.course as Extract<typeof draft.course, { source: 'practice' }>), legM: v } })} />
-        </>
-      )}
-      {draft.course && draft.course.source !== 'inline' && (
-        <Num label="Laps" value={draft.course.laps ?? 2} min={1} max={10} step={1} unit="" onChange={(v) => setDraft({ ...draft, course: { ...draft.course!, laps: Math.round(v) } as typeof draft.course })} />
-      )}
-      {draft.course && (
-        <>
-          <label className="field select-field">
-            <span>Start sequence</span>
-            <select value={draft.race?.sequence ?? 'one-minute'} onChange={(e) => setDraft({ ...draft, race: { startInS: draft.race?.startInS ?? 90, sequence: e.target.value as NonNullable<AppScenario['race']>['sequence'] } })}>
-              <option value="one-minute">1 minute</option>
-              <option value="three-minute">3 minutes</option>
-              <option value="five-minute">5 minutes (warning, preparatory, one-minute)</option>
-            </select>
-          </label>
-          <Num label="Start signal after" value={draft.race?.startInS ?? 90} min={20} max={600} step={10} unit="s" onChange={(v) => setDraft({ ...draft, race: { sequence: draft.race?.sequence ?? 'one-minute', startInS: Math.round(v) } })} />
-          <h4>Fleet</h4>
-          <Num label="AI boats" value={draft.fleet?.aiCount ?? 0} min={0} max={20} step={1} unit="" onChange={(v) => setDraft({ ...draft, fleet: { level: draft.fleet?.level ?? 'good', prepFlag: draft.fleet?.prepFlag ?? 'P', aiCount: Math.max(0, Math.min(20, Math.round(v))) } })} />
-          <label className="field select-field">
-            <span>AI level</span>
-            <select aria-label="AI level" value={draft.fleet?.level ?? 'good'} onChange={(e) => setDraft({ ...draft, fleet: { aiCount: draft.fleet?.aiCount ?? 0, prepFlag: draft.fleet?.prepFlag ?? 'P', level: e.target.value as AiLevel } })}>
-              <option value="club">Club</option>
-              <option value="good">Good</option>
-              <option value="expert">Expert</option>
-            </select>
-          </label>
-          <label className="field select-field">
-            <span>Preparatory flag</span>
-            <select aria-label="Preparatory flag" value={draft.fleet?.prepFlag ?? 'P'} onChange={(e) => setDraft({ ...draft, fleet: { aiCount: draft.fleet?.aiCount ?? 0, level: draft.fleet?.level ?? 'good', prepFlag: e.target.value as PrepFlag } })}>
-              <option value="P">P (no starting penalty)</option>
-              <option value="U">U (rule 30.3)</option>
-              <option value="black">Black flag (rule 30.4)</option>
-            </select>
-          </label>
-          <p className="fine">
-            AI Squibs sail with the same physics and controls as you (auto-trim, crew assist) and follow a simplified subset of the
-            racing rules. Their sail numbers are invented. Starting sequence per rule 26; individual and general recalls per rule 29;
-            the club's sailing instructions are not available, so the finishing window and recall policy are estimates.
-            With a course you start in the first slot behind the line; practice start lines are longer for bigger fleets.
-            The AI was tested with fleets of 5; in bigger fleets AI boats collide or start late more often.
-          </p>
-        </>
-      )}
+      <h4>Course and race</h4>
+      <p className="fine" data-testid="scenario-course">
+        {draft.course
+          ? `This scenario races ${ui.race?.courseName ?? (draft.course.source === 'practice' ? PRACTICE_KINDS.find((k) => k.kind === (draft.course as { kind: string }).kind)?.label ?? 'a practice course' : 'a course')}${draft.fleet?.aiCount ? ` against ${draft.fleet.aiCount} AI boat${draft.fleet.aiCount === 1 ? '' : 's'}` : ' alone'}. Apply keeps it, with the conditions above.`
+          : 'Free sailing: no course.'}{' '}
+        Courses, laps, the start sequence and the fleet are all set in Race.
+      </p>
+      <div className="row left wrap">
+        {onRace && (
+          <button
+            onClick={() => {
+              onClose();
+              onRace();
+            }}
+          >
+            Race set-up…
+          </button>
+        )}
+        {draft.course && <button onClick={() => setDraft({ ...draft, course: undefined, race: undefined, fleet: undefined })}>Sail without the course</button>}
+      </div>
 
       {ui.scenarioError && <p className="error" role="alert">Could not start: {ui.scenarioError}</p>}
       <div className="row">

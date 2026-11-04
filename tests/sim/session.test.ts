@@ -25,7 +25,7 @@ describe('activity', () => {
     const c = new SimController();
     expect(activityOf(c.getState())).toEqual({ kind: 'free', label: 'Free sailing' });
     c.startTutorial();
-    expect(activityOf(c.getState())).toEqual({ kind: 'tutorial', label: 'Tutorial', detail: 'step 1 of 11' });
+    expect(activityOf(c.getState())).toEqual({ kind: 'tutorial', label: 'Lesson 1', detail: 'Steering · step 1 of 4' });
     c.restart(structuredClone(RACE));
     expect(activityOf(c.getState())).toEqual({ kind: 'race', label: 'Race', detail: '2 AI · starting' });
     c.restart({ ...structuredClone(RACE), fleet: { aiCount: 0, level: 'good', prepFlag: 'P' } });

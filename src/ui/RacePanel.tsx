@@ -60,7 +60,7 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
   const signalTime = race.events.find((e) => e.type === 'signal' && e.name === 'start')?.t;
   const t0 = signalTime ?? 0;
   return (
-    <section className="panel race" aria-label="Race" data-testid="race-panel">
+    <section className="panel race" aria-label="Race" data-testid="race-panel" data-tutorial="race">
       <div className="race-head">
         <strong>{race.courseName}</strong>
         <span className={`status ${st.cls}`}>{st.label}</span>
@@ -135,6 +135,25 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
           <div className="cell-label">Finished</div>
           <div className="race-big" data-testid="finish-time">{clock(race.finishTime - t0)}</div>
           <div className="fine-inline">from the start signal</div>
+        </div>
+      )}
+      {race.best && (
+        <div className="race-best" data-testid="race-best" role="status">
+          {race.best.start && (
+            <div>
+              Start: {race.best.start.delayS.toFixed(1)} s after the signal
+              {race.best.start.best ? (race.best.start.previousS !== undefined ? ` · your best start (was ${race.best.start.previousS.toFixed(1)} s)` : ' · your first start recorded') : ` · best ${race.best.start.previousS?.toFixed(1)} s`}
+            </div>
+          )}
+          {race.best.finish && (
+            <div>
+              {race.best.finish.best
+                ? race.best.finish.previousS !== undefined
+                  ? `New personal best for ${race.best.finish.label} (was ${clock(race.best.finish.previousS)})`
+                  : `Your first time on ${race.best.finish.label}`
+                : `Your best on ${race.best.finish.label}: ${clock(race.best.finish.previousS ?? 0)}`}
+            </div>
+          )}
         </div>
       )}
       <ol className="race-events" aria-label="Race events">

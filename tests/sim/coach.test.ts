@@ -143,7 +143,7 @@ describe('quick race', () => {
   it('builds the race scenario: competitors, level, venue, sequence, and live data when there is some', () => {
     const q = quickRaceScenario({ ...DEFAULT_QUICK_RACE, competitors: 25, level: 'expert' }, DEFAULT_SCENARIO);
     expect(q.scenario.fleet).toEqual({ aiCount: 20, level: 'expert', prepFlag: 'P' });
-    expect(q.scenario.course).toEqual({ source: 'practice', kind: 'windward-leeward' });
+    expect(q.scenario.course).toEqual({ source: 'practice', kind: 'windward-leeward', legM: 220, laps: 1 }); // the short course, by default
     expect(q.scenario.race!.startInS).toBe(210);
     expect(q.summary).toMatch(/against 20 AI boats \(expert\)/);
     const river = quickRaceScenario({ ...DEFAULT_QUICK_RACE, venue: 'river' }, DEFAULT_SCENARIO);

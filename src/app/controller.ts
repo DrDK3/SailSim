@@ -33,7 +33,10 @@ import { windFrom } from '../sim/boat/forces';
 import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
 import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
-import { TUTORIAL_INPUT, TUTORIAL_SCENARIO, Tutorial, type TutorialState } from './tutorial';
+import { Tutorial, type TutorialState } from './tutorial';
+import { courseKey, recordRaceTime, recordStart } from './bests';
+import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
+import { LESSONS, lessonAfter, lessonById, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
@@ -127,6 +130,8 @@ export interface RaceUi {
   results?: FleetRow[];
   raceOver: boolean;
   disqualified?: string;
+  /** Your start and finish against your bests in this browser (src/app/bests.ts). */
+  best?: { start?: { delayS: number; best: boolean; previousS?: number }; finish?: { timeS: number; best: boolean; previousS?: number; label: string } };
 }
 
 export const DEFAULT_SCENARIO: AppScenario = {
@@ -189,8 +194,19 @@ export interface UiState {
   replay?: ReplayStatus;
   /** Simulation speed relative to real time (1, 2, 4, 8). */
   timeScale: number;
-  /** The interactive tutorial, while it runs. */
-  tutorial?: TutorialState & { finished: boolean };
+  /** The lesson running (src/app/lessons.ts), with its step, and its result card once it is finished. */
+  tutorial?: TutorialState & {
+    finished: boolean;
+    lesson: { id: LessonId; number: number; title: string; count: number };
+    /** The result card: what you did, whether it was your best time, and the next lesson. */
+    result?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
+  };
+  /** The six lessons, with what is done in this browser. */
+  lessons: { id: LessonId; number: number; title: string; summary: string; minutes: number; done: boolean; bestS?: number }[];
+  /** The teaching overlay (heading, course over ground, stream, winds, VMG) is on outside the lessons. */
+  teaching: boolean;
+  /** How much the interface shows by default (src/app/level.ts). */
+  level: InterfaceLevel;
   /** Reset was asked for during a race: the UI asks before throwing the race away. */
   confirmReset: boolean;
   /** Something else was asked for during a race (what, in a few words): the UI asks before leaving the race. */
@@ -267,7 +283,7 @@ export class SimController {
   private raf = 0;
   private paused = false;
   /** Pace against the wall clock (`watchPace`). */
-  private readonly pace = { wall: 0, sim: 0, slowWindows: 0, lastLowered: -Infinity, skipNext: false };
+  private readonly pace = { wall: 0, sim: 0, slowWindows: 0, lastLowered: -Infinity, skipFrames: 0 };
   private runningSlow?: { ratio: number; lowered?: GraphicsPreset };
   /** Step the graphics down when the simulation cannot keep up (a setting; on by default). */
   autoLowerGraphics = true;
@@ -287,8 +303,20 @@ export class SimController {
   /** Replay in progress: the recording, its decoded inputs and how far it has been checked. */
   private replay?: { rec: Recording; inputs: InputLogEntry[]; next: number; matched: number; total: number; verifiedTo: number; divergedAt?: number; ended: boolean; notes: string[] };
   private timeScale = 1;
-  /** The interactive tutorial, while it runs (src/app/tutorial.ts). */
+  /** The lesson running (src/app/lessons.ts) and its step engine (src/app/tutorial.ts). */
   private tutorial?: Tutorial;
+  private lesson?: Lesson;
+  /** The lesson's buoy (local metres), placed from where the boat started. */
+  private lessonTarget?: { n: number; e: number };
+  private lessonResult?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
+  private lessonProgress: LessonProgress = loadLessonProgress();
+  /** Today's challenge, while it is the race being sailed. */
+  private raceTag?: { key: string; scenario: string };
+  /** This race's start and finish against your bests (once each). */
+  private raceBest: NonNullable<RaceUi['best']> = {};
+  /** The teaching overlay outside lessons (Settings; on by default at the Learn level). */
+  private teachingOn = readFlag('squib.teaching', false);
+  private interfaceLevel: InterfaceLevel = loadLevel();
   private confirmReset = false;
   private lastRecordT = -Infinity;
   private frames = 0;
@@ -439,8 +467,16 @@ export class SimController {
     }
     this.confirmReset = false;
     this.leave = undefined;
-    // Starting anything other than the tutorial's own scenario ends the tutorial (Reset keeps it).
-    if (this.tutorial && JSON.stringify(scenario) !== JSON.stringify(TUTORIAL_SCENARIO)) this.tutorial = undefined;
+    this.raceBest = {};
+    if (this.raceTag && this.raceTag.scenario !== JSON.stringify(scenario)) this.raceTag = undefined;
+    // Starting anything other than the lesson's own scenario ends the lesson (a Reset keeps it).
+    if (this.tutorial && JSON.stringify(scenario) !== JSON.stringify(this.lesson?.scenario)) this.endLesson();
+    else if (this.tutorial) {
+      // Reset keeps the step but starts its measuring again from the new start, and sets the boat up for it
+      // again (a sheet handed over stays handed over).
+      this.tutorial.restartStep();
+      this.applyTutorialInput();
+    }
     this.currSnap = this.sim.snapshot(false);
     this.prevSnap = this.currSnap;
     this.detailSnap = this.sim.snapshot();
@@ -489,6 +525,8 @@ export class SimController {
     if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
     if (this.tutorial && this.sim.step % 10 === 0) this.updateTutorial();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
+    // Only your own sailing counts towards your bests, not a replay of a recording.
+    if (this.race && !this.replay && this.sim.step % 50 === 0) this.checkRaceBests();
   }
 
   /** The coach for a race: the line, the first mark and the conditions at the line when the run begins. */
@@ -558,6 +596,8 @@ export class SimController {
     const liveTide = this.tideSources.find((t) => t.kind === 'live');
     const q = quickRaceScenario(o, this.scenario, live, liveTide);
     if (!this.restart(q.scenario)) return undefined;
+    // Today's challenge keeps its best apart (it stays the challenge through a Reset of the same race).
+    this.raceTag = o.challenge ? { key: o.challenge, scenario: JSON.stringify(q.scenario) } : undefined;
     if (this.paused) this.togglePause();
     return { summary: q.summary, note: q.note };
   }
@@ -620,7 +660,7 @@ export class SimController {
    */
   freeSail(): void {
     if (this.replay) this.takeOver();
-    if (this.tutorial) this.tutorial = undefined;
+    if (this.tutorial) this.endLesson();
     if (this.race) {
       const free = structuredClone(this.scenario);
       delete free.course;
@@ -644,25 +684,67 @@ export class SimController {
     else this.publish(true);
   }
 
-  // ------------------------------------------------------------- tutorial
+  /** A clean start and a finish are compared with your bests in this browser, once each per race. */
+  private checkRaceBests(): void {
+    const r = this.race!;
+    const t = this.sim.time;
+    const cm = r.session.committee;
+    const st = r.session.judgeOf('you').state(t);
+    if (!this.raceBest.start && st.startTime !== undefined) {
+      const delayS = Math.max(0, st.startTime - cm.startTime);
+      this.raceBest.start = { delayS, ...recordStart(delayS) };
+      this.publish(true);
+    }
+    if (!this.raceBest.finish && st.phase === 'finished' && st.finishTime !== undefined && st.startTime !== undefined) {
+      const timeS = st.finishTime - cm.startTime;
+      const label = this.raceTag ? `Today's challenge (${this.raceTag.key.slice(10)})` : courseKey(r.course.name, r.course.laps);
+      this.raceBest.finish = { timeS, label, ...recordRaceTime(this.raceTag?.key ?? courseKey(r.course.name, r.course.laps), label, timeS) };
+      this.publish(true);
+    }
+  }
 
-  /** Start the interactive tutorial: its own open-water scenario, steady breeze, steps checked as you sail. */
-  startTutorial(): void {
-    if (!this.restart(structuredClone(TUTORIAL_SCENARIO), { initialInput: TUTORIAL_INPUT })) return;
-    this.tutorial = new Tutorial();
+  // ------------------------------------------------------------- lessons
+
+  /** Start a lesson (src/app/lessons.ts): its own water and wind, steps checked as you sail. Default: the next one not done. */
+  startLesson(id?: LessonId): void {
+    const lesson = id ? lessonById(id) : nextLessonFor(this.lessonProgress);
+    this.endLesson();
+    if (!this.restart(structuredClone(lesson.scenario), { initialInput: lesson.input })) return;
+    this.lesson = lesson;
+    this.tutorial = new Tutorial(lesson.steps);
+    const s = this.sim.state;
+    const b = ((lesson.target?.bearingDeg ?? 0) * Math.PI) / 180;
+    this.lessonTarget = lesson.target ? { n: s.n + Math.cos(b) * lesson.target.distM, e: s.e + Math.sin(b) * lesson.target.distM } : undefined;
+    this.lessonResult = undefined;
     this.paused = false;
+    this.lastFrame = performance.now();
     this.applyTutorialInput();
+    this.applyTeaching();
     this.publish(true);
   }
 
+  /** The lessons began as one tutorial; "Learn to sail" starts the next lesson not yet done. */
+  startTutorial(): void {
+    this.startLesson();
+  }
+
   endTutorial(): void {
-    this.tutorial = undefined;
+    this.endLesson();
     this.publish(true);
+  }
+
+  private endLesson(): void {
+    this.tutorial = undefined;
+    this.lesson = undefined;
+    this.lessonTarget = undefined;
+    this.lessonResult = undefined;
+    this.applyTeaching();
   }
 
   tutorialNext(): void {
     this.tutorial?.next();
     this.applyTutorialInput();
+    this.checkLessonDone();
     this.publish(true);
   }
 
@@ -679,28 +761,106 @@ export class SimController {
     t.pendingInput = undefined;
   }
 
-  /** Every 0.1 s of simulated time: check the step's goal; move on 2 s after it is met. */
-  private updateTutorial(): void {
-    const t = this.tutorial!;
+  /** The teaching overlay: the lesson's parts during a lesson, else all of them when switched on (or none). */
+  private applyTeaching(): void {
+    const parts: OverlayPart[] = this.lesson ? this.lesson.overlay : this.teachingOn ? ['heading', 'cog', 'current', 'wind', 'vmg'] : [];
+    this.view?.setTeaching(parts, this.lessonTarget);
+  }
+
+  /**
+   * The interface level: kept in this browser, and it sets the defaults it governs (the teaching overlay, the
+   * coach, all the instruments, the dock's advanced controls), each of which can still be changed by hand.
+   */
+  setLevel(l: InterfaceLevel): void {
+    this.interfaceLevel = l;
+    saveLevel(l);
+    const d = levelDefaults(l);
+    this.teachingOn = d.teaching;
+    writeFlag('squib.teaching', d.teaching);
+    this.coachOn = d.coach;
+    writeFlag('squib.coach', d.coach);
+    try {
+      localStorage.setItem('squib.instruments.more', d.allInstruments ? '1' : '0');
+    } catch {
+      // storage unavailable
+    }
+    this.applyTeaching();
+    this.publish(true);
+  }
+
+  get level(): InterfaceLevel {
+    return this.interfaceLevel;
+  }
+
+  get teachingEnabled(): boolean {
+    return this.teachingOn;
+  }
+
+  /** The teaching overlay outside the lessons (kept in this browser). */
+  toggleTeaching(force?: boolean): void {
+    this.teachingOn = force ?? !this.teachingOn;
+    writeFlag('squib.teaching', this.teachingOn);
+    this.applyTeaching();
+    this.publish(true);
+  }
+
+  /** What the lesson sees of the boat now. */
+  private lessonSample() {
     const s = this.sim.snapshot(false);
     const R2D = 180 / Math.PI;
-    t.update({
+    const KN = 0.514444;
+    let race: { toStart: number; ocs: boolean; startedAt?: number; signalAt: number } | undefined;
+    if (this.race) {
+      const cm = this.race.session.committee;
+      const st = this.race.session.judgeOf('you').state(s.t);
+      race = { toStart: cm.startTime - s.t, ocs: st.ocs, startedAt: st.startTime, signalAt: cm.startTime };
+    }
+    const tg = this.lessonTarget;
+    return {
       t: s.t,
       headingDeg: s.heading * R2D,
       twaDeg: Math.abs(s.twa) * R2D,
-      stwKn: s.stw / 0.514444,
+      stwKn: s.stw / KN,
       mainSide: s.mainSide,
       main: sailState(s.forces.main),
       autoMain: s.input.autoMain,
       autoCrew: s.input.autoCrew,
       crewHike: s.input.crewHike,
-    });
-    const since = t.sinceDone(s.t);
+      n: s.n,
+      e: s.e,
+      sogKn: s.sog / KN,
+      vmgKn: s.vmg / KN,
+      awsKn: s.aws / KN,
+      jib: sailState(s.forces.jib),
+      autoJib: s.input.autoJib,
+      targetDistM: tg ? Math.hypot(tg.n - s.n, tg.e - s.e) : undefined,
+      race,
+    };
+  }
+
+  /** Every 0.1 s of simulated time: check the step's goal; move on 2 s after it is met. */
+  private updateTutorial(): void {
+    const t = this.tutorial!;
+    t.update(this.lessonSample());
+    const since = t.sinceDone(this.sim.time);
     if (since !== undefined && since >= 2 && t.state.index < t.state.total - 1) {
       t.next();
       this.applyTutorialInput();
+      this.checkLessonDone();
       this.publish(true);
     }
+  }
+
+  /** On reaching the lesson's last step: its result card, and the lesson marked done in this browser. */
+  private checkLessonDone(): void {
+    const t = this.tutorial;
+    const l = this.lesson;
+    if (!t || !l || !t.finished || this.lessonResult) return;
+    const elapsed = this.sim.time;
+    const { progress, best } = saveLessonDone(l.id, elapsed);
+    this.lessonProgress = progress;
+    const next = lessonAfter(l.id);
+    this.lessonResult = { lines: l.result(t.record, elapsed), best, next: next && { id: next.id, title: next.title } };
   }
 
   /** The whole run's state hash: every boat (and so, through determinism, everything else). */
@@ -934,6 +1094,7 @@ export class SimController {
       try {
         this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, quays: data.quays, detail: this.view.quality });
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
+        this.settlePace();
         // A course already drawn learns which of its marks are real buoys the harbour now draws.
         if (this.race) this.view.setCourse(this.race.resolved, this.race.course, data.features?.marks);
       } catch (err) {
@@ -953,6 +1114,7 @@ export class SimController {
     try {
       this.view = new SceneView(container, this.sim.params);
       this.view.onContextChange = (lost) => this.onGraphicsContext(lost);
+      this.applyTeaching();
     } catch (err) {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
@@ -991,6 +1153,7 @@ export class SimController {
     const simulate = new URLSearchParams(location.search).get('gpucheck') === 'fault';
     const c = this.view.checkMaterials(simulate);
     if (c) this.lastMaterialCheck = c;
+    this.settlePace();
     this.publish(true);
     return c;
   }
@@ -1000,6 +1163,7 @@ export class SimController {
     if (!this.view) return;
     this.view.setMaterialFix(fix);
     saveFix(this.view.gpuName, fix);
+    this.settlePace();
     this.publish(true);
   }
 
@@ -1132,7 +1296,7 @@ export class SimController {
   private onGesture = () => this.sound.resume();
   private onVisibility = () => {
     this.sound.setHidden(document.hidden);
-    this.pace.skipNext = true;
+    this.pace.skipFrames = Math.max(this.pace.skipFrames, 1);
   };
 
   /** The sounds follow the boat as drawn (the latest physics state). */
@@ -1212,6 +1376,7 @@ export class SimController {
     // The user's own choice wins: no automatic lowering for the rest of this visit.
     this.autoLowerGraphics = false;
     this.view?.applyGraphics(g, true);
+    this.settlePace();
     this.publish(true);
   }
 
@@ -1321,6 +1486,19 @@ export class SimController {
   }
 
   /**
+   * A one-off pause the app makes itself (new shaders compiled after the river scene arrives, a change of drawing
+   * mode or graphics, the graphics check): leave its frames out and start the measurement again, so it is not
+   * taken for a device too slow to keep up (which would lower the graphics for nothing).
+   */
+  private settlePace(frames = 4): void {
+    const w = this.pace;
+    w.skipFrames = Math.max(w.skipFrames, frames);
+    w.wall = 0;
+    w.sim = 0;
+    w.slowWindows = 0;
+  }
+
+  /**
    * Keeping up with real time (review PH-5). Each frame may advance at most 0.1 s and 12 steps, so on a slow
    * device the simulation runs slower than the clock. Over windows of 3 s of wall time (the frame after a hidden
    * tab returns is left out) the share of real time simulated is measured; under 90% the run is "running
@@ -1330,8 +1508,8 @@ export class SimController {
   private watchPace(wallS: number, simS: number): void {
     const w = this.pace;
     // The first frame after the tab is shown again spans the time it was hidden: not slowness.
-    if (w.skipNext || wallS > 30 || wallS <= 0) {
-      w.skipNext = false;
+    if (w.skipFrames > 0 || wallS > 30 || wallS <= 0) {
+      w.skipFrames = Math.max(0, w.skipFrames - 1);
       return;
     }
     w.wall += wallS;
@@ -1352,6 +1530,8 @@ export class SimController {
       if (next !== g.preset) {
         this.view.applyGraphics(presetSettings(next, g.cameraMotion), false);
         w.lastLowered = performance.now();
+        // Its own recompiling is not more slowness (the next step down is still at least 30 s away).
+        w.skipFrames = Math.max(w.skipFrames, 4);
         this.runningSlow = { ratio, lowered: next };
       }
     }
@@ -1384,8 +1564,10 @@ export class SimController {
 
   cycleCamera(): void {
     if (!this.view) return;
-    const i = CAMERA_MODES.indexOf(this.view.cameraMode);
-    this.setCamera(CAMERA_MODES[(i + 1) % CAMERA_MODES.length]!);
+    // The start-line view is offered only when there is a course (a start line to look along).
+    const modes = CAMERA_MODES.filter((m) => m !== 'line' || this.view!.hasStartLine);
+    const i = modes.indexOf(this.view.cameraMode);
+    this.setCamera(modes[(i + 1) % modes.length]!);
   }
 
   setCamera(mode: CameraMode): void {
@@ -1549,7 +1731,18 @@ export class SimController {
       snapshot: this.detailSnap,
       paused: this.paused,
       timeScale: this.timeScale,
-      tutorial: this.tutorial ? { ...this.tutorial.state, finished: this.tutorial.finished } : undefined,
+      tutorial:
+        this.tutorial && this.lesson
+          ? {
+              ...this.tutorial.state,
+              finished: this.tutorial.finished,
+              lesson: { id: this.lesson.id, number: this.lesson.number, title: this.lesson.title, count: LESSONS.length },
+              result: this.lessonResult,
+            }
+          : undefined,
+      lessons: LESSONS.map((l) => ({ id: l.id, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id], bestS: this.lessonProgress[l.id]?.bestS })),
+      teaching: this.teachingOn,
+      level: this.interfaceLevel,
       confirmReset: this.confirmReset,
       confirmLeave: this.leave?.what,
       replay: this.replay
@@ -1687,6 +1880,7 @@ export class SimController {
       results,
       raceOver,
       disqualified: dq,
+      best: this.raceBest.start || this.raceBest.finish ? { ...this.raceBest } : undefined,
     };
   }
 

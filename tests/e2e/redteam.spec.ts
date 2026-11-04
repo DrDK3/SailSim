@@ -23,7 +23,7 @@ test('quick race: choose the competitors, start, read the coach’s briefing, tu
   test.setTimeout(180_000 * CI_SLOW);
   const errors = await ready(page);
   await page.getByRole('button', { name: 'Race', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Quick race' });
+  const panel = page.getByRole('region', { name: 'Race set-up' });
   await expect(panel).toBeVisible();
   await panel.getByLabel('Number of AI competitors').fill('3');
   await expect(panel).toContainText('3 AI boats');

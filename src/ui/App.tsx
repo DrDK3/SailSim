@@ -10,6 +10,7 @@ import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
 import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
+import { hasStoredLevel } from '../app/level';
 import { Confirm } from './Confirm';
 import { activityOf } from './activity';
 import { ActivityIcon } from './icons';
@@ -79,6 +80,11 @@ export function App({ ctl }: { ctl: SimController }) {
   // The experience hub: by itself on the first visit only; the activity button brings it back.
   const [hubFirst, setHubFirst] = useState(shouldWelcome);
   const [hubOpen, setHubOpen] = useState(hubFirst);
+  // A first visit with no level chosen yet starts at Learn ("Not yet" in the welcome's question), so that
+  // "Sail now" starts lesson 1; answering the question changes it.
+  useEffect(() => {
+    if (hubFirst && !hasStoredLevel()) ctl.setLevel('learn');
+  }, []);
   // Small screens: the toolbar folds behind a Menu button (styles.css).
   const [toolsOpen, setToolsOpen] = useState(false);
   // The sailing controls can be put away (keyboard sailors), remembered in this browser.
@@ -116,7 +122,7 @@ export function App({ ctl }: { ctl: SimController }) {
     then?.();
   };
   const activity = activityOf(ui);
-  const startTutorial = () => ctl.leaveTo('Starting the tutorial', () => ctl.startTutorial());
+  const startTutorial = () => ctl.leaveTo('Starting a lesson', () => ctl.startTutorial());
 
   // Escape closes the panels this component owns (the controller closes help, polar and layers).
   useEffect(() => {
@@ -215,7 +221,7 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
       <div className="hud-left" style={hudMax === undefined ? undefined : { maxHeight: hudMax }}>
-        <Instruments s={ui.snapshot} />
+        <Instruments s={ui.snapshot} level={ui.level} />
         {ui.race && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
         {ui.race && <CoachCard ctl={ctl} ui={ui} />}
       </div>
@@ -263,12 +269,13 @@ export function App({ ctl }: { ctl: SimController }) {
                 <option value="orbit">Orbit the boat</option>
                 <option value="drone">Drone (fly and pan)</option>
                 <option value="top">Top-down</option>
+                <option value="line" disabled={!ui.race}>Start line (from the committee boat){ui.race ? '' : ': with a course'}</option>
               </select>
             </label>
           </div>
           {/* Setting up a sail: ready-made scenarios, or your own. */}
           <div className="tb-group">
-            <button aria-pressed={raceOpen} onClick={() => openRace(!raceOpen)} title="Quick race: choose how many AI boats, where, and random or live conditions">Race</button>
+            <button aria-pressed={raceOpen} onClick={() => openRace(!raceOpen)} title="Race: today\u2019s challenge, or choose the course, the fleet, the start and the conditions">Race</button>
             <button className="tb-secondary" aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
             <button className="tb-secondary" aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
           </div>
@@ -276,9 +283,10 @@ export function App({ ctl }: { ctl: SimController }) {
           <div className="tb-group">
             <Menu
               label="More"
-              title="Tutorial, course editor, what is shown, and physics tools"
+              title="Lessons, course editor, what is shown, and physics tools"
               items={[
-                { section: 'Learn and plan', label: 'Tutorial', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
+                { section: 'Learn and plan', label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
+                { label: 'Teaching overlay', checked: ui.teaching, onSelect: () => ctl.toggleTeaching() },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
                 { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
@@ -300,8 +308,8 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       </nav>
       <div className="side" style={sideTop === undefined ? undefined : { top: sideTop, maxHeight: `calc(100% - ${sideTop + 230}px)` }}>
-        {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} />}
-        <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => openScenario(false)} />}</Suspense>
+        {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} onRace={() => openRace(true)} />}
+        <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => openScenario(false)} onRace={() => openRace(true)} />}</Suspense>
         <Suspense fallback={null}>{libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => openLibrary(false)} />}</Suspense>
         <Suspense fallback={null}>{raceOpen && <QuickRacePanel ctl={ctl} ui={ui} onClose={() => openRace(false)} />}</Suspense>
         <Suspense fallback={null}>{ui.showPolar && <PolarPanel onClose={() => ctl.togglePolar(false)} />}</Suspense>
@@ -394,7 +402,13 @@ export function App({ ctl }: { ctl: SimController }) {
           onRace={() => closeHub(() => openRace(true))}
           onScenarios={() => closeHub(() => openLibrary(true))}
           steering={ui.steering}
-          onSteering={(m) => ctl.setSteering(m)}
+          level={ui.level}
+          onAnswer={(l, m) => {
+            ctl.setLevel(l);
+            ctl.setSteering(m);
+          }}
+          onSailNow={() => closeHub(() => (ui.level === 'learn' ? ctl.leaveTo('Starting lesson 1', () => ctl.startLesson('steer')) : ctl.leaveTo('Free sailing', () => ctl.freeSail())))}
+          lessonsDone={ui.lessons.filter((l) => l.done).length}
         />
       )}
       {ui.confirmLeave && (
