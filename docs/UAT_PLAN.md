@@ -259,6 +259,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 19.4a | On a phone (or a window under 700 px wide) in a race, choose Expert and turn Auto crew off | The console: the sails one above the other, the helm and the boat side by side, Flat and Hike inside their box; the instruments and the race panel scroll above it, never over it; ▾ on a tab above the console's corner | |
 | 19.5 | Look at the minimap and zoom it in and out | The scale (300 m, 625 m or 1.7 km) under the map, not on it | |
 | 19.6 | On the deployed site, a few hours after the merge, free sail with live conditions on a cloudy or rainy day | Overcast sky, soft light, rain when the forecast has it | |
+| 19.6a | On the river in 18 kn and then 25 kn (Scenario), chase and helm views | No white spots or twinkling flecks across the water; at 25 kn the chop's crests whiten a little, as lace on the crests | |
 | 19.7 | Start Bay in 15 kn or more (Scenario, or live on a breezy day) | White horses across the bay; surf on the beaches with an onshore wind | |
 
 ## Accepting the build

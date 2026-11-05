@@ -1526,4 +1526,15 @@ The owner's screenshot of the two-row dock: "not looking good … too much white
 | **CI follow-up.** The pull-request run failed the layout check in a race on a 360 × 640 phone: the instruments column ran over the console and off the screen. Its height was set from a measurement taken after a resize, and in software rendering the first frames of a race can take longer than the check waits, so the height measured on the larger screen before stayed. The column is now also capped in CSS, above the console, whose height is fixed at each width (86, 164 or 232 px); the measurement can only lower that cap | `src/ui/App.tsx`, `src/ui/styles.css` | `layout.spec.ts` (five sizes, sailing and racing) |
 | **CI follow-up.** Measuring every module at its widest (Expert, crew by hand, every figure 100%) found the boat module 18 px too narrow on a laptop and 50–65 px on a phone, and the four modules in a row running under the minimap from 1180 to 1219 px. The boat module is 230 px; four in a row from 1250 px (the console is 1020 px, the minimap and margins 228 px); on a phone the key letters are left off (no keyboard; the buttons' names still give the keys) and the hide button is a tab above the console's corner | `src/ui/styles.css` | `immersive.spec.ts` (nine widths from 360 to 1920 px: nothing runs out of its module, the console's height, clear of the minimap) |
 
+### White spots on the river (the owner, 5 Nov 2026)
+
+"What are the white spots on the river? It looks like a disco ball reflection and it is very distracting." Rendered on the river at 18 kn and switched off in turn, the spots were the white horses added for Start Bay: 5 m patches, as many as the wind speed alone says, drawn on the river's chop too, whose waves are only 1 to 5 m long (fetches of 0.3 to 2.5 km; Start Bay's are 15 to 70 m). Away from the boat each patch shrank to a few pixels that twinkled as the waves moved. At 25 kn the crest foam, strengthened with them, also turned the chop's crests into solid white blobs.
+
+| What changed | Files | Checked by |
+|---|---|---|
+| White horses only where the waves are long enough to carry them (from 6 m, all from 12 m, E): Start Bay's sea and the surf, not the river's chop | `src/render/water.ts` | Renders on the river at 18 and 25 kn and in Start Bay at 18 and 25 kn, before and after (software rendering only) |
+| Where a patch would be only a few pixels across, it fades out and a faint, slowly varying whitening of the same cover takes its place, so nothing twinkles in the distance | `src/render/water.ts` | The same renders |
+| A crest breaks over about a second and its foam thins and fades over the next few, rather than switching on and off | `src/render/water.ts` | The same renders |
+| On short chop the crests whiten at most a third (E), a lace on the crests rather than white blobs | `src/render/water.ts` | The same renders |
+
 **Takes effect on the site after the merge:** the live job runs the ingest from `main`, so the cloud fix reaches the published forecast at its first run after this is merged. **Not inspected on a real GPU** (GR-1).
