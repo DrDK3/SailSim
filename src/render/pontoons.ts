@@ -16,8 +16,11 @@ export interface PontoonPier {
   line?: [number, number][];
   width?: number;
   poly?: [number, number][];
-  /** A named gangway: from the shore (e, n) to the pontoon (e, n). */
-  gangway?: { shore: [number, number]; pontoon: [number, number] };
+  /**
+   * A named gangway: from the shore (e, n) to the pontoon (e, n); optionally its shore end's height (m ODN, else
+   * the ground's), its width, and its style (side rails, or a white lattice truss as at Kingswear).
+   */
+  gangway?: { shore: [number, number]; pontoon: [number, number]; shoreY?: number; width?: number; style?: GangwayStyle };
 }
 
 /** Heights (m): floating pontoon deck top above the water, fixed jetty deck top (ODN), pile tops (ODN). */
@@ -80,6 +83,9 @@ function cleatGeometry(): THREE.BufferGeometry {
   horn.translate(0, 0.07, 0);
   return mergeGeometries([base, horn])!;
 }
+
+/** How a gangway is drawn: side rails (the marinas'), or a white lattice truss (Kingswear's passenger pier). */
+export type GangwayStyle = 'rails' | 'truss';
 
 export interface Gangway {
   mesh: THREE.Group;
@@ -189,7 +195,7 @@ export function buildPontoons(piers: readonly PontoonPier[], groundAt: (e: numbe
         run += L;
       }
       if (p.floating) {
-        const g = gangwayFor(p.line, half, groundAt);
+        const g = p.gangway ? namedGangway(p.gangway, groundAt) : gangwayFor(p.line, half, groundAt);
         if (g) gangways.push(g);
       }
     } else if (p.poly && p.poly.length >= 3) {
@@ -204,9 +210,7 @@ export function buildPontoons(piers: readonly PontoonPier[], groundAt: (e: numbe
       geo.translate(0, top - depth, 0);
       (p.floating ? decks : jettyDecks).push(geo);
       if (p.floating) {
-        const g = p.gangway
-          ? makeGangway({ e: p.gangway.pontoon[0], n: p.gangway.pontoon[1] }, { e: p.gangway.shore[0], n: p.gangway.shore[1], y: groundAt(p.gangway.shore[0], p.gangway.shore[1]) + 0.05 }, 1.2)
-          : gangwayFromCorner(p.poly, groundAt);
+        const g = p.gangway ? namedGangway(p.gangway, groundAt) : gangwayFromCorner(p.poly, groundAt);
         if (g) gangways.push(g);
       }
       if (!p.floating) {
@@ -296,8 +300,67 @@ function gangwayFor(line: [number, number][], half: number, groundAt: (e: number
   return best;
 }
 
-/** A gangway (1.1 m wide or less, with side rails) from a pontoon end to a point on the bank. */
-function makeGangway(from: { e: number; n: number }, to: { e: number; n: number; y: number }, width = 1.1): Gangway {
+/** A pier's named gangway (PontoonPier.gangway). */
+function namedGangway(g: NonNullable<PontoonPier['gangway']>, groundAt: (e: number, n: number) => number): Gangway {
+  const y = g.shoreY ?? groundAt(g.shore[0], g.shore[1]) + 0.05;
+  return makeGangway({ e: g.pontoon[0], n: g.pontoon[1] }, { e: g.shore[0], n: g.shore[1], y }, g.width ?? 1.2, g.style);
+}
+
+/**
+ * A white lattice-truss gangway (Kingswear's passenger pier, from the owner's photographs; E: its depth, panel
+ * length and members): a deck between two trusses of chords, posts and crossed diagonals in panels of about
+ * 1.4 m. Built along +z, 1 m long, as `makeGangway` does: every member is drawn from its corners, so stretching
+ * it to the span keeps the members' depth and the panels in proportion.
+ */
+function trussGangway(span: number, width: number): THREE.Group {
+  const mesh = new THREE.Group();
+  mesh.name = 'gangway';
+  const white = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.55, side: THREE.DoubleSide });
+  const tread = new THREE.MeshStandardMaterial({ color: 0x6d6a64, roughness: 0.9 });
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.12, 1).translate(0, 0, 0.5), tread);
+  deck.name = 'gangway-deck';
+  mesh.add(deck);
+  const H = 1.45;
+  const panels = Math.max(2, Math.round(span / 1.4));
+  const pos: number[] = [];
+  // A flat member in the plane x = cx (both faces drawn), from (y0, z0) to (y1, z1), `t` deep across the span.
+  const member = (cx: number, y0: number, z0: number, y1: number, z1: number, t: number) => {
+    const dy = y1 - y0;
+    const dz = (z1 - z0) * span;
+    const L = Math.hypot(dy, dz) || 1;
+    // Half the depth, at right angles to the member (in metres, then back into the 1 m long frame).
+    const ny = (dz / L) * (t / 2);
+    const nz = (-dy / L) * (t / 2) / span;
+    const a = [cx, y0 - ny, z0 - nz];
+    const b = [cx, y1 - ny, z1 - nz];
+    const c = [cx, y1 + ny, z1 + nz];
+    const d = [cx, y0 + ny, z0 + nz];
+    pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+  };
+  for (const s of [-1, 1]) {
+    const cx = (s * width) / 2;
+    member(cx, H, 0, H, 1, 0.14);
+    member(cx, 0.1, 0, 0.1, 1, 0.16);
+    member(cx, 0.75, 0, 0.75, 1, 0.05);
+    for (let k = 0; k <= panels; k++) member(cx, 0.1, k / panels, H, k / panels, 0.07);
+    for (let k = 0; k < panels; k++) {
+      member(cx, 0.12, k / panels, H - 0.02, (k + 1) / panels, 0.05);
+      member(cx, H - 0.02, k / panels, 0.12, (k + 1) / panels, 0.05);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  const truss = new THREE.Mesh(geo, white);
+  truss.name = 'gangway-truss';
+  truss.castShadow = true;
+  mesh.add(truss);
+  return mesh;
+}
+
+/** A gangway (1.1 m wide or less, with side rails; or a white truss) from a pontoon end to a point on the bank. */
+function makeGangway(from: { e: number; n: number }, to: { e: number; n: number; y: number }, width = 1.1, style: GangwayStyle = 'rails'): Gangway {
+  if (style === 'truss') return { mesh: trussGangway(Math.max(2, Math.hypot(to.e - from.e, to.n - from.n)), width), from, to };
   const mesh = new THREE.Group();
   mesh.name = 'gangway';
   const steel = new THREE.MeshStandardMaterial({ color: 0x9ea4aa, roughness: 0.5, metalness: 0.6 });

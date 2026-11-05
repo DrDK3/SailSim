@@ -232,7 +232,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 17.9 | More → Graphics and sound → Interface level: try Learn, Club, Expert | Learn: the teaching overlay on and no Flatten slider; Expert: all instruments and no coach; Club: as before | |
 | 17.10 | Look at the compass | The two wind arrows marked T (solid) and A (dashed) | |
 
-## 18. The owner's photographs and requests of 5 Nov 2026 (15 min)
+## 18. The owner's photographs and requests of 5 Nov 2026 (20 min)
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
@@ -244,6 +244,9 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 18.6 | Look at the sailing dock on a laptop | Each sail's name, Ease, the sheet meter ("35% eased") and Trim on one line, then Auto-trim and the sail's state in words; nothing cut off; all labels easy to read | |
 | 18.7 | Turn Auto-trim off and press Ease until the sheet is all the way out | The meter reads "100% eased"; the state reads "Luffing · trim in (W)" in full | |
 | 18.8 | On a phone (or a narrow window) look at the dock | Nothing cut off or overlapping; the paused notice is clear of the dock | |
+| 18.9 | Sail past the Royal Dart, beside the Lower Ferry's slipway in Kingswear | Cream render, a low roof on deep white eaves; the splayed bay on the river front with two balconies, thin white columns and a grey tented canopy; ROYAL DART BARS on a navy band; a navy base on stone at the water | |
+| 18.10 | Look at the wing north of it and the passenger pier | A white wing with large first-floor windows over a loggia of white columns; a white lattice-truss gangway from the loggia down to a pontoon where the passenger ferry berths; the gangway steeper at low water | |
+| 18.11 | Look up the slipway to the top of the Square | A stone building with brick arches and a cream one with round-headed windows facing the river (note if they are the wrong way round or in the wrong place) | |
 
 ## Accepting the build
 

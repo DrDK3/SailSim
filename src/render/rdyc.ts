@@ -194,7 +194,7 @@ export function rdycPlatformAt(e: number, n: number): number | undefined {
 
 // ------------------------------------------------------------------ textures (browser only)
 
-type Key = 'brick' | 'render' | 'slate' | 'trim' | 'glass' | 'stone' | 'coping' | 'paving' | 'lead' | 'pot' | 'canvas' | 'sign' | 'name' | 'steel' | 'navy';
+export type Key = 'brick' | 'render' | 'slate' | 'trim' | 'glass' | 'stone' | 'coping' | 'paving' | 'lead' | 'pot' | 'canvas' | 'sign' | 'name' | 'steel' | 'navy';
 
 /** Texture repeat (m) per material: u, v. */
 const SCALE: Partial<Record<Key, [number, number]>> = {
@@ -207,7 +207,7 @@ const SCALE: Partial<Record<Key, [number, number]>> = {
 };
 
 const texCache = new Map<string, THREE.Texture>();
-function canvasTex(id: string, w: number, h: number, draw: (g: CanvasRenderingContext2D) => void, repeat = true): THREE.Texture | undefined {
+export function canvasTex(id: string, w: number, h: number, draw: (g: CanvasRenderingContext2D) => void, repeat = true): THREE.Texture | undefined {
   if (typeof document === 'undefined') return undefined;
   const hit = texCache.get(id);
   if (hit) return hit;
@@ -230,7 +230,7 @@ const hash = (i: number) => {
 };
 
 /** Victorian red brick in stretcher bond with pale mortar: one repeat 1.2 m by 0.6 m (5 bricks, 8 courses). */
-function brickTex() {
+export function brickTex() {
   return canvasTex('rdyc-brick', 256, 128, (g) => {
     g.fillStyle = '#a0968a';
     g.fillRect(0, 0, 256, 128);
@@ -248,7 +248,7 @@ function brickTex() {
 }
 
 /** Slates in courses, joints staggered: one repeat 1 m by 0.5 m (2 courses, 4 slates). */
-function slateTex() {
+export function slateTex() {
   return canvasTex('rdyc-slate', 128, 64, (g) => {
     g.fillStyle = '#2a2e33';
     g.fillRect(0, 0, 128, 64);
@@ -264,7 +264,7 @@ function slateTex() {
 }
 
 /** Painted render: off-white with a faint mottle. */
-function renderTex() {
+export function renderTex() {
   return canvasTex('rdyc-render', 128, 128, (g) => {
     g.fillStyle = '#eeebe3';
     g.fillRect(0, 0, 128, 128);
@@ -318,7 +318,7 @@ function pavingTex() {
 }
 
 /** A sign board: text centred, in the club's navy and white. */
-function signTex(id: string, text: string, fg: string, bg: string, w = 256, h = 64): THREE.Texture | undefined {
+export function signTex(id: string, text: string, fg: string, bg: string, w = 256, h = 64): THREE.Texture | undefined {
   return canvasTex(
     id,
     w,
@@ -368,22 +368,72 @@ function makeMaterials(): Record<Key, THREE.MeshStandardMaterial> {
 // ------------------------------------------------------------------ geometry
 
 const G = RDYC_FRAME.floorOdn;
+const UP = new THREE.Vector3(0, 1, 0);
 
-/** A frame point (x, y, height above the floor) in three.js space (x = e, y = up, z = -n). */
-function P(x: number, y: number, h: number): THREE.Vector3 {
-  const [e, n] = rdycToEN(x, y);
-  return new THREE.Vector3(e, G + h, -n);
+/**
+ * A building's frame on plan: x and y turned `thetaDeg` anticlockwise from east and north about `origin` (local
+ * e, n), heights above `floor` (m ODN). The yacht club is drawn in one; src/render/royalDart.ts in another.
+ */
+export class Frame {
+  readonly th: number;
+  readonly cos: number;
+  readonly sin: number;
+  /** The frame's x and y directions, and its turn, in three.js space. */
+  readonly fx: THREE.Vector3;
+  readonly fy: THREE.Vector3;
+  readonly yaw: THREE.Quaternion;
+
+  constructor(
+    readonly origin: readonly [number, number],
+    thetaDeg: number,
+    readonly floor: number,
+  ) {
+    this.th = (thetaDeg * Math.PI) / 180;
+    this.cos = Math.cos(this.th);
+    this.sin = Math.sin(this.th);
+    this.fx = new THREE.Vector3(this.cos, 0, -this.sin);
+    this.fy = new THREE.Vector3(-this.sin, 0, -this.cos);
+    this.yaw = new THREE.Quaternion().setFromAxisAngle(UP, this.th);
+  }
+
+  /** Frame (x, y) to local (e, n). */
+  toEN(x: number, y: number): [number, number] {
+    return [this.origin[0] + x * this.cos - y * this.sin, this.origin[1] + x * this.sin + y * this.cos];
+  }
+
+  /** Local (e, n) to frame (x, y). */
+  fromEN(e: number, n: number): [number, number] {
+    const de = e - this.origin[0];
+    const dn = n - this.origin[1];
+    return [de * this.cos + dn * this.sin, -de * this.sin + dn * this.cos];
+  }
+
+  /** A frame point (x, y, height above the floor) in three.js space (x = e, y = up, z = -n). */
+  P(x: number, y: number, h: number): THREE.Vector3 {
+    const [e, n] = this.toEN(x, y);
+    return new THREE.Vector3(e, this.floor + h, -n);
+  }
+
+  /** A frame direction (x, y) in three.js space. */
+  dir(x: number, y: number): THREE.Vector3 {
+    return this.fx.clone().multiplyScalar(x).add(this.fy.clone().multiplyScalar(y));
+  }
 }
 
-/** The frame's directions in three.js space. */
-const FX = new THREE.Vector3(COS, 0, -SIN);
-const FY = new THREE.Vector3(-SIN, 0, -COS);
-const UP = new THREE.Vector3(0, 1, 0);
-const YAW = new THREE.Quaternion().setFromAxisAngle(UP, TH);
+const CLUB = new Frame(RDYC_FRAME.origin, RDYC_FRAME.thetaDeg, G);
 
-class Builder {
+/** A point in the club's frame (x, y, height above its floor) in three.js space. */
+function P(x: number, y: number, h: number): THREE.Vector3 {
+  return CLUB.P(x, y, h);
+}
+
+
+/** Geometry gathered per material in a building's frame, merged into one mesh each. */
+export class Builder {
   readonly parts = new Map<Key, THREE.BufferGeometry[]>();
   tris = 0;
+
+  constructor(readonly f: Frame = CLUB) {}
 
   add(key: Key, geo: THREE.BufferGeometry, m?: THREE.Matrix4): void {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
@@ -427,7 +477,7 @@ class Builder {
 
   /** A box in the frame: centred at (x, y), from h0 up, sx along x, sy along y, sz tall. */
   box(key: Key, x: number, y: number, h0: number, sx: number, sy: number, sz: number): void {
-    this.add(key, new THREE.BoxGeometry(sx, sz, sy), new THREE.Matrix4().compose(P(x, y, h0 + sz / 2), YAW, new THREE.Vector3(1, 1, 1)));
+    this.add(key, new THREE.BoxGeometry(sx, sz, sy), new THREE.Matrix4().compose(this.f.P(x, y, h0 + sz / 2), this.f.yaw, new THREE.Vector3(1, 1, 1)));
   }
 
   /** A box along a frame segment (x0, y0)→(x1, y1), `w` wide, from h0 to h1. */
@@ -435,8 +485,8 @@ class Builder {
     const L = Math.hypot(x1 - x0, y1 - y0);
     if (L < 1e-6) return;
     const a = Math.atan2(y1 - y0, x1 - x0);
-    const q = new THREE.Quaternion().setFromAxisAngle(UP, TH + a);
-    this.add(key, new THREE.BoxGeometry(L, h1 - h0, w), new THREE.Matrix4().compose(P((x0 + x1) / 2, (y0 + y1) / 2, (h0 + h1) / 2), q, new THREE.Vector3(1, 1, 1)));
+    const q = new THREE.Quaternion().setFromAxisAngle(UP, this.f.th + a);
+    this.add(key, new THREE.BoxGeometry(L, h1 - h0, w), new THREE.Matrix4().compose(this.f.P((x0 + x1) / 2, (y0 + y1) / 2, (h0 + h1) / 2), q, new THREE.Vector3(1, 1, 1)));
   }
 
   /** A box along a segment in local (e, n), from heights y0 to y1 (m ODN). */
@@ -452,7 +502,7 @@ class Builder {
    * texture spread once across it (its own UVs; facing the viewer, the left of a→b).
    */
   sign(key: Key, a: [number, number], b: [number, number], h0: number, h1: number): void {
-    const v = [P(a[0], a[1], h0), P(b[0], b[1], h0), P(b[0], b[1], h1), P(a[0], a[1], h1)];
+    const v = [this.f.P(a[0], a[1], h0), this.f.P(b[0], b[1], h0), this.f.P(b[0], b[1], h1), this.f.P(a[0], a[1], h1)];
     const pos = [v[0]!, v[1]!, v[2]!, v[0]!, v[2]!, v[3]!].flatMap((p) => [p.x, p.y, p.z]);
     const uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1];
     const g = new THREE.BufferGeometry();
@@ -467,8 +517,8 @@ class Builder {
 
   /** A wall from frame (x0, y0) to (x1, y1), heights h0 to h1, facing `out` (frame direction). */
   wall(key: Key, x0: number, y0: number, x1: number, y1: number, h0: number, h1: number, outX: number, outY: number): void {
-    const out = FX.clone().multiplyScalar(outX).add(FY.clone().multiplyScalar(outY));
-    this.quad(key, P(x0, y0, h0), P(x1, y1, h0), P(x1, y1, h1), P(x0, y0, h1), out);
+    const out = this.f.dir(outX, outY);
+    this.quad(key, this.f.P(x0, y0, h0), this.f.P(x1, y1, h0), this.f.P(x1, y1, h1), this.f.P(x0, y0, h1), out);
   }
 
   /** Merge into meshes with UVs projected in the building's frame (metres / the material's repeat). */
@@ -493,13 +543,13 @@ class Builder {
         // One projection per triangle, from its normal in the frame.
         tri.set(0, 0, 0);
         for (let k = 0; k < 3; k++) tri.add(new THREE.Vector3(nor.getX(i + k), nor.getY(i + k), nor.getZ(i + k)));
-        const nx = tri.dot(FX);
-        const ny = tri.dot(FY);
+        const nx = tri.dot(this.f.fx);
+        const ny = tri.dot(this.f.fy);
         const nz = tri.y;
         for (let k = 0; k < 3; k++) {
           const e = pos.getX(i + k);
           const n = -pos.getZ(i + k);
-          const [fx, fy] = rdycFromEN(e, n);
+          const [fx, fy] = this.f.fromEN(e, n);
           const h = pos.getY(i + k);
           let u: number;
           let v: number;
@@ -529,13 +579,13 @@ class Builder {
 }
 
 /** Roof slopes: tan of the pitch. */
-const PITCH = { main: Math.tan((50 * Math.PI) / 180), wing: Math.tan((48 * Math.PI) / 180), low: Math.tan((42 * Math.PI) / 180), porch: Math.tan((35 * Math.PI) / 180) };
+export const PITCH = { main: Math.tan((50 * Math.PI) / 180), wing: Math.tan((48 * Math.PI) / 180), low: Math.tan((42 * Math.PI) / 180), porch: Math.tan((35 * Math.PI) / 180) };
 
 /**
  * A pitched roof over the frame rectangle x0..x1, y0..y1 with its ridge along `axis`; each end a gable or a hip.
  * Eaves at `eaves`, `o` m of overhang; gable ends get their triangle of wall (`wallKey`) and white bargeboards.
  */
-function roof(b: Builder, r: { x0: number; x1: number; y0: number; y1: number; axis: 'x' | 'y'; eaves: number; slope: number; lo: 'gable' | 'hip' | 'none'; hi: 'gable' | 'hip' | 'none'; wallKey: Key; o?: number; key?: Key }): void {
+export function roof(b: Builder, r: { x0: number; x1: number; y0: number; y1: number; axis: 'x' | 'y'; eaves: number; slope: number; lo: 'gable' | 'hip' | 'none'; hi: 'gable' | 'hip' | 'none'; wallKey: Key; o?: number; key?: Key }): void {
   const o = r.o ?? 0.35;
   const key = r.key ?? 'slate';
   // Work in (a, c): a along the ridge, c across it; map back to (x, y).
@@ -548,8 +598,8 @@ function roof(b: Builder, r: { x0: number; x1: number; y0: number; y1: number; a
   const cm = (c0 + c1) / 2;
   const ridge = r.eaves + half * r.slope;
   const e2 = r.eaves - o * r.slope;
-  const pt = (a: number, c: number, h: number) => (ax ? P(a, c, h) : P(c, a, h));
-  const dir = (a: number, c: number) => (ax ? FX.clone().multiplyScalar(a).add(FY.clone().multiplyScalar(c)) : FX.clone().multiplyScalar(c).add(FY.clone().multiplyScalar(a)));
+  const pt = (a: number, c: number, h: number) => (ax ? b.f.P(a, c, h) : b.f.P(c, a, h));
+  const dir = (a: number, c: number) => (ax ? b.f.dir(a, c) : b.f.dir(c, a));
   const ra0 = r.lo === 'hip' ? a0 + half : a0;
   const ra1 = r.hi === 'hip' ? a1 - half : a1;
   const ea0 = r.lo === 'gable' ? a0 - o : r.lo === 'hip' ? a0 - o : a0;
@@ -603,13 +653,13 @@ function roof(b: Builder, r: { x0: number; x1: number; y0: number; y1: number; a
 }
 
 /** A sash window or glazed door on a wall face: frame (x, y) of its centre, the wall's outward normal, width and heights. */
-function windowAt(b: Builder, x: number, y: number, outX: number, outY: number, w: number, h0: number, h1: number, bars: 'sash' | 'door' | 'none' = 'sash'): void {
+export function windowAt(b: Builder, x: number, y: number, outX: number, outY: number, w: number, h0: number, h1: number, bars: 'sash' | 'door' | 'none' = 'sash'): void {
   const t = { x: -outY, y: outX }; // along the wall
   const off = 0.04;
   const cx = x + outX * off;
   const cy = y + outY * off;
-  const out = FX.clone().multiplyScalar(outX).add(FY.clone().multiplyScalar(outY));
-  const corner = (s: number, h: number, d = 0) => P(cx + t.x * s + outX * d, cy + t.y * s + outY * d, h);
+  const out = b.f.dir(outX, outY);
+  const corner = (s: number, h: number, d = 0) => b.f.P(cx + t.x * s + outX * d, cy + t.y * s + outY * d, h);
   b.quad('glass', corner(-w / 2, h0), corner(w / 2, h0), corner(w / 2, h1), corner(-w / 2, h1), out);
   // White frame: four bars proud of the glass.
   const fw = 0.09;
@@ -641,11 +691,11 @@ function windowAt(b: Builder, x: number, y: number, outX: number, outY: number, 
 }
 
 /** A brick chimney stack with a stone cap and pots, at frame (x, y), from `h0` to `top`. */
-function chimney(b: Builder, x: number, y: number, h0: number, top: number, sx = 1.1, sy = 0.65): void {
+export function chimney(b: Builder, x: number, y: number, h0: number, top: number, sx = 1.1, sy = 0.65): void {
   b.box('brick', x, y, h0, sx, sy, top - h0);
   b.box('coping', x, y, top, sx + 0.16, sy + 0.16, 0.14);
   for (const k of [-1, 1]) {
-    const p = P(x + (k * sx) / 4, y, top + 0.14 + 0.28);
+    const p = b.f.P(x + (k * sx) / 4, y, top + 0.14 + 0.28);
     b.add('pot', new THREE.CylinderGeometry(0.11, 0.14, 0.56, 8), new THREE.Matrix4().makeTranslation(p.x, p.y, p.z));
   }
 }

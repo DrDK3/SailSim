@@ -21,6 +21,7 @@ import { quayMesh } from './quays';
 import { fillBehindQuays, type QuayWall } from '../sim/env/quays';
 import { RoadNetwork } from './roads';
 import { buildRdycClub, buildRdycPines, buildRdycPontoonGear, rdycForeshore, rdycKeepOut, rdycPlatformAt, type RdycClub } from './rdyc';
+import { buildRoyalDart, passengerPierAsDrawn, type RoyalDart } from './royalDart';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -36,6 +37,8 @@ const FIXED_DECK_ODN = 3.0; // E: deck level of fixed jetties and quays
 const LABEL_RANGE_M = 1600;
 /** OSM buildings that are moored ships (drawn as ships; their outlines are solid in the race, sim/env/structures). */
 const MOORED_SHIPS = new Set(['Hindostan']);
+/** Landmarks drawn by their own modules, not from the plain footprint. */
+const MODELLED = new Set(['rdyc', 'bayards-fort', 'royal-dart-hotel', 'royal-dart-wing']);
 
 export interface DartSceneInput {
   manifest: ManifestFull;
@@ -121,6 +124,8 @@ export class DartScene {
   private readonly ensigns: ClubEnsign[] = [];
   /** The yacht club (src/render/rdyc.ts). */
   private club?: RdycClub;
+  /** The Royal Dart and its north wing (src/render/royalDart.ts). */
+  private royalDart?: RoyalDart;
 
   private readonly input: DartSceneInput;
   /** The roads (src/render/roads.ts): their surfaces, and the town ground cut and filled to them. */
@@ -491,8 +496,9 @@ export class DartScene {
       const T = t;
       // Landmarks as themselves (src/render/landmarks.ts); churches and chapels in stone with tall windows; the
       // marina buildings at Noss; shopfronts on the named buildings of the town streets.
-      // The yacht club is modelled as itself (src/render/rdyc.ts), added after the loop.
-      if (spec?.id === 'rdyc' || spec?.id === 'bayards-fort') return;
+      // The yacht club (src/render/rdyc.ts), Bayard's Cove Fort and the Royal Dart with its wing
+      // (src/render/royalDart.ts) are modelled as themselves, added after the loop.
+      if (spec && MODELLED.has(spec.id)) return;
       // The Hindostan is a moored ship that OSM maps as a building: drawn as a ship below (buildShips).
       if (MOORED_SHIPS.has(b.n ?? '')) return;
       const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
@@ -761,6 +767,12 @@ export class DartScene {
       this.fixed.add(buildRdycPines((e, n) => this.groundAt(e, n)));
       this.ensigns.push(new ClubEnsign(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
     }
+    // The Royal Dart and its north wing as themselves, from the owner's photographs (src/render/royalDart.ts).
+    if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'royal-dart-hotel')) {
+      const wing = f.buildings.find((b) => landmarkFor(b.r)?.id === 'royal-dart-wing');
+      this.royalDart = buildRoyalDart(wing?.r);
+      this.fixed.add(this.royalDart.group);
+    }
     // Bayard's Cove Fort as itself (src/render/bayards.ts).
     if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'bayards-fort')) {
       this.fixed.add(buildBayardsCoveFort());
@@ -778,13 +790,15 @@ export class DartScene {
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
     this.club?.setNight(x * x * (3 - 2 * x));
+    this.royalDart?.setNight(x * x * (3 - 2 * x));
   }
 
   // ------------------------------------------------------------- piers etc.
 
   private buildPiers(f: DartFeatures): void {
     // Decks, floats, fenders, cleats and pile hoops float with the water; piles, jetties and gangways are fixed.
-    this.pontoons = buildPontoons(f.piers, (e, n) => this.groundAt(e, n));
+    // Kingswear's passenger pier is drawn as a truss gangway and a pontoon (src/render/royalDart.ts).
+    this.pontoons = buildPontoons(f.piers.flatMap((p) => passengerPierAsDrawn(p)), (e, n) => this.groundAt(e, n));
     this.floating.add(this.pontoons.floating);
     this.fixed.add(this.pontoons.fixed);
     // The yacht club's dinghy racks, its RIB and the pontoon's guide piles.
@@ -1307,13 +1321,15 @@ export function standingSpots(f: DartFeatures): { e: number; n: number; floating
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const town = (e: number, n: number) => TOWNS.some((t) => e >= t.eMin && e <= t.eMax && n >= t.nMin && n <= t.nMax);
   const deck = (floating: boolean) => (floating ? 0.4 : FIXED_DECK_ODN);
-  for (const p of f.piers) {
-    if ('line' in p) {
+  // The piers as drawn: Kingswear's passenger pier is a gangway (nobody stands on it) and a pontoon.
+  for (const p of f.piers.flatMap((x) => passengerPierAsDrawn(x))) {
+    if (p.line) {
+      const width = p.width ?? 2.4;
       const [a, b] = [p.line[0]!, p.line[p.line.length - 1]!];
       if (!town(a[0], a[1])) continue;
       let len = 0;
       for (let i = 1; i < p.line.length; i++) len += Math.hypot(p.line[i]![0] - p.line[i - 1]![0], p.line[i]![1] - p.line[i - 1]![1]);
-      const count = Math.min(40, Math.floor((len * p.width) / 60 * (p.floating ? 0.5 : 1)));
+      const count = Math.min(40, Math.floor((len * width) / 60 * (p.floating ? 0.5 : 1)));
       for (let k = 0; k < count; k++) {
         const t = rnd();
         // Along the line at a random point, within its width.
@@ -1324,7 +1340,7 @@ export function standingSpots(f: DartFeatures): { e: number; n: number; floating
           const l = Math.hypot(q1[0] - q0[0], q1[1] - q0[1]);
           if (s <= l || i === p.line.length - 1) {
             const f2 = l > 0 ? Math.min(1, s / l) : 0;
-            const w = (rnd() - 0.5) * p.width * 0.6;
+            const w = (rnd() - 0.5) * width * 0.6;
             const ue = l > 0 ? (q1[0] - q0[0]) / l : 0;
             const un = l > 0 ? (q1[1] - q0[1]) / l : 0;
             out.push({ e: q0[0] + (q1[0] - q0[0]) * f2 - un * w, n: q0[1] + (q1[1] - q0[1]) * f2 + ue * w, floating: p.floating, deck: deck(p.floating) });
@@ -1334,22 +1350,23 @@ export function standingSpots(f: DartFeatures): { e: number; n: number; floating
         }
       }
       void b;
-    } else {
-      const xs = p.poly.map((q) => q[0]);
-      const ys = p.poly.map((q) => q[1]);
+    } else if (p.poly) {
+      const poly = p.poly;
+      const xs = poly.map((q) => q[0]);
+      const ys = poly.map((q) => q[1]);
       const [e0, e1, n0, n1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
       if (!town((e0 + e1) / 2, (n0 + n1) / 2)) continue;
       let area = 0;
-      for (let i = 0; i < p.poly.length; i++) {
-        const [x0, y0] = p.poly[i]!;
-        const [x1, y1] = p.poly[(i + 1) % p.poly.length]!;
+      for (let i = 0; i < poly.length; i++) {
+        const [x0, y0] = poly[i]!;
+        const [x1, y1] = poly[(i + 1) % poly.length]!;
         area += x0 * y1 - x1 * y0;
       }
       const count = Math.min(40, Math.floor(Math.abs(area / 2) / 60 * (p.floating ? 0.5 : 1)));
       for (let k = 0, tries = 0; k < count && tries < count * 20; tries++) {
         const e = e0 + (e1 - e0) * rnd();
         const n = n0 + (n1 - n0) * rnd();
-        if (!insideRing(p.poly, e, n)) continue;
+        if (!insideRing(poly, e, n)) continue;
         out.push({ e, n, floating: p.floating, deck: deck(p.floating) });
         k++;
       }
