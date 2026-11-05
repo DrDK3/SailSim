@@ -1,13 +1,29 @@
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { sailAdvice, sailState } from '../app/sailStatus';
 import { helmAction, type SteeringMode } from '../app/steering';
 
 /**
+ * The helm console (owner review, 5 Nov 2026, third: "not looking good … too much white space … lacks the
+ * immersive experience … the height expands as the rudder moves"). The sailing controls as four instrument-like
+ * modules side by side, MAIN, JIB, HELM and BOAT, each exactly two rows tall, every readout of a fixed width and
+ * no text that wraps: the console never changes size as the rudder, the sheets or the sails' states change.
+ *  - A sail: its name, its state as a coloured pill (Drawing, Luffing, Stalled, By the lee) and the Auto-trim
+ *    switch; under them Ease, a meter of how far the sheet is eased, and Trim. When the sail needs something done,
+ *    the button that does it glows (Trim when it luffs, Ease when it stalls), so a novice sees what to press and
+ *    an expert reads the state at a glance; the advice in words is in the pill's tooltip and read out with it.
+ *  - The helm: steer either way either side of the rudder and tiller seen from above; under them where the bow
+ *    is turning, in a fixed-width readout, and Centre.
+ *  - The boat: release both sheets and flatten the sails (in the keys' 25% steps); the crew on auto, or hiking in
+ *    the same steps by hand.
+ */
+
+/**
  * The tiller from above (review UX-8): the after end of the cockpit, the rudder blade and the tiller, at the
  * simulation's rudder angle. The bow turns the way the blade's trailing edge points, so the tiller always lies
- * the other way: push the tiller to port and the bow goes to starboard. Drawn in both steering modes.
+ * the other way: push the tiller to port and the bow goes to starboard. Drawn in both steering modes; the whole
+ * sentence is read out (and shown on hover), the console shows the short readout under it.
  */
 export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMode }) {
   const d = (Math.abs(rudder) * 180) / Math.PI;
@@ -20,23 +36,27 @@ export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMod
   const tip = { x: -Math.sin(a) * 25, y: stock.y - Math.cos(a) * 25 };
   const blade = { x: Math.sin(a) * 9, y: stock.y + Math.cos(a) * 9 };
   const text = centred ? 'Tiller centred' : `Tiller ${Math.round(d)}° to ${tiller} · bow turning to ${bow}`;
-  // On the dock, a short form (the whole sentence is read out, and shown on hover).
-  const short = centred ? 'Centred' : `${Math.round(d)}° ${tiller === 'port' ? 'port' : 'stbd'}`;
   return (
-    <div className="rudder-bar tiller-view" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} (More → Graphics and sound to change)`} data-testid="tiller">
-      <svg viewBox="-34 -2 68 44" width="58" height="38" aria-hidden="true" className="tiller-svg">
+    <div className="rudder-dial" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} (More → Graphics and sound to change)`} data-testid="tiller">
+      <svg viewBox="-34 -2 68 44" aria-hidden="true" className="tiller-svg">
         <path className="tv-hull" d="M -30 -2 L -27 28 Q -24 36 -16 37 L 16 37 Q 24 36 27 28 L 30 -2" />
         <line className="tv-blade" x1={stock.x} y1={stock.y} x2={blade.x} y2={blade.y} />
         <line className="tv-tiller" x1={stock.x} y1={stock.y} x2={tip.x} y2={tip.y} />
         <circle className="tv-stock" cx={stock.x} cy={stock.y} r="2.2" />
       </svg>
       <span className="sr-only">{text}</span>
-      <span className="tiller-short" aria-hidden="true">{short}</span>
     </div>
   );
 }
 
-function Hold({ ctl, action, children, label }: { ctl: SimController; action: string; children: ReactNode; label: string }) {
+/** Where the bow is turning, in a few characters of fixed width: "Straight", "12° → stbd", "35° → port". */
+export function helmReadout(rudder: number): string {
+  const d = Math.round((Math.abs(rudder) * 180) / Math.PI);
+  if (d < 1) return 'Straight';
+  return `${d}° → ${rudder > 0 ? 'stbd' : 'port'}`;
+}
+
+function Hold({ ctl, action, children, label, hint, className }: { ctl: SimController; action: string; children: ReactNode; label: string; hint?: boolean; className?: string }) {
   const on = (e: ReactPointerEvent) => {
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -47,7 +67,16 @@ function Hold({ ctl, action, children, label }: { ctl: SimController; action: st
   };
   const off = () => ctl.press(action, false);
   return (
-    <button className="hold" aria-label={label} title={label} onPointerDown={on} onPointerUp={off} onPointerCancel={off} onPointerLeave={off} onContextMenu={(e) => e.preventDefault()}>
+    <button
+      className={`hold${hint ? ' suggest' : ''}${className ? ` ${className}` : ''}`}
+      aria-label={label}
+      title={label}
+      onPointerDown={on}
+      onPointerUp={off}
+      onPointerCancel={off}
+      onPointerLeave={off}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {children}
     </button>
   );
@@ -56,26 +85,48 @@ function Hold({ ctl, action, children, label }: { ctl: SimController; action: st
 /** A key name shown on a button, for recognition rather than recall. */
 const Key = ({ k }: { k: string }) => <kbd className="key-hint" aria-hidden="true">{k}</kbd>;
 
-function SailRow({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'main' | 'jib' }) {
+/** The next of the 25% steps the keys use (Z, Shift+Z): forward with a click, back with Shift or a right click. */
+function step(v: number, back: boolean): number {
+  const q = Math.round(v * 4);
+  return (back ? (q + 4) % 5 : (q + 1) % 5) / 4;
+}
+
+function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'main' | 'jib' }) {
   const s = ui.snapshot;
   const f = sail === 'main' ? s.forces.main : s.forces.jib;
   const auto = sail === 'main' ? s.input.autoMain : s.input.autoJib;
   const sheet = ctl.sim.currentSheet(sail);
   const angle = sail === 'main' ? s.boomMain : s.boomJib;
   const keys = sail === 'main' ? { trim: 'W', ease: 'S' } : { trim: 'E', ease: 'Q' };
-  const st = sailAdvice(sailState(f), keys);
-  // The state in a word; the advice and the airflow angle only when the sail needs something done.
+  const state = sailState(f);
+  const st = sailAdvice(state, keys);
   const ok = st.cls === 'good';
+  const name = sail === 'main' ? 'Main' : 'Jib';
   return (
-    <div className="sail-row" data-tutorial={sail}>
-      <div className="sail-name">{sail === 'main' ? 'Main' : 'Jib'}</div>
-      {/* The sheet: ease and trim either side of a meter of how far it is eased. */}
-      <div className="sail-sheet">
-        <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`}>Ease <Key k={keys.ease} /></Hold>
+    <div className={`mod sail-mod is-${st.cls}`} data-tutorial={sail} role="group" aria-label={`${name} sheet`}>
+      <div className="mod-top">
+        <span className="mod-label" aria-hidden="true">{name}</span>
+        <span
+          className={`status ${st.cls}`}
+          title={`${st.text}: ${st.advice}. Angle of the airflow on the sail (α) ${deg(Math.abs(f.incidence))}°, sail ${deg(Math.abs(angle))}° off the centreline`}
+          data-testid={`${sail}-status`}
+          role="status"
+        >
+          <span className="dot" aria-hidden="true" />
+          <strong>{st.text}</strong>
+          {!ok && <span className="sr-only"> · {st.advice}</span>}
+        </span>
+        <label className="toggle" title={`Auto-trim: the crew trims this sheet for you (${sail === 'main' ? 'M' : 'J'})`}>
+          <input type="checkbox" checked={auto} onChange={(e) => ctl.setInput(sail === 'main' ? { autoMain: e.target.checked } : { autoJib: e.target.checked })} />
+          Auto-trim
+        </label>
+      </div>
+      <div className="mod-row">
+        <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`} hint={state === 'stalled'}>Ease <Key k={keys.ease} /></Hold>
         <div
           className="sheet-bar sheet-meter"
           role="meter"
-          aria-label={`${sail === 'main' ? 'Main' : 'Jib'} sheet eased`}
+          aria-label={`${name} sheet eased`}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(sheet * 100)}
@@ -88,23 +139,7 @@ function SailRow({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'ma
             <span className="sheet-word"> eased</span>
           </span>
         </div>
-        <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`}>Trim <Key k={keys.trim} /></Hold>
-      </div>
-      {/* The assist and how the sail is working, in words. */}
-      <div className="sail-assist">
-        <label className="toggle" title={`Auto-trim assist (${sail === 'main' ? 'M' : 'J'})`}>
-          <input type="checkbox" checked={auto} onChange={(e) => ctl.setInput(sail === 'main' ? { autoMain: e.target.checked } : { autoJib: e.target.checked })} />
-          Auto-trim
-        </label>
-        <div
-          className={`status ${st.cls}`}
-          title={`${st.text}: ${st.advice}. Angle of the airflow on the sail (α) ${deg(Math.abs(f.incidence))}°, sail ${deg(Math.abs(angle))}° off the centreline`}
-          data-testid={`${sail}-status`}
-          role="status"
-        >
-          <strong>{st.text}</strong>
-          {!ok && <span className="advice"> · {st.advice}</span>}
-        </div>
+        <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`} hint={state === 'luffing'}>Trim <Key k={keys.trim} /></Hold>
       </div>
     </div>
   );
@@ -113,39 +148,63 @@ function SailRow({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 'ma
 export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState; onHide?: () => void }) {
   const s = ui.snapshot;
   const tillerMode = ui.steering === 'tiller';
-  // At the Learn level the dock leaves out its advanced controls (src/app/level.ts); the keys still work.
+  // At the Learn level the console leaves out the advanced controls (src/app/level.ts); the keys still work.
   const advanced = ui.level !== 'learn';
+  const flatten = s.input.flatten ?? 0;
+  const stepFlatten = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    ctl.setInput({ flatten: step(flatten, e.shiftKey || e.type === 'contextmenu') });
+  };
+  const stepHike = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    ctl.setInput({ crewHike: step(s.input.crewHike, e.shiftKey || e.type === 'contextmenu') });
+  };
   return (
-    <section className="panel controls dock" aria-label="Sailing controls">
-      <div className="controls-sails" role="group" aria-label="Sails">
-        <SailRow ctl={ctl} ui={ui} sail="main" />
-        <SailRow ctl={ctl} ui={ui} sail="jib" />
-      </div>
-      <div className="controls-boat" role="group" aria-label="Helm and crew">
-        <div className="helm-row" data-tutorial="helm">
+    <section className="panel controls dock console" aria-label="Sailing controls">
+      <SailModule ctl={ctl} ui={ui} sail="main" />
+      <SailModule ctl={ctl} ui={ui} sail="jib" />
+      <div className="mod helm-mod" data-tutorial="helm" role="group" aria-label="Helm">
+        <div className="mod-row">
           <Hold ctl={ctl} action={helmAction('left', ui.steering)} label={tillerMode ? 'Tiller to port, bow to starboard (A / ←)' : 'Steer to port (A / ←)'}>◀ <Key k="A" /></Hold>
           <TillerView rudder={s.rudder} mode={ui.steering} />
           <Hold ctl={ctl} action={helmAction('right', ui.steering)} label={tillerMode ? 'Tiller to starboard, bow to port (D / →)' : 'Steer to starboard (D / →)'}><Key k="D" /> ▶</Hold>
+        </div>
+        <div className="mod-row">
+          <span className="helm-readout" aria-hidden="true">{helmReadout(s.rudder)}</span>
           <button onClick={() => ctl.centreHelm()} title="Centre the helm (Space)">Centre</button>
         </div>
-        <div className="misc-row">
-          <button onClick={() => ctl.releaseSheets()} title="Let both sheets fly: the sails luff and stop driving. To stop the boat, also turn head to wind (X)" data-tutorial="release">Release sheets <Key k="X" /></button>
+      </div>
+      <div className="mod boat-mod" role="group" aria-label="Crew and sails">
+        <div className="mod-row">
+          <button onClick={() => ctl.releaseSheets()} title="Release both sheets: the sails luff and stop driving. To stop the boat, also turn head to wind (X)" data-tutorial="release">Release <Key k="X" /></button>
+          {advanced && (
+            <button
+              className="stepper"
+              onClick={stepFlatten}
+              onContextMenu={stepFlatten}
+              aria-label={`Flatten the sails: ${pct(flatten)}. Click for more, Shift-click for less (Z, Shift+Z)`}
+              title={`Flatten ${pct(flatten)}: cunningham, outhaul and kicker on, leech twisted open, to depower in a breeze. Less heel and weather helm, less power. Click for more, Shift-click or right-click for less (Z, Shift+Z)`}
+              data-tutorial="flatten"
+            >
+              Flat <span className="stepper-value">{pct(flatten)}</span> <Key k="Z" />
+            </button>
+          )}
+        </div>
+        <div className="mod-row">
           <label className="toggle" title="Crew move to keep the boat upright (K)" data-tutorial="crew">
             <input type="checkbox" checked={s.input.autoCrew} onChange={(e) => ctl.setInput({ autoCrew: e.target.checked })} />
             Auto crew
           </label>
           {advanced && !s.input.autoCrew && (
-            <label className="slider" title="Crew weight out to windward">
-              Hike
-              <input type="range" min={0} max={1} step={0.05} value={s.input.crewHike} onChange={(e) => ctl.setInput({ crewHike: Number(e.target.value) })} />
-            </label>
-          )}
-          {advanced && (
-            <label className="slider" title={`Flatten ${pct(s.input.flatten ?? 0)}: flatten the sails to depower in a breeze: cunningham, outhaul and kicker on, leech twisted open. Less heel and weather helm, less power (Z flatter, Shift+Z fuller)`} data-tutorial="flatten">
-              Flatten <Key k="Z" />
-              <input type="range" min={0} max={1} step={0.05} value={s.input.flatten ?? 0} aria-valuetext={pct(s.input.flatten ?? 0)} onChange={(e) => ctl.setInput({ flatten: Number(e.target.value) })} />
-              <span className="slider-value">{pct(s.input.flatten ?? 0)}</span>
-            </label>
+            <button
+              className="stepper"
+              onClick={stepHike}
+              onContextMenu={stepHike}
+              aria-label={`Crew hiking out: ${pct(s.input.crewHike)}. Click for more, Shift-click for less`}
+              title={`Crew weight out to windward: ${pct(s.input.crewHike)}. Click for more, Shift-click or right-click for less`}
+            >
+              Hike <span className="stepper-value">{pct(s.input.crewHike)}</span>
+            </button>
           )}
         </div>
       </div>
