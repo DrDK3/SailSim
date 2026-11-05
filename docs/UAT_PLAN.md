@@ -232,6 +232,19 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 17.9 | More → Graphics and sound → Interface level: try Learn, Club, Expert | Learn: the teaching overlay on and no Flatten slider; Expert: all instruments and no coach; Club: as before | |
 | 17.10 | Look at the compass | The two wind arrows marked T (solid) and A (dashed) | |
 
+## 18. The owner's photographs and requests of 5 Nov 2026 (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 18.1 | Sail slowly past the RDYC pontoon, then hold still and look at the rack and the shore | The dinghies fanned in their rack, grey, leaning one against the next; no flickering on the rack or along the foot of the sea wall; the wall stands in the water | |
+| 18.2 | Watch the people near the RDYC for a minute | Nobody walks through the clubhouse or along the river face of the sea wall; walkers turn back at the wall | |
+| 18.3 | Watch the Lower Ferry's float cross | No cabin on the float: an open deck with rails, lamps and lifebuoys, a post either side of each ramp | |
+| 18.4 | Watch the Higher Ferry from both sides | Dark blue hull, white casings with a house at each corner, the control cabin high on a gantry amidships over the cars | |
+| 18.5 | Sail up to Noss and Sandquay | Noss: the brick hall with PHILIP & SON LTD · SHIPBUILDERS & ENGINEERS and three round windows on its river gable; the Noss ferry red with a white cabin. Sandquay: three grey training boats on the pontoon flying the White Ensign; white boathouses with green roofs. (Positions are estimates: note any that are wrong) | |
+| 18.6 | Look at the sailing dock on a laptop | Each sail's name, Ease, the sheet meter ("35% eased") and Trim on one line, then Auto-trim and the sail's state in words; nothing cut off; all labels easy to read | |
+| 18.7 | Turn Auto-trim off and press Ease until the sheet is all the way out | The meter reads "100% eased"; the state reads "Luffing · trim in (W)" in full | |
+| 18.8 | On a phone (or a narrow window) look at the dock | Nothing cut off or overlapping; the paused notice is clear of the dock | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

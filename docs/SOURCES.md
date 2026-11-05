@@ -161,6 +161,16 @@ Found by web search on 4 Nov 2026. `geograph.org.uk`, `dkfb.co.uk` and `www.gov.
 | RD1 | Wikipedia, "Royal Dart Yacht Club" (via search) | https://en.wikipedia.org/wiki/Royal_Dart_Yacht_Club | n.d. | Excerpt | Purpose-built clubhouse completed 1881. A ground-floor bar and dining area opening onto the riverside terrace; upstairs the dining room, the Quarter Deck function room and a large balcony |
 | P3 | The owner's four photographs of Bayard's Cove (4 Nov 2026) | n/a | 2026 | Direct | The round stone fort at the water's edge at the south end of the quay; arched gunports; the stone quay wall; pastel houses under slate roofs climbing the hill. Reference only, nothing copied |
 
+## Owner photographs (5 Nov 2026): the club, Noss, Sandquay, the ferries, the dock
+
+Supplied in the conversation on 5 Nov 2026. Reference only: nothing is copied, and none is committed (several carry stock-photo watermarks).
+
+| ID | Source | Date | Kind | What it gives |
+|---|---|---|---|---|
+| P5 | The owner's photographs of the RDYC (four views from the river), Noss on Dart (the Noss ferry NORAGH PHILIP of NOSS; a render of the redevelopment with the PHILIP & SON LTD · SHIPBUILDERS & ENGINEERS hall; an aerial view of the marina, sheds and railway; a timber-clad building with a glazed corner), the Lower Ferry (tug and float from above; the float with cars at the Dartmouth slip) and the Higher Ferry (at her slipway at low water; crossing loaded) | 5 Nov 2026 | Direct | The club's grey dinghies standing in their rack and the stone wall standing in the water; the Lower Ferry's float with no cabin; the Higher Ferry's blue hull, white side casings and corner houses, and her control cabin high on a gantry amidships with a stair each side; the hall's lettering and round windows; brick sheds with grey roofs; the Noss ferry's red hull, white cabin and red roof. The render's apartment block is a later phase (NO1) and is not drawn |
+| P6 | The owner's photographs of Sandquay (four): the grey minehunter (the Hindostan) off the quay with a green timber shed behind; the quayside with a dinghy planter; the white gangway down to the pontoon, a white building with a green roof beyond; the new pontoon with grey Royal Navy training boats (orange lifebuoys, white life-raft canisters) and the long timber pier | 5 Nov 2026 | Direct | The training boats and their berth along the pontoon, the boathouses' white walls and green roofs, the dark green sheds |
+| P7 | The owner's screenshot of the sailing dock (5 Nov 2026) | 5 Nov 2026 | Direct | The dock's faults: the sheet percentage squeezed to ")%", low-contrast labels that do not fit |
+
 ## River race review (1 Nov 2026)
 
 | # | Source | URL | Date | Access | Used for |

@@ -1,4 +1,5 @@
 import { buildBayardsCoveFort } from './bayards';
+import { NOSS_HALL_AT, buildNossLettering } from './noss';
 import * as THREE from 'three';
 import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
@@ -12,14 +13,14 @@ import { ClubEnsign } from './clubEnsign';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
-import { TrafficView, minehunterModel, shipOnFootprint } from './traffic';
+import { TrafficView, minehunterModel, navyTrainingBoatModel, shipOnFootprint } from './traffic';
 import { Woodland } from './trees';
 import { BUMP_GLSL, bumpBlock } from './bump';
 import { StreetLife, TOWNS, type RoadsData } from './population';
 import { quayMesh } from './quays';
 import { fillBehindQuays, type QuayWall } from '../sim/env/quays';
 import { RoadNetwork } from './roads';
-import { buildRdycClub, buildRdycPines, buildRdycPontoonGear, rdycPlatformAt, type RdycClub } from './rdyc';
+import { buildRdycClub, buildRdycPines, buildRdycPontoonGear, rdycForeshore, rdycKeepOut, rdycPlatformAt, type RdycClub } from './rdyc';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -93,7 +94,9 @@ function townGround(input: DartSceneInput, e: number, n: number): number | undef
   const fy = y - j;
   const v = town.values;
   const k = j * t.nx + i;
-  return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
+  const h = (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + t.nx]! * (1 - fx) + v[k + t.nx + 1]! * fx) * fy;
+  // In front of the club's sea wall the bed is drawn below the water (src/render/rdyc.ts).
+  return rdycForeshore(e, n, h);
 }
 
 export class DartScene {
@@ -185,6 +188,8 @@ export class DartScene {
         standing: f ? standingSpots(f) : [],
         queues: f ? ferryQueues(f) : [],
         detail: input.detail,
+        // Nobody walks through the clubhouse or off the end of the footway past its sea wall.
+        keepOut: f ? rdycKeepOut(f.buildings.find((b) => b.n === 'Royal Dart Yacht Club')?.r ?? []) : undefined,
       });
       this.fixed.add(this.street.fixed);
       this.floating.add(this.street.floating);
@@ -229,7 +234,12 @@ export class DartScene {
     const d = this.input.manifest.drape;
     const width = d.nx * d.cell;
     const height = d.ny * d.cell;
-    const z = (i: number, j: number) => town.values[Math.max(0, Math.min(j, t.ny - 1)) * t.nx + Math.max(0, Math.min(i, t.nx - 1))]!;
+    // The cell's height, with the bed in front of the club's sea wall below the water (src/render/rdyc.ts).
+    const z = (i: number, j: number) => {
+      const ii = Math.max(0, Math.min(i, t.nx - 1));
+      const jj = Math.max(0, Math.min(j, t.ny - 1));
+      return rdycForeshore(t.e0 + (ii + 0.5) * t.cell, t.n0 + (jj + 0.5) * t.cell, town.values[jj * t.nx + ii]!);
+    };
     const C = 64;
     for (let j0 = 0; j0 < t.ny - 1; j0 += C) {
       for (let i0 = 0; i0 < t.nx - 1; i0 += C) {
@@ -755,6 +765,10 @@ export class DartScene {
     if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'bayards-fort')) {
       this.fixed.add(buildBayardsCoveFort());
     }
+    // Noss: the lettering on the Philip & Son hall's river gable (src/render/noss.ts); named boats at their berths.
+    const hall = f.buildings.find((b) => insideRing(b.r as [number, number][], NOSS_HALL_AT[0], NOSS_HALL_AT[1]));
+    if (hall) this.fixed.add(buildNossLettering(hall.r as [number, number][], (hall.t ?? 10) - 3.2, hall.t ?? 10));
+    for (const b of namedBerths()) this.floating.add(b);
   }
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
@@ -1353,3 +1367,32 @@ function insideRing(ring: [number, number][], x: number, y: number): boolean {
   }
   return inside;
 }
+
+/**
+ * Named boats lying at their berths (visual only; the owner's photographs of 5 Nov 2026): three grey Royal Navy
+ * training boats along the river side of the college's pontoon at Sandquay. The pontoon is the data's (OSM via
+ * Overture); where along it the boats lie is an estimate (E). (The Noss ferry runs in the river traffic,
+ * src/sim/env/traffic.ts, drawn as herself by src/render/traffic.ts.)
+ */
+export function namedBerths(): THREE.Object3D[] {
+  /** A boat's place `off` m to the right of a pontoon's centre line a→b, t of the way along, bow towards b. */
+  const along = (a: [number, number], b: [number, number], t: number, off: number, model: THREE.Object3D, name: string) => {
+    const de = b[0] - a[0];
+    const dn = b[1] - a[1];
+    const len = Math.hypot(de, dn);
+    const ue = de / len;
+    const un = dn / len;
+    const e = a[0] + de * t + un * off;
+    const n = a[1] + dn * t - ue * off;
+    model.position.set(e, 0, -n);
+    // The models' bows point along -z (north): turn them to the bearing of a→b.
+    model.rotation.y = -Math.atan2(ue, un);
+    model.name = name;
+    return model;
+  };
+  return [
+    // Sandquay: the east arm of the college's pontoon, from its south end to its north end; the river to its east.
+    ...[0.22, 0.5, 0.78].map((t, i) => along([-315.8, 1300.4], [-356.05, 1346.15], t, 4.4, navyTrainingBoatModel(15, 4.4, i + 1), `navy-training-boat-${i + 1}`)),
+  ];
+}
+

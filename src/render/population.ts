@@ -128,6 +128,47 @@ export interface StreetLifeOptions {
   queues?: { e: number; n: number; de: number; dn: number }[];
   detail?: 'high' | 'low';
   seed?: number;
+  /** Places nobody walks (a building's inside, the river side of a sea wall): walking routes stop at them. */
+  keepOut?: (e: number, n: number) => boolean;
+}
+
+const pathLength = (pts: readonly [number, number][]) => {
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]);
+  return len;
+};
+
+/**
+ * A walking route split where it (or a walker on either side of it, `side` m off the line) enters a keep-out:
+ * the pieces that stay clear, each long enough to walk (3 m).
+ */
+export function splitWalkable(pts: readonly [number, number][], keepOut: (e: number, n: number) => boolean, side: number, step = 0.5): [number, number][][] {
+  const out: [number, number][][] = [];
+  let run: [number, number][] = [];
+  const close = () => {
+    let len = 0;
+    for (let i = 1; i < run.length; i++) len += Math.hypot(run[i]![0] - run[i - 1]![0], run[i]![1] - run[i - 1]![1]);
+    if (run.length >= 2 && len > 3) out.push(run);
+    run = [];
+  };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ae, an] = pts[i]!;
+    const [be, bn] = pts[i + 1]!;
+    const len = Math.hypot(be - ae, bn - an);
+    if (len < 1e-6) continue;
+    const ue = (be - ae) / len;
+    const un = (bn - an) / len;
+    const k = Math.max(1, Math.ceil(len / step));
+    for (let q = i === 0 ? 0 : 1; q <= k; q++) {
+      const e = ae + ue * len * (q / k);
+      const n = an + un * len * (q / k);
+      const blocked = keepOut(e, n) || keepOut(e - un * side, n + ue * side) || keepOut(e + un * side, n - ue * side);
+      if (blocked) close();
+      else run.push([e, n]);
+    }
+  }
+  close();
+  return out;
 }
 
 /** Moving and parked cars and people. Seeded, so a screenshot is the same each time. */
@@ -172,6 +213,26 @@ export class StreetLife {
       }
       if (WALK.has(s.c) || (PAVEMENT.has(s.c) && inTown(s.pts[0]![0], s.pts[0]![1]))) this.walk.push(i);
     });
+    // Walking routes that enter a keep-out are walked only up to it (the walkers turn round there).
+    if (o.keepOut) {
+      const keepOut = o.keepOut;
+      const walk = [...this.walk];
+      this.walk.length = 0;
+      for (const i of walk) {
+        const s = this.segs[i]!;
+        const side = PAVEMENT.has(s.c) ? ROAD_WIDTH[s.c]! / 2 + 0.7 : 0.3;
+        const pieces = splitWalkable(s.pts, keepOut, side);
+        const whole = pieces.length === 1 && Math.abs(pathLength(pieces[0]!) - s.len) < 0.6;
+        if (whole) {
+          this.walk.push(i);
+          continue;
+        }
+        for (const piece of pieces) {
+          this.segs.push(makeSeg(s.c, piece));
+          this.walk.push(this.segs.length - 1);
+        }
+      }
+    }
     // Moving cars, more on the main roads and in the towns.
     const carWeight = (i: number) => {
       const s = this.segs[i]!;

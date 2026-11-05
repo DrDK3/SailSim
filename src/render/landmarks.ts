@@ -210,6 +210,62 @@ export const LANDMARKS: LandmarkSpec[] = [
     },
     source: 'Dart Marina Hotel, Sandquay (Overture place 50.35719, -3.57733; its building is the nearest footprint): rooms with river views, some with balconies (venue listing, via search). White walls and balcony fronts E.',
   },
+  // ---- Noss on Dart (the former Philip & Son shipyard): the owner's photographs of 5 Nov 2026 (P5).
+  {
+    id: 'noss-philip-hall',
+    at: [-188, 2106],
+    walls: BRICK,
+    roof: 0x54585b,
+    win: WIN.glazed,
+    shape: 'g',
+    roofDrop: 3.2,
+    source: "The former Philip & Son shipbuilding hall at Noss, kept in the 2023 redevelopment (NO1): red brick, a grey pitched roof, PHILIP & SON LTD · SHIPBUILDERS & ENGINEERS on its gable with three round windows above, glazed below (the owner's photographs, 5 Nov 2026; the lettering is drawn by src/render/noss.ts). That this footprint, the largest at the waterfront, is the hall is an estimate (E).",
+  },
+  {
+    id: 'noss-shed',
+    at: [-247, 2126],
+    walls: BRICK,
+    roof: 0x54585b,
+    win: WIN.sash,
+    shape: 'g',
+    roofDrop: 2.4,
+    source: "Noss on Dart: the brick shed at the water's edge beside the hall (the owner's aerial photograph, 5 Nov 2026: red brick sheds with grey roofs). Colours E.",
+  },
+  ...([[-75.5, 2134.5], [-63, 2013], [-35, 1988]] as [number, number][]).map(
+    (at, i): LandmarkSpec => ({
+      id: `noss-commercial-${i + 1}`,
+      at,
+      walls: 0xa9824f,
+      roof: 0x45494c,
+      win: WIN.glazed,
+      shape: 'g',
+      roofDrop: 2,
+      source: "Noss on Dart's new commercial buildings (2023, NO1): larch-clad walls, dark grey roofs and large glazing, as the owner's photograph of 5 Nov 2026 shows one of them. Which footprints are the new buildings, and their cladding, are estimates (E).",
+    }),
+  ),
+  // ---- Sandquay (Britannia Royal Naval College's waterfront): the owner's photographs of 5 Nov 2026 (P6).
+  ...([[-406, 1298], [-386, 1262]] as [number, number][]).map(
+    (at, i): LandmarkSpec => ({
+      id: `sandquay-boathouse-${i + 1}`,
+      at,
+      walls: 0xf1f1ec,
+      roof: 0x6f9a7c,
+      win: WIN.sash,
+      shape: 'g',
+      roofDrop: 2.5,
+      source: "BRNC's Sandquay boathouses behind the pier: white walls under pale green roofs (the owner's photographs, 5 Nov 2026). Which footprints they are is an estimate (E).",
+    }),
+  ),
+  ...([[-448, 1363], [-435, 1363]] as [number, number][]).map(
+    (at, i): LandmarkSpec => ({
+      id: `sandquay-shed-${i + 1}`,
+      at,
+      walls: 0x2f4a3c,
+      roof: 0x5a5f62,
+      win: WIN.none,
+      source: "Sandquay: the dark green timber sheds at the water's edge behind the Hindostan's berth (the owner's photograph, 5 Nov 2026). Colours E.",
+    }),
+  ),
 ];
 
 /** Noss on Dart Marina's buildings: modern timber-clad marina buildings (E: the redevelopment's materials are not described in the sources found). */

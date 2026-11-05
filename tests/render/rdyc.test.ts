@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { coloursFlying, coloursHour, ukUtcOffsetHours } from '../../src/render/colours';
 import { ClubEnsign } from '../../src/render/clubEnsign';
 import { LANDMARKS, insideRing } from '../../src/render/landmarks';
-import { RDYC_FRAME, SEA_WALL, buildRdycClub, buildRdycPontoonGear, rdycPlatformAt } from '../../src/render/rdyc';
+import { RDYC_FORESHORE_ODN, RDYC_FRAME, SEA_WALL, buildRdycClub, buildRdycPontoonGear, rdycForeshore, rdycKeepOut, rdycPlatformAt, seawardOfRdycWall } from '../../src/render/rdyc';
+import { splitWalkable } from '../../src/render/population';
 import { pierPieces } from '../../src/sim/race/piers';
 import { RDYC_ORIGIN } from '../../src/sim/geo/projection';
 import type { DartFeatures } from '../../src/app/geoLoader';
@@ -105,6 +106,67 @@ describe('the clubhouse and its pontoons', () => {
     const gear = buildRdycPontoonGear((club as { poly: [number, number][] }).poly, 0.42);
     const parts = gear.floating.children.map((c) => c.name);
     for (const n of ['rdyc-dinghies-on-edge', 'rdyc-dinghy-stack', 'rdyc-pontoon-sign', 'rdyc-rib']) expect(parts).toContain(n);
+  });
+
+  it('the dinghies in the rack lean one against the next and share no surface (they strobed side by side in one plane)', () => {
+    const club = features.piers.find((p) => p.name === 'Royal Dart Yacht Club pontoon')!;
+    const gear = buildRdycPontoonGear((club as { poly: [number, number][] }).poly, 0.42);
+    const rack = gear.floating.children.find((c) => c.name === 'rdyc-dinghies-on-edge') as THREE.InstancedMesh;
+    const m = new THREE.Matrix4();
+    const pos: THREE.Vector3[] = [];
+    let depthAxis: THREE.Vector3 | undefined;
+    for (let k = 0; k < rack.count; k++) {
+      rack.getMatrixAt(k, m);
+      pos.push(new THREE.Vector3().setFromMatrixPosition(m));
+      const z = new THREE.Vector3().setFromMatrixColumn(m, 2).normalize();
+      if (depthAxis) expect(Math.abs(z.dot(depthAxis))).toBeGreaterThan(0.999); // all parallel
+      depthAxis ??= z;
+    }
+    // A hull is 0.32 m deep (0.22 m and its rounded edges): face to face, neighbours stand farther apart than that.
+    for (let k = 1; k < pos.length; k++) expect(Math.abs(pos[k]!.clone().sub(pos[k - 1]!).dot(depthAxis!))).toBeGreaterThan(0.33);
+  });
+
+  it('in front of its sea wall the bed is drawn below the water, so the wall stands in the water; behind the wall nothing changes', () => {
+    // Half-way along the club's stretch of wall, 5 m out into the river and 5 m behind it.
+    const [ae, an] = SEA_WALL[3]!;
+    const [be, bn] = SEA_WALL[4]!;
+    const me = (ae + be) / 2;
+    const mn = (an + bn) / 2;
+    const len = Math.hypot(be - ae, bn - an);
+    // The river is on the right of the wall walked north to south.
+    const re = (bn - an) / len;
+    const rn = -(be - ae) / len;
+    expect(seawardOfRdycWall(me + re * 5, mn + rn * 5)).toBeCloseTo(5, 1);
+    expect(seawardOfRdycWall(me - re * 5, mn - rn * 5)).toBeCloseTo(-5, 1);
+    expect(rdycForeshore(me + re * 5, mn + rn * 5, 0.6)).toBe(RDYC_FORESHORE_ODN);
+    expect(rdycForeshore(me - re * 5, mn - rn * 5, 2.4)).toBe(2.4);
+    // Far out in the river, and far from the club: unchanged.
+    expect(rdycForeshore(me + re * 60, mn + rn * 60, -6)).toBe(-6);
+    expect(rdycForeshore(500, 500, 0.6)).toBe(0.6);
+  });
+
+  it('nobody walks through the clubhouse or past the sea wall: walking routes stop at them', () => {
+    const roads = JSON.parse(readFileSync(new URL('../../public/geo/roads.json', import.meta.url), 'utf8')) as { roads: { c: string; l: [number, number][] }[] };
+    const footprint = features.buildings.find((b) => (b as { n?: string }).n === 'Royal Dart Yacht Club')!.r as [number, number][];
+    const keepOut = rdycKeepOut(footprint);
+    // The footway past the club's south side runs on beyond the wall's face in the data; walked as it was, a
+    // walker went through the wall.
+    const footway = roads.roads.find((r) => r.c === 'f' && r.l.some(([e, n]) => Math.hypot(e + 12.1, n + 17.8) < 0.5))!;
+    expect(footway).toBeDefined();
+    expect(footway.l.some(([e, n]) => keepOut(e, n))).toBe(true);
+    let checked = 0;
+    for (const r of roads.roads) {
+      if (!['f', 'w', 'x', 'r', 'l', 't', 's', 'p'].includes(r.c) || !r.l.some(([e, n]) => Math.hypot(e, n) < 80)) continue;
+      const side = ['f', 'w', 'x'].includes(r.c) ? 0.3 : 3;
+      for (const piece of splitWalkable(r.l, keepOut, side)) {
+        for (let i = 0; i < piece.length; i++) {
+          const [e, n] = piece[i]!;
+          expect(keepOut(e, n), `${r.c} at ${e.toFixed(1)}, ${n.toFixed(1)}`).toBe(false);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(50);
   });
 
   it("the club's main pontoon and its dinghy pontoon (Moody Island) are named, and float", () => {
