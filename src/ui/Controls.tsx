@@ -20,6 +20,8 @@ export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMod
   const tip = { x: -Math.sin(a) * 25, y: stock.y - Math.cos(a) * 25 };
   const blade = { x: Math.sin(a) * 9, y: stock.y + Math.cos(a) * 9 };
   const text = centred ? 'Tiller centred' : `Tiller ${Math.round(d)}° to ${tiller} · bow turning to ${bow}`;
+  // On the dock, a short form (the whole sentence is read out, and shown on hover).
+  const short = centred ? 'Centred' : `${Math.round(d)}° ${tiller === 'port' ? 'port' : 'stbd'}`;
   return (
     <div className="rudder-bar tiller-view" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} (More → Graphics and sound to change)`} data-testid="tiller">
       <svg viewBox="-34 -2 68 44" width="58" height="38" aria-hidden="true" className="tiller-svg">
@@ -28,7 +30,8 @@ export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMod
         <line className="tv-tiller" x1={stock.x} y1={stock.y} x2={tip.x} y2={tip.y} />
         <circle className="tv-stock" cx={stock.x} cy={stock.y} r="2.2" />
       </svg>
-      <span>{text}</span>
+      <span className="sr-only">{text}</span>
+      <span className="tiller-short" aria-hidden="true">{short}</span>
     </div>
   );
 }
@@ -138,7 +141,7 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
             </label>
           )}
           {advanced && (
-            <label className="slider" title="Flatten the sails to depower in a breeze: cunningham, outhaul and kicker on, leech twisted open. Less heel and weather helm, less power (Z flatter, Shift+Z fuller)" data-tutorial="flatten">
+            <label className="slider" title={`Flatten ${pct(s.input.flatten ?? 0)}: flatten the sails to depower in a breeze: cunningham, outhaul and kicker on, leech twisted open. Less heel and weather helm, less power (Z flatter, Shift+Z fuller)`} data-tutorial="flatten">
               Flatten <Key k="Z" />
               <input type="range" min={0} max={1} step={0.05} value={s.input.flatten ?? 0} aria-valuetext={pct(s.input.flatten ?? 0)} onChange={(e) => ctl.setInput({ flatten: Number(e.target.value) })} />
               <span className="slider-value">{pct(s.input.flatten ?? 0)}</span>

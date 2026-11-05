@@ -11,10 +11,13 @@ const VERDICT = { good: 'Went well', ok: 'All right', work: 'To work on' } as co
 export function CoachCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   const c = ui.coach;
   const [open, setOpen] = useState<boolean | undefined>(undefined);
+  const [all, setAll] = useState(false);
   if (!c || !c.on || !ui.race) return null;
   const preStart = ui.race.phase === 'pre-start';
   const d = c.debrief;
   const expanded = open ?? (preStart || !!d);
+  // The briefing's first point, the rest a click away (the card stays small beside the view).
+  const shown = all ? c.briefing : c.briefing.slice(0, 1);
   return (
     <section className="panel coach" aria-label="Race coach" data-testid="coach">
       <div className="row coach-head">
@@ -23,9 +26,16 @@ export function CoachCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         <button className="link" onClick={() => ctl.toggleCoach(false)} title="Turn the coach off (More → Race coach turns it back on)">Off</button>
       </div>
       {expanded && !d && (
-        <ul className="coach-list">
-          {c.briefing.map((b) => <li key={b}>{b}</li>)}
-        </ul>
+        <>
+          <ul className="coach-list">
+            {shown.map((b) => <li key={b}>{b}</li>)}
+          </ul>
+          {c.briefing.length > 1 && (
+            <button className="link coach-more" onClick={() => setAll(!all)} aria-expanded={all}>
+              {all ? 'Fewer' : `${c.briefing.length - 1} more point${c.briefing.length === 2 ? '' : 's'}`}
+            </button>
+          )}
+        </>
       )}
       {expanded && d && (
         <>

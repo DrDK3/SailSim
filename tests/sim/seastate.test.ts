@@ -81,6 +81,22 @@ describe('wind over tide (open water)', () => {
     expect(Math.abs(against.dirTo)).toBeLessThan(1e-9);
   });
 
+  it('waves running onto a shoal or a beach break there: surf, white water where the depth limits them', () => {
+    // A fresh onshore breeze over open water, onto a bank 1 m deep (owner review, 5 Nov 2026: breaking waves in
+    // Start Bay when the weather calls for them). The same sea over deep water: only its wind-driven whitecaps.
+    const sea = (depthHere: number) =>
+      new SeaStateModel({ startEpochMs: 0, wind: () => ({ n: 11, e: 0 }), current: () => ({ n: 0, e: 0 }), depth: (_t, n) => (n > -40 ? depthHere : 25) }).exact(0, 0, 0);
+    const deep = sea(25);
+    const shoal = sea(1);
+    expect(shoal.hs).toBeLessThanOrEqual(0.55 * 1 + 1e-9);
+    expect(shoal.hs).toBeLessThan(deep.hs);
+    expect(shoal.whitecaps).toBeGreaterThan(deep.whitecaps);
+    expect(shoal.whitecaps).toBeGreaterThanOrEqual(0.1);
+    // A light air raises no surf.
+    const calm = new SeaStateModel({ startEpochMs: 0, wind: () => ({ n: 2, e: 0 }), current: () => ({ n: 0, e: 0 }), depth: (_t, n) => (n > -40 ? 1 : 25) }).exact(0, 0, 0);
+    expect(calm.whitecaps).toBeLessThan(0.01);
+  });
+
   it('a stream that is the same all along the fetch only changes the wind over the water (no steepening)', () => {
     const slack = openSea(8, 0, Infinity).exact(0, 0, 0);
     const against = openSea(8, -1, Infinity).exact(0, 0, 0);

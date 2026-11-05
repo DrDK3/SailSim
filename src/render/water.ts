@@ -300,9 +300,11 @@ void main() {
   float spec = D * Fs * NdotL / (4.0 * max(facing, 0.05));
   col += uSunColor * (1.0 - exp(-spec * 0.12)) * 1.5 * uGlint;
   // Whitecaps: foam on compressed crests, as much as the modelled cover, broken up and streaked downwind.
-  // A few per cent cover already reads as a sea of white horses, so the cover is scaled up for the eye.
+  // A few per cent cover already reads as a sea of white horses, so the cover is mapped for the eye: none in a
+  // light air, scattered white horses at about 10 kn, frequent ones from 15 kn, many at 20 kn and more
+  // (Beaufort's descriptions; owner review, 5 Nov 2026: breaking waves when the weather calls for them).
   float near = exp(-dist / 450.0);
-  float cover = clamp(f.b * 20.0, 0.0, 1.0);
+  float cover = clamp((sqrt(f.b) - 0.02) * 5.0, 0.0, 0.9);
   float crest = smoothstep(0.85, 0.15, jac) * smoothstep(0.0, 0.5, h / max(f.r * 0.5, 0.02));
   float breakup = noise(vWorld.xz * 0.35 + uComp[4].xy * uTime * 0.6) * 0.6 + noise(vWorld.xz * 1.7) * 0.4;
   float streaks = noise(vec2(dot(vWorld.xz, uComp[4].xy) * 0.08, dot(vWorld.xz, vec2(-uComp[4].y, uComp[4].x)) * 1.2));

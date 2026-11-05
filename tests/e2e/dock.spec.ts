@@ -30,7 +30,8 @@ for (const size of [
       const out: string[] = [];
       for (const el of root.querySelectorAll<HTMLElement>('*')) {
         const cs = getComputedStyle(el);
-        if (cs.display === 'none' || el.clientWidth === 0) continue;
+        // Text for screen readers only is clipped on purpose.
+        if (cs.display === 'none' || el.clientWidth === 0 || el.classList.contains('sr-only')) continue;
         if (cs.overflow !== 'visible' && el.scrollWidth > el.clientWidth + 1) out.push(`clipped: ${el.className || el.tagName} (${el.scrollWidth} > ${el.clientWidth})`);
       }
       // Each sheet meter's value fits inside the meter.

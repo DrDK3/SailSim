@@ -31,6 +31,13 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     if (!c || !m) return;
     const ctx = c.getContext('2d');
     if (!ctx) return;
+    // Sharp on high-density screens: the canvas at the device's pixels, drawn in CSS pixels.
+    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    if (c.width !== Math.round(W * dpr)) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const s = ui.snapshot;
     const span = SPANS[zoom]!;
     const k = W / span; // px per metre
@@ -176,25 +183,25 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    // Scale bar
-    const bar = span / 4;
-    ctx.fillStyle = 'rgba(8,18,26,0.7)';
-    ctx.fillRect(6, H - 20, bar * k + 34, 14);
-    ctx.fillStyle = '#eef3f6';
-    ctx.fillRect(10, H - 12, bar * k, 2);
-    ctx.font = '10px Inter, system-ui, sans-serif';
-    ctx.fillText(bar >= 1000 ? `${bar / 1000} km` : `${bar} m`, 14 + bar * k, H - 9);
   }, [ui.snapshot, ui.fleet, zoom, img, data, ctl]);
 
   if (ui.dart.status !== 'loaded' || !data?.manifest) return null;
+  // The scale, under the map rather than drawn on it (owner review, 5 Nov 2026: its figures ran onto the map):
+  // a bar a quarter of the map's width and its length.
+  const bar = SPANS[zoom]! / 4;
   return (
     <section className="panel minimap" aria-label="Minimap">
       <canvas ref={canvas} width={W} height={H} data-testid="minimap" role="img" aria-label="Map of the River Dart around the boat, north up" />
       <div className="minimap-bar">
         <button onClick={() => setZoom(Math.max(0, zoom - 1))} aria-label="Zoom in" disabled={zoom === 0}>+</button>
         <button onClick={() => setZoom(Math.min(SPANS.length - 1, zoom + 1))} aria-label="Zoom out" disabled={zoom === SPANS.length - 1}>−</button>
-        <span className="fine-inline">North up · not for navigation</span>
+        <span className="map-scale" data-testid="minimap-scale" title="Scale of the map">
+          <span className="map-scale-bar" aria-hidden="true" />
+          {bar >= 1000 ? `${bar / 1000} km` : `${bar} m`}
+        </span>
+        <span className="map-north" title="North is up">N↑</span>
       </div>
+      <div className="fine-inline minimap-note">Not for navigation</div>
     </section>
   );
 }

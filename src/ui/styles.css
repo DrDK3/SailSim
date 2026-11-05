@@ -746,3 +746,64 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   /* The paused notice in the middle of the view, clear of the dock however tall it is. */
   .banner.paused-pill { top: 45%; bottom: auto; }
 }
+
+/* The immersive layout (owner review, 5 Nov 2026, second: "the bottom menu block takes over too much of the
+   screen"; "numbers in the map block spill onto the map"). The dock is as wide as its controls, centred, and two
+   rows tall on a laptop (each sail on one line; the helm, then the sheets and crew, beside them); translucent so
+   the water shows through. Targets stay at least 24 px (28 px here) and text at least 12 px. */
+:root { --minimap-w: 214px; }
+/* On a laptop the map a little narrower, so the dock's two rows fit beside it. */
+@media (max-width: 1439px) { :root { --minimap-w: 192px; } }
+@media (min-width: 701px) {
+  /* Wrapping, never overlapping: where the sails and the boat's controls do not fit side by side, the boat's go
+     under the sails. */
+  .panel.dock.controls {
+    display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+    width: fit-content; max-width: none; padding: 6px 38px 6px 10px; bottom: 26px;
+    background: rgba(10, 24, 36, 0.64); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    font-size: 13px;
+  }
+  .panel.dock .controls-sails { container-type: normal; display: flex; flex-direction: column; gap: 4px; }
+  .panel.dock .controls-boat { display: flex; flex-direction: column; gap: 4px; }
+  .panel.dock .sail-row { display: flex; align-items: center; gap: 6px; }
+  .panel.dock .sail-name { flex: 0 0 34px; font-size: 13.5px; }
+  .panel.dock .sail-sheet, .panel.dock .sail-assist { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+  .panel.dock button { font-size: 13px; min-height: 28px; }
+  .panel.dock .hold { min-width: 0; padding: 0 8px; }
+  .panel.dock .sheet-meter { flex: 0 0 auto; width: 112px; min-width: 112px; height: 28px; font-size: 13px; }
+  .panel.dock .toggle, .panel.dock .slider { font-size: 13px; }
+  .panel.dock .status { flex: 0 0 158px; width: 158px; min-height: 28px; display: flex; align-items: center; flex-wrap: wrap; column-gap: 4px; padding: 2px 8px; font-size: 12.5px; }
+  .panel.dock .status .advice { white-space: nowrap; }
+  .panel.dock .helm-row { display: flex; align-items: center; gap: 6px; }
+  .panel.dock .tiller-view { display: flex; align-items: center; gap: 4px; flex: 0 0 108px; min-height: 28px; width: 108px; padding: 0 6px; font-size: 12.5px; }
+  .panel.dock .tiller-view .tiller-svg { width: 40px; height: 26px; flex: 0 0 auto; }
+  .panel.dock .misc-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; }
+  .panel.dock .misc-row .slider input { width: 72px; }
+  /* The percentage is in the slider's hover text and read out with it. */
+  .panel.dock .misc-row .slider-value { display: none; }
+  .panel.dock .key-hint { font-size: 12px; }
+  .controls-hide { top: 4px; right: 4px; }
+}
+.minimap { padding: 5px; background: rgba(10, 24, 36, 0.66); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.minimap-bar { gap: 6px; margin-top: 4px; flex-wrap: nowrap; white-space: nowrap; }
+.minimap-bar button { padding: 2px 9px; min-height: 26px; }
+.map-scale { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text); }
+/* A quarter of the map's width, as the figure beside it says. */
+.map-scale-bar { display: inline-block; width: calc((var(--minimap-w) - 10px) / 4); height: 3px; border: 1px solid var(--text); border-top: 0; }
+.map-north { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--muted); }
+.minimap-note { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+/* The race set-up: where to race, first and in plain view. */
+.quick-race .venue-field { display: block; margin: 6px 0 8px; }
+.quick-race .venue-field > span { display: block; font-size: 12.5px; margin-bottom: 4px; }
+.segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.segmented button { justify-content: center; padding: 6px 4px; font-size: 13px; white-space: nowrap; }
+.segmented button[aria-checked='true'] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.quick-race .race-warn { cursor: help; }
+.coach-more { margin: 2px 0 0; font-size: 12.5px; }
+/* The left column's cards lighter, so more of the water shows. */
+.hud-left .panel { background: rgba(10, 24, 36, 0.68); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+@media (max-width: 700px) {
+  .panel.dock .tiller-view { min-height: 36px; padding: 2px 6px; }
+  .panel.dock .tiller-view .tiller-svg { width: 40px; height: 26px; }
+  .panel.dock .tiller-view .tiller-short { font-size: 12px; }
+}
