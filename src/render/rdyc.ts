@@ -69,6 +69,90 @@ export const SEA_WALL_SOUTH: [number, number][] = [
 ];
 export const SEA_WALL_SOUTH_TOP = 2.6;
 
+/** The whole frontage wall, north to south: the club's stretch, then on south in front of the white houses. */
+const FRONTAGE: [number, number][] = [...SEA_WALL, ...SEA_WALL_SOUTH.slice(1)];
+
+/**
+ * How far (m) a point lies on the river side of the club's frontage wall: positive in the water, negative behind
+ * the wall; undefined where the nearest point of the wall is one of its two ends (beyond the wall, either way).
+ * The river is on the right of the wall walked from north to south.
+ */
+export function seawardOfRdycWall(e: number, n: number): number | undefined {
+  const w = rdycWallSide(e, n);
+  return w && w.beyond === 0 ? w.seaward : undefined;
+}
+
+/**
+ * The point against the frontage wall: how far it lies on the river side of the wall's line (m, negative behind
+ * it; past the wall's ends, of the line carried on straight), and how far past an end of the wall it is (0 beside
+ * the wall). Undefined far from the club.
+ */
+function rdycWallSide(e: number, n: number): { seaward: number; beyond: number } | undefined {
+  if (e < -70 || e > 30 || n < -90 || n > 70) return undefined;
+  let best = Infinity;
+  let out: { seaward: number; beyond: number } | undefined;
+  const last = FRONTAGE.length - 2;
+  for (let i = 0; i <= last; i++) {
+    const [ae, an] = FRONTAGE[i]!;
+    const [be, bn] = FRONTAGE[i + 1]!;
+    const de = be - ae;
+    const dn = bn - an;
+    const len = Math.hypot(de, dn);
+    const tRaw = ((e - ae) * de + (n - an) * dn) / (len * len);
+    const t = Math.max(0, Math.min(1, tRaw));
+    const d = Math.hypot(e - (ae + de * t), n - (an + dn * t));
+    if (d >= best) continue;
+    best = d;
+    // Past the wall's first or last end: the side is taken from that end's line carried on.
+    const beyond = i === 0 && tRaw < 0 ? -tRaw * len : i === last && tRaw > 1 ? (tRaw - 1) * len : 0;
+    // The cross product is negative on the right of a→b (the river side).
+    const across = -(de * (n - an) - dn * (e - ae)) / len;
+    out = { seaward: beyond > 0 ? across : across < 0 ? -d : d, beyond };
+  }
+  return out;
+}
+
+/**
+ * The bed in front of the club's sea wall as drawn (m ODN): the wall stands in the water at all but the lowest
+ * tides, as the owner's photographs show it. The town's 4 m ground grid otherwise leaves a shelf of foreshore just
+ * above the water in front of the wall, drawn nearly black, which the waves cover and uncover so that it strobes
+ * (owner review, 5 Nov 2026). Within 30 m of the wall the drawn ground is kept below this (E). Visual only: the
+ * physics' bed (the depth grid) is unchanged.
+ */
+export const RDYC_FORESHORE_ODN = -3.0;
+
+export function rdycForeshore(e: number, n: number, h: number): number {
+  const w = rdycWallSide(e, n);
+  if (!w || w.seaward < 0.3 || w.seaward > 30 || h <= RDYC_FORESHORE_ODN) return h;
+  // Beside the wall, all the way down; past its ends, less and less over 12 m, so the bed meets the shore beyond
+  // in a slope rather than a step.
+  const k = Math.max(0, 1 - w.beyond / 12);
+  return h + (RDYC_FORESHORE_ODN - h) * k;
+}
+
+/**
+ * Where people may not walk at the club (owner review, 5 Nov 2026: walkers went through the wall): inside the
+ * clubhouse's footprint (`footprint`, local e, n) with a margin for their shoulders, and on the river side of the
+ * frontage wall (a footway in the data runs on past the wall's face, over the water).
+ */
+export function rdycKeepOut(footprint: readonly (readonly [number, number])[], margin = 0.7): (e: number, n: number) => boolean {
+  return (e, n) => {
+    if (e < -70 || e > 30 || n < -90 || n > 70) return false;
+    const s = seawardOfRdycWall(e, n);
+    if (s !== undefined && s > -0.4) return true;
+    if (inside(footprint as [number, number][], e, n)) return true;
+    for (let i = 0; i < footprint.length; i++) {
+      const [ae, an] = footprint[i]!;
+      const [be, bn] = footprint[(i + 1) % footprint.length]!;
+      const de = be - ae;
+      const dn = bn - an;
+      const t = Math.max(0, Math.min(1, ((e - ae) * de + (n - an) * dn) / (de * de + dn * dn || 1)));
+      if (Math.hypot(e - (ae + de * t), n - (an + dn * t)) < margin) return true;
+    }
+    return false;
+  };
+}
+
 /** The terrace (and the ground behind the wall to the north) at the club's floor level: the wall, then inland round the buildings. */
 export const RDYC_PLATFORM: [number, number][] = [
   ...SEA_WALL,
@@ -900,22 +984,27 @@ export function buildRdycPontoonGear(head: [number, number][], deck: number): { 
   // pointed bow and a square transom, given 0.3 m of depth with rounded edges.
   const hull = dinghyGeometry();
   // The rack along the shore side, as in the owner's photographs: dinghies standing on their transoms, bows up,
-  // side by side, their bottoms to the river; mostly white and pale grey, the odd red or blue one (E).
+  // side by side, their bottoms to the river (E).
   const rackN = 22;
   const gap = 0.42;
   const s0 = 3.2;
   const onEdge = new THREE.InstancedMesh(hull, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 }), rackN);
-  const hullColours = [0xf2f2ee, 0xd9dcde, 0xf2f2ee, 0xc9cdd0, 0xf2f2ee, 0xe6e8e9, 0xc23b32, 0xf2f2ee, 0xd9dcde, 0x2f5f8a, 0xf2f2ee];
+  // Mostly pale to mid grey, as the owner's photographs of 5 Nov show them, the odd white one.
+  const hullColours = [0xb8bcbf, 0xa7acaf, 0xc6c9cb, 0x9aa0a4, 0xb8bcbf, 0xeeeeea, 0xadb2b5, 0x8f969b, 0xc6c9cb, 0xa7acaf, 0xd4d6d7];
   for (let k = 0; k < rackN; k++) onEdge.setColorAt(k, new THREE.Color(hullColours[(k * 7) % hullColours.length]!));
   onEdge.name = 'rdyc-dinghies-on-edge';
   const q = new THREE.Quaternion();
-  // The geometry: length along x (transom at 0, bow at +3), beam along y, depth along z. Stood up: x to vertical,
-  // y along the pontoon, z across it (the bottom facing the river).
-  const stand = new THREE.Matrix4().makeBasis(
-    new THREE.Vector3(0, 1, 0),
-    new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)),
-    new THREE.Vector3(Math.cos(acrossYaw), 0, -Math.sin(acrossYaw)),
-  );
+  // The geometry: length along x (transom at 0, bow at +3), beam along y (1.28 m), depth along z (0.32 m). Stood
+  // up: x to vertical, and each boat turned 55° from the line of the rack, so that they lean one against the next
+  // like fanned cards, their bottoms to the river, as in the owner's photographs. Set 0.42 m apart that leaves
+  // 0.34 m between neighbours, more than a boat's depth: no two hulls share a surface (side by side in one plane
+  // they did, and their bottoms strobed: owner review, 5 Nov 2026).
+  const fan = (55 * Math.PI) / 180;
+  const along = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+  const across = new THREE.Vector3(Math.cos(acrossYaw), 0, -Math.sin(acrossYaw));
+  const beamDir = along.clone().multiplyScalar(Math.cos(fan)).addScaledVector(across, Math.sin(fan)).normalize();
+  const up = new THREE.Vector3(0, 1, 0);
+  const stand = new THREE.Matrix4().makeBasis(up, beamDir, up.clone().cross(beamDir).normalize());
   q.setFromRotationMatrix(stand);
   for (let k = 0; k < rackN; k++) {
     const p = at(s0 + k * gap, 1.3);

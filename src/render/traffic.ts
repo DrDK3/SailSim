@@ -53,16 +53,30 @@ function bench(kit: Kit, x: number, y: number, z: number, l: number, side: numbe
 
 let ensignMat: THREE.MeshStandardMaterial | undefined;
 /** The Red Ensign (the merchant flag British passenger boats wear): red field, the Union Flag in the canton. */
-function ensignMaterial(): THREE.Material {
-  if (ensignMat) return ensignMat;
-  ensignMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.DoubleSide });
+let whiteEnsignMat: THREE.MeshStandardMaterial | undefined;
+/** The Red Ensign (merchant and private vessels), or the White Ensign (the Royal Navy's). */
+function ensignMaterial(white = false): THREE.Material {
+  if (!white && ensignMat) return ensignMat;
+  if (white && whiteEnsignMat) return whiteEnsignMat;
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.DoubleSide });
+  if (white) whiteEnsignMat = mat;
+  else ensignMat = mat;
   if (typeof document !== 'undefined') {
     const c = document.createElement('canvas');
     c.width = 120;
     c.height = 60;
     const g = c.getContext('2d')!;
-    g.fillStyle = '#c8102e';
-    g.fillRect(0, 0, 120, 60);
+    if (white) {
+      // White, with the red cross of St George over the whole flag.
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 120, 60);
+      g.fillStyle = '#c8102e';
+      g.fillRect(54, 0, 12, 60);
+      g.fillRect(0, 24, 120, 12);
+    } else {
+      g.fillStyle = '#c8102e';
+      g.fillRect(0, 0, 120, 60);
+    }
     // Canton (hoist on the left, top half): blue, white and red saltires, white and red crosses.
     g.save();
     g.beginPath();
@@ -90,9 +104,9 @@ function ensignMaterial(): THREE.Material {
     g.restore();
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
-    ensignMat.map = t;
+    mat.map = t;
   }
-  return ensignMat;
+  return mat;
 }
 
 let ensignGeo: THREE.PlaneGeometry | undefined;
@@ -100,7 +114,7 @@ let ensignGeo: THREE.PlaneGeometry | undefined;
  * The ensign on a staff at the stern: the flag hangs from a pivot at the staff (named 'ensign'), its fly along
  * the pivot's +x, so turning the pivot flies it with the wind (TrafficView.update); built flying aft.
  */
-function ensign(group: THREE.Group, kit: Kit, x: number, y: number, z: number): void {
+function ensign(group: THREE.Group, kit: Kit, x: number, y: number, z: number, white = false): void {
   kit.rod(V(x, y, z), V(x, y + 1.3, z + 0.25), 0.02, VMAT.paint, C.wood, 6);
   if (!ensignGeo) {
     ensignGeo = new THREE.PlaneGeometry(0.8, 0.4);
@@ -111,7 +125,7 @@ function ensign(group: THREE.Group, kit: Kit, x: number, y: number, z: number): 
   pivot.position.set(x, y + 1.28, z + 0.24);
   pivot.rotation.y = -Math.PI / 2;
   pivot.name = 'ensign';
-  const flag = new THREE.Mesh(ensignGeo, ensignMaterial());
+  const flag = new THREE.Mesh(ensignGeo, ensignMaterial(white));
   flag.name = 'ensign-flag';
   pivot.add(flag);
   group.add(pivot);
@@ -201,7 +215,9 @@ function tugModel(): THREE.Group {
 
 /**
  * Lower Ferry float: a spoon-ended steel pontoon, two car lanes between walkways, ramps at both ends with
- * orange lips, and "Do not board" boards on the gates at each end (the owner's photographs).
+ * orange lips, and "Do not board" boards on the gates at each end. She has no cabin of any kind: an open deck
+ * with rails, lamps and lifebuoys, the tug's wheelhouse alongside the only shelter (the owner's photographs of
+ * 4 and 5 Nov 2026). At each end a pair of posts carries the gear that lifts the ramp.
  */
 function floatModel(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
@@ -220,8 +236,7 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
     rail(kit, [V(s * (beam / 2 - 0.12), deckY, -deckL / 2 + 0.3), V(s * (beam / 2 - 0.12), deckY, deckL / 2 - 0.3)], 1.1, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
   }
   for (const x of [-beam / 2 + walk + 0.3, 0, beam / 2 - walk - 0.3]) kit.box(0.12, 0.01, deckL - 3, VMAT.paint, x === 0 ? 0xf2f2ee : C.yellow, x, deckY + 0.045, 0);
-  // Crew shelter on the port walkway, lamp posts at the corners, lifebuoys on the rails.
-  cabin(kit, { x: -(beam / 2 - walk / 2 - 0.05), z: 2, y: deckY, length: 2.6, width: 1.15, height: 2.15, rFront: 0.15, rBack: 0.15, colour: C.cream, windows: [0.5, 0.88], roof: { overhang: 0.12, thickness: 0.08, colour: C.navy } });
+  // Lamp posts at the corners, lifebuoys on the rails (no cabin: see above).
   for (const s of [-1, 1]) {
     for (const e of [-1, 1]) {
       const p = V(s * (beam / 2 - 0.25), deckY, e * (deckL / 2 - 1));
@@ -229,6 +244,17 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
       kit.box(0.35, 0.18, 0.25, VMAT.paint, 0xe8e8e2, p.x - s * 0.15, deckY + 3.25, p.z);
     }
     lifebuoy(kit, s * (beam / 2 - 0.1), deckY + 0.75, -4, s);
+    lifebuoy(kit, s * (beam / 2 - 0.1), deckY + 0.75, 4, s);
+  }
+  // The ramp gear at each end: a post either side of the ramp with a lifting sheave at its head.
+  for (const e of [-1, 1]) {
+    for (const s of [-1, 1]) {
+      const x = s * (beam / 2 - walk - 0.15);
+      const z = e * (deckL / 2 - 0.5);
+      kit.box(0.22, 3.0, 0.22, VMAT.paint, 0x8d9296, x, deckY + 1.5, z);
+      kit.add(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 14), VMAT.paint, 0x2b2e33, place(x, deckY + 2.95, z, 0).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)));
+    }
+    kit.box(beam - 2 * walk - 0.1, 0.16, 0.16, VMAT.paint, 0x8d9296, 0, deckY + 3.0, e * (deckL / 2 - 0.5));
   }
   // The gates' boards at each end of the walkways: white, lettered in red ("Do not board" when the ramp is up).
   for (const e of [-1, 1]) {
@@ -256,6 +282,8 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
     for (const s of [-1, 1]) {
       rk.box(0.14, 0.45, 3.6, VMAT.paint, 0xe07a2a, s * (w / 2 + 0.07), 0.15, end * 1.8);
       for (let k = 0; k < 6; k++) rk.box(0.15, 0.46, 0.22, VMAT.paint, C.black, s * (w / 2 + 0.07), 0.15, end * (0.3 + k * 0.6));
+      // The lifting arm along each side of the ramp, from its hinge out to the lip.
+      rk.rod(V(s * (w / 2 + 0.07), 0.38, end * 0.1), V(s * (w / 2 + 0.07), 0.95, end * 3.4), 0.07, VMAT.paint, 0xd7d9db);
     }
     pivot.add(rk.build('ramp'));
     g.add(pivot);
@@ -282,54 +310,92 @@ function placeRod(m: THREE.Object3D, p0: THREE.Vector3, p1: THREE.Vector3): void
 }
 
 /**
- * The Higher Ferry: a double-ended cable ferry carrying up to 36 cars (Wikipedia, via search, 4 Nov 2026): four
- * lanes of nine, a lounge and control cabin along one side, big ramps at both ends, and the sheaves her two
- * cables run through (she hauls herself across on them). Hull size from the capacity (E).
+ * The Higher Ferry: a double-ended cable ferry carrying up to 36 cars (Wikipedia, via search, 4 Nov 2026), as the
+ * owner's photographs of 5 Nov 2026 show her: a dark blue hull; low white casings along both sides with a small
+ * house at each corner; her control cabin high on a white gantry that bridges the car deck amidships, reached by a
+ * stair on each side; big ramps at both ends; and the sheaves her two cables run through (she hauls herself
+ * across on them). Symmetrical end to end and side to side. Hull size from the capacity, heights from the
+ * photographs (E).
  */
 function bridgeModel(length: number, beam: number): THREE.Group {
   const g = new THREE.Group();
   const kit = new Kit();
+  const NAVY = 0x1f3a63;
+  const WHITE = 0xf2f3f1;
   const h = hull(kit, {
     length, beam, freeboard: 1.2, draft: 1.2, pontoon: true, camber: 0.05,
-    colours: { bottom: 0x3a1414, boot: C.white, topsides: C.navy, deck: 0x6a6e72 }, bootTop: 0.35,
+    colours: { bottom: 0x3a1414, boot: NAVY, topsides: NAVY, deck: 0x6a6e72 }, bootTop: 0.35,
   });
   const deckY = h.deck(0);
   const deckL = length - 3;
-  const sup = 3.2; // width of the starboard superstructure
-  // Lanes (four of 3.2 m) and the walkway on the other side.
-  const lane0 = -beam / 2 + 1.3;
+  // The side casings: white, along both sides, a white band along the sheer above the blue hull.
+  const cas = 1.6;
+  const casH = 1.35;
+  const casL = deckL - 1;
+  for (const s of [-1, 1]) {
+    const x = s * (beam / 2 - cas / 2);
+    kit.box(cas, casH, casL, VMAT.paint, WHITE, x, deckY + casH / 2, 0);
+    kit.box(cas + 0.06, 0.12, casL + 0.06, VMAT.paint, 0xdfe2e3, x, deckY + casH + 0.06, 0);
+    // A house at each corner, with windows and a door to the deck.
+    for (const e of [-1, 1]) {
+      cabin(kit, { x, z: e * (casL / 2 - 2.2), y: deckY + casH, length: 3.6, width: cas, height: 1.9, rFront: 0.2, rBack: 0.2, colour: WHITE, windows: [0.42, 0.85], roof: { overhang: 0.1, thickness: 0.1, colour: WHITE } });
+    }
+    rail(kit, [V(x - s * (cas / 2 - 0.08), deckY + casH, -casL / 2 + 4.2), V(x - s * (cas / 2 - 0.08), deckY + casH, casL / 2 - 4.2)], 1.0, { spacing: 1.6, colour: WHITE, material: VMAT.paint, r: 0.03 });
+    for (const z of [-casL / 2 + 5, casL / 2 - 5]) lifebuoy(kit, s * (beam / 2 + 0.02), deckY + casH * 0.6, z, s);
+  }
+  // Four lanes of 3.2 m between the casings.
+  const inner = beam / 2 - cas;
+  const lane0 = -6.4;
   for (let i = 0; i <= 4; i++) kit.box(0.12, 0.01, deckL - 4, VMAT.paint, C.yellow, lane0 + i * 3.2, deckY + 0.05, 0);
-  rail(kit, [V(-beam / 2 + 0.15, deckY, -deckL / 2 + 0.5), V(-beam / 2 + 0.15, deckY, deckL / 2 - 0.5)], 1.1, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
-  // Lounge along the starboard side, the control cabin above it (windows all round), mast, lifebuoys.
-  const sx = beam / 2 - sup / 2 - 0.1;
-  cabin(kit, { x: sx, z: 0, y: deckY, length: length * 0.52, width: sup, height: 2.6, rFront: 0.3, rBack: 0.3, colour: C.white, windows: [0.42, 0.85], roof: { overhang: 0.15, thickness: 0.12, colour: C.white } });
-  rail(kit, [V(sx - sup / 2 + 0.1, deckY + 2.72, -length * 0.25), V(sx - sup / 2 + 0.1, deckY + 2.72, length * 0.25)], 1.0, { spacing: 1.6 });
-  cabin(kit, { x: sx, z: 0, y: deckY + 2.72, length: 6, width: sup + 0.3, height: 2.1, rFront: 0.5, rBack: 0.5, colour: C.white, windows: [0.4, 0.92], front: [0.35, 0.94], roof: { overhang: 0.25, thickness: 0.12, colour: C.navy } });
-  mast(kit, sx, deckY + 4.95, 0, 2.4, { radar: false });
-  for (const z of [-8, 8]) lifebuoy(kit, beam / 2 - 0.08, deckY + 1.2, z, 1);
+  // The gantry amidships: on each side an A-frame from the casing, the bridge deck spanning the car deck at
+  // about 6.5 m, the control cabin on it with windows all round, a rail round the bridge deck, a mast on top.
+  const bridgeY = deckY + 6.5;
+  const legHalf = 2.2;
+  for (const s of [-1, 1]) {
+    const x = s * (beam / 2 - cas / 2);
+    for (const e of [-1, 1]) kit.rod(V(x, deckY + casH, e * legHalf), V(s * (inner - 0.3), bridgeY, e * 0.9), 0.17, VMAT.paint, WHITE, 10);
+    kit.rod(V(x, deckY + casH + 2.4, -legHalf * 0.55), V(x, deckY + casH + 2.4, legHalf * 0.55), 0.1, VMAT.paint, WHITE, 8);
+    // The stair up from the casing to the bridge deck, along the side.
+    const s0 = V(x, deckY + casH, -legHalf - 4.2);
+    const s1 = V(s * (inner - 0.6), bridgeY, -1.3);
+    kit.rod(s0, s1, 0.06, VMAT.paint, WHITE, 6);
+    kit.rod(s0.clone().setY(s0.y + 1.0), s1.clone().setY(s1.y + 1.0), 0.04, VMAT.paint, WHITE, 6);
+    const steps = 18;
+    for (let k = 1; k < steps; k++) {
+      const p = s0.clone().lerp(s1, k / steps);
+      kit.box(0.9, 0.05, 0.28, VMAT.paint, 0xb9bdc0, p.x - s * 0.35, p.y, p.z);
+    }
+  }
+  kit.box(beam - 2 * cas + 0.6, 0.35, 3.0, VMAT.paint, WHITE, 0, bridgeY, 0);
+  rail(kit, [V(-(inner - 0.2), bridgeY + 0.18, -1.45), V(inner - 0.2, bridgeY + 0.18, -1.45)], 1.0, { spacing: 1.4, colour: WHITE, material: VMAT.paint, r: 0.03 });
+  rail(kit, [V(-(inner - 0.2), bridgeY + 0.18, 1.45), V(inner - 0.2, bridgeY + 0.18, 1.45)], 1.0, { spacing: 1.4, colour: WHITE, material: VMAT.paint, r: 0.03 });
+  cabin(kit, { x: 0, z: 0, y: bridgeY + 0.18, length: 2.7, width: 6.2, height: 2.2, rFront: 0.3, rBack: 0.3, colour: WHITE, windows: [0.35, 0.9], front: [0.3, 0.92], roof: { overhang: 0.25, thickness: 0.14, colour: WHITE } });
+  // The operator's name board on each face of the cabin (navy).
+  for (const e of [-1, 1]) kit.box(1.6, 0.4, 0.04, VMAT.paint, NAVY, 0, bridgeY + 2.15, e * 1.4);
+  mast(kit, 0, bridgeY + 2.55, 0, 2.2, { radar: true });
   // Cable sheaves at each end (she runs on two cables, F6): where the cables come up out of the water.
-  for (const e of [-1, 1]) for (const x of bridgeSheaveX(beam)) kit.box(0.9, 0.9, 1.4, VMAT.paint, C.navy, x, deckY + 0.3, e * (deckL / 2 - 0.4));
-  // Cars: four lanes of up to nine (36 cars), a few spaces empty; people on the walkway.
+  for (const e of [-1, 1]) for (const x of bridgeSheaveX(beam)) kit.box(0.9, 0.9, 1.4, VMAT.paint, NAVY, x, deckY + 0.3, e * (deckL / 2 - 0.4));
+  // Cars: four lanes of up to nine (36 cars), a few spaces empty; people at the casing rails.
   let k = 0;
   const pitch = Math.min(5.0, (deckL - 6) / 9);
   for (let lane = 0; lane < 4; lane++) for (let i = 0; i < 9; i++) {
     if ((lane * 7 + i * 3) % 6 === 5) continue;
     car(kit, lane0 + 1.6 + lane * 3.2, deckY + 0.05, -deckL / 2 + 3 + pitch / 2 + i * pitch, k++ * 3 + lane);
   }
-  for (let i = 0; i < 3; i++) addPerson(kit, -beam / 2 + 0.7, deckY + 0.04, -6 + i * 5, -Math.PI / 2, 20 + i);
+  for (let i = 0; i < 3; i++) addPerson(kit, (i % 2 ? 1 : -1) * (beam / 2 - cas / 2), deckY + casH, -6 + i * 5, i % 2 ? Math.PI / 2 : -Math.PI / 2, 20 + i);
   g.add(kit.build('higher-ferry'));
   for (const end of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.name = end < 0 ? 'ramp-bow' : 'ramp-stern';
-    pivot.position.set(-sup / 2, deckY, (end * deckL) / 2 + end * 0.3);
+    pivot.position.set(0, deckY, (end * deckL) / 2 + end * 0.3);
     const rk = new Kit();
-    const w = beam - sup - 1.2;
+    const w = 2 * inner - 0.4;
     rk.box(w, 0.22, 4.6, VMAT.paint, 0x7a7e82, 0, 0, end * 2.3);
-    for (const s of [-1, 1]) rk.box(0.2, 0.6, 4.6, VMAT.paint, C.navy, s * (w / 2 + 0.1), 0.2, end * 2.3);
+    for (const sd of [-1, 1]) rk.box(0.2, 0.6, 4.6, VMAT.paint, NAVY, sd * (w / 2 + 0.1), 0.2, end * 2.3);
     pivot.add(rk.build('ramp'));
     g.add(pivot);
   }
-  navLights(g, { length: deckL, beam, mastY: deckY + 7.3, mastZ: 0, sideY: deckY + 4.8, ram: true });
+  navLights(g, { length: deckL, beam, mastY: bridgeY + 4.6, mastZ: 0, sideY: bridgeY + 1.6, ram: true });
   return g;
 }
 
@@ -396,6 +462,117 @@ function launchModel(length: number, beam: number, seed: number): THREE.Group {
   g.add(kit.build('launch'));
   navLights(g, { length: L, beam, mastY: cy + 0.6, mastZ: cz0, sideY: cy - 0.4 });
   g.add(wake(beam));
+  return g;
+}
+
+/** A name in letters on a transparent plane (a hull's or a board's), or nothing where there is no canvas (tests). */
+function lettering(text: string, w: number, h: number, colour: string, font = '700 64px Georgia, serif'): THREE.Mesh | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = Math.max(64, Math.round((1024 * h) / w));
+  const g = c.getContext('2d');
+  if (!g) return undefined;
+  g.fillStyle = colour;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = font;
+  g.fillText(text, c.width / 2, c.height / 2, c.width - 20);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.35, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+  m.name = 'lettering';
+  return m;
+}
+
+/**
+ * The Noss ferry, NORAGH PHILIP of NOSS (the owner's photograph, 5 Nov 2026): a small passenger boat with a deep red
+ * hull and her name along it in white, a white wheelhouse-saloon with a red roof and a NOSS FERRY board on its
+ * front, a dark blue canopy over the open well aft, and a white mast with her lights. About 10 m (E).
+ */
+export function nossFerryModel(length = 10, beam = 3.4): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'noss-ferry';
+  const kit = new Kit();
+  const RED = 0x8f1d22;
+  const h = hull(kit, {
+    length, beam, freeboard: 0.95, draft: 0.8, sheerBow: 0.35, sheerStern: 0.1, stemRake: 0.5, entry: 0.42, transom: 0.72,
+    flare: 0.1, bulwark: 0.25, colours: { bottom: C.antifouling, boot: C.white, topsides: RED, deck: C.greyDeck, bulwarkInside: C.white }, bootTop: 0.18,
+  });
+  const L = length;
+  // The wheelhouse-saloon forward of amidships: white, windows all round, a red roof.
+  const wz = -L * 0.08;
+  const wl = L * 0.38;
+  const wy = h.deck(wz);
+  cabin(kit, { z: wz, y: wy, length: wl, width: beam - 0.5, height: 1.95, rFront: 0.45, rBack: 0.2, rake: 0.2, colour: C.white, windows: [0.45, 0.88], front: [0.42, 0.9], roof: { overhang: 0.12, thickness: 0.12, colour: 0xb3262b } });
+  // The NOSS FERRY board on the front of the wheelhouse: red, white letters.
+  kit.box(1.4, 0.32, 0.05, VMAT.paint, 0xc0282d, 0, wy + 1.55, wz - wl / 2 - 0.04);
+  // The canopy over the well aft, on posts.
+  const cz0 = wz + wl / 2 + 0.2;
+  const cz1 = L * 0.42;
+  const cy = h.deck(0) + 1.95;
+  for (const s of [-1, 1]) for (const z of [cz0, cz1]) kit.rod(V(s * (h.half(z) - 0.25), h.sheer(z), z), V(s * (h.half(z) - 0.25), cy, z), 0.03, VMAT.steel);
+  kit.box(beam - 0.35, 0.06, cz1 - cz0 + 0.3, VMAT.canvas, 0x23356b, 0, cy + 0.02, (cz0 + cz1) / 2);
+  for (const s of [-1, 1]) bench(kit, s * (h.half((cz0 + cz1) / 2) - 0.45), h.deck(0), (cz0 + cz1) / 2, cz1 - cz0 - 0.3, -s, 1, 31 + s);
+  mast(kit, 0, wy + 2.07, wz, 1.6, { radar: false });
+  for (const s of [-1, 1]) lifebuoy(kit, s * (h.half(wz) + 0.02), wy + 0.9, wz + 0.4, s);
+  addPerson(kit, 0.4, wy, wz - 0.2, 0, 17);
+  g.add(kit.build('noss-ferry-hull'));
+  // Her name along both sides, white, and the board's letters.
+  for (const s of [-1, 1]) {
+    const name = lettering('NORAGH PHILIP of NOSS', L * 0.5, 0.42, '#f4f1ea');
+    if (name) {
+      name.position.set(s * (h.half(L * 0.05) + 0.03), h.sheer(L * 0.05) - 0.45, L * 0.05);
+      name.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2;
+      g.add(name);
+    }
+  }
+  const board = lettering('NOSS FERRY', 1.3, 0.28, '#ffffff', '800 150px Arial, sans-serif');
+  if (board) {
+    board.position.set(0, wy + 1.55, wz - wl / 2 - 0.075);
+    board.rotation.y = Math.PI;
+    g.add(board);
+  }
+  navLights(g, { length: L, beam, mastY: wy + 3.6, mastZ: wz, sideY: wy + 1.6 });
+  return g;
+}
+
+/**
+ * A grey Royal Navy training boat at Sandquay (the owner's photograph, 5 Nov 2026): a grey hull and a long grey
+ * wheelhouse-saloon with square windows, white life-raft canisters on its roof, orange lifebuoys, a mast with a
+ * radar, the White Ensign aft. About 15 m (E).
+ */
+export function navyTrainingBoatModel(length = 15, beam = 4.4, seed = 1): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'navy-training-boat';
+  const kit = new Kit();
+  const GREY = 0x9ba2a7;
+  const DARK = 0x5b6166;
+  const h = hull(kit, {
+    length, beam, freeboard: 1.25, draft: 1.1, sheerBow: 0.55, sheerStern: 0.15, stemRake: 0.9, entry: 0.4, transom: 0.8,
+    flare: 0.12, bulwark: 0.2, colours: { bottom: C.antifouling, boot: C.black, topsides: GREY, deck: DARK, bulwarkInside: GREY }, bootTop: 0.2,
+  });
+  const L = length;
+  const cz = -L * 0.02;
+  const cl = L * 0.55;
+  const cy = h.deck(cz);
+  cabin(kit, { z: cz, y: cy, length: cl, width: beam - 1.0, height: 2.1, rFront: 0.9, rBack: 0.25, rake: 0.25, colour: GREY, windows: [0.42, 0.82], front: [0.4, 0.88], roof: { overhang: 0.08, thickness: 0.1, colour: 0xc9cdd0 } });
+  // Life-raft canisters (white) side by side on the saloon roof, aft.
+  for (const s of [-1, 1]) kit.add(new THREE.CylinderGeometry(0.33, 0.33, 1.1, 14), VMAT.paint, 0xf2f2ee, place(s * 0.55, cy + 2.55, cz + cl * 0.3).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+  mast(kit, 0, cy + 2.2, cz - cl * 0.22, 2.4, { radar: true, colour: GREY });
+  for (const s of [-1, 1]) for (const z of [cz - cl * 0.15, cz + cl * 0.35]) lifebuoy(kit, s * (h.half(z) - 0.42), cy + 1.0, z, s);
+  for (const sd of [-1, 1]) {
+    const pts: THREE.Vector3[] = [];
+    for (let k = 0; k <= 8; k++) {
+      const z = -L * 0.42 + (k / 8) * L * 0.86;
+      pts.push(V(sd * (h.half(z) - 0.12), h.deck(z), z));
+    }
+    rail(kit, pts, 0.85, { spacing: 1.5, colour: GREY });
+  }
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.2), L / 2 - 0.3, true);
+  addPerson(kit, 0.5, h.deck(L * 0.38), L * 0.38, 0, seed + 5);
+  g.add(kit.build('navy-training-boat-hull'));
+  navLights(g, { length: L, beam, mastY: cy + 4.6, mastZ: cz - cl * 0.22, sideY: cy + 1.8 });
   return g;
 }
 
@@ -524,7 +701,7 @@ export function minehunterModel(length = 52.5, beam = 10.5): THREE.Group {
     }
     rail(kit, pts, 1.0, { spacing: 2, colour: GREY });
   }
-  ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4);
+  ensign(g, kit, 0, h.sheer(L / 2 - 0.3), L / 2 - 0.4, true);
   g.add(kit.build('hindostan'));
   return g;
 }
@@ -915,7 +1092,11 @@ export class TrafficView {
     const root = new THREE.Group();
     root.name = `vessel-${s.kind}`;
     const seed = [...s.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
-    const body = instance(`${s.kind}:${s.length}:${s.beam}:${seed % MODEL_VARIANTS}`, () => makeModel(s.kind, s.length, s.beam, seed % MODEL_VARIANTS));
+    // The Noss ferry as herself, NORAGH PHILIP of NOSS (the owner's photograph, 5 Nov 2026); the rest by kind.
+    const noss = s.label === 'Noss ferry';
+    const body = noss
+      ? instance(`noss-ferry:${s.length}:${s.beam}`, () => nossFerryModel(s.length, s.beam))
+      : instance(`${s.kind}:${s.length}:${s.beam}:${seed % MODEL_VARIANTS}`, () => makeModel(s.kind, s.length, s.beam, seed % MODEL_VARIANTS));
     root.add(body);
     let tug: THREE.Group | undefined;
     if (s.kind === 'tug-float') {

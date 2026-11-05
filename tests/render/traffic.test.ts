@@ -74,6 +74,47 @@ describe('river traffic models', () => {
     expect(Math.abs(ramp() - down)).toBeGreaterThan(0.2);
   });
 
+  /** Every vertex of the meshes named `name` in the vessel's model (model coordinates). */
+  function vertices(kind: VesselState['kind'], length: number, beam: number, name: string): THREE.Vector3[] {
+    const view = new TrafficView();
+    view.update([state(kind, length, beam, { heading: 0, n: 0, e: 0 })], 0, cam, false);
+    const root = view.group.children.find((c) => c.name === `vessel-${kind}`)!;
+    const out: THREE.Vector3[] = [];
+    let part: THREE.Object3D | undefined;
+    root.traverse((o) => {
+      if (!part && o.name === name) part = o;
+    });
+    part?.traverse((m) => {
+      if (!(m instanceof THREE.Mesh)) return;
+      const p = m.geometry.getAttribute('position');
+      for (let i = 0; i < p.count; i++) out.push(new THREE.Vector3(p.getX(i), p.getY(i), p.getZ(i)));
+    });
+    return out;
+  }
+
+  it("the Lower Ferry's float has no cabin: nothing stands on its walkways above the rails but the lamps and the ramp gear (owner, 5 Nov 2026)", () => {
+    const v = vertices('tug-float', 33, 11, 'float');
+    expect(v.length).toBeGreaterThan(1000);
+    const deck = Math.min(...v.filter((p) => Math.abs(p.x) < 1 && Math.abs(p.z) < 2).map((p) => p.y).filter((y) => y > 0.3));
+    // Where the crew shelter stood (on the port walkway, amidships): clear above the rails.
+    const shelter = v.filter((p) => p.x > -5.3 && p.x < -4.3 && p.z > 0.6 && p.z < 3.4 && p.y > deck + 1.25 && p.y < deck + 2.6);
+    expect(shelter).toHaveLength(0);
+  });
+
+  it('the Higher Ferry is symmetrical, her control cabin high on a gantry amidships over the car deck (owner, 5 Nov 2026)', () => {
+    const v = vertices('floating-bridge', 50, 16, 'higher-ferry');
+    const top = Math.max(...v.map((p) => p.y));
+    const high = v.filter((p) => p.y > top - 3.5);
+    const meanX = high.reduce((a, p) => a + p.x, 0) / high.length;
+    const meanZ = high.reduce((a, p) => a + p.z, 0) / high.length;
+    expect(top).toBeGreaterThan(9);
+    expect(Math.abs(meanX)).toBeLessThan(0.6);
+    expect(Math.abs(meanZ)).toBeLessThan(1.5);
+    // Cars pass under it: nothing between the lanes' outer lines from the car tops (2 m) up to the bridge deck.
+    const underBridge = v.filter((p) => Math.abs(p.x) < 5 && Math.abs(p.z) < 1.4 && p.y > 4 && p.y < 7);
+    expect(underBridge).toHaveLength(0);
+  });
+
   it('the Hindostan (a moored Sandown-class minehunter) builds at her size, bow along -z, its mast forward of amidships', () => {
     const ship = minehunterModel(52.5, 10.5);
     ship.updateMatrixWorld(true);

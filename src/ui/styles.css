@@ -698,3 +698,51 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 /* Sound signals in words (GR-6): an empty live region until a horn sounds, so screen readers announce it. */
 .sound-caption:empty { margin: 0; padding: 0; }
 .sound-caption { margin-top: 6px; padding: 3px 8px; border-radius: var(--r-sm); background: var(--accent-tint); font-size: var(--fs-sm); font-weight: 600; }
+
+/* The sailing dock, redesigned (owner review, 5 Nov 2026: "cannot be read and labels do not fit"). It replaces the
+   layered rules above for the dock: each sail is a block (its name; ease, a meter of the sheet and trim on one line;
+   the auto-trim switch and the sail's state in words), wide enough that nothing is clipped, at full contrast. On a
+   wide dock a sail's block is one line. Targets stay 24 px (44 px for fingers) and text 13-15 px. */
+.panel.dock { gap: var(--s2) var(--s4); padding: 10px 44px 10px 14px; font-size: 14px; color: var(--text); }
+.panel.dock .controls-sails { container: sails / inline-size; gap: 8px; }
+.panel.dock .controls-boat { gap: 8px; }
+.panel.dock .sail-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: 'name sheet' '. assist';
+  align-items: center; gap: 4px 8px; min-width: 0;
+}
+.panel.dock .sail-name { grid-area: name; width: auto; font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
+.panel.dock .sail-sheet { grid-area: sheet; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.panel.dock .sail-assist { grid-area: assist; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.panel.dock .sheet-meter { flex: 1 1 auto; min-width: 112px; height: 30px; border-radius: 7px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.14); color: var(--text); font-size: 14px; }
+.panel.dock .sheet-meter .sheet-fill { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.panel.dock .sheet-meter .sheet-value { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.panel.dock .sheet-meter .sheet-word { font-weight: 500; }
+.panel.dock button { font-size: 14px; white-space: nowrap; }
+.panel.dock .hold { min-width: 76px; justify-content: center; }
+.panel.dock .toggle, .panel.dock .slider { color: var(--text); font-size: 14px; white-space: nowrap; }
+.panel.dock .status { width: auto; flex: 1 1 170px; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; font-size: 13px; line-height: 1.25; padding: 4px 10px; border-radius: 7px; }
+.panel.dock .status strong { font-weight: 700; }
+.panel.dock .status.good { background: color-mix(in srgb, var(--good) 22%, transparent); color: color-mix(in srgb, var(--good) 70%, white); }
+.panel.dock .status.warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: color-mix(in srgb, var(--warn) 70%, white); }
+.panel.dock .status.bad { background: color-mix(in srgb, var(--bad) 24%, transparent); color: color-mix(in srgb, var(--bad) 55%, white); }
+/* Room for a sail's block on one line: name, sheet, then the switch and the state. */
+@container sails (min-width: 600px) {
+  .panel.dock .sail-row { grid-template-columns: 44px minmax(300px, 1.25fr) minmax(0, 1fr); grid-template-areas: 'name sheet assist'; }
+}
+.panel.dock .helm-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.panel.dock .tiller-view { height: auto; min-height: 44px; padding: 3px 8px; font-size: 13px; color: var(--text); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px; }
+.panel.dock .misc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.panel.dock .misc-row .slider input { width: 110px; }
+.panel.dock .key-hint { font-size: 12px; padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); color: var(--text); }
+@media (max-width: 700px) {
+  .panel.dock { padding: 8px 38px 8px 10px; font-size: 13px; gap: 6px; }
+  .panel.dock .sail-row { grid-template-columns: 36px minmax(0, 1fr); gap: 4px 6px; }
+  .panel.dock .hold { min-width: 52px; padding-left: 8px; padding-right: 8px; }
+  .panel.dock .sheet-meter { min-width: 84px; }
+  .panel.dock .sail-assist { flex-wrap: nowrap; gap: 6px; }
+  .panel.dock .status { flex: 1 1 0; }
+  .panel.dock .helm-row { gap: 4px; }
+  .panel.dock .misc-row { gap: 4px 10px; }
+  /* The paused notice in the middle of the view, clear of the dock however tall it is. */
+  .banner.paused-pill { top: 45%; bottom: auto; }
+}
