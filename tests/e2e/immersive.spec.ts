@@ -73,3 +73,27 @@ test('the minimap’s scale is under the map, and the dock is two rows beside it
   expect(d!.x + d!.width).toBeLessThanOrEqual(mapPanel!.x);
   expect(errors).toEqual([]);
 });
+
+test('the helm console keeps its size as the rudder moves and the sails’ states change; the fix glows', async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const errors = await ready(page);
+  const dock = page.getByRole('region', { name: 'Sailing controls' });
+  const size = async () => {
+    const b = (await dock.boundingBox())!;
+    return [Math.round(b.width), Math.round(b.height)];
+  };
+  const before = await size();
+  expect(before[1]).toBeLessThan(100);
+  // The main let right out: it luffs, and the button that fixes it (Trim) glows.
+  await page.evaluate(() => window.__squib!.controller.setInput({ autoMain: false, mainSheet: 1 }));
+  await expect(page.getByTestId('main-status')).toContainText('Luffing');
+  await expect(dock.getByRole('button', { name: /^Trim main/ })).toHaveClass(/suggest/);
+  expect(await size()).toEqual(before);
+  // Hold the helm over: the rudder moves, the readout changes, the console does not.
+  await page.keyboard.down('KeyD');
+  await expect(dock.locator('.helm-readout')).not.toHaveText('Straight', { timeout: 60_000 });
+  expect(await size()).toEqual(before);
+  await page.keyboard.up('KeyD');
+  expect(errors).toEqual([]);
+});

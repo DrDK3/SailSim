@@ -807,3 +807,78 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .panel.dock .tiller-view .tiller-svg { width: 40px; height: 26px; }
   .panel.dock .tiller-view .tiller-short { font-size: 12px; }
 }
+
+/* The helm console (owner review, 5 Nov 2026, third): four instrument modules, each two fixed rows; nothing in it
+   wraps and every readout has a fixed width, so the console keeps its size whatever the rudder and the sails do.
+   Translucent glass over the water; the modules a shade lighter; uppercase labels as on a boat's instruments.
+   Targets at least 24 px (28 px here), text at least 12 px. */
+.panel.dock.console {
+  display: grid; grid-template-columns: repeat(4, auto); grid-auto-flow: row; align-items: stretch; gap: 6px;
+  width: fit-content; max-width: none; padding: 6px 34px 6px 6px; bottom: 24px; flex-wrap: nowrap;
+  background: rgba(8, 20, 30, 0.55); backdrop-filter: blur(12px) saturate(1.15); -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  border: 1px solid rgba(178, 205, 226, 0.14); border-radius: 14px; font-size: 13px; color: var(--text);
+}
+.panel.dock.console .mod {
+  display: grid; grid-template-rows: 28px 28px; row-gap: 4px; padding: 5px 7px; min-width: 0;
+  border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.panel.dock.console .sail-mod { width: 270px; }
+.panel.dock.console .helm-mod { width: 190px; }
+.panel.dock.console .boat-mod { width: 210px; }
+.panel.dock.console .mod-top, .panel.dock.console .mod-row { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; flex-wrap: nowrap; }
+.panel.dock.console .mod-label {
+  flex: 0 0 36px; font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+}
+.panel.dock.console button { min-height: 28px; height: 28px; padding: 0 8px; font-size: 13px; white-space: nowrap; }
+.panel.dock.console .hold { min-width: 0; flex: 0 0 auto; gap: 4px; padding: 0 7px; }
+.panel.dock.console .key-hint { font-size: 12px; padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); color: var(--text); }
+/* The sail's state: a pill with a coloured dot, the word in full; the advice is its tooltip and read out. */
+.panel.dock.console .status {
+  flex: 1 1 auto; width: auto; min-width: 0; height: 24px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 9px; border-radius: 99px; font-size: 12.5px; line-height: 1; white-space: nowrap; overflow: visible;
+  background: rgba(255, 255, 255, 0.06); color: var(--text);
+}
+.panel.dock.console .status .dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
+.panel.dock.console .status.good { color: color-mix(in srgb, var(--good) 75%, white); background: color-mix(in srgb, var(--good) 16%, transparent); }
+.panel.dock.console .status.warn { color: color-mix(in srgb, var(--warn) 75%, white); background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.panel.dock.console .status.bad { color: color-mix(in srgb, var(--bad) 60%, white); background: color-mix(in srgb, var(--bad) 20%, transparent); }
+.panel.dock.console .toggle { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; min-height: 24px; font-size: 12.5px; color: var(--text); white-space: nowrap; }
+/* The sheet's meter: how far it is eased, the figure in the middle. */
+.panel.dock.console .sheet-meter {
+  position: relative; flex: 1 1 auto; min-width: 0; height: 28px; border-radius: 7px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); font-size: 13px;
+}
+.panel.dock.console .sheet-meter .sheet-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 42%, transparent); }
+.panel.dock.console .sheet-meter .sheet-value { position: relative; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
+.panel.dock.console .sheet-meter .sheet-word { font-weight: 500; }
+/* The button that fixes the sail's trouble glows: Trim when it luffs, Ease when it stalls. */
+.panel.dock.console .hold.suggest { box-shadow: inset 0 0 0 2px var(--warn), 0 0 10px color-mix(in srgb, var(--warn) 55%, transparent); animation: console-glow 1.6s ease-in-out infinite; }
+.panel.dock.console .is-bad .hold.suggest { box-shadow: inset 0 0 0 2px var(--bad), 0 0 10px color-mix(in srgb, var(--bad) 55%, transparent); }
+@keyframes console-glow { 50% { box-shadow: inset 0 0 0 2px transparent, 0 0 2px transparent; } }
+/* The helm: the rudder and tiller from above, and where the bow is turning. */
+.panel.dock.console .rudder-dial {
+  position: relative; flex: 1 1 auto; min-width: 0; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 7px; background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.12); overflow: visible;
+}
+.panel.dock.console .rudder-dial .tiller-svg { width: 40px; height: 26px; }
+.panel.dock.console .helm-readout { flex: 1 1 auto; min-width: 0; text-align: center; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.panel.dock.console .helm-mod .mod-row > button:last-child { flex: 0 0 auto; }
+/* The boat: release, and steppers that move in the keys' 25% steps. */
+.panel.dock.console .stepper { gap: 5px; }
+.panel.dock.console .stepper-value { display: inline-block; min-width: 3.1em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.panel.dock.console + .controls-show, .controls-hide { z-index: 1; }
+/* Not room for the four side by side (with the minimap): the sails above, the helm and the boat below. */
+@media (max-width: 1179px) {
+  .panel.dock.console { grid-template-columns: repeat(2, auto); }
+  .panel.dock.console .helm-mod, .panel.dock.console .boat-mod { width: auto; }
+}
+/* A phone: the sails one above the other across the width, the helm and the boat side by side under them. */
+@media (max-width: 700px) {
+  .panel.dock.console { grid-template-columns: 1fr 1fr; width: auto; left: 8px; right: 8px; padding: 5px 30px 5px 5px; gap: 5px; bottom: 8px; }
+  .panel.dock.console .sail-mod { grid-column: 1 / -1; width: auto; }
+  .panel.dock.console .helm-mod, .panel.dock.console .boat-mod { width: auto; }
+  .panel.dock.console .mod { padding: 4px 6px; }
+  .panel.dock.console .boat-mod .mod-row { gap: 4px; }
+  .panel.dock.console button { padding: 0 6px; }
+}
