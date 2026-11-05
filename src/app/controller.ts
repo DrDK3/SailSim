@@ -1665,11 +1665,28 @@ export class SimController {
     KeyE: 'jibIn', KeyQ: 'jibOut', ShiftLeft: 'helmHold', ShiftRight: 'helmHold',
   };
 
+  /**
+   * Whether a key belongs to the focused control rather than the boat: everything in a text field; in a list,
+   * slider, checkbox or button only the keys that work it (the arrows, Space, Enter, Home and End). The letter keys
+   * sail the boat even while the camera list or a slider has the focus (owner review, 5 Nov 2026: after the
+   * camera was chosen from its list, A and D no longer steered, and D chose the drone view).
+   */
+  static keyForControl(target: EventTarget | null, code: string): boolean {
+    const t = target as HTMLElement | null;
+    if (!t || !t.tagName) return false;
+    if (t.tagName === 'TEXTAREA' || t.isContentEditable) return true;
+    if (t.tagName === 'INPUT') {
+      const type = (t as HTMLInputElement).type;
+      if (!['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'color'].includes(type)) return true;
+    } else if (t.tagName !== 'SELECT' && t.tagName !== 'BUTTON') return false;
+    return /^(Arrow|Page)|^(Space|Enter|NumpadEnter|Home|End|Tab|Escape)$/.test(code);
+  }
+
   private onKeyDown = (ev: KeyboardEvent) => {
     // Browsers let sound start only after the user has pressed a key or clicked.
     this.sound.resume();
-    const t = ev.target as HTMLElement | null;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (SimController.keyForControl(ev.target, ev.code)) return;
     const held = this.keyAction(ev.code);
     if (held) {
       this.press(held, true);
