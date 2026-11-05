@@ -185,16 +185,37 @@ export const LANDMARKS: LandmarkSpec[] = [
   {
     id: 'royal-dart-hotel',
     at: [12, 54],
-    walls: 0xe8dcc0,
-    // Re-roofed in zinc in the refurbishment (estate agent's listing, via search).
-    roof: 0x8a9096,
+    // Matched here, drawn by src/render/royalDart.ts from the owner's photographs (5 Nov 2026, P8).
+    walls: 0xf1e8d0,
+    roof: 0x8c9399,
     win: WIN.sash,
-    // The river (west) front: "a wide splayed two-storey bay with cast-iron balcony with tented roof on thin iron columns".
-    extras: (base, _top, ring) => {
-      const [a, b] = facing(ring, 225, 315);
-      return [{ kind: 'veranda', a, b, floorM: base + 3.4, topM: base + 7.2, depth: 2.2, canopy: 1.1 }];
-    },
-    source: 'The Royal Dart, Kingswear (c. 1850, Italianate, Grade II; the Royal Dart Hotel until it fell into disrepair, refurbished for Darthaven Marina as five apartments and a commercial unit, with a zinc-clad roof, Hydrock, Gillespie Yunnie Architects and Waterside Properties, via search): river front with a two-storey bay and a cast-iron balcony with a tented roof on thin iron columns (Historic England list entry 1146644, via search). Balcony length and depth E.',
+    source: "The Royal Dart, Kingswear (c. 1850, Italianate, Grade II; the Royal Dart Hotel until it fell into disrepair, refurbished for Darthaven Marina as five apartments and a commercial unit, with a zinc-clad roof, Hydrock, Gillespie Yunnie Architects and Waterside Properties, via search): river front with a wide splayed two-storey bay and a cast-iron balcony with a tented roof on thin iron columns (Historic England list entry 1146644, via search). Modelled from the owner's photographs of 5 Nov 2026 (src/render/royalDart.ts): cream render, a low hipped roof on deep bracketed eaves, the bay with two balconies under a grey tented canopy, the ROYAL DART BARS sign, a navy base on a granite plinth at the water. Storey heights, the balconies and the canopy's profile E.",
+  },
+  {
+    id: 'royal-dart-wing',
+    at: [15, 62.2],
+    walls: 0xf4f3ee,
+    roof: SLATE,
+    win: WIN.glazed,
+    source: "The Royal Dart's north wing beside the passenger ferry's gangway: white, a first floor of large windows over an open loggia on white columns where the gangway lands, a slate roof and a small square lantern (the owner's photographs, 5 Nov 2026; drawn by src/render/royalDart.ts). Its heights and details E.",
+  },
+  // ---- The top of the Square, Kingswear, facing the river up the Lower Ferry's slipway (the owner's photographs,
+  // 5 Nov 2026, P8: which footprints these are is judged from where they stand in the photographs, E).
+  {
+    id: 'kingswear-square-north',
+    at: [41, 50.5],
+    walls: 0xeee5cc,
+    roof: SLATE,
+    win: WIN.sash,
+    source: "At the top of the Square, north: three storeys in cream render with round-headed windows and string courses, a slate roof (the owner's photographs, 5 Nov 2026). Which footprint it is, and its colours, E.",
+  },
+  {
+    id: 'kingswear-square-stone',
+    at: [40, 40.5],
+    walls: 0x8f7e6c,
+    roof: SLATE,
+    win: WIN.sash,
+    source: "At the top of the Square beside the slipway: three storeys of rubble stone with red-brick arches over white sashes, string courses, a shopfront and a slate roof with brick stacks (the owner's photograph from the river, 5 Nov 2026; painted pink in older photographs). Which footprint it is, and its colours, E.",
   },
   {
     id: 'dart-marina-hotel',
