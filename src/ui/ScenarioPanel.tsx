@@ -87,7 +87,8 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
   const tideSourceId = c.tide?.mode === 'snapshot' ? (ui.tideSources.find((s) => s.json === (c.tide as { snapshot: unknown }).snapshot)?.id ?? 'none') : undefined;
   const tideMode = c.tide?.mode === 'snapshot' ? (tideSourceId ?? 'none') : (c.tide?.mode ?? 'none');
   const weatherSrc = ui.weatherSources.find((s) => s.id === sourceId);
-  const skyValue = c.sky ? (c.sky.source === 'data' ? 'data' : c.sky.preset) : w.source === 'metoffice' ? 'data' : 'clear';
+  // Today's sky under a set wind (a random race or today's challenge) shows as the forecast's sky.
+  const skyValue = c.sky ? (c.sky.source === 'preset' ? c.sky.preset : 'data') : w.source === 'metoffice' ? 'data' : 'clear';
   const skyFromData = w.source === 'metoffice' && Array.isArray((w.snapshot as { model?: { sky?: unknown[] } })?.model?.sky);
   const manual = c.tide?.mode === 'manual' ? c.tide : undefined;
   const setManualTide = (patch: Partial<NonNullable<typeof manual>>) => manual && setC({ tide: { ...manual, ...patch } });

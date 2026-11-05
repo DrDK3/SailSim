@@ -150,18 +150,46 @@ def wind_step(run, valid):
     return speed, direction, gust
 
 
-def sky_step(run, valid):
+# How far back to look for a sky field the newest run has not published yet (UKV runs are hourly).
+SKY_FALLBACK_RUNS = 6
+
+
+def sky_runs(run, valid, fallback=SKY_FALLBACK_RUNS):
+    """The runs to read a sky field from, newest first: the wind's run, then the hourly runs before it that also
+    cover `valid`. The wind files of a new run are uploaded first and its cloud and other sky fields a little
+    later, so a job run in between found no cloud at all and published null (owner review, 5 Nov 2026: the sky did
+    not follow the weather). An hour or two older forecast of the sky is far better than none."""
+    return [run - dt.timedelta(hours=h) for h in range(0, fallback + 1) if run - dt.timedelta(hours=h) <= valid]
+
+
+def sky_step(run, valid, have=None, read=None):
+    """One hourly sky step. `have(run, valid, var)` and `read(run, valid, var)` are for tests (default: the bucket)."""
+    have = have or (lambda r, v, var: exists(model_file(r, v, var)))
+    read = read or Field
     out = {"valid": f"{valid:%Y-%m-%dT%H:%MZ}", "rdyc": {}, "area_mean": {}}
+    older = {}
     for name, var, conv, nd in SKY_VARS:
-        try:
-            f = Field(run, valid, var)
-        except Exception as e:  # one missing sky variable must not lose the wind
+        f = None
+        for k, r0 in enumerate(sky_runs(run, valid)):
+            try:
+                if k > 0 and not have(r0, valid, var):
+                    continue
+                f = read(r0, valid, var)
+            except Exception as e:  # one missing sky variable must not lose the wind
+                print(f"  sky {var} at {valid:%H:%MZ} from the {r0:%H%MZ} run unavailable: {e}", file=sys.stderr)
+                continue
+            if k > 0:
+                older[name] = f"{r0:%Y-%m-%dT%H:%MZ}"
+            break
+        if f is None:
             out["rdyc"][name] = None
             out["area_mean"][name] = None
-            print(f"  sky {var} at {valid:%H:%MZ} unavailable: {e}", file=sys.stderr)
             continue
         out["rdyc"][name] = round(float(conv(f.at(*RDYC))), nd)
         out["area_mean"][name] = round(float(conv(np.nanmean(f.area()))), nd)
+    if older:
+        # Fields taken from an earlier run than the wind's, by name: the run they came from.
+        out["older_run"] = older
     return out
 
 

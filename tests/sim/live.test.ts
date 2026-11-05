@@ -89,6 +89,19 @@ describe('sky (visual only)', () => {
     expect(mid.visibilityM).toBeCloseTo(Math.sqrt(a.visibilityM * b.visibilityM), 6);
   });
 
+  it('a forecast hour without its cloud: rain or fog closes the sky; dry, the default, and a note says so', () => {
+    const step = (valid: string, rdyc: Record<string, number | null>) => ({ valid, rdyc });
+    const wet = modelSky([step('2026-11-05T12:00Z', { cloud_total: null, cloud_low: null, visibility_m: 11664, rain_mm_h: 1.0 })], at('2026-11-05T12:00Z'), 'test');
+    expect(wet.at(0).cloud).toBeGreaterThan(0.9);
+    expect(wet.at(0).lowCloud).toBeGreaterThan(0.8);
+    expect(wet.notes.join(' ')).toContain('inferred from rain and fog');
+    const dry = modelSky([step('2026-11-05T12:00Z', { cloud_total: null, visibility_m: 30000, rain_mm_h: 0 })], at('2026-11-05T12:00Z'), 'test');
+    expect(dry.at(0).cloud).toBeCloseTo(0.3, 9);
+    const given = modelSky([step('2026-11-05T12:00Z', { cloud_total: 0.4, cloud_low: 0.1, visibility_m: 30000, rain_mm_h: 1.0 })], at('2026-11-05T12:00Z'), 'test');
+    expect(given.at(0).cloud).toBe(0.4);
+    expect(given.notes.join(' ')).not.toContain('inferred');
+  });
+
   it('presets and descriptions', () => {
     expect(presetSky('fog').at(123).visibilityM).toBe(300);
     expect(describeSky(SKY_PRESETS.fog)).toContain('(fog)');

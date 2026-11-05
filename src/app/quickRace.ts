@@ -15,7 +15,9 @@ import type { SkyPreset } from '../sim/env/sky';
 import type { PracticeKind } from '../sim/course/practice';
 import type { AppScenario, DataSource } from './controller';
 import type { PrepFlag } from '../sim/race/committee';
-import { RIVER_STREAM, liveNowConditions } from './liveNow';
+import { RIVER_STREAM, liveNowConditions, nowStartTime } from './liveNow';
+import { sunPosition } from '../sim/env/sun';
+import { RDYC_ORIGIN } from '../sim/geo/projection';
 
 export type QuickConditions = 'random' | 'live' | 'as-set';
 export type QuickWind = 'any' | 'light' | 'medium' | 'strong';
@@ -130,6 +132,24 @@ export function randomConditions(seed: number, wind: QuickWind, venue: QuickVenu
   return { conditions, summary: `${twsKn} kn from ${twdDeg}°, ${preset}, ${tide} (random, seed ${seed})` };
 }
 
+/**
+ * Today's sky and light for seeded conditions (owner review, 5 Nov 2026: "the sky and lighting need to reflect real
+ * time weather conditions"): with a live forecast that covers now and the sun up, the race starts now under the
+ * forecast's sky. The wind (and so the race) stays as seeded, the tide keeps its phase; the sky is visual only. At
+ * night the race keeps its seeded afternoon, so it can be seen.
+ */
+export function underTodaysSky(c: ConditionsSettings, live: DataSource | undefined, nowMs = Date.now()): { conditions: ConditionsSettings; applied: boolean } {
+  // Only a forecast that still covers now (as the live conditions themselves).
+  if (!live || live.freshness?.status === 'stale' || live.freshness?.status === 'expired') return { conditions: c, applied: false };
+  const sun = sunPosition(nowMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+  if (sun.elevationDeg < 5) return { conditions: c, applied: false };
+  const startTime = nowStartTime(nowMs);
+  const shift = Date.parse(startTime) - Date.parse(c.startTime);
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 16) + ':00Z';
+  const tide = c.tide?.mode === 'manual' ? { ...c.tide, hwTime: iso(Date.parse(c.tide.hwTime) + shift) } : c.tide;
+  return { conditions: { ...c, startTime, ...(tide ? { tide } : {}), sky: { source: 'forecast', snapshot: live.json } }, applied: true };
+}
+
 export interface QuickRaceBuild {
   scenario: AppScenario;
   summary: string;
@@ -161,8 +181,9 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
   } else {
     if (o.conditions === 'live') note = 'No live weather is available here (it needs the deployed site and its scheduled job), so the conditions are random.';
     const r = randomConditions(o.seed, o.wind, o.venue, !!o.stream);
-    conditions = r.conditions;
-    summary = r.summary;
+    const today = underTodaysSky(r.conditions, live);
+    conditions = today.conditions;
+    summary = today.applied ? `${r.summary}; today’s sky and light` : r.summary;
   }
   const river = o.venue === 'river';
   const library = o.venue === 'library' && o.libraryId ? builtInOrUserCourse(o.libraryId) : undefined;

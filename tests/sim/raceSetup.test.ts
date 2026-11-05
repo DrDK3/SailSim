@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_QUICK_RACE, SHORT_COURSE_LEG_M, dailyChallenge, quickRaceScenario } from '../../src/app/quickRace';
+import { readFileSync } from 'node:fs';
+import { DEFAULT_QUICK_RACE, SHORT_COURSE_LEG_M, dailyChallenge, quickRaceScenario, randomConditions, underTodaysSky } from '../../src/app/quickRace';
+import { buildConditions } from '../../src/sim/env/conditions';
 import { courseKey, loadBests, recordRaceTime, recordStart } from '../../src/app/bests';
-import { DEFAULT_SCENARIO } from '../../src/app/controller';
+import { DEFAULT_SCENARIO, type DataSource } from '../../src/app/controller';
 import { createRace } from '../../src/sim/race/setup';
 import { practiceCourse } from '../../src/sim/course/practice';
 
@@ -82,5 +84,35 @@ describe('personal bests (kept in this browser)', () => {
     expect(recordStart(6).best).toBe(true);
     expect(recordStart(9)).toEqual({ best: false, previousS: 6 });
     expect(loadBests().start!.delayS).toBe(6);
+  });
+});
+
+describe('today’s sky and light for seeded races (owner review, 5 Nov 2026)', () => {
+  const snapshot = JSON.parse(readFileSync(new URL('../../public/live/metoffice-replay-2026-10-23T1400Z.json', import.meta.url), 'utf8'));
+  const live = { id: 'live', kind: 'live', label: 'Met Office (live)', json: snapshot } as unknown as DataSource;
+  const challenge = dailyChallenge(new Date('2026-10-23T12:00:00Z'));
+
+  it('by day, the race starts now under the forecast’s sky; its wind and tide phase are unchanged', () => {
+    const now = Date.parse('2026-10-23T14:07:00Z');
+    const base = randomConditions(challenge.options.seed, challenge.options.wind, 'start-bay').conditions;
+    const t = underTodaysSky(base, live, now);
+    expect(t.applied).toBe(true);
+    expect(t.conditions.startTime).toBe('2026-10-23T14:07:00Z');
+    expect(t.conditions.weather).toEqual(base.weather);
+    expect(t.conditions.gusts).toEqual(base.gusts);
+    expect(t.conditions.sky).toEqual({ source: 'forecast', snapshot });
+    // The high water moved with the start, so the tide's phase is the same.
+    const phase = (c: typeof base) => Date.parse((c.tide as { hwTime: string }).hwTime) - Date.parse(c.startTime);
+    expect(phase(t.conditions)).toBe(phase(base));
+    // The sky is the forecast's (model kind), and the wind exactly as seeded.
+    const built = buildConditions(t.conditions);
+    expect(built.sky.kind).toBe('model');
+    expect(buildConditions(base).env.wind(0, 0, 0)).toEqual(built.env.wind(0, 0, 0));
+  });
+
+  it('at night it keeps its seeded afternoon, and without a live forecast nothing changes', () => {
+    const base = randomConditions(7, 'medium', 'start-bay').conditions;
+    expect(underTodaysSky(base, live, Date.parse('2026-10-23T23:30:00Z'))).toEqual({ conditions: base, applied: false });
+    expect(underTodaysSky(base, undefined, Date.parse('2026-10-23T14:00:00Z'))).toEqual({ conditions: base, applied: false });
   });
 });
