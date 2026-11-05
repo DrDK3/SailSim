@@ -824,7 +824,7 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 }
 .panel.dock.console .sail-mod { width: 270px; }
 .panel.dock.console .helm-mod { width: 190px; }
-.panel.dock.console .boat-mod { width: 210px; }
+.panel.dock.console .boat-mod { width: 230px; }
 .panel.dock.console .mod-top, .panel.dock.console .mod-row { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; flex-wrap: nowrap; }
 .panel.dock.console .mod-label {
   flex: 0 0 36px; font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
@@ -868,17 +868,42 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 .panel.dock.console .stepper { gap: 5px; }
 .panel.dock.console .stepper-value { display: inline-block; min-width: 3.1em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .panel.dock.console + .controls-show, .controls-hide { z-index: 1; }
-/* Not room for the four side by side (with the minimap): the sails above, the helm and the boat below. */
-@media (max-width: 1179px) {
+/* Not room for the four side by side beside the minimap (the console is 1020 px wide, the minimap and its margins
+   228 px): the sails above, the helm and the boat below. Without the minimap the four fit from 1050 px. */
+@media (max-width: 1249px) {
   .panel.dock.console { grid-template-columns: repeat(2, auto); }
   .panel.dock.console .helm-mod, .panel.dock.console .boat-mod { width: auto; }
 }
-/* A phone: the sails one above the other across the width, the helm and the boat side by side under them. */
+@media (min-width: 1050px) and (max-width: 1249px) {
+  .app:not(.has-minimap) .panel.dock.console { grid-template-columns: repeat(4, auto); }
+  .app:not(.has-minimap) .panel.dock.console .helm-mod { width: 190px; }
+  .app:not(.has-minimap) .panel.dock.console .boat-mod { width: 230px; }
+}
+/* A phone: the sails one above the other across the width, the helm and the boat side by side under them. No key
+   letters (a phone has no keyboard; the buttons' labels still name the keys), and the hide button a tab above the
+   console's corner, so the helm and the boat fit side by side on a 360 px screen. */
 @media (max-width: 700px) {
-  .panel.dock.console { grid-template-columns: 1fr 1fr; width: auto; left: 8px; right: 8px; padding: 5px 30px 5px 5px; gap: 5px; bottom: 8px; }
+  .panel.dock.console { grid-template-columns: minmax(130px, 1fr) minmax(190px, 1fr); width: auto; left: 8px; right: 8px; padding: 5px; gap: 5px; }
   .panel.dock.console .sail-mod { grid-column: 1 / -1; width: auto; }
   .panel.dock.console .helm-mod, .panel.dock.console .boat-mod { width: auto; }
   .panel.dock.console .mod { padding: 4px 6px; }
   .panel.dock.console .boat-mod .mod-row { gap: 4px; }
   .panel.dock.console button { padding: 0 6px; }
+  .panel.dock.console .key-hint { display: none; }
+  .panel.dock.console .controls-hide {
+    top: -25px; right: 10px; width: 36px; min-height: 24px; height: 24px; border-radius: 8px 8px 0 0;
+    background: rgba(8, 20, 30, 0.55); border: 1px solid rgba(178, 205, 226, 0.14); border-bottom: 0;
+  }
 }
+
+/* The console's height is fixed at each width (two rows of 28 px in every module), so the instruments column is
+   capped above it here: the two never overlap, even before App.tsx has measured the screen after a resize (in
+   software rendering the first frames of a race can take longer than that). App.tsx's measurement (--hud-js) can
+   only lower the cap. */
+.app { --console-h: 164px; --console-bottom: 24px; --hud-top: 12px; }
+@media (min-width: 1250px) { .app { --console-h: 86px; } }
+@media (min-width: 1050px) and (max-width: 1249px) { .app:not(.has-minimap) { --console-h: 86px; } }
+@media (max-width: 700px) { .app { --console-h: 232px; --console-bottom: 8px; --hud-top: 8px; } }
+.panel.dock.console { height: var(--console-h); bottom: var(--console-bottom); }
+.app .hud-left { max-height: var(--hud-js, calc(100% - 170px)); }
+.app.console-on .hud-left { max-height: min(var(--hud-js, 100%), calc(100% - var(--hud-top) - var(--console-h) - var(--console-bottom) - 8px)); }

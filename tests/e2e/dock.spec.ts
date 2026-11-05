@@ -19,6 +19,8 @@ for (const size of [
     await page.goto('/?nowelcome&quality=low');
     const dock = page.getByRole('region', { name: 'Sailing controls' });
     await expect(dock).toBeVisible();
+    // The river's data loaded first: the boat restarts with trimmed sails when it arrives.
+    await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 * CI_SLOW });
     // Both sheets let right out, auto-trim off: the longest values and states ("100% eased", "Luffing · trim in (W)").
     await page.evaluate(() => {
       const c = window.__squib!.controller;

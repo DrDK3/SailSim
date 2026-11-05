@@ -70,7 +70,6 @@ export function App({ ctl }: { ctl: SimController }) {
   // The camera hint strip sits just below the toolbar, however many rows the toolbar wraps onto.
   const [barTop, setBarTop] = useState<number>();
   // The left column (instruments, race, coach) stops above the dock and scrolls, whatever their heights (UX-5).
-  const [hudMax, setHudMax] = useState<number>();
   // How much of the toolbar shows on one row (owner review, 4 Nov 2026: no wrapping, no blank space).
   const [density, setDensity] = useState<'full' | 'compact' | 'minimal' | 'menu'>('full');
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
@@ -146,7 +145,8 @@ export function App({ ctl }: { ctl: SimController }) {
     const nav = toolbar.current;
     if (!nav) return;
     const instruments = document.querySelector<HTMLElement>('.hud-left');
-    const dock = document.querySelector<HTMLElement>('.controls, .controls-show');
+    const dockNow = () => document.querySelector<HTMLElement>('.controls, .controls-show');
+    const dock = dockNow();
     const root = nav.parentElement;
     const place = () => {
       // The toolbar keeps clear of the left column, however wide the column's panels make it (UX-5).
@@ -178,10 +178,12 @@ export function App({ ctl }: { ctl: SimController }) {
       setSideTop(top === undefined ? undefined : Math.round(top));
       if (instruments) {
         const h = instruments.getBoundingClientRect();
-        const d = dock?.getBoundingClientRect();
-        // Above the dock where the two share columns of the screen; otherwise down to the bottom edge.
+        const d = dockNow()?.getBoundingClientRect();
+        // Above the dock where the two share columns of the screen; otherwise down to the bottom edge. Written
+        // straight to the column (no re-render); styles.css also caps it above the console, whose height is fixed
+        // at each width, so a measurement taken before a resize has settled cannot let the two overlap.
         const bottom = d && d.height > 0 && d.left < h.right && d.right > h.left ? d.top - 8 : window.innerHeight - 8;
-        setHudMax(Math.max(96, Math.floor(bottom - h.top)));
+        instruments.style.setProperty('--hud-js', `${Math.max(96, Math.floor(bottom - h.top))}px`);
       }
     };
     place();
@@ -210,7 +212,7 @@ export function App({ ctl }: { ctl: SimController }) {
   }, [ctl]);
 
   return (
-    <div className={`app ${ui.showMinimap ? 'has-minimap' : ''}`}>
+    <div className={`app${ui.showMinimap ? ' has-minimap' : ''}${!ui.replay && !controlsHidden ? ' console-on' : ''}`}>
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
       {ui.graphicsLost && (
@@ -220,7 +222,7 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
-      <div className="hud-left" style={hudMax === undefined ? undefined : { maxHeight: hudMax }}>
+      <div className="hud-left">
         <Instruments s={ui.snapshot} level={ui.level} />
         {ui.race && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
         {ui.race && <CoachCard ctl={ctl} ui={ui} />}
