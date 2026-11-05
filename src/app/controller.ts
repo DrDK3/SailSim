@@ -488,6 +488,7 @@ export class SimController {
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
+    this.view?.resetSea(); // and the sea's field at once
     this.accumulator = 0;
     this.telemetry.clear();
     this.lastRecordT = -Infinity;
@@ -1122,6 +1123,7 @@ export class SimController {
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
+    this.view?.resetSea(); // and the sea's field at once
     this.lastFrame = performance.now();
     this.fpsT0 = this.lastFrame;
     const loop = (now: number) => {
