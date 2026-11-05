@@ -18,6 +18,8 @@ describe('keys while a control has the focus', () => {
     for (const t of [el('SELECT'), el('INPUT', 'range'), el('BUTTON')]) {
       for (const code of ['ArrowLeft', 'ArrowDown', 'Space', 'Enter', 'Home', 'End']) expect(SimController.keyForControl(t, code)).toBe(true);
     }
+    // Escape closes the panels from anywhere but a text field.
+    for (const t of [el('SELECT'), el('INPUT', 'range'), el('BUTTON')]) expect(SimController.keyForControl(t, 'Escape')).toBe(false);
     // Off the controls the arrows steer.
     expect(SimController.keyForControl(el('BODY'), 'ArrowLeft')).toBe(false);
   });

@@ -1679,7 +1679,8 @@ export class SimController {
       const type = (t as HTMLInputElement).type;
       if (!['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'color'].includes(type)) return true;
     } else if (t.tagName !== 'SELECT' && t.tagName !== 'BUTTON') return false;
-    return /^(Arrow|Page)|^(Space|Enter|NumpadEnter|Home|End|Tab|Escape)$/.test(code);
+    // Escape always reaches the app (it closes the panels), whatever has the focus.
+    return /^(Arrow|Page)|^(Space|Enter|NumpadEnter|Home|End)$/.test(code);
   }
 
   private onKeyDown = (ev: KeyboardEvent) => {
