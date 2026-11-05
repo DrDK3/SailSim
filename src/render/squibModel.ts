@@ -159,6 +159,46 @@ const MAT = sharedAll({
 });
 // The gelcoat at the waterline stays wet: darker and glossier (materialFx.ts).
 addWetBand(MAT.hull);
+addHullPaint(MAT.hull);
+
+/**
+ * The hull's paint bands (antifouling, boot top, topsides, sheer stripe) drawn in the shader from each point's
+ * height above the waterline and its station's sheer height (attribute aSheer), with edges a pixel wide: they
+ * follow straight lines along the hull whatever the mesh. Painted per vertex, as before, their edges followed
+ * the mesh's rows and drew a saw-tooth along the waterline and the sheer (owner review, 5 Nov 2026). The material's
+ * colour still tints it (the fleet's hulls).
+ */
+function addHullPaint(m: THREE.MeshStandardMaterial): void {
+  const v = (hex: string) => {
+    const c = linear(hex);
+    return `vec3(${c.r.toFixed(5)}, ${c.g.toFixed(5)}, ${c.b.toFixed(5)})`;
+  };
+  const base = m.onBeforeCompile;
+  const baseKey = m.customProgramCacheKey();
+  m.onBeforeCompile = function (this: THREE.Material, shader, renderer) {
+    base.call(this, shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aSheer;\nvarying float vHullY;\nvarying float vSheer;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHullY = position.y;\nvSheer = aSheer;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vHullY;\nvarying float vSheer;')
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `#include <color_fragment>
+float pw = max(fwidth(vHullY), 1e-4);
+float boot0 = smoothstep(${BOOT[0].toFixed(3)} - pw, ${BOOT[0].toFixed(3)} + pw, vHullY);
+float boot1 = smoothstep(${BOOT[1].toFixed(3)} - pw, ${BOOT[1].toFixed(3)} + pw, vHullY);
+float st0 = smoothstep(vSheer - ${STRIPE_DROP[0].toFixed(3)} - pw, vSheer - ${STRIPE_DROP[0].toFixed(3)} + pw, vHullY);
+float st1 = smoothstep(vSheer - ${STRIPE_DROP[1].toFixed(3)} - pw, vSheer - ${STRIPE_DROP[1].toFixed(3)} + pw, vHullY);
+vec3 paint = mix(${v(ANTIFOULING)}, ${v(BOOT_TOP)}, boot0);
+paint = mix(paint, ${v(TOPSIDES)}, boot1);
+paint = mix(paint, ${v(SHEER_STRIPE)}, st0 * (1.0 - st1));
+diffuseColor.rgb = diffuse * paint;`,
+      );
+  };
+  m.customProgramCacheKey = () => `${baseKey}|hullpaint`;
+  m.needsUpdate = true;
+}
 let texturesApplied = false;
 function applyTextures(): void {
   if (texturesApplied || typeof document === 'undefined') return;
@@ -404,6 +444,7 @@ export class SquibModel {
     const M = SECTION;
     const pos: number[] = [];
     const col: number[] = [];
+    const sheer: number[] = [];
     const idx: number[] = [];
     const white = linear(TOPSIDES);
     const stripe = linear(SHEER_STRIPE);
@@ -412,7 +453,6 @@ export class SquibModel {
     const colorFor = (y: number, h: number) =>
       y < BOOT[0] ? anti : y < BOOT[1] ? boot : y > h - STRIPE_DROP[0] && y < h - STRIPE_DROP[1] ? stripe : white;
     const v = new THREE.Vector3();
-    // Extra section rows at the colour boundaries keep the stripes crisp.
     for (let i = 0; i <= N; i++) {
       const t = i / N;
       for (let side = -1; side <= 1; side += 2) {
@@ -422,6 +462,7 @@ export class SquibModel {
           const { h } = this.hullStation(t);
           const c = colorFor(v.y, h);
           col.push(c.r, c.g, c.b);
+          sheer.push(h);
         }
       }
     }
@@ -439,6 +480,8 @@ export class SquibModel {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    // The station's sheer height for the paint bands (addHullPaint); the vertex colours remain for tests.
+    geo.setAttribute('aSheer', new THREE.Float32BufferAttribute(sheer, 1));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     const mesh = new THREE.Mesh(geo, MAT.hull);
@@ -914,7 +957,10 @@ export class SquibModel {
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh && (o.name === 'hull' || o.name === 'hull-transom')) {
         const m = (o.material as THREE.MeshPhysicalMaterial).clone();
-        if (o.name === 'hull') addWetBand(m);
+        if (o.name === 'hull') {
+          addWetBand(m);
+          addHullPaint(m);
+        }
         m.color.setHex(hex);
         o.material = m;
       }

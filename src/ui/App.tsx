@@ -262,7 +262,15 @@ export function App({ ctl }: { ctl: SimController }) {
             </button>
             <label className="select">
               <span className="sr-only">Camera</span>
-              <select value={ui.camera} onChange={(e) => ctl.setCamera(e.target.value as CameraMode)} title="Camera (C cycles)">
+              <select
+                value={ui.camera}
+                onChange={(e) => {
+                  ctl.setCamera(e.target.value as CameraMode);
+                  // Back to the water: the keys sail the boat again at once (the list kept them otherwise).
+                  e.currentTarget.blur();
+                }}
+                title="Camera (C cycles)"
+              >
                 <option value="chase">Chase view</option>
                 <option value="scenic">Scenic (wide, slow orbit)</option>
                 <option value="helm">Helm (first person)</option>

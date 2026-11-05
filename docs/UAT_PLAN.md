@@ -248,6 +248,18 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 18.10 | Look at the wing north of it and the passenger pier | A white wing with large first-floor windows over a loggia of white columns; a white lattice-truss gangway from the loggia down to a pontoon where the passenger ferry berths; the gangway steeper at low water | |
 | 18.11 | Look up the slipway to the top of the Square | A stone building with brick arches and a cream one with round-headed windows facing the river (note if they are the wrong way round or in the wrong place) | |
 
+## 19. The interface, the sea and the sky (5 Nov 2026, second review) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 19.1 | Choose the helm view from the camera list, then press A and D at once; do the same for top-down and drone | The boat turns each time; pressing D does not switch to the drone view | |
+| 19.2 | Look at the hull close to, in the chase view | Straight, crisp blue and red bands at the waterline and a straight blue stripe under the deck edge; no saw-tooth | |
+| 19.3 | Open Race | Today's challenge on top; "Where" with Start Bay chosen; the river, an RDYC course and the library beside it | |
+| 19.4 | On a laptop, look at the dock | Two rows, about a sixth of the screen's height or less; nothing cut off; the water shows through it | |
+| 19.5 | Look at the minimap and zoom it in and out | The scale (300 m, 625 m or 1.7 km) under the map, not on it | |
+| 19.6 | On the deployed site, a few hours after the merge, free sail with live conditions on a cloudy or rainy day | Overcast sky, soft light, rain when the forecast has it | |
+| 19.7 | Start Bay in 15 kn or more (Scenario, or live on a breezy day) | White horses across the bay; surf on the beaches with an onshore wind | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

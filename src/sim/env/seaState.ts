@@ -289,12 +289,18 @@ export class SeaStateModel {
       hs = gen.hs * Math.sqrt(Math.max(0, ratio));
     }
     const wavelength = (2 * Math.PI) / k;
-    hs = Math.min(hs, STEEPNESS_MAX * wavelength, DEPTH_BREAKING * h);
+    // The height the waves would have here without the depth limit: above it they break on the shoal or beach.
+    const hsFree = Math.min(hs, STEEPNESS_MAX * wavelength);
+    hs = Math.min(hsFree, DEPTH_BREAKING * h);
     const steepness = hs / wavelength;
     const refSteep = hsRef / lRef;
     const steepen = refSteep > 0 ? steepness / refSteep : 1;
     let whitecaps = whitecapFraction(u) * steepen * steepen;
     if (blocked || steepness >= 0.98 * STEEPNESS_MAX) whitecaps = Math.max(whitecaps, 0.15);
+    // Surf (owner review, 5 Nov 2026: breaking waves in Start Bay when the weather calls for them): where the
+    // depth limits the waves they break, white water in proportion to how far they exceed it (E). Visual only.
+    const surf = h > 0 ? hsFree / (DEPTH_BREAKING * h) - 1 : 0;
+    if (surf > 0.05 && hsFree > 0.15) whitecaps = Math.max(whitecaps, Math.min(0.5, 0.1 + 0.4 * surf));
     return {
       hs,
       tp: omega > 0 ? (2 * Math.PI) / omega : gen.tp,

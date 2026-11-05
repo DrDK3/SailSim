@@ -165,7 +165,7 @@ export function ExperienceHub({
             id="race"
             title="Race against AI"
             icon={<IconRace />}
-            text="Today’s challenge, or up to 20 AI Squibs on a five-minute short course, the river, an RDYC course or your own: the fleet, the start and the conditions."
+            text="Today’s challenge, or up to 20 AI Squibs in Start Bay (from a five-minute short course up), on the river, on an RDYC course or your own: the fleet, the start and the conditions."
             onClick={onRace}
           />
           <Door

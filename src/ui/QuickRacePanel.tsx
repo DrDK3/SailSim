@@ -26,15 +26,16 @@ function loadOptions(liveNow: boolean): QuickRaceOptions {
   return base;
 }
 
-/** The course choice as one select value. */
-const courseValue = (o: QuickRaceOptions) => (o.venue === 'start-bay' ? `bay:${o.course}` : o.venue === 'library' ? `lib:${o.libraryId ?? ''}` : o.venue);
-
-function fromCourseValue(v: string, o: QuickRaceOptions): QuickRaceOptions {
-  const base = { ...o, laps: undefined, legM: undefined };
-  if (v.startsWith('bay:')) return { ...base, venue: 'start-bay', course: v.slice(4) as QuickCourse };
-  if (v.startsWith('lib:')) return { ...base, venue: 'library', libraryId: v.slice(4) };
-  return { ...base, venue: v as QuickRaceOptions['venue'] };
-}
+/**
+ * Where to race, first and in plain view (owner review, 5 Nov 2026: Start Bay had gone from sight inside a
+ * list of courses): open water in Start Bay, the river, an RDYC club course, or a course from the library.
+ */
+const VENUES: { v: QuickRaceOptions['venue']; label: string; hint: string; needsDart?: boolean }[] = [
+  { v: 'start-bay', label: 'Start Bay', hint: 'Open water off Dartmouth: a course laid to the wind, from the five-minute short course up' },
+  { v: 'river', label: 'The river', hint: 'The Range, off Dart Marina', needsDart: true },
+  { v: 'rdyc', label: 'RDYC course', hint: 'A Royal Dart Yacht Club course in Start Bay for the wind', needsDart: true },
+  { v: 'library', label: 'Library', hint: 'A ready-made course, or one of your own' },
+];
 
 /**
  * The race set-up (review U4): every race option in one place (the Scenario panel no longer has its own), with
@@ -106,26 +107,44 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
           <option value="expert">Expert</option>
         </select>
       </label>
-      <label className="field select-field">
-        <span>Course</span>
-        <select aria-label="Course" value={courseValue(o)} onChange={(e) => setO(fromCourseValue(e.target.value, o))} data-testid="race-course">
-          <optgroup label="Start Bay (simulated courses, laid to the wind)">
-            <option value="bay:short">Short course: one beat and one run, about 5 minutes</option>
+      <div className="field venue-field">
+        <span id="race-where">Where</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="race-where" data-testid="race-venue">
+          {VENUES.map((x) => (
+            <button
+              key={x.v}
+              role="radio"
+              aria-checked={o.venue === x.v}
+              disabled={!!x.needsDart && !river}
+              title={x.needsDart && !river ? `${x.hint} (needs the River Dart data)` : x.hint}
+              onClick={() => setO({ ...o, venue: x.v, laps: undefined, legM: undefined, libraryId: x.v === 'library' ? o.libraryId ?? library[0]?.id : o.libraryId })}
+            >
+              {x.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {o.venue === 'start-bay' && (
+        <label className="field select-field">
+          <span>Course</span>
+          <select aria-label="Course" value={o.course} onChange={(e) => setO({ ...o, course: e.target.value as QuickCourse, laps: undefined, legM: undefined })} data-testid="race-course">
+            <option value="short">Short course: one beat and one run, about 5 minutes</option>
             {PRACTICE_KINDS.map((k) => (
-              <option key={k.kind} value={`bay:${k.kind}`}>{k.label}</option>
+              <option key={k.kind} value={k.kind}>{k.label}</option>
             ))}
-          </optgroup>
-          <optgroup label="The Dart">
-            <option value="river" disabled={!river}>The river: the Range, off Dart Marina{river ? '' : ' (needs the River Dart data)'}</option>
-            <option value="rdyc" disabled={!river}>Start Bay: an RDYC club course for the wind{river ? '' : ' (needs the River Dart data)'}</option>
-          </optgroup>
-          <optgroup label="Course library">
+          </select>
+        </label>
+      )}
+      {o.venue === 'library' && (
+        <label className="field select-field">
+          <span>Course</span>
+          <select aria-label="Course" value={o.libraryId ?? library[0]?.id ?? ''} onChange={(e) => setO({ ...o, libraryId: e.target.value, laps: undefined })} data-testid="race-course">
             {library.map((c) => (
-              <option key={`${c.group}-${c.id}`} value={`lib:${c.id}`}>{c.group === 'user' ? 'Mine: ' : ''}{c.name}</option>
+              <option key={`${c.group}-${c.id}`} value={c.id}>{c.group === 'user' ? 'Mine: ' : ''}{c.name}</option>
             ))}
-          </optgroup>
-        </select>
-      </label>
+          </select>
+        </label>
+      )}
       {o.venue === 'start-bay' && (
         <p className="fine">
           {o.course === 'short'

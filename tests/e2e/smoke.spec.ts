@@ -277,7 +277,8 @@ test('Phase 4: a practice course from the race set-up (the Scenario panel points
   const panel = page.getByRole('region', { name: 'Race set-up' });
   await expect(panel).toBeVisible();
   await panel.getByLabel('Number of AI competitors').fill('0');
-  await panel.getByRole('combobox', { name: 'Course' }).selectOption('bay:windward-leeward');
+  await panel.getByRole('radio', { name: 'Start Bay' }).click();
+  await panel.getByRole('combobox', { name: 'Course' }).selectOption('windward-leeward');
   await expect(panel).toContainText('Simulated: not an RDYC course');
   await panel.locator('.field', { hasText: 'Conditions' }).locator('select').selectOption('as-set');
   await panel.locator('.field', { hasText: 'Start sequence' }).locator('select').selectOption('one-minute');
@@ -357,7 +358,8 @@ test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, r
   const panel = page.getByRole('region', { name: 'Race set-up' });
   await panel.getByLabel('Number of AI competitors').fill('3');
   await panel.locator('.field', { hasText: 'Their level' }).locator('select').selectOption('expert');
-  await panel.getByRole('combobox', { name: 'Course' }).selectOption('bay:windward-leeward');
+  await panel.getByRole('radio', { name: 'Start Bay' }).click();
+  await panel.getByRole('combobox', { name: 'Course' }).selectOption('windward-leeward');
   await panel.locator('.field', { hasText: 'Conditions' }).locator('select').selectOption('as-set');
   await panel.locator('.field', { hasText: 'Start sequence' }).locator('select').selectOption('one-minute');
   await panel.getByText('More options').click();

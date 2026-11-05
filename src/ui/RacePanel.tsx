@@ -176,12 +176,16 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
           ))}
         </ol>
       )}
-      {race.warnings.length > 0 && <p className="fine">{race.warnings.length} course warning{race.warnings.length === 1 ? '' : 's'}: {race.warnings[0]!.message}</p>}
+      {race.warnings.length > 0 && (
+        <p className="fine race-warn" title={race.warnings.map((w) => w.message).join('\n')}>
+          {race.warnings.length} course warning{race.warnings.length === 1 ? '' : 's'} (hover for details)
+        </p>
+      )}
       <div className="row">
         <button onClick={() => ctl.toggleResults()} disabled={!race.results} title={race.results ? 'Results table' : 'Results once you have finished'}>Results</button>
         <button onClick={() => ctl.retire()} disabled={race.phase === 'finished' || race.raceOver}>Retire</button>
       </div>
-      <p className="fine">Simplified racing rules: not an authoritative adjudication. AI boats and their sail numbers are invented.</p>
+      <p className="fine">Simplified rules, not an authoritative adjudication; AI sail numbers invented.</p>
     </section>
   );
 }

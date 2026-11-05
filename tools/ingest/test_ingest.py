@@ -153,6 +153,39 @@ class WeatherAndIndexTests(unittest.TestCase):
         self.assertEqual(times[-1], dt.datetime(2026, 11, 1, 17, 0, tzinfo=dt.timezone.utc))
         self.assertTrue(all(b > a for a, b in zip(times, times[1:])))
 
+    def test_sky_from_an_earlier_run_when_the_newest_has_not_published_it(self):
+        # The newest run (09Z) has its wind but not yet its cloud; the 08Z run has both (owner review, 5 Nov 2026).
+        run = dt.datetime(2026, 11, 5, 9, 0, tzinfo=dt.timezone.utc)
+        valid = dt.datetime(2026, 11, 5, 12, 0, tzinfo=dt.timezone.utc)
+
+        class F:
+            def __init__(self, v):
+                self.v = v
+
+            def at(self, lat, lon):
+                return self.v
+
+            def area(self):
+                return np.array([self.v])
+
+        published = {(run, "visibility_at_screen_level"): 20000.0, (run - dt.timedelta(hours=1), "cloud_amount_of_total_cloud"): 0.9}
+
+        def read(r, v, var):
+            if (r, var) not in published:
+                raise OSError("404")
+            return F(published[(r, var)])
+
+        step = weather.sky_step(run, valid, have=lambda r, v, var: (r, var) in published, read=read)
+        self.assertEqual(step["rdyc"]["cloud_total"], 0.9)
+        self.assertEqual(step["rdyc"]["visibility_m"], 20000.0)
+        self.assertIsNone(step["rdyc"]["cloud_low"])
+        self.assertEqual(step["older_run"], {"cloud_total": "2026-11-05T08:00Z"})
+        # Only runs that cover the valid time, newest first, six hours back at most.
+        runs = weather.sky_runs(run, valid)
+        self.assertEqual(runs[0], run)
+        self.assertEqual(len(runs), weather.SKY_FALLBACK_RUNS + 1)
+        self.assertTrue(all(b < a for a, b in zip(runs, runs[1:])))
+
     def test_weather_validation_refuses_bad_values(self):
         grid = [[1.0, 2.0], [3.0, 4.0]]
         good = {"model": {"available": True, "grid": {"lat": grid}, "steps": [

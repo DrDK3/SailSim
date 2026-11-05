@@ -340,6 +340,11 @@ export class SceneView {
   }
 
   /** Show the River Dart (or remove it with undefined). `depthAt` keeps the motion-cue floats in the water. */
+  /** New conditions: the sea's field is filled afresh at the next frame (not after its next refresh). */
+  resetSea(): void {
+    this.water.resetField();
+  }
+
   setDart(dart: DartScene | undefined, depthAt?: (n: number, e: number) => number): void {
     if (this.dart) this.scene.remove(this.dart.fixed, this.dart.floating, this.dart.labels);
     this.dart = dart;

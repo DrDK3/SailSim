@@ -35,6 +35,8 @@ test('quick race: choose the competitors, start, read the coach’s briefing, tu
   expect(st.scenario.conditions.weather.source).toBe('manual');
   const coach = page.getByTestId('coach');
   await expect(coach).toBeVisible();
+  // The briefing's first point shows; the rest a click away.
+  await coach.getByRole('button', { name: /more point/ }).click();
   await expect(coach).toContainText('sequence: be on the line at full speed');
   await coach.getByRole('button', { name: 'Off' }).click();
   await expect(coach).toHaveCount(0);

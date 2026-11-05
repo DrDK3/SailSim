@@ -300,13 +300,33 @@ void main() {
   float spec = D * Fs * NdotL / (4.0 * max(facing, 0.05));
   col += uSunColor * (1.0 - exp(-spec * 0.12)) * 1.5 * uGlint;
   // Whitecaps: foam on compressed crests, as much as the modelled cover, broken up and streaked downwind.
-  // A few per cent cover already reads as a sea of white horses, so the cover is scaled up for the eye.
+  // A few per cent cover already reads as a sea of white horses, so the cover is mapped for the eye: none in a
+  // light air, scattered white horses at about 10 kn, frequent ones from 15 kn, many at 20 kn and more
+  // (Beaufort's descriptions; owner review, 5 Nov 2026: breaking waves when the weather calls for them).
   float near = exp(-dist / 450.0);
-  float cover = clamp(f.b * 20.0, 0.0, 1.0);
+  float cover = clamp((sqrt(f.b) - 0.02) * 5.0, 0.0, 0.9);
   float crest = smoothstep(0.85, 0.15, jac) * smoothstep(0.0, 0.5, h / max(f.r * 0.5, 0.02));
   float breakup = noise(vWorld.xz * 0.35 + uComp[4].xy * uTime * 0.6) * 0.6 + noise(vWorld.xz * 1.7) * 0.4;
   float streaks = noise(vec2(dot(vWorld.xz, uComp[4].xy) * 0.08, dot(vWorld.xz, vec2(-uComp[4].y, uComp[4].x)) * 1.2));
   float foam = clamp(crest * cover * 2.5 * smoothstep(0.3, 0.7, breakup) + cover * 0.25 * smoothstep(0.62, 0.9, streaks) * steep, 0.0, 1.0);
+  // White horses: the tops of crests that break, scattered over the sea as often as the cover says, each patch
+  // a few metres across, drifting with the waves and coming and going over a few seconds (E: sizes and timing
+  // for the eye). The sea folds too rarely in this wave model for the crest test above to show them alone.
+  float crestTop = smoothstep(0.2, 0.7, h / max(f.r * 0.5, 0.02));
+  // Cells about 5 m across drift with the waves; a share of them (the cover) breaks, each for a few seconds in
+  // every fifteen or so, as a patch longer across the wave than along it, brightest on the crests.
+  vec2 hp = vWorld.xz * 0.2 - uComp[4].xy * uTime * 1.1;
+  vec2 cellId = floor(hp);
+  float r = fract(sin(dot(cellId, vec2(127.1, 311.7))) * 43758.5453);
+  float phase = fract(r * 7.13 + uTime * 0.07);
+  float alive = smoothstep(0.0, 0.05, phase) * (1.0 - smoothstep(0.22, 0.38, phase));
+  vec2 inCell = fract(hp) - 0.5;
+  vec2 along = uComp[4].xy;
+  // Broken white water, not a smooth blob: the patch's edge and inside torn by fine noise.
+  float lace = noise(vWorld.xz * 1.6 + uComp[4].xy * uTime * 0.4);
+  float blob = 1.0 - smoothstep(0.12, 0.3, length(vec2(dot(inCell, along) * 2.0, dot(inCell, vec2(-along.y, along.x)))) + 0.12 * (lace - 0.5));
+  float horse = step(r, cover * 0.9) * alive * blob * (0.35 + 0.65 * crestTop) * smoothstep(0.25, 0.6, lace * 0.6 + breakup * 0.4);
+  foam = max(foam, horse * (0.55 + 0.45 * near) / max(0.3 + 0.7 * near, 1e-3));
   // The wash at the water's edge: a thin, broken line of foam where waves run up the shore (none on a calm
   // river: it grows with the wave height).
   if (onBed) {
@@ -669,6 +689,12 @@ export class Water {
         this.swapIn();
       }
     }
+  }
+
+  /** New conditions (a restart): the next frame fills the whole field at once from the new sea. */
+  resetField(): void {
+    this.fieldOrigin.set(NaN, NaN);
+    this.pending = undefined;
   }
 
   private swapIn(): void {

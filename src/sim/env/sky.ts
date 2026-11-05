@@ -62,13 +62,23 @@ function stepState(s: SkyStep): SkyState {
   };
   const fog = pick('fog_fraction') ?? 0;
   const vis = pick('visibility_m') ?? DEFAULT_SKY.visibilityM;
+  const rain = pick('rain_mm_h') ?? pick('precip_mm_h') ?? 0;
+  // A step without its cloud (a forecast published before its cloud fields, owner review 5 Nov 2026): rain or
+  // fog means a closed, low sky (E); otherwise the default.
+  const wet = rain >= 0.1 || fog > 0.5;
   return {
-    cloud: pick('cloud_total') ?? DEFAULT_SKY.cloud,
-    lowCloud: pick('cloud_low') ?? DEFAULT_SKY.lowCloud,
+    cloud: pick('cloud_total') ?? (wet ? 0.95 : DEFAULT_SKY.cloud),
+    lowCloud: pick('cloud_low') ?? (wet ? 0.85 : DEFAULT_SKY.lowCloud),
     // The model's fog fraction is the share of the cell in fog: thicken the haze accordingly.
     visibilityM: fog > 0.5 ? Math.min(vis, 1000) : vis,
-    rainMmH: pick('rain_mm_h') ?? pick('precip_mm_h') ?? 0,
+    rainMmH: rain,
   };
+}
+
+/** Whether a step lacks its cloud cover (so the sky's cloud is inferred). */
+function cloudMissing(s: SkyStep): boolean {
+  const v = s.rdyc.cloud_total ?? s.area_mean?.cloud_total;
+  return !(typeof v === 'number' && Number.isFinite(v));
 }
 
 /** Sky from the forecast's hourly sky steps, interpolated linearly in time (visibility geometrically). */
@@ -78,10 +88,14 @@ export function modelSky(steps: SkyStep[], startEpochMs: number, label: string):
     .filter((p) => Number.isFinite(p.t))
     .sort((a, b) => a.t - b.t);
   if (!pts.length) throw new Error('modelSky: no valid sky steps');
+  const inferred = steps.some(cloudMissing);
   return {
     label,
     kind: 'model',
-    notes: ['Cloud, visibility and rain from the Met Office UKV forecast at the RDYC grid cell (model output). Visual only.'],
+    notes: [
+      'Cloud, visibility and rain from the Met Office UKV forecast at the RDYC grid cell (model output). Visual only.',
+      ...(inferred ? ['The forecast has no cloud cover for some hours: there it is inferred from rain and fog (estimate).'] : []),
+    ],
     at(t: number): SkyState {
       if (t <= pts[0]!.t) return pts[0]!.s;
       const last = pts[pts.length - 1]!;

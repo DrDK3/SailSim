@@ -32,9 +32,11 @@ export interface ConditionsSettings {
     | { mode: 'snapshot'; snapshot: unknown; useGauge?: boolean };
   /**
    * Cloud, visibility and rain (visual only). 'data' uses the Met Office snapshot's sky fields when it has
-   * them, else the 'fair' preset. Default: 'data' with Met Office weather, otherwise the 'clear' preset.
+   * them, else the 'fair' preset. 'forecast' takes the sky of a Met Office snapshot whatever the wind (the
+   * random races and today's challenge under today's sky, owner review 5 Nov 2026). Default: 'data' with Met
+   * Office weather, otherwise the 'clear' preset.
    */
-  sky?: { source: 'preset'; preset: SkyPreset } | { source: 'data' };
+  sky?: { source: 'preset'; preset: SkyPreset } | { source: 'data' } | { source: 'forecast'; snapshot: unknown };
   /**
    * The land's effect on the wind over the River Dart (shelter, valley steering; src/sim/env/terrainWind.ts).
    * On unless false; it needs the River Dart data.
@@ -83,6 +85,9 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
   if (skyChoice.source === 'preset') {
     if (!(skyChoice.preset in SKY_PRESETS)) throw new Error(`conditions: unknown sky preset "${skyChoice.preset}"`);
     sky = presetSky(skyChoice.preset);
+  } else if (skyChoice.source === 'forecast') {
+    const snap = parseMetOfficeSnapshot(skyChoice.snapshot);
+    sky = snap.model.sky?.length ? modelSky(snap.model.sky, startEpochMs, 'Sky: Met Office UKV forecast (live, today’s sky)') : presetSky('fair');
   }
   if (c.weather.source === 'manual') {
     base = uniformBase(knToMs(c.weather.twsKn), c.weather.twdDeg * DEG);
