@@ -6,6 +6,8 @@ import { expect, type Page } from '@playwright/test';
  * loads on first use, slowly in software rendering; if the summary does not appear, the failure says what is open.
  */
 export async function expectSessionSummary(page: Page, text: string): Promise<void> {
+  // After a restart, let its first frames draw: in software rendering they can hold the page for tens of seconds.
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
   await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
   await expect
     .poll(
