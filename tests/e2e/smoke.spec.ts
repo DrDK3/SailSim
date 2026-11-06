@@ -55,6 +55,8 @@ test('keyboard helm and sheet controls change the boat', async ({ page }) => {
 });
 
 test('on-screen buttons, pause, help and scenario panel work', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   await open(page);
   await page.getByRole('button', { name: /Steer to port/ }).dispatchEvent('pointerdown');
   await page.evaluate(() => window.__squib!.advance(1));
@@ -139,6 +141,8 @@ test('validation dashboard: eight live charts, table view, CSV export', async ({
 });
 
 test('scenario panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   const errors = await open(page);
   await page.getByRole('button', { name: 'Scenario' }).click();
   const panel = page.getByRole('region', { name: 'Scenario settings' });
@@ -185,6 +189,8 @@ const dartLoaded = (page: Page) =>
   page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
 
 test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisional layers', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   const errors = await open(page);
   await dartLoaded(page);
   const state = await page.evaluate(() => {
@@ -258,6 +264,8 @@ for (const [asset, effect] of [['features.json', 'No buildings'], ['drape.jpg', 
 }
 
 test('Phase 3: without the River Dart data the app falls back to open water and says so', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   await page.route('**/geo/manifest.json', (r) => r.abort());
   await page.goto('/');
   await expect(page.getByTestId('stw')).toBeVisible();
