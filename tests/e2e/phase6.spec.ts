@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectSessionSummary } from './helpers/sessionSummary';
 import { readFileSync } from 'node:fs';
 
 /** CI runners draw the scene in software, several times slower (playwright.config.ts). */
@@ -111,7 +112,7 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   const more = page.getByRole('button', { name: 'All instruments and conditions' });
   if (await more.isVisible()) await more.click();
   await expect(page.getByTestId('sky')).toContainText(/fog/i);
-  await expect(page.locator('footer')).toContainText('fog');
+  await expectSessionSummary(page, 'fog');
 
   await lib.getByRole('textbox', { name: 'Scenario title' }).fill('Foggy test');
   await lib.getByRole('button', { name: 'Save current' }).click();

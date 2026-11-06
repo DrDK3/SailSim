@@ -5,7 +5,6 @@ import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
 import { CoachCard, CoachTip } from './Coach';
-import { SKY_PRESETS } from '../sim/env/sky';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
@@ -15,7 +14,6 @@ import { Confirm } from './Confirm';
 import { activityOf } from './activity';
 import { ActivityIcon } from './icons';
 import type { CameraMode } from '../render/scene';
-import type { AppScenario } from '../app/controller';
 
 /** Panels opened on demand load their code when first opened (docs/PERFORMANCE.md). */
 const DebugPanel = lazy(() => import('./DebugPanel').then((m) => ({ default: m.DebugPanel })));
@@ -47,19 +45,6 @@ function writeFlag(key: string, v: boolean): void {
   } catch {
     // storage unavailable
   }
-}
-
-function conditionsText(sc: AppScenario): string {
-  const c = sc.conditions;
-  const wind = c.weather.source === 'manual' ? `wind ${c.weather.twsKn} kn from ${c.weather.twdDeg}°` : `Met Office UKV model wind${c.weather.replay ? ' (replay)' : ''}`;
-  const tide = c.tide ? `tide ${c.tide.mode}` : 'no tide';
-  const cur = c.current.mode === 'tidal' ? 'modelled tidal stream' : c.current.mode === 'uniform' ? `current ${c.current.rateKn} kn` : 'no current';
-  const course = sc.course ? (sc.course.source === 'practice' ? ` · practice course (simulated)` : ' · course set') : '';
-  const fleet = sc.course && sc.fleet?.aiCount ? ` · ${sc.fleet.aiCount} AI boat${sc.fleet.aiCount === 1 ? '' : 's'}` : '';
-  const sky = c.sky?.source === 'preset' && c.sky.preset !== 'clear' ? ` · ${SKY_PRESETS[c.sky.preset].label.toLowerCase()}` : '';
-  // "steady wind", "gusty", not "gusty gusts" (UX-7).
-  const gusts = ({ steady: 'steady wind', moderate: 'moderate gusts', shifty: 'shifty', gusty: 'gusty' } as Record<string, string>)[c.gusts.preset] ?? c.gusts.preset;
-  return `${wind} · ${gusts} · ${tide} · ${cur}${sky}${course}${fleet}`;
 }
 
 export function App({ ctl }: { ctl: SimController }) {
@@ -377,14 +362,6 @@ export function App({ ctl }: { ctl: SimController }) {
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
-      {(() => {
-        const text = `${ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water'} · ${conditionsText(ui.scenario)} · physics estimated · not for navigation`;
-        return (
-          <footer className="badge" title={text}>
-            {text}
-          </footer>
-        );
-      })()}
       <Suspense fallback={null}>
         {ui.showHelp && (
           <Help

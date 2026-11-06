@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectSessionSummary } from './helpers/sessionSummary';
 import { readFileSync } from 'node:fs';
 import { runDeterminismState } from '../../src/sim/testing/determinism';
 import { squibParams } from '../../src/sim/index';
@@ -54,6 +55,8 @@ test('keyboard helm and sheet controls change the boat', async ({ page }) => {
 });
 
 test('on-screen buttons, pause, help and scenario panel work', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   await open(page);
   await page.getByRole('button', { name: /Steer to port/ }).dispatchEvent('pointerdown');
   await page.evaluate(() => window.__squib!.advance(1));
@@ -76,7 +79,7 @@ test('on-screen buttons, pause, help and scenario panel work', async ({ page }) 
   const tws = page.locator('.scenario .field', { hasText: 'True wind speed' }).locator('input[type="number"]');
   await tws.fill('15');
   await page.getByRole('button', { name: 'Apply and restart' }).click();
-  await expect(page.locator('footer.badge')).toContainText('wind 15 kn');
+  await expectSessionSummary(page, 'wind 15 kn');
   expect((await snap(page)).t).toBeLessThan(5);
 });
 
@@ -138,6 +141,8 @@ test('validation dashboard: eight live charts, table view, CSV export', async ({
 });
 
 test('scenario panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   const errors = await open(page);
   await page.getByRole('button', { name: 'Scenario' }).click();
   const panel = page.getByRole('region', { name: 'Scenario settings' });
@@ -156,7 +161,7 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
   await expect(cond).toContainText('Met Office UKV (replay)');
   await expect(page.getByTestId('tide')).toContainText('m CD');
   await expect(cond).toContainText('Tidal stream (illustrative, not real timing)');
-  await expect(page.locator('footer.badge')).toContainText('Met Office UKV model wind (replay)');
+  await expectSessionSummary(page, 'Met Office UKV model wind (replay)');
   expect(errors).toEqual([]);
 });
 
@@ -184,6 +189,8 @@ const dartLoaded = (page: Page) =>
   page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
 
 test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisional layers', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   const errors = await open(page);
   await dartLoaded(page);
   const state = await page.evaluate(() => {
@@ -195,7 +202,7 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   expect(state.dart).toEqual({ status: 'loaded', issues: [] });
   for (const n of ['terrain', 'buildings', 'pontoons', 'moorings', 'traffic', 'mark', 'club-ensign', 'berthed-vanes', 'walkers']) expect(state.names).toContain(n);
   await expect(page.getByTestId('minimap')).toBeVisible();
-  await expect(page.locator('footer.badge')).toContainText('River Dart (depths and stream provisional)');
+  await expectSessionSummary(page, 'River Dart (depths and stream provisional)');
   // Depth at the keel is shown, from the provisional depths mid-river.
   await expect(page.locator('.cell', { hasText: 'Depth' })).toContainText('m');
   // Every provisional layer is labelled in the Layers panel.
@@ -257,12 +264,14 @@ for (const [asset, effect] of [['features.json', 'No buildings'], ['drape.jpg', 
 }
 
 test('Phase 3: without the River Dart data the app falls back to open water and says so', async ({ page }) => {
+  // Opens Layers and sources to read the session summary: slow in software rendering.
+  test.slow();
   await page.route('**/geo/manifest.json', (r) => r.abort());
   await page.goto('/');
   await expect(page.getByTestId('stw')).toBeVisible();
   await dartLoaded(page);
   await expect(page.getByTestId('dart-warning')).toContainText('sailing on open water');
-  await expect(page.locator('footer.badge')).toContainText('open water');
+  await expectSessionSummary(page, 'open water');
   const t0 = (await snap(page)).t;
   await expect.poll(async () => (await snap(page)).t, { timeout: 20_000 }).toBeGreaterThan(t0);
 });

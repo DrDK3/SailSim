@@ -64,6 +64,9 @@ test('the instruments, toolbar, dock and minimap never overlap, at five screen s
     if (phase === 'racing') {
       await page.evaluate(() => window.__squib!.controller.startQuickRace({ competitors: 3, level: 'good', venue: 'start-bay', course: 'windward-leeward', conditions: 'random', wind: 'any', seed: 3, sequence: 'one-minute' }));
       await expect(page.getByTestId('coach')).toBeVisible();
+      // Let the race's first frames draw before resizing: in software rendering, compiling the new boats' shaders
+      // can take tens of seconds, and the app re-lays its regions out only between frames.
+      await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
     }
     for (const size of SIZES) {
       await page.setViewportSize(size);

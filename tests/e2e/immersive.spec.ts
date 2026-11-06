@@ -3,7 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 /**
  * Owner review, 5 Nov 2026 (second): the keys steer after a camera is chosen from its list; Start Bay is a race
  * choice in plain view with today's challenge kept; the minimap's scale is under the map, not drawn on it; the dock
- * is two rows on a laptop.
+ * is two rows on a laptop. 6 Nov 2026: no status line along the bottom; the console a slim band that leaves the
+ * Squib in view.
  */
 
 const CI_SLOW = process.env.CI ? 2 : 1;
@@ -84,18 +85,20 @@ test('at every width the console’s modules hold their contents at their widest
     c.setInput({ autoCrew: false, crewHike: 1, flatten: 1, autoMain: false, mainSheet: 1 });
   });
   await expect(page.getByRole('button', { name: /^Crew hiking out: 100%/ })).toBeVisible();
-  // Laptop and desktop widths: four modules in one row (86 px) where they fit beside the minimap, two rows (164 px)
-  // where they do not, three on a phone (232 px).
+  // One slim band (75 px) from 820 px wide, the key letters left off under 990 px; two bands (145 px) on a tablet
+  // held upright; three rows on a phone (215 px). Under 1180 px the minimap stands above the band's right-hand end.
   const sizes = [
-    [360, 640, 232],
-    [390, 844, 232],
-    [700, 800, 232],
-    [1000, 560, 164],
-    [1180, 800, 164],
-    [1249, 800, 164],
-    [1250, 800, 86],
-    [1366, 768, 86],
-    [1920, 1080, 86],
+    [360, 640, 215],
+    [390, 844, 215],
+    [700, 800, 215],
+    [768, 1024, 145],
+    [820, 600, 75],
+    [989, 600, 75],
+    [1000, 560, 75],
+    [1179, 700, 75],
+    [1180, 800, 75],
+    [1366, 768, 75],
+    [1920, 1080, 75],
   ] as const;
   for (const [width, height, consoleH] of sizes) {
     await page.setViewportSize({ width, height });
@@ -118,12 +121,52 @@ test('at every width the console’s modules hold their contents at their widest
             }
             if (c.left < 0 || c.right > window.innerWidth || c.bottom > window.innerHeight) bad.push('console off the screen');
             const map = document.querySelector('.minimap')?.getBoundingClientRect();
-            if (map && map.width > 0 && c.right > map.left && c.bottom > map.top) bad.push('console under the minimap');
+            const tab = con.querySelector('.controls-hide')!.getBoundingClientRect();
+            const meets = (a: DOMRect, b: DOMRect) => a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+            if (map && map.width > 0 && meets(c, map)) bad.push('console under the minimap');
+            if (map && map.width > 0 && meets(tab, map)) bad.push('hide tab under the minimap');
             return [Math.round(c.height), ...bad];
           }),
-        { message: `${width}×${height}` },
+        { message: `${width}×${height}`, timeout: 30_000 * CI_SLOW },
       )
       .toEqual([consoleH]);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('the Squib is drawn above the console in the chase and top-down views; no status line along the bottom', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  const errors = await ready(page);
+  await expect(page.locator('footer.badge')).toHaveCount(0);
+  // Each camera at each size, the camera changed once (its swing from one view to the other takes many frames,
+  // slow in software rendering).
+  for (const cam of ['chase', 'top'] as const) {
+    await page.evaluate((m) => window.__squib!.controller.setCamera(m), cam);
+    for (const [width, height] of [
+      [1000, 560],
+      [1280, 800],
+      [820, 600],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      // The hull's lowest point on the screen (its ends and sides, 3 m from its middle), against the console's top.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              type V = { clone(): V; set(x: number, y: number, z: number): V; project(c: unknown): V; x: number; y: number };
+              const view = (window.__squib!.controller as unknown as { view: { camera: unknown; boatRoot: { position: V; localToWorld(v: V): V } } }).view;
+              let low = 0;
+              for (const [x, z] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]] as const) {
+                const p = view.boatRoot.localToWorld(view.boatRoot.position.clone().set(x, 0.3, z)).project(view.camera);
+                low = Math.max(low, ((1 - p.y) / 2) * window.innerHeight);
+              }
+              const top = document.querySelector('.panel.dock.console')!.getBoundingClientRect().top;
+              return Math.round(top - low);
+            }),
+          { message: `${width}×${height}, ${cam}: room between the hull and the console (px)`, timeout: 30_000 * CI_SLOW },
+        )
+        .toBeGreaterThan(0);
+    }
   }
   expect(errors).toEqual([]);
 });

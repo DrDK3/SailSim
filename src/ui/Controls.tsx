@@ -118,7 +118,9 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
         </span>
         <label className="toggle" title={`Auto-trim: the crew trims this sheet for you (${sail === 'main' ? 'M' : 'J'})`}>
           <input type="checkbox" checked={auto} onChange={(e) => ctl.setInput(sail === 'main' ? { autoMain: e.target.checked } : { autoJib: e.target.checked })} />
-          Auto-trim
+          <span>
+            Auto<span className="label-more">-trim</span>
+          </span>
         </label>
       </div>
       <div className="mod-row">

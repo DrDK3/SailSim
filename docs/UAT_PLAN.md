@@ -109,7 +109,7 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 | 7.2 | Library → Fog, Rain, Evening | Visibility, rain streaks and sunset light look right; colours are not washed out | |
 | 7.3 | Scenario → Tide manual; set a low tide and sail near the edge | The boat grounds where the drying areas are; no start is placed on the mud | |
 | 7.4 | Library → the Met Office replay | Wind follows the forecast, labelled as model output with its age | |
-| 7.5 | Open the published site fresh (no scenario chosen) | Within a few seconds it sails in today's live wind and sky, at this minute: the light is the real light (dark after sunset); the bottom line names the Met Office forecast | |
+| 7.5 | Open the published site fresh (no scenario chosen) | Within a few seconds it sails in today's live wind and sky, at this minute: the light is the real light (dark after sunset); the instruments (All instruments and conditions) and More → Layers and sources name the Met Office forecast | |
 | 7.6 | Settings → Light → Real time | Restarts now, in the live weather if the site has it | |
 
 ## 8. Library, replays and the editor (10 min)
@@ -256,6 +256,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 19.2 | Look at the hull close to, in the chase view | Straight, crisp blue and red bands at the waterline and a straight blue stripe under the deck edge; no saw-tooth | |
 | 19.3 | Open Race | Today's challenge on top; "Where" with Start Bay chosen; the river, an RDYC course and the library beside it | |
 | 19.4 | On a laptop, look at the helm console at the bottom | Four modules side by side (MAIN, JIB, HELM, BOAT), two rows tall, little empty space, the water showing through; hold A or D: it does not grow or shrink; let a sheet right out: its state turns amber and Trim glows | |
+| 19.4b | On the laptop you use, in the chase and the top-down views, at your usual window size | The console is one slim band along the bottom edge (about 75 px), the whole Squib in view above it; no line of text along the bottom of the screen; More → Layers and sources starts with the session's summary | |
 | 19.4a | On a phone (or a window under 700 px wide) in a race, choose Expert and turn Auto crew off | The console: the sails one above the other, the helm and the boat side by side, Flat and Hike inside their box; the instruments and the race panel scroll above it, never over it; ▾ on a tab above the console's corner | |
 | 19.5 | Look at the minimap and zoom it in and out | The scale (300 m, 625 m or 1.7 km) under the map, not on it | |
 | 19.6 | On the deployed site, a few hours after the merge, free sail with live conditions on a cloudy or rainy day | Overcast sky, soft light, rain when the forecast has it | |
