@@ -1,0 +1,312 @@
+{
+ "generated": "2026-10-27T10:00:06Z",
+ "projection": "+proj=tmerc +lat_0=50.34801 +lon_0=-3.57339 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs",
+ "origin": {
+  "lat": 50.34801,
+  "lon": -3.57339,
+  "name": "RDYC clubhouse footprint centroid"
+ },
+ "verticalDatum": {
+  "heights": "metres above Ordnance Datum Newlyn (ODN)",
+  "chartDatumBelowOdn": 2.62,
+  "chartDatumTag": "S",
+  "chartDatumSource": "Secondary source (issue 14); confirm against UKHO (C8)"
+ },
+ "domain": {
+  "eMin": -3200.0,
+  "eMax": 3600.0,
+  "nMin": -5200.0,
+  "nMax": 4560.0
+ },
+ "elevation": {
+  "file": "elevation.i16z",
+  "type": "int16le",
+  "scale": 0.01,
+  "cell": 8.0,
+  "nx": 850,
+  "ny": 1220,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "row-major, rows south to north, cell centres at e0 + (i + 0.5)\u00b7cell",
+  "packing": "i16-gradient-zigzag-planes-gzip/1"
+ },
+ "current": {
+  "file": "current.i16z",
+  "type": "int16le",
+  "scale": 0.001,
+  "components": [
+   "tidal_ve",
+   "tidal_vn",
+   "river_ve",
+   "river_vn"
+  ],
+  "cell": 16.0,
+  "nx": 425,
+  "ny": 610,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "meaning": "Ebb direction; magnitude relative to the mean speed across the entrance (castle to castle)",
+  "packing": "i16-gradient-zigzag-planes-gzip/1"
+ },
+ "drape": {
+  "file": "drape.jpg",
+  "nx": 680,
+  "ny": 976,
+  "cell": 10.0,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "image rows north to south"
+ },
+ "town": {
+  "file": "town.i16z",
+  "type": "int16le",
+  "scale": 0.01,
+  "cell": 4.0,
+  "nx": 450,
+  "ny": 675,
+  "e0": -1000.0,
+  "n0": -1000.0,
+  "order": "row-major, rows south to north, cell centres at e0 + (i + 0.5)\u00b7cell",
+  "packing": "i16-gradient-zigzag-planes-gzip/1",
+  "meaning": "Ground (m ODN) over Dartmouth and Kingswear for the picture: the same LIDAR DTM at 4 m (the physics uses the 8 m grid)"
+ },
+ "minimap": {
+  "file": "minimap.png",
+  "cell": 16.0,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "image rows north to south"
+ },
+ "waterMask": {
+  "file": "watermask.png",
+  "cell": 8.0,
+  "nx": 850,
+  "ny": 1220,
+  "e0": -3200.0,
+  "n0": -5200.0,
+  "order": "image rows north to south, cell centres at e0 + (i + 0.5)\u00b7cell",
+  "encoding": "signed distance (m) to the tidal water outline (shoreline layer) = (v - 128) / 2, > 0 in the water, clamped to about \u00b164 m",
+  "meaning": "Where the picture may draw the water surface: tidal water and the bank next to it, not low ground inland"
+ },
+ "features": "features.json",
+ "entrance": {
+  "a": [
+   546.0,
+   -690.7
+  ],
+  "b": [
+   963.1,
+   -666.2
+  ]
+ },
+ "layers": [
+  {
+   "id": "terrain",
+   "label": "Terrain (land)",
+   "status": "data",
+   "tag": "V",
+   "source": "Environment Agency LIDAR Composite DTM 2 m via Tilezen terrain tiles (AWS Open Data), z15, resampled to 8 m",
+   "licence": "Open Government Licence v3 (\u00a9 Environment Agency copyright and/or database right 2015. All rights reserved.)",
+   "notes": [
+    "Tile sources (tile counts): {'uk_lidar': 150, 'eudem': 56, 'srtm': 39, 'gmted': 45, 'etopo1': 43}. Where LIDAR coverage ends (offshore), tiles blend EU-DEM, SRTM, GMTED and ETOPO1.",
+    "Over Dartmouth and Kingswear the picture uses the same LIDAR at 4 m (town.i16z); the physics keeps the 8 m grid."
+   ]
+  },
+  {
+   "id": "intertidal",
+   "label": "Drying areas (mud, sand, rock)",
+   "status": "data",
+   "tag": "V",
+   "source": "Same LIDAR DTM: ground above the water surface at the time of the survey, inside the tidal water mask",
+   "licence": "Open Government Licence v3",
+   "notes": [
+    "17943 cells of 8 m. Survey date and tide not known: the lower limit is the survey water level, about +0.4 m above chart datum."
+   ]
+  },
+  {
+   "id": "bathymetry",
+   "label": "Water depth below the low-water line",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Estimate: depth grows with distance from the low-water edge (9 m cap in the harbour, rising seaward)",
+   "licence": "\u2014",
+   "notes": [
+    "No legally usable survey is available (Admiralty charts are UKHO copyright). Do not use for navigation.",
+    "Grounding in the app uses this depth: it is right near the shore (LIDAR) and only indicative mid-channel."
+   ]
+  },
+  {
+   "id": "shoreline",
+   "label": "Shoreline and tidal water",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap coastline and riverbank polygons via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "OSM positional accuracy not independently verified; the visible shoreline comes from the LIDAR terrain at the current tide."
+   ]
+  },
+  {
+   "id": "drape",
+   "label": "Terrain colour",
+   "status": "data",
+   "tag": "V",
+   "source": "Copernicus Sentinel-2 L2A true colour, scene S2C_30UVA_20250712_0_L2A (12 Jul 2025), 10 m",
+   "licence": "Contains modified Copernicus Sentinel data 2025 (free and open)",
+   "notes": [
+    "10 m pixels: fields, woods and towns are recognisable; individual buildings are not."
+   ]
+  },
+  {
+   "id": "buildings",
+   "label": "Buildings",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap and Microsoft ML building footprints via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation); Microsoft ML Buildings ODbL",
+   "notes": [
+    "5404 footprints. Heights: 2041 from the data (Microsoft ML estimates or OSM), 392 from floor counts, 2971 estimated by building type (E).",
+    "Bases on the LIDAR ground (about 3 m in the towns). Roofs: OSM roof:shape where tagged; otherwise inferred (E) - terraces (shared party walls) gabled along the street, detached houses hipped or gabled, large and utility buildings flat ({'f': 626, 'g': 3246, 'h': 1532}; 1050 with party walls). Measured roof shapes need the Environment Agency LIDAR surface model (environment.data.gov.uk, not reachable from the build environment)."
+   ]
+  },
+  {
+   "id": "landmarks",
+   "label": "Landmarks",
+   "status": "data",
+   "tag": "S",
+   "source": "OSM names and footprints via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "Shown on their real footprints with labels. The app draws the principal landmarks as described in their listing entries and other sources (docs/SOURCES.md L1\u2013L8): BRNC's brick and Portland stone and its central clock tower, the castles' battlements and Kingswear Castle's stair turret, St Petrox's west tower, the Royal Dart Hotel's balcony, RDYC's flagstaff; parish churches get a west tower by rule. Their proportions are estimates (E)."
+   ]
+  },
+  {
+   "id": "piers",
+   "label": "Piers, jetties and pontoons",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap (man_made=pier) via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "92 features. Widths of line features and deck heights are estimates (E). Pontoons are assumed floating when tagged so or named 'Pontoon'.", "RDYC's main pontoon (unnamed in OSM) and its dinghy pontoon, Moody Island, are named from the club's documents (PIER_CORRECTIONS; the main pontoon floating, E)."
+   ]
+  },
+  {
+   "id": "mooring-areas",
+   "label": "Mooring areas (trots)",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap water polygons (Kingswear, Noss and Distins Trots; DHNA anchorage) via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "4 areas."
+   ]
+  },
+  {
+   "id": "moorings",
+   "label": "Individual moorings and moored boats",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Generated: rows 22 m apart, buoys 16 m apart inside the mooring areas; boat types random (seeded)",
+   "licence": "\u2014",
+   "notes": [
+    "443 moorings. Positions are illustrative: individual buoy positions are not established (N). They are not obstacles in the physics yet."
+   ]
+  },
+  {
+   "id": "ferries",
+   "label": "Ferries",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Routes: OpenStreetMap ferry routes via Overture Maps 2026-10-21.0 (S). Timetables and vessel sizes: estimates (E)",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "9 route segments. Animation only: not obstacles in the physics yet. Lower and Higher Ferries are shown as restricted in their ability to manoeuvre (DHNA sailing directions, S(p))."
+   ]
+  },
+  {
+   "id": "railway",
+   "label": "Railway and Kingswear station",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap railway lines, platform and station via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "Track level follows the LIDAR ground; the tunnel is inferred from the ground rising far above the line (E).",
+    "Trains and their times: see the timetable notes in the app (docs/SOURCES.md)."
+   ]
+  },
+  {
+   "id": "berths",
+   "label": "Marina berths and berthed boats",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Laid out in the app on OSM's pontoons (src/sim/env/marinas.ts): finger berths in the marinas, alongside on Dart Harbour's and the visitors' pontoons",
+   "licence": "\u2014",
+   "notes": [
+    "Berth spacing, boat sizes, how many berths are let by season and the marinas' daily movements are estimates (E). Published counts: Darthaven over 270 berths, Noss on Dart 155\u2013232 (SOURCES.md F12, F13).",
+    "Berthed boats and pontoons are not obstacles in the physics yet."
+   ]
+  },
+  {
+   "id": "trains",
+   "label": "Steam trains",
+   "status": "provisional",
+   "tag": "E",
+   "source": "The Dartmouth Steam Railway's published timetable for 25 Oct 2026 (Paignton 10:30, 12:00, 14:00, 15:30; Kingswear 11:10, 12:40, 14:40, 16:10; 30-minute journey), used for every day of the season",
+   "licence": "\u2014",
+   "notes": [
+    "Running days, the train's make-up and engine, speeds and the run-round at Kingswear are estimates (E). Visual only."
+   ]
+  },
+  {
+   "id": "marks",
+   "label": "Navigation marks",
+   "status": "partial",
+   "tag": "S",
+   "source": "Only marks with a stated position are placed (Castle Ledge buoy, visitmyharbour)",
+   "licence": "\u2014",
+   "notes": [
+    "Not placed (position not established): Checkstone and Homestone buoys, Kingswear light, RDYC racing marks."
+   ]
+  },
+  {
+   "id": "current",
+   "label": "Tidal stream pattern",
+   "status": "provisional",
+   "tag": "E",
+   "source": "Tidal-prism continuity on the provisional depths (potential flow), scaled to the entrance stream from the tide timing",
+   "licence": "\u2014",
+   "notes": [
+    "Not measured current data. The pattern depends on the provisional depths. Offshore (Start Bay) streams are not modelled."
+   ]
+  },
+  {
+   "id": "roads",
+   "label": "Roads and footways",
+   "status": "data",
+   "tag": "S",
+   "source": "OpenStreetMap highways via Overture Maps 2026-10-21.0",
+   "licence": "ODbL 1.0 (\u00a9 OpenStreetMap contributors, via Overture Maps Foundation)",
+   "notes": [
+    "1729 segments. Road widths are estimates by class (E).",
+    "Cars on the roads and people on the footways and quays are illustrative (E): their numbers and movements are not data."
+   ]
+  }
+ ],
+ "roads": {
+  "file": "roads.json",
+  "classes": {
+   "p": "primary",
+   "s": "secondary",
+   "t": "tertiary",
+   "u": "unclassified",
+   "r": "residential",
+   "l": "living_street",
+   "v": "service",
+   "w": "pedestrian",
+   "f": "footway",
+   "x": "steps"
+  }
+ }
+}
