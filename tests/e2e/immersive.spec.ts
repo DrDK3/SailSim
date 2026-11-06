@@ -74,6 +74,60 @@ test('the minimap’s scale is under the map, and the dock is two rows beside it
   expect(errors).toEqual([]);
 });
 
+test('at every width the console’s modules hold their contents at their widest, and the console clears the minimap', async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  // The widest state: every control shown (Expert, crew by hand) and every figure at 100%.
+  await page.evaluate(() => {
+    const c = window.__squib!.controller;
+    c.setLevel('expert');
+    c.setInput({ autoCrew: false, crewHike: 1, flatten: 1, autoMain: false, mainSheet: 1 });
+  });
+  await expect(page.getByRole('button', { name: /^Crew hiking out: 100%/ })).toBeVisible();
+  // Laptop and desktop widths: four modules in one row (86 px) where they fit beside the minimap, two rows (164 px)
+  // where they do not, three on a phone (232 px).
+  const sizes = [
+    [360, 640, 232],
+    [390, 844, 232],
+    [700, 800, 232],
+    [1000, 560, 164],
+    [1180, 800, 164],
+    [1249, 800, 164],
+    [1250, 800, 86],
+    [1366, 768, 86],
+    [1920, 1080, 86],
+  ] as const;
+  for (const [width, height, consoleH] of sizes) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const bad: string[] = [];
+            const con = document.querySelector<HTMLElement>('.panel.dock.console')!;
+            const c = con.getBoundingClientRect();
+            for (const mod of con.querySelectorAll<HTMLElement>('.mod')) {
+              const m = mod.getBoundingClientRect();
+              const cs = getComputedStyle(mod);
+              const left = m.left + parseFloat(cs.paddingLeft);
+              const right = m.right - parseFloat(cs.paddingRight);
+              for (const el of mod.querySelectorAll<HTMLElement>(':scope > .mod-top > *, :scope > .mod-row > *')) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 0 && !el.classList.contains('sr-only') && (r.left < left - 1 || r.right > right + 1)) bad.push(`${mod.getAttribute('aria-label')}: “${el.textContent?.trim()}” runs out of its module`);
+              }
+            }
+            if (c.left < 0 || c.right > window.innerWidth || c.bottom > window.innerHeight) bad.push('console off the screen');
+            const map = document.querySelector('.minimap')?.getBoundingClientRect();
+            if (map && map.width > 0 && c.right > map.left && c.bottom > map.top) bad.push('console under the minimap');
+            return [Math.round(c.height), ...bad];
+          }),
+        { message: `${width}×${height}` },
+      )
+      .toEqual([consoleH]);
+  }
+  expect(errors).toEqual([]);
+});
+
 test('the helm console keeps its size as the rudder moves and the sails’ states change; the fix glows', async ({ page }) => {
   test.setTimeout(150_000 * CI_SLOW);
   await page.setViewportSize({ width: 1280, height: 800 });
