@@ -127,7 +127,7 @@ test('at every width the console’s modules hold their contents at their widest
             if (map && map.width > 0 && meets(tab, map)) bad.push('hide tab under the minimap');
             return [Math.round(c.height), ...bad];
           }),
-        { message: `${width}×${height}` },
+        { message: `${width}×${height}`, timeout: 30_000 * CI_SLOW },
       )
       .toEqual([consoleH]);
   }
@@ -138,14 +138,16 @@ test('the Squib is drawn above the console in the chase and top-down views; no s
   test.setTimeout(180_000 * CI_SLOW);
   const errors = await ready(page);
   await expect(page.locator('footer.badge')).toHaveCount(0);
-  for (const [width, height] of [
-    [1000, 560],
-    [1280, 800],
-    [820, 600],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    for (const cam of ['chase', 'top'] as const) {
-      await page.evaluate((m) => window.__squib!.controller.setCamera(m), cam);
+  // Each camera at each size, the camera changed once (its swing from one view to the other takes many frames,
+  // slow in software rendering).
+  for (const cam of ['chase', 'top'] as const) {
+    await page.evaluate((m) => window.__squib!.controller.setCamera(m), cam);
+    for (const [width, height] of [
+      [1000, 560],
+      [1280, 800],
+      [820, 600],
+    ] as const) {
+      await page.setViewportSize({ width, height });
       // The hull's lowest point on the screen (its ends and sides, 3 m from its middle), against the console's top.
       await expect
         .poll(
