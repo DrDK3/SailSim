@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DamageView, type DamageLook } from './damageView';
 import { shared, sharedAll } from './dispose';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BoatParams } from '../sim/boat/params';
@@ -311,6 +312,10 @@ export class SquibModel {
     hands: [new THREE.Vector3(), new THREE.Vector3()] as [THREE.Vector3, THREE.Vector3], look: new THREE.Vector3(),
   }));
   readonly anchors: { mainCE: THREE.Vector3; jibCE: THREE.Vector3; keel: THREE.Vector3; rudder: THREE.Vector3; bow: THREE.Vector3; masthead: THREE.Vector3 };
+  /** Damage drawn on this boat (made when she is first damaged). */
+  private damageView?: DamageView;
+  /** Water inside the hull shown above the cockpit floor (model y), from the damage. */
+  private floodY?: number;
 
   private static readonly MAIN_U = 14;
   private static readonly MAIN_V = 24;
@@ -360,6 +365,7 @@ export class SquibModel {
       const geo = new THREE.BufferGeometry().setFromPoints(Array.from({ length: count }, () => new THREE.Vector3()));
       const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: colour }));
       line.frustumCulled = false;
+      line.name = 'sheet';
       this.sheets.push({ geo, pts: count });
       this.group.add(line);
     }
@@ -434,9 +440,15 @@ export class SquibModel {
     const g = new THREE.Group();
     const mastTopY = sheerAt(0.4) + this.p.mastLength;
     g.add(this.buildHull(), this.buildTransom(transomText), this.buildDeck(), this.buildCockpit(), this.buildKeel());
-    for (const m of this.buildRig(mastTopY)) g.add(m);
     for (const m of this.buildFittings()) g.add(m);
-    return { group: mergeByMaterial(g), mastTopY };
+    // The spars and standing rigging apart (merged on their own): they come down when the boat is dismasted.
+    const rig = new THREE.Group();
+    for (const m of this.buildRig(mastTopY)) rig.add(m);
+    const merged = mergeByMaterial(g);
+    const rigMerged = mergeByMaterial(rig);
+    rigMerged.name = 'rig';
+    merged.add(rigMerged);
+    return { group: merged, mastTopY };
   }
 
   private buildHull(): THREE.Mesh {
@@ -953,6 +965,47 @@ export class SquibModel {
   }
 
   /** Tint the hull (the vertex colours and transom texture are multiplied by this colour): fleet boats. */
+  /**
+   * Show damage (src/render/damageView.ts): marks on the hull, the rig down, the rudder bent or gone, water
+   * inside, the sea over a drowned deck. `dt` (s) moves the chips flying off an impact.
+   */
+  setDamage(d: DamageLook | undefined, dt: number): void {
+    if (!this.damageView) {
+      if (!d || (d.scars.length === 0 && !d.rigParts.down && d.rudder <= 0 && d.state === 'afloat')) return;
+      const find = (name: string) => {
+        let hit: THREE.Object3D | undefined;
+        this.group.traverse((o) => {
+          if (!hit && o.name === name) hit = o;
+        });
+        return hit;
+      };
+      const hull: THREE.Mesh[] = [];
+      this.group.traverse((o) => {
+        if (o instanceof THREE.Mesh && (o.name === 'hull' || o.name === 'hull-transom')) hull.push(o);
+      });
+      const rig: THREE.Object3D[] = [this.boom, this.burgee.group, ...this.telltales];
+      for (const o of this.group.children) if (o.name === 'mainsail' || o.name === 'jib' || o.name === 'sheet') rig.push(o);
+      const rigGroup = find('rig');
+      if (rigGroup) rig.push(rigGroup);
+      const main = this.group.children.find((o) => o.name === 'mainsail') as THREE.Mesh | undefined;
+      this.damageView = new DamageView({
+        root: this.group,
+        hull,
+        rig,
+        rudder: this.rudder,
+        rudderBlade: this.rudder.children.find((o) => o.name === 'rudder-blade'),
+        waterMask: find('water-mask'),
+        mastZ: MAST_Z,
+        deckY: sheerAt(0.4) + DECK_CAMBER,
+        mastLength: this.p.mastLength,
+        boomLength: this.p.main.foot,
+        sailMaterial: main?.material as THREE.Material | undefined,
+      });
+    }
+    this.damageView.update(d, dt);
+    this.floodY = DamageView.floodLevel(d, this.soleY);
+  }
+
   setHullColour(hex: number): void {
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh && (o.name === 'hull' || o.name === 'hull-transom')) {
@@ -1070,6 +1123,13 @@ export class SquibModel {
     this.burgee.update(awa, aws, time);
 
     this.updateWater(params.water ?? 0, params.heel ?? 0);
+    // Water from a breach risen above the cockpit floor: its level surface over the floor.
+    if (this.floodY !== undefined && (!this.water.visible || this.water.position.y < this.floodY)) {
+      this.water.visible = true;
+      this.water.position.set(0, this.floodY, (COCKPIT_TO + COCKPIT_FROM) / 2);
+      this.water.rotation.set(0, 0, 0);
+      this.water.scale.set(2 * COCKPIT_HALF - 0.06, 1, COCKPIT_TO - COCKPIT_FROM - 0.06);
+    }
   }
 
   /**

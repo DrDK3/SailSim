@@ -910,3 +910,24 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .app.console-on.has-minimap .panel.dock.console { right: 12px; }
   .app.console-on .minimap { bottom: calc(var(--console-bottom) + var(--console-h) + 34px); }
 }
+
+/* The damage report (owner, 6 Nov 2026): what the crew know after a collision or a grounding. */
+.hud-left .panel.damage { width: 300px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.panel.damage .damage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel.damage h3 { margin: 0; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.panel.damage .status { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 99px; font-size: 12.5px; line-height: 20px; }
+.panel.damage .status .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
+.panel.damage .status.good { color: color-mix(in srgb, var(--good) 75%, white); background: color-mix(in srgb, var(--good) 16%, transparent); }
+.panel.damage .status.warn { color: color-mix(in srgb, var(--warn) 75%, white); background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.panel.damage .status.bad { color: color-mix(in srgb, var(--bad) 60%, white); background: color-mix(in srgb, var(--bad) 22%, transparent); }
+.panel.damage .damage-row { display: flex; justify-content: space-between; gap: 8px; }
+.panel.damage .damage-row.fine { font-size: 12px; color: var(--muted); }
+.panel.damage .damage-bar { position: relative; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.28); overflow: hidden; }
+.panel.damage .damage-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--bad) 65%, #3a8fd8); }
+.panel.damage .damage-list { margin: 0; padding-left: 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; }
+.panel.damage .damage-plug { align-self: flex-start; min-height: 28px; }
+.panel.damage .fine { margin: 0; font-size: 12px; color: var(--muted); }
+.banner.damage-banner { top: 76px; max-width: min(640px, calc(100% - 24px)); }
+@media (max-width: 700px) {
+  .hud-left .panel.damage { width: auto; }
+}

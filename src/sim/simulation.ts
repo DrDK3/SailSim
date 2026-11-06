@@ -23,7 +23,8 @@ import {
 import type { BoatParams } from './boat/params';
 import { FLATTEN, flattenedParams } from './boat/flatten';
 import { greenWaterInflow, sprayInflow, stepWater } from './boat/cockpit';
-import { DAMAGE, applyImpact, impactEnergy, newDamage, stepBilge, type Damage, type Impact, type ImpactRegion } from './boat/damage';
+import { DAMAGE, HULL, applyImpact, checkRigFall, cloneDamage, impactEnergy, newDamage, type Damage, type Impact, type ImpactPoint, type ImpactRegion } from './boat/damage';
+import { damageReport, startPlugging, stepFlooding, type DamageReport } from './boat/flooding';
 import type { ContactPointState, GroundContext } from './boat/contact';
 import type { Seabed } from './geo/dart';
 import type { Environment, EnvironmentInfo } from './env/environment';
@@ -54,6 +55,11 @@ export interface ControlInput {
    * 1 = as flat as the rig allows (src/sim/boat/flatten.ts). Optional so that older replays still load.
    */
   flatten?: number;
+  /**
+   * The crew's requests to stuff a hole they can reach (a sail bag or cushion): each increase is one request
+   * (an input, so replays repeat it). Optional so that older replays still load.
+   */
+  plug?: number;
 }
 
 export const DEFAULT_INPUT: ControlInput = {
@@ -221,6 +227,8 @@ export interface BoatSnapshot {
   cockpitWater: number;
   /** Damage so far (hull, rudder, rig, bilge water). */
   damage: Damage;
+  /** The water's story for the crew (in, out, freeboard, each breach), when she is damaged. */
+  damageReport?: DamageReport;
   input: ControlInput;
   forces: ForceBreakdown;
   /** Conditions here: sources, tide, flags (when the environment can describe itself). */
@@ -264,6 +272,8 @@ export class Simulation {
   readonly damage: Damage = newDamage();
   readonly impacts: Impact[] = [];
   private wasGrounded = false;
+  /** Plug requests already acted on (input.plug counts them). */
+  private plugsDone = 0;
   /** Where the crew's weight was last moving to (display only; not part of the state or its hash). */
   private crewTo?: number;
   /** Contact force for the next step (fleet), or null. */
@@ -543,14 +553,40 @@ export class Simulation {
 
     // Crew: manual = sit to windward (opposite the main) at the chosen hike; auto = move to cancel the
     // heeling moment. Either way they move across at a finite speed.
-    const crewTarget = this.input.autoCrew ? this.autoCrewTarget(wind, cur) : a.mainSide * this.crewOffset();
+    let crewTarget = this.input.autoCrew ? this.autoCrewTarget(wind, cur) : a.mainSide * this.crewOffset();
+    // One of them bailing cannot hike: half the weight out.
+    if (this.damage.bailing) crewTarget *= 0.5;
     a.crewY += clamp(crewTarget - a.crewY, -p.crewSpeed * dt, p.crewSpeed * dt);
     this.crewTo = crewTarget;
 
     // Water over the rail or in spray; out through the transom (self-draining) or bailed.
     a.water = stepWater(p.cockpit, a.water, this.waterInflow(), dt);
-    // A leak fills the bilge; the crew pump.
-    stepBilge(this.damage, dt);
+    // Water in through the breaches, the crew bailing and plugging; her sinkage, trim and state
+    // (src/sim/boat/flooding.ts). Nothing to do for a sound hull.
+    const dmg = this.damage;
+    if ((this.input.plug ?? 0) > this.plugsDone) {
+      this.plugsDone = this.input.plug ?? 0;
+      startPlugging(dmg);
+    }
+    if (dmg.breaches.length || dmg.bilge > 0 || dmg.state !== 'afloat') {
+      const sea = this.env.seaState?.(this.time, this.state.n, this.state.e);
+      const depth = ground ? ground.waterLevel - ground.seabed.bedElevation(this.state.n, this.state.e) : Infinity;
+      const res = stepFlooding(dmg, { phi: this.state.phi, hs: sea?.hs ?? 0, mass: p.mass, cockpitWater: a.water, depth, draft: p.draft, bail: true, selfDraining: p.cockpit.selfDraining }, dt);
+      if (res.cockpitInflow > 0) a.water = Math.min(p.cockpit.capacity, a.water + res.cockpitInflow * dt);
+    }
+    // A broken shroud brings the mast down once it is to windward and loaded.
+    if (!dmg.rigParts.down && (dmg.rigParts.shroudPort >= 1 || dmg.rigParts.shroudStbd >= 1)) {
+      // mainSide is the windward side (the crew sit at mainSide × their offset: to windward).
+      const fell = checkRigFall(dmg, a.mainSide, Math.hypot(f.main.x, f.main.y) + Math.hypot(f.jib.x, f.jib.y) > 40);
+      if (fell) this.impacts.push({ t: this.time, what: 'the rig', region: 'side', speed: 0, energy: 0, effects: [`the mast fell to ${fell === 'stbd' ? 'starboard' : 'port'}`] });
+    }
+    if (dmg.state === 'sunk') {
+      // On the bottom: nothing moves.
+      this.state = { ...this.state, u: 0, v: 0, r: 0, p: 0 };
+      this.time = (this.step + 1) * dt;
+      this.step += 1;
+      return;
+    }
 
     this.integrate(dt, wind, cur);
     // Running aground hard (the keel or rudder meeting the bottom at speed) damages her.
@@ -561,7 +597,7 @@ export class Simulation {
       const g = this.work.forces.groundVelocity;
       const speed = Math.hypot(g.n, g.e);
       const stern = contact.points.some((cp) => cp.name === 'stern' && cp.clearance < 0);
-      if (speed > DAMAGE.groundingSpeed) this.impact('the bottom', stern ? 'stern' : 'keel', speed, impactEnergy(speed, p.mass));
+      if (speed > DAMAGE.groundingSpeed) this.impact('the bottom', stern ? 'stern' : 'keel', speed, impactEnergy(speed, p.mass), stern ? { x: HULL.sternX, y: 0, z: -0.6 } : { x: HULL.keelRootX, y: 0, z: HULL.bottomZ });
     }
     this.wasGrounded = grounded;
     this.time = (this.step + 1) * dt;
@@ -572,8 +608,8 @@ export class Simulation {
    * An impact on the boat (from the fleet's contact, or running aground): damage by its energy and where it
    * struck. Returns what it did, in words (src/sim/boat/damage.ts).
    */
-  impact(what: string, region: ImpactRegion, speed: number, energy: number): Impact {
-    const ev: Impact = { t: this.time, what, region, speed, energy, effects: applyImpact(this.damage, region, energy) };
+  impact(what: string, region: ImpactRegion, speed: number, energy: number, at?: ImpactPoint): Impact {
+    const ev: Impact = { t: this.time, what, region, speed, energy, effects: applyImpact(this.damage, region, energy, at) };
     this.impacts.push(ev);
     return ev;
   }
@@ -719,7 +755,11 @@ export class Simulation {
       crewY: a.crewY,
       crewTo: this.crewTo ?? a.crewY,
       cockpitWater: a.water,
-      damage: { ...this.damage },
+      damage: cloneDamage(this.damage),
+      damageReport:
+        this.damage.breaches.length || this.damage.state !== 'afloat'
+          ? damageReport(this.damage, this.state.phi, this.env.seaState?.(this.time, this.state.n, this.state.e)?.hs ?? 0)
+          : undefined,
       input: { ...this.input },
       forces,
       env: detailed ? this.env.describe?.(this.time, s.n, s.e) : undefined,

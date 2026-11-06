@@ -4,6 +4,7 @@ import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
 import { SquibModel, sailFill } from './squibModel';
+import type { DamageLook } from './damageView';
 import { HullFoam, WakeTrail, type SeaUniforms } from './boatWater';
 
 /** The state of one fleet boat the renderer needs (two of these are interpolated per frame). */
@@ -32,6 +33,8 @@ export interface FleetPose {
   water: number;
   /** Speed through the water (m/s): the wake and the foam at the bow. */
   stw?: number;
+  /** Her damage, when she has any (marks, rig, rudder, water inside, sinkage and trim). */
+  damage?: DamageLook;
 }
 
 interface Entry {
@@ -145,8 +148,9 @@ export class FleetView {
       // Each boat floats on the drawn sea as the user's does (frames.ts).
       easeRide(e.ride, rideWaves(waterHeight, x, z, heading, RIDE_SCRATCH), frameDt, !e.rideStarted);
       e.rideStarted = true;
-      e.root.position.set(x, e.ride.heave, z);
-      orientBoat(e.model.group, heading, heel + e.ride.roll, e.ride.pitch);
+      e.root.position.set(x, e.ride.heave - (b.damage?.sinkage ?? 0), z);
+      orientBoat(e.model.group, heading, heel + e.ride.roll, e.ride.pitch - (b.damage?.trim ?? 0));
+      e.model.setDamage(b.damage, frameDt);
       const mainAngle = lerpAngle(a.boomMain, b.boomMain, alpha);
       const jibAngle = lerpAngle(a.boomJib, b.boomJib, alpha);
       e.model.update({

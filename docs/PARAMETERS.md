@@ -200,3 +200,29 @@ Rondar hull with the 2024 sail designs: a flatter foot lets the jib and main she
 | `sails.jib.cd0` | 0.028 | - | E | C11 (claim), estimate (size) | Designed for the rig's forestay sag: less drag when pointing (default 0.03) |
 | `sails.jib.stallWidthDeg` | 25 | deg | E | C11 (claim), estimate (size) | Wider groove (default 22) |
 | `sails.jib.sheetMinDeg` | 9 | deg | E | C11 (claim), estimate (size) | Jib sheets closer to the centreline (default 10) |
+
+## Damage and flooding (`src/sim/boat/damage.ts`, `src/sim/boat/flooding.ts`; 6 Nov 2026)
+
+| Parameter | Value | Unit | Tag | Source | Note |
+|---|---|---|---|---|---|
+| `DAMAGE.markJ` / `scrapeJ` | 120 / 300 | J | E | estimate | No mark below; a scuff up to `scrapeJ`, a gouge to `hullJ` |
+| `DAMAGE.hullJ` / `holeJ` | 800 / 2500 | J | E | estimate | A crack beyond 800 J, a hole beyond 2.5 kJ |
+| crack area | 1–7 | cm² | E | estimate | Effective flow area of a crack, growing with the energy |
+| hole area | 30 + 0.04/J, max 400 | cm² | E | estimate | Effective flow area of a hole |
+| hardness | pontoon 0.6, ferry 1.2, else 1 | - | E | estimate | Energy multiplier for what was hit |
+| contact heights | boat 0.55, jetty 0.25, pontoon 0.35, ferry 0.45 | m | E | estimate | Where on the topsides the thing meets her (above the waterline) |
+| `DAMAGE.rigJ`, `rigPerJ` | 2500, 1/8000 | J | E | estimate | Forestay (bow impacts); parted: the mast falls aft (D4) |
+| `DAMAGE.shroudJ`, `shroudPerJ`, reach | 2000, 1/6000, 0.8 m | - | E | estimate | Shroud (side impacts near the mast); broken and to windward: the mast falls to leeward (D4) |
+| `DAMAGE.keelJ`, keel leak | 1500; 2–25 cm² | J | E | estimate | Keel joint opening in a grounding |
+| `DAMAGE.rudderJ`, `rudderPerJ` | 400, 1/3000 | J | E | estimate | Bent, then torn off at 1 (no grip; a 5 cm² transom leak) |
+| `FLOOD.cd` | 0.62 | - | S | D2 | Discharge coefficient of an opening in a hull |
+| compartments | fore 300, main 2200, aft 200 | L | E | D1 (layout), estimate (volumes) | Forward tank forward of x = 1.6 m, aft tank aft of −2.15 m, main hull between |
+| `FLOOD.flotationL` | 158 | L | V | C16 C.5.1(a)(3) | Extra flotation forward of the mast: never floods |
+| `FLOOD.structureL`, `keelL` | 160, 52 | L | E, S | estimate; class-spec (375 kg cast iron) | Volume of the structure and of the keel |
+| waterplane, `gmL` | 4.8 m², 13 m | - | E | estimate | Sinkage and trim from the water inside |
+| sheer (deck edge) | 0.54–0.74 | m | E | the renderer's estimate | Freeboard, and when the deck goes under |
+| bailing | bucket 1.2, pump 0.4 | kg/s | E | estimate | The class requires a bailer or bucket (C16) |
+| plugging | 20 s, 80 % | - | E | estimate | A sail bag stuffed into a hole the crew can reach |
+| sinking | 0.35 m/s | - | E | estimate | Once nothing can carry her |
+| wreck drag | Cd·A 1.3 m² (side 1.6 m out), list 450 N m | - | E | estimate | A fallen rig in the water |
+| awash drag | Cd·A 1.4 m² | - | E | estimate | A drowned hull and deck |

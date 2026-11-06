@@ -695,8 +695,13 @@ export class SceneView {
     easeRide(this.ride, this.rideTarget, frameDt, !this.rideStarted);
     this.rideStarted = true;
     const prevPos = this.boatRoot.position.clone();
-    this.boatRoot.position.set(x, this.ride.heave, z);
-    orientBoat(this.boatRoot, heading, heel + this.ride.roll, this.ride.pitch);
+    // Water inside a damaged hull: she floats lower and trimmed (bow down > 0), and goes under when she sinks.
+    const dmg = curr.damage;
+    const sink = dmg ? THREE.MathUtils.lerp(prev.damage?.sinkage ?? dmg.sinkage, dmg.sinkage, alpha) : 0;
+    const trim = dmg ? THREE.MathUtils.lerp(prev.damage?.trim ?? dmg.trim, dmg.trim, alpha) : 0;
+    this.boatRoot.position.set(x, this.ride.heave - sink, z);
+    orientBoat(this.boatRoot, heading, heel + this.ride.roll, this.ride.pitch - trim);
+    this.boat.setDamage(dmg, frameDt);
     const moved = prevPos.distanceTo(this.boatRoot.position);
 
     const mainAngle = lerpAngle(prev.boomMain, curr.boomMain, alpha);
@@ -858,7 +863,9 @@ export class SceneView {
   }
 
   private updateCamera(heading: number, dt: number, moved: number, heel = 0): void {
-    const b = this.boatRoot.position;
+    // Follow the boat, but not down when she sinks: never more than half a metre under the sea's surface.
+    const b = this.boatRoot.position.clone();
+    b.y = Math.max(b.y, this.ride.heave - 0.5);
     const k = 1 - Math.exp(-dt * 2.5);
     this.chaseHeading = lerpAngle(this.chaseHeading, heading, k);
     // The heave the camera follows: a slow average (about 1.5 s) with part of each wave, by the motion setting.
@@ -900,8 +907,10 @@ export class SceneView {
       const side = this.crewSide;
       // With reduced motion the eye follows the heading only: no heel, pitch or wave heave.
       const frame = reduced ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -heading) : this.boatRoot.quaternion;
-      const base = reduced ? new THREE.Vector3(b.x, y, b.z) : b;
+      const base = reduced ? new THREE.Vector3(b.x, y, b.z) : this.boatRoot.position;
       const eye = new THREE.Vector3(side * 0.8, 1.5, 2.15).applyQuaternion(frame).add(base);
+      // Awash or sinking, the helm's head stays above the water.
+      eye.y = Math.max(eye.y, this.ride.heave + 0.45);
       this.camera.position.copy(eye);
       // Looking where the head is turned (ahead by default), from the boat's frame.
       const [lx, ly, lz] = helmLookDir(this.helmLook.yaw, this.helmLook.pitch);

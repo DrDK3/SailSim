@@ -262,6 +262,10 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 19.6 | On the deployed site, a few hours after the merge, free sail with live conditions on a cloudy or rainy day | Overcast sky, soft light, rain when the forecast has it | |
 | 19.6a | On the river in 18 kn and then 25 kn (Scenario), chase and helm views | No white spots or twinkling flecks across the water; at 25 kn the chop's crests whiten a little, as lace on the crests | |
 | 19.7 | Start Bay in 15 kn or more (Scenario, or live on a breezy day) | White horses across the bay; surf on the beaches with an onshore wind | |
+| 19.8 | Sail into a moored boat or a pontoon at 2 kn, then into the jetty at full speed | At 2 kn a scuff or a gouge on the hull where she touched, no leak; at full speed a crunch, a hole in the bow drawn where she struck, chips flying, the damage report showing the hole, the water coming in (L/min) and her bow going down | |
+| 19.9 | With a hole in the main hull (a hard knock on the side), watch the water inside; press Stuff the hole | The crew bail (one stops hiking); she gets heavier and more tender; after about 20 s the hole is stuffed and most of the flow stops | |
+| 19.10 | Hit something hard at the bow, or knock the windward side by the mast | The forestay parts and the mast falls aft, or the shroud breaks and the mast falls to leeward: the mast broken at the deck and lying with the sails in the water, dragging her round | |
+| 19.11 | Keep sailing holed until she fills | She settles lower and lower; awash on her buoyancy tanks with the deck under ("Awash"); with a buoyancy tank holed too she sinks and lies on the bottom ("Sunk"), and Start again restarts | |
 
 ## Accepting the build
 
