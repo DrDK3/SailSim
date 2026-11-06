@@ -74,6 +74,8 @@ export interface ContactEvent {
   /** Closing speed at first contact (m/s). */
   speed: number;
   point: Vec;
+  /** A pier or pontoon that floats on fenders (it gives). */
+  floating?: boolean;
 }
 
 /** Height (m above the waterline) at which contact forces act, for the heel they cause: topsides, fenders, piles (E). */
@@ -345,7 +347,7 @@ export class Fleet {
           const kc = pc.floating ? PIER_CONTACT.floating : PIER_CONTACT.fixed;
           const f = force(c, { n: -va.n, e: -va.e }, kc.stiffness, kc.damping);
           apply(i, { n: -f.n, e: -f.e }, c.point, pc.floating ? CONTACT_HEIGHT.pontoon : CONTACT_HEIGHT.jetty);
-          touch(pairKey(oa.id, `pier-${pc.pier}`), { kind: 'pier', a: oa.id, b: `pier-${pc.pier}`, label: pc.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point });
+          touch(pairKey(oa.id, `pier-${pc.pier}`), { kind: 'pier', a: oa.id, b: `pier-${pc.pier}`, label: pc.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point, floating: pc.floating });
         }
       }
     }
@@ -407,11 +409,19 @@ export class Fleet {
     const B = ev.kind === 'boat' ? this.boat(ev.b) : undefined;
     const mass = B ? (A.sim.params.mass * B.sim.params.mass) / (A.sim.params.mass + B.sim.params.mass) : A.sim.params.mass;
     const energy = impactEnergy(ev.speed, mass);
+    // Where it struck on each hull (the contact point, at the height the thing meets her topsides) and how hard
+    // the thing is: a fendered floating pontoon gives, a steel ferry does not (E).
+    const floating = ev.kind === 'pier' && !!ev.floating;
+    const height = ev.kind === 'boat' || ev.kind === 'moored' || ev.kind === 'committee-boat' ? CONTACT_HEIGHT.boat : ev.kind === 'mark' ? CONTACT_HEIGHT.mark : ev.kind === 'ferry' ? 0.45 : floating ? CONTACT_HEIGHT.pontoon : CONTACT_HEIGHT.jetty;
+    const hardness = ev.kind === 'ferry' ? 1.2 : floating ? 0.6 : 1;
     for (const [boat, what] of B ? ([[A, B.name], [B, A.name]] as const) : ([[A, ev.label]] as const)) {
       const s = boat.sim.state;
-      const along = (ev.point.n - s.n) * Math.cos(s.psi) + (ev.point.e - s.e) * Math.sin(s.psi);
+      const dn = ev.point.n - s.n;
+      const de = ev.point.e - s.e;
+      const along = dn * Math.cos(s.psi) + de * Math.sin(s.psi);
+      const across = -dn * Math.sin(s.psi) + de * Math.cos(s.psi);
       const L = boat.sim.params.loa;
-      boat.sim.impact(what, along > 0.25 * L ? 'bow' : along < -0.25 * L ? 'stern' : 'side', ev.speed, energy);
+      boat.sim.impact(what, along > 0.25 * L ? 'bow' : along < -0.25 * L ? 'stern' : 'side', ev.speed, energy, { x: along, y: across, z: height, hardness });
     }
   }
 

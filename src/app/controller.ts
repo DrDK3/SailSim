@@ -958,9 +958,10 @@ export class SimController {
       const hit = this.sim.impacts.find((i) => Math.abs(i.t - e.t) < 0.05 && i.effects.length);
       return `Contact with ${other} at ${e.speed.toFixed(1)} m/s${hit ? `: ${hit.effects.join(', ')}` : ''}`;
     }
-    // Running aground hard.
+    // Running aground hard; the mast coming down.
     const g = this.sim.impacts[this.sim.impacts.length - 1];
     if (g && g.what === 'the bottom' && this.sim.time - g.t < 8) return `Ran aground at ${g.speed.toFixed(1)} m/s${g.effects.length ? `: ${g.effects.join(', ')}` : ''}`;
+    if (g && g.what === 'the rig' && this.sim.time - g.t < 8) return `Dismasted: ${g.effects.join(', ')}`;
     return undefined;
   }
 
@@ -985,6 +986,7 @@ export class SimController {
         mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
         mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
         rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, sailsDown: sn.damage.rig >= 1, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater, stw: sn.stw,
+        damage: sn.damage.version > 0 || sn.damage.state !== 'afloat' ? sn.damage : undefined,
       });
     }
     this.fleetCurr = m;
@@ -1292,7 +1294,7 @@ export class SimController {
   private showSettings = false;
   private lastBoomT = -1;
   /** What the event sounds have played so far (the committee's signal log, contacts, groundings). */
-  private heard = { log: undefined as unknown, signals: 0, contactT: -1, groundT: -1, knockAt: -1 };
+  private heard = { log: undefined as unknown, signals: 0, contactT: -1, groundT: -1, knockAt: -1, crunchT: -1 };
   private caption?: { text: string; t: number };
   private harbour = { at: -Infinity, value: 0 };
   private onGesture = () => this.sound.resume();
@@ -1325,7 +1327,7 @@ export class SimController {
   private eventSounds(): void {
     const h = this.heard;
     const now = this.sim.time;
-    if (now < h.contactT || now < h.groundT) Object.assign(h, { contactT: -1, groundT: -1, knockAt: -1 });
+    if (now < h.contactT || now < h.groundT) Object.assign(h, { contactT: -1, groundT: -1, knockAt: -1, crunchT: -1 });
     const log = this.race?.session.committee.log;
     if (log !== h.log) Object.assign(h, { log, signals: 0 });
     if (log) {
@@ -1350,6 +1352,11 @@ export class SimController {
     if (g && g.what === 'the bottom' && g.t > h.groundT) {
       if (now - g.t < 2) this.sound.scrape(g.speed / 2);
       h.groundT = g.t;
+    }
+    // Glassfibre breaking or the rig coming down: a crunch, louder the worse it is.
+    if (g && g.t > h.crunchT && g.effects.some((x) => /cracked|holed|parted|broken|fell|torn|keel joint/.test(x))) {
+      if (now - g.t < 2) this.sound.crunch(g.what === 'the rig' ? 1 : Math.min(1, g.energy / 8000));
+      h.crunchT = g.t;
     }
   }
 
@@ -1462,6 +1469,16 @@ export class SimController {
   retire(): void {
     if (!this.race) return;
     this.race.session.retire('you');
+    this.publish(true);
+  }
+
+  /**
+   * The crew stuff the worst hole they can reach with a sail bag or a cushion (it takes them about 20 s and
+   * stops most of the flow): an input, so a replay repeats it (src/sim/boat/flooding.ts).
+   */
+  plugLeak(): void {
+    if (this.replay) return;
+    this.sim.setInput({ plug: (this.sim.input.plug ?? 0) + 1 });
     this.publish(true);
   }
 
@@ -1738,6 +1755,8 @@ export class SimController {
   private publish(force = false): void {
     if (!force && performance.now() - this.lastPublish < 100) return;
     this.lastPublish = performance.now();
+    // Sunk in a race: she retires (she cannot finish).
+    if (this.race && !this.replay && this.sim.damage.state === 'sunk' && !this.race.session.outOfRace('you')) this.race.session.retire('you');
     // Show the results once when the race is over.
     const over = !!this.race && (this.race.session.committee.finished || this.race.session.committee.abandoned);
     if (over && !this.resultsShown) {

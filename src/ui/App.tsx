@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { SimController } from '../app/controller';
 import { Instruments } from './Instruments';
+import { DamageBanner, DamageCard } from './DamageCard';
 import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
@@ -200,6 +201,7 @@ export function App({ ctl }: { ctl: SimController }) {
     <div className={`app${ui.showMinimap ? ' has-minimap' : ''}${!ui.replay && !controlsHidden ? ' console-on' : ''}`}>
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
+      <DamageBanner ctl={ctl} ui={ui} />
       {ui.graphicsLost && (
         <div className="banner error" role="alert" data-testid="graphics-lost">
           The browser reset the graphics. Restoring the picture… The simulation is paused and carries on when the picture is back.{' '}
@@ -209,6 +211,7 @@ export function App({ ctl }: { ctl: SimController }) {
       {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
       <div className="hud-left">
         <Instruments s={ui.snapshot} level={ui.level} />
+        <DamageCard ctl={ctl} ui={ui} />
         {ui.race && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
         {ui.race && <CoachCard ctl={ctl} ui={ui} />}
       </div>

@@ -402,6 +402,33 @@ export class SoundScape {
     s.stop(t + len + 0.05);
   }
 
+  /**
+   * Glassfibre breaking (a crack or a hole, the rig coming down): a sharp crackle of high noise over a heavy
+   * thud, the crackle longer the worse it is (E: for the ear).
+   */
+  crunch(severity: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.buses || !this.noise) return;
+    const sev = Math.min(1, Math.max(0, severity));
+    this.knock(0.6 + 0.4 * sev);
+    const t = ctx.currentTime;
+    const len = 0.25 + 0.6 * sev;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.setValueAtTime(1800, t);
+    f.frequency.exponentialRampToValueAtTime(700, t + len);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    // Crackle: the gain stutters as the laminate gives way.
+    for (let i = 0; i < 8; i++) g.gain.setValueAtTime((0.15 + 0.3 * sev) * (i % 2 ? 0.3 : 1), t + (len * i) / 8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    s.connect(f).connect(g).connect(this.buses.effects);
+    s.start(t, Math.random() * 1.5);
+    s.stop(t + len + 0.05);
+  }
+
   /** The page was hidden or shown again: hidden, the frames stop, so the sound pauses too. */
   setHidden(hidden: boolean): void {
     if (!this.ctx) return;

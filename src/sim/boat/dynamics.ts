@@ -2,6 +2,7 @@ import { clamp, smoothstep, wrapPi } from '../math/angles';
 import { interpTable } from '../math/interp';
 import { G } from '../units';
 import { rigFactor, rudderDamage, type Damage } from './damage';
+import { FLOOD, floodHeelMoment, wreckForces } from './flooding';
 import {
   apparentWind,
   bodyToWorld,
@@ -80,6 +81,8 @@ export interface ForceBreakdown {
   contact: ContactForce;
   /** Water in the cockpit (kg) the forces were computed with: it moves with the boat (derivatives). */
   water: number;
+  /** Water inside the hull from a breach (kg), counted the same way while she is still afloat. */
+  flood: number;
   /** Roll moments (N m, > 0 heels to starboard). `water`: the shipped water running to the low side. */
   roll: { sails: number; hydro: number; crew: number; righting: number; damping: number; ground: number; water: number; total: number };
   total: BodyForce;
@@ -130,6 +133,7 @@ export function newForceBreakdown(): ForceBreakdown {
     yawDamping: 0,
     contact: { ...NO_CONTACT, points: [] },
     water: 0,
+    flood: 0,
     roll: { sails: 0, hydro: 0, crew: 0, righting: 0, damping: 0, ground: 0, water: 0, total: 0 },
     total: { x: 0, y: 0, n: 0 },
   };
@@ -190,7 +194,7 @@ export function computeForces(
   const rd = rudderDamage(a.damage);
   const rudder = foilForce(p.rudder, s.u, rudderSway, a.rudder + rd.bias, s.phi, fluids.rhoWater, o.rudder, rudderGrip(p.rudder, s.phi) * rd.grip);
   const water = a.water;
-  // Water in the bilge (a leak) is extra weight: more resistance (its effect on stability is taken as nil, E).
+  // Water inside from a breach is extra weight: more resistance (its free surface and mass are added below).
   const bilge = a.damage?.bilge ?? 0;
   o.water = water;
   // Shipped water adds weight: more residuary resistance (and more displacement in the righting moment below).
@@ -213,6 +217,14 @@ export function computeForces(
   total.x = main.x + jib.x + windage.x + lateral.x + rudder.x + hull.x + contact.x;
   total.y = main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y + contact.y;
   total.n = main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping + contact.n;
+  // A fallen rig dragging in the water, and a drowned hull (src/sim/boat/flooding.ts).
+  const dmg = a.damage;
+  const wreck = dmg && (dmg.rigParts.down || dmg.state === 'awash' || dmg.state === 'sinking') ? wreckForces(dmg, s.u, s.v, s.r, fluids.rhoWater) : undefined;
+  if (wreck) {
+    total.x += wreck.x;
+    total.y += wreck.y;
+    total.n += wreck.n;
+  }
   // Roll about the waterline: sail-plane side forces act above it, keel and rudder forces below it.
   const r = o.roll;
   r.sails = main.yPlane * p.main.ceHeight + jib.yPlane * p.jib.ceHeight + windage.y * p.windageHeight;
@@ -224,6 +236,7 @@ export function computeForces(
   r.ground = contact.roll;
   r.water = 0;
   r.total = r.sails + r.hydro + r.crew + r.righting + r.damping + contact.roll;
+  if (wreck) r.total += wreck.roll;
   if (water > 0) {
     // The hull carries the extra displacement at the same righting arm; the water's weight acts at its own
     // centre, above the CG and run to leeward (free surface), so the net effect is a loss of stability.
@@ -231,6 +244,17 @@ export function computeForces(
     r.water = waterHeelMoment(p.cockpit, water, s.phi);
     r.righting += extra;
     r.total += extra + r.water;
+  }
+  // Water from a breach in the main hull: carried by the extra displacement at her righting arm; its weight low
+  // down but running to the low side (free surface). Awash, the sea carries it: nothing extra.
+  const afloat = !dmg || dmg.state === 'afloat' || dmg.state === 'low';
+  o.flood = afloat && bilge > 0 ? bilge : 0;
+  if (o.flood > 0 && dmg) {
+    const extra = -bilge * G * rightingArm(p, s.phi);
+    const free = floodHeelMoment(dmg, s.phi);
+    r.righting += extra;
+    r.water += free;
+    r.total += extra + free;
   }
   return o;
 }
@@ -247,15 +271,15 @@ export function derivatives(p: BoatParams, s: RigidState, f: ForceBreakdown, cur
   d.n = s.u * c - s.v * sn + current.n;
   d.e = s.u * sn + s.v * c + current.e;
   d.psi = s.r;
-  if (f.water > 0) {
+  if (f.water > 0 || f.flood > 0) {
     // Shipped water moves with the hull in surge, sway and yaw: spread over the cockpit floor, centred near
-    // the crew (crewX).
-    const w = f.water;
+    // the crew (crewX); water from a breach likewise, over the main hull.
+    const w = f.water + f.flood;
     const m11 = p.m11 + w;
     const m22 = p.m22 + w;
     d.u = (t.x + m22 * s.v * s.r) / m11;
     d.v = (t.y - m11 * s.u * s.r) / m22;
-    d.r = t.n / (p.i66 + w * (p.crewX * p.crewX + (p.cockpit.soleLength * p.cockpit.soleLength) / 12));
+    d.r = t.n / (p.i66 + f.water * (p.crewX * p.crewX + (p.cockpit.soleLength * p.cockpit.soleLength) / 12) + f.flood * (FLOOD.slabLength * FLOOD.slabLength) / 12);
   } else {
     d.u = (t.x + p.m22 * s.v * s.r) / p.m11;
     d.v = (t.y - p.m11 * s.u * s.r) / p.m22;
