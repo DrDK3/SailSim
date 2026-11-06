@@ -76,7 +76,10 @@ test('on-screen buttons, pause, help and scenario panel work', async ({ page }) 
   const tws = page.locator('.scenario .field', { hasText: 'True wind speed' }).locator('input[type="number"]');
   await tws.fill('15');
   await page.getByRole('button', { name: 'Apply and restart' }).click();
-  await expect(page.locator('footer.badge')).toContainText('wind 15 kn');
+  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
+  await expect(page.getByTestId('session-summary')).toContainText('wind 15 kn', { timeout: 30_000 });
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
   expect((await snap(page)).t).toBeLessThan(5);
 });
 
@@ -156,7 +159,10 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
   await expect(cond).toContainText('Met Office UKV (replay)');
   await expect(page.getByTestId('tide')).toContainText('m CD');
   await expect(cond).toContainText('Tidal stream (illustrative, not real timing)');
-  await expect(page.locator('footer.badge')).toContainText('Met Office UKV model wind (replay)');
+  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
+  await expect(page.getByTestId('session-summary')).toContainText('Met Office UKV model wind (replay)', { timeout: 30_000 });
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
   expect(errors).toEqual([]);
 });
 
@@ -195,7 +201,10 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   expect(state.dart).toEqual({ status: 'loaded', issues: [] });
   for (const n of ['terrain', 'buildings', 'pontoons', 'moorings', 'traffic', 'mark', 'club-ensign', 'berthed-vanes', 'walkers']) expect(state.names).toContain(n);
   await expect(page.getByTestId('minimap')).toBeVisible();
-  await expect(page.locator('footer.badge')).toContainText('River Dart (depths and stream provisional)');
+  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
+  await expect(page.getByTestId('session-summary')).toContainText('River Dart (depths and stream provisional)', { timeout: 30_000 });
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
   // Depth at the keel is shown, from the provisional depths mid-river.
   await expect(page.locator('.cell', { hasText: 'Depth' })).toContainText('m');
   // Every provisional layer is labelled in the Layers panel.
@@ -262,7 +271,10 @@ test('Phase 3: without the River Dart data the app falls back to open water and 
   await expect(page.getByTestId('stw')).toBeVisible();
   await dartLoaded(page);
   await expect(page.getByTestId('dart-warning')).toContainText('sailing on open water');
-  await expect(page.locator('footer.badge')).toContainText('open water');
+  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
+  await expect(page.getByTestId('session-summary')).toContainText('open water', { timeout: 30_000 });
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
   const t0 = (await snap(page)).t;
   await expect.poll(async () => (await snap(page)).t, { timeout: 20_000 }).toBeGreaterThan(t0);
 });

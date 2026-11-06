@@ -183,7 +183,6 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 
 .banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--panel-border); padding: 10px 16px; border-radius: var(--radius); font-weight: 600; }
 .banner.error { top: 80px; transform: translateX(-50%); color: var(--bad); max-width: 560px; }
-.badge { position: absolute; bottom: 8px; right: 12px; left: 12px; text-align: center; font-size: 12px; color: rgba(238, 243, 246, 0.75); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); pointer-events: none; }
 
 @media (max-width: 900px) {
   .instruments { width: calc(100% - 24px); }
@@ -429,7 +428,6 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
   .sail-row { flex-wrap: wrap; }
   .sail-row .status { flex-basis: 100%; width: auto; order: 10; }
   .status .detail { display: none; }
-  .badge { display: none; }
   .side { left: 8px; right: 8px; }
   .race { bottom: 236px; }
 }
@@ -493,11 +491,6 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .banner.paused-pill { top: 76px; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--panel-strong); }
 /* Information only: clicks pass through to whatever is under it. */
 .banner.slow-pill { pointer-events: none; font-weight: 500; }
-.badge {
-  left: 12px; right: auto; max-width: min(60%, 760px); text-align: left; bottom: 6px; font-size: 12px; color: rgba(238, 243, 246, 0.6);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto;
-}
-.badge:hover { color: rgba(238, 243, 246, 0.95); }
 .minimap { bottom: 30px; }
 .minimap canvas { max-width: 200px; height: auto; }
 
@@ -808,33 +801,35 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .panel.dock .tiller-view .tiller-short { font-size: 12px; }
 }
 
-/* The helm console (owner review, 5 Nov 2026, third): four instrument modules, each two fixed rows; nothing in it
-   wraps and every readout has a fixed width, so the console keeps its size whatever the rudder and the sails do.
-   Translucent glass over the water; the modules a shade lighter; uppercase labels as on a boat's instruments.
-   Targets at least 24 px (28 px here), text at least 12 px. */
+/* The helm console (owner review, 5-6 Nov 2026: "too much white space … the height takes too much of the screen …
+   interferes with the view of the Squib"): four instrument modules in one slim band along the bottom edge, 75 px
+   tall, each module two fixed rows; nothing in it wraps and every readout has a fixed width, so the console keeps
+   its size whatever the rudder and the sails do. It stays below the boat in the chase and top-down views (the boat
+   is drawn about mid-screen). Translucent glass over the water; the modules a shade lighter; uppercase labels as on
+   a boat's instruments. Targets at least 24 px (26 px here), text at least 12 px. */
 .panel.dock.console {
   display: grid; grid-template-columns: repeat(4, auto); grid-auto-flow: row; align-items: stretch; gap: 6px;
-  width: fit-content; max-width: none; padding: 6px 34px 6px 6px; bottom: 24px; flex-wrap: nowrap;
+  width: fit-content; max-width: none; padding: 4px; flex-wrap: nowrap;
   background: rgba(8, 20, 30, 0.55); backdrop-filter: blur(12px) saturate(1.15); -webkit-backdrop-filter: blur(12px) saturate(1.15);
-  border: 1px solid rgba(178, 205, 226, 0.14); border-radius: 14px; font-size: 13px; color: var(--text);
+  border: 1px solid rgba(178, 205, 226, 0.14); border-radius: 12px; font-size: 13px; color: var(--text);
 }
 .panel.dock.console .mod {
-  display: grid; grid-template-rows: 28px 28px; row-gap: 4px; padding: 5px 7px; min-width: 0;
-  border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07);
+  display: grid; grid-template-rows: 26px 26px; row-gap: 3px; padding: 4px 7px; min-width: 0;
+  border-radius: 9px; background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07);
 }
-.panel.dock.console .sail-mod { width: 270px; }
-.panel.dock.console .helm-mod { width: 190px; }
-.panel.dock.console .boat-mod { width: 230px; }
+.panel.dock.console .sail-mod { width: 250px; }
+.panel.dock.console .helm-mod { width: 180px; }
+.panel.dock.console .boat-mod { width: 232px; }
 .panel.dock.console .mod-top, .panel.dock.console .mod-row { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; flex-wrap: nowrap; }
 .panel.dock.console .mod-label {
   flex: 0 0 36px; font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
 }
-.panel.dock.console button { min-height: 28px; height: 28px; padding: 0 8px; font-size: 13px; white-space: nowrap; }
+.panel.dock.console button { min-height: 26px; height: 26px; padding: 0 8px; font-size: 13px; white-space: nowrap; }
 .panel.dock.console .hold { min-width: 0; flex: 0 0 auto; gap: 4px; padding: 0 7px; }
 .panel.dock.console .key-hint { font-size: 12px; padding: 0 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); color: var(--text); }
 /* The sail's state: a pill with a coloured dot, the word in full; the advice is its tooltip and read out. */
 .panel.dock.console .status {
-  flex: 1 1 auto; width: auto; min-width: 0; height: 24px; display: inline-flex; align-items: center; gap: 6px;
+  flex: 1 1 auto; width: auto; min-width: 0; height: 22px; display: inline-flex; align-items: center; gap: 6px;
   padding: 0 9px; border-radius: 99px; font-size: 12.5px; line-height: 1; white-space: nowrap; overflow: visible;
   background: rgba(255, 255, 255, 0.06); color: var(--text);
 }
@@ -845,7 +840,7 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 .panel.dock.console .toggle { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; min-height: 24px; font-size: 12.5px; color: var(--text); white-space: nowrap; }
 /* The sheet's meter: how far it is eased, the figure in the middle. */
 .panel.dock.console .sheet-meter {
-  position: relative; flex: 1 1 auto; min-width: 0; height: 28px; border-radius: 7px; overflow: hidden;
+  position: relative; flex: 1 1 auto; min-width: 0; height: 26px; border-radius: 7px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text); font-size: 13px;
 }
@@ -858,52 +853,60 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 @keyframes console-glow { 50% { box-shadow: inset 0 0 0 2px transparent, 0 0 2px transparent; } }
 /* The helm: the rudder and tiller from above, and where the bow is turning. */
 .panel.dock.console .rudder-dial {
-  position: relative; flex: 1 1 auto; min-width: 0; height: 28px; display: flex; align-items: center; justify-content: center;
+  position: relative; flex: 1 1 auto; min-width: 0; height: 26px; display: flex; align-items: center; justify-content: center;
   border-radius: 7px; background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.12); overflow: visible;
 }
-.panel.dock.console .rudder-dial .tiller-svg { width: 40px; height: 26px; }
+.panel.dock.console .rudder-dial .tiller-svg { width: 40px; height: 24px; }
 .panel.dock.console .helm-readout { flex: 1 1 auto; min-width: 0; text-align: center; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
 .panel.dock.console .helm-mod .mod-row > button:last-child { flex: 0 0 auto; }
 /* The boat: release, and steppers that move in the keys' 25% steps. */
 .panel.dock.console .stepper { gap: 5px; }
 .panel.dock.console .stepper-value { display: inline-block; min-width: 3.1em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
-.panel.dock.console + .controls-show, .controls-hide { z-index: 1; }
-/* Not room for the four side by side beside the minimap (the console is 1020 px wide, the minimap and its margins
-   228 px): the sails above, the helm and the boat below. Without the minimap the four fit from 1050 px. */
-@media (max-width: 1249px) {
+/* Put the console away: a tab above its right-hand corner, so it takes no width from the modules. */
+.panel.dock.console .controls-hide {
+  top: -25px; right: 14px; width: 36px; min-height: 24px; height: 24px; border-radius: 8px 8px 0 0;
+  background: rgba(8, 20, 30, 0.55); border: 1px solid rgba(178, 205, 226, 0.14); border-bottom: 0; z-index: 1;
+}
+.panel.dock.console + .controls-show { z-index: 1; }
+/* Narrower windows (under 990 px): the same band, without the key letters (the buttons' names and tooltips still
+   give the keys) and with "Auto" for "Auto-trim". */
+@media (max-width: 989px) {
+  .panel.dock.console .key-hint, .panel.dock.console .label-more { display: none; }
+  .panel.dock.console .sail-mod { width: 210px; }
+  .panel.dock.console .helm-mod { width: 150px; }
+  .panel.dock.console .boat-mod { width: 196px; }
+  .panel.dock.console button, .panel.dock.console .hold { padding: 0 7px; }
+}
+/* Not room for the band (a tablet held upright): the sails above, the helm and the boat below. */
+@media (max-width: 819px) {
   .panel.dock.console { grid-template-columns: repeat(2, auto); }
   .panel.dock.console .helm-mod, .panel.dock.console .boat-mod { width: auto; }
 }
-@media (min-width: 1050px) and (max-width: 1249px) {
-  .app:not(.has-minimap) .panel.dock.console { grid-template-columns: repeat(4, auto); }
-  .app:not(.has-minimap) .panel.dock.console .helm-mod { width: 190px; }
-  .app:not(.has-minimap) .panel.dock.console .boat-mod { width: 230px; }
-}
-/* A phone: the sails one above the other across the width, the helm and the boat side by side under them. No key
-   letters (a phone has no keyboard; the buttons' labels still name the keys), and the hide button a tab above the
-   console's corner, so the helm and the boat fit side by side on a 360 px screen. */
+/* A phone: the sails one above the other across the width, the helm and the boat side by side under them. */
 @media (max-width: 700px) {
-  .panel.dock.console { grid-template-columns: minmax(130px, 1fr) minmax(190px, 1fr); width: auto; left: 8px; right: 8px; padding: 5px; gap: 5px; }
+  .panel.dock.console { grid-template-columns: minmax(130px, 1fr) minmax(190px, 1fr); width: auto; left: 8px; right: 8px; gap: 5px; }
   .panel.dock.console .sail-mod { grid-column: 1 / -1; width: auto; }
   .panel.dock.console .helm-mod, .panel.dock.console .boat-mod { width: auto; }
   .panel.dock.console .mod { padding: 4px 6px; }
   .panel.dock.console .boat-mod .mod-row { gap: 4px; }
-  .panel.dock.console button { padding: 0 6px; }
-  .panel.dock.console .key-hint { display: none; }
-  .panel.dock.console .controls-hide {
-    top: -25px; right: 10px; width: 36px; min-height: 24px; height: 24px; border-radius: 8px 8px 0 0;
-    background: rgba(8, 20, 30, 0.55); border: 1px solid rgba(178, 205, 226, 0.14); border-bottom: 0;
-  }
+  .panel.dock.console button, .panel.dock.console .hold { padding: 0 6px; }
+  .panel.dock.console .controls-hide { right: 10px; }
 }
 
-/* The console's height is fixed at each width (two rows of 28 px in every module), so the instruments column is
+/* The console's height is fixed at each width (two rows of 26 px in every module), so the instruments column is
    capped above it here: the two never overlap, even before App.tsx has measured the screen after a resize (in
    software rendering the first frames of a race can take longer than that). App.tsx's measurement (--hud-js) can
    only lower the cap. */
-.app { --console-h: 164px; --console-bottom: 24px; --hud-top: 12px; }
-@media (min-width: 1250px) { .app { --console-h: 86px; } }
-@media (min-width: 1050px) and (max-width: 1249px) { .app:not(.has-minimap) { --console-h: 86px; } }
-@media (max-width: 700px) { .app { --console-h: 232px; --console-bottom: 8px; --hud-top: 8px; } }
+.app { --console-h: 75px; --console-bottom: 10px; --hud-top: 12px; }
+@media (max-width: 819px) { .app { --console-h: 145px; } }
+@media (max-width: 700px) { .app { --console-h: 215px; --console-bottom: 8px; --hud-top: 8px; } }
 .panel.dock.console { height: var(--console-h); bottom: var(--console-bottom); }
 .app .hud-left { max-height: var(--hud-js, calc(100% - 170px)); }
 .app.console-on .hud-left { max-height: min(var(--hud-js, 100%), calc(100% - var(--hud-top) - var(--console-h) - var(--console-bottom) - 8px)); }
+/* The minimap beside the band where both fit (from 1180 px: the band is 940 px, the minimap and its margins 228 px);
+   in narrower windows the band has the bottom edge to itself and the minimap stands above its right-hand end. */
+.app .minimap { bottom: var(--console-bottom); }
+@media (max-width: 1179px) {
+  .app.console-on.has-minimap .panel.dock.console { right: 12px; }
+  .app.console-on .minimap { bottom: calc(var(--console-bottom) + var(--console-h) + 34px); }
+}

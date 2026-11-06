@@ -136,7 +136,10 @@ test('live data: a current forecast is offered as live; choosing it follows the 
   await expect(panel.getByTestId('weather-freshness')).toContainText('Forecast covers now');
   await expect(panel.getByRole('combobox', { name: 'Sky' })).toHaveValue('data');
   await panel.getByRole('button', { name: 'Apply and restart' }).click();
-  await expect(page.locator('footer.badge')).toContainText('Met Office UKV');
+  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
+  await expect(page.getByTestId('session-summary')).toContainText('Met Office UKV', { timeout: 30_000 });
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
   const sky = await page.evaluate(() => (window.__squib!.controller.sim.env.describe?.(0, 0, 0) as { sky?: { kind: string } }).sky);
   expect(sky?.kind).toBe('model');
   expect(errors).toEqual([]);

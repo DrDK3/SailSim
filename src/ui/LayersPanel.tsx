@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { useModal } from './useModal';
+import { sessionSummary } from './sessionSummary';
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   data: { label: 'Data', cls: 'good' },
@@ -26,6 +27,7 @@ export function LayersPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiSt
           <h3>River Dart: layers, provisional elements and sources</h3>
           <button onClick={onClose}>Close</button>
         </div>
+        <p className="fine" data-testid="session-summary">This session: {sessionSummary(ui)}</p>
         {ui.dart.issues.length > 0 && (
           <>
             <h4>Load problems</h4>

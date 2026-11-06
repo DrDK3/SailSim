@@ -111,7 +111,10 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   const more = page.getByRole('button', { name: 'All instruments and conditions' });
   if (await more.isVisible()) await more.click();
   await expect(page.getByTestId('sky')).toContainText(/fog/i);
-  await expect(page.locator('footer')).toContainText('fog');
+  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
+  await expect(page.getByTestId('session-summary')).toContainText('fog', { timeout: 30_000 });
+  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
 
   await lib.getByRole('textbox', { name: 'Scenario title' }).fill('Foggy test');
   await lib.getByRole('button', { name: 'Save current' }).click();
