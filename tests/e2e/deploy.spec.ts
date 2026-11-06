@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectSessionSummary } from './helpers/sessionSummary';
 import { readFileSync } from 'node:fs';
 
 /** CI runners draw the scene in software, several times slower (playwright.config.ts). */
@@ -136,10 +137,7 @@ test('live data: a current forecast is offered as live; choosing it follows the 
   await expect(panel.getByTestId('weather-freshness')).toContainText('Forecast covers now');
   await expect(panel.getByRole('combobox', { name: 'Sky' })).toHaveValue('data');
   await panel.getByRole('button', { name: 'Apply and restart' }).click();
-  // The session's summary, in Layers and sources (it was the line along the bottom of the screen).
-  await page.evaluate(() => window.__squib!.controller.toggleLayers(true));
-  await expect(page.getByTestId('session-summary')).toContainText('Met Office UKV', { timeout: 30_000 });
-  await page.evaluate(() => window.__squib!.controller.toggleLayers(false));
+  await expectSessionSummary(page, 'Met Office UKV');
   const sky = await page.evaluate(() => (window.__squib!.controller.sim.env.describe?.(0, 0, 0) as { sky?: { kind: string } }).sky);
   expect(sky?.kind).toBe('model');
   expect(errors).toEqual([]);
