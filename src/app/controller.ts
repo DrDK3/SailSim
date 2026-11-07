@@ -4,6 +4,8 @@ import { ocsGuide, type OcsGuide } from './ocsGuide';
 import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
 import { quayPiers } from '../sim/env/quays';
+import type { PierInput } from '../sim/race/piers';
+import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
 import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
@@ -407,7 +409,7 @@ export class SimController {
           conditions: scenario.conditions,
           env: built.env,
           geo,
-          features: this.dartData?.features ? { ...this.dartData.features, piers: [...this.dartData.features.piers, ...quayPiers(this.dartData.quays ?? [])] } : undefined,
+          features: this.dartData?.features ? { ...this.dartData.features, piers: [...this.dartData.features.piers, ...this.solidWalls()] } : undefined,
           course,
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
@@ -418,7 +420,7 @@ export class SimController {
             params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             // Either way in clear water (not on the mud of a river bank).
-            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(feats, geo), ...quayPiers(this.dartData?.quays ?? [])]) : undefined),
+            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(feats, geo), ...this.solidWalls()]) : undefined),
           },
           committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
           traffic,
@@ -445,7 +447,7 @@ export class SimController {
       const fleet = new Fleet(built.env);
       fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
       const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a, swingDeg: mooringSwingDeg(m.h) })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...quayPiers(this.dartData?.quays ?? [])] });
+      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a, swingDeg: mooringSwingDeg(m.h) })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...this.solidWalls()] });
       this.soloFleet = fleet;
     }
     if (race) this.soloFleet = undefined;
@@ -494,6 +496,15 @@ export class SimController {
     this.lastRecordT = -Infinity;
     this.publish(true);
     return true;
+  }
+
+  /**
+   * The walls standing in the water, solid to the boats: the towns' quays and the yacht club's frontage sea wall
+   * (each drawn as a vertical stone face; owner, 6 Nov 2026: the Squib going through solid objects).
+   */
+  private solidWalls(): PierInput[] {
+    if (!this.dartData?.geo) return [];
+    return [...quayPiers(this.dartData.quays ?? []), ...quayPiers([{ line: [...RDYC_FRONTAGE] }], "the yacht club's sea wall")];
   }
 
   /** Validation context: with the River Dart data when it is loaded (land, depth, restrictions). */

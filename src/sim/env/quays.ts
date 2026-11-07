@@ -261,6 +261,6 @@ export function fillBehindQuays(t: TownGrid, walls: readonly QuayWall[]): Float3
 }
 
 /** The walls as fixed obstacles for the fleet (src/sim/race/piers.ts): a wall 1.2 m thick along each face. */
-export function quayPiers(walls: readonly QuayWall[]): { name: string; floating: false; line: [number, number][]; width: number }[] {
-  return walls.map((w) => ({ name: 'quay wall', floating: false as const, line: offsetLine(w.line, 0.6), width: 1.2 }));
+export function quayPiers(walls: readonly Pick<QuayWall, 'line'>[], name = 'quay wall'): { name: string; floating: false; line: [number, number][]; width: number }[] {
+  return walls.map((w) => ({ name, floating: false as const, line: offsetLine(w.line, 0.6), width: 1.2 }));
 }

@@ -13,9 +13,10 @@ import { quickRaceScenario, DEFAULT_QUICK_RACE } from '../../src/app/quickRace';
 import { DEFAULT_SCENARIO } from '../../src/app/controller';
 import { validateCourse, DART_LEVELS } from '../../src/sim/course/validate';
 import { DART_PROJECTION } from '../../src/sim/geo/projection';
-import { loadDartGeo } from './helpers';
+import { loadDartApp } from './helpers';
 
-const geo = loadDartGeo();
+// The ground as the app has it: over the towns, the rocks and quays the picture draws.
+const geo = loadDartApp().geo;
 const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8'));
 const draft = squibParams().draft;
 // Water levels (m ODN): chart datum (lower than any ordinary low water), mid-tide, and +2.3 m (about MHWS): the

@@ -3,8 +3,8 @@ import { withClubMarks, type FeatureMark } from '../sim/course/clubMarks';
 import { DartGeo, type DartManifest } from '../sim/geo/dart';
 import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
 import type { RoadsData } from '../render/population';
-import { rdycPlatformAt } from '../render/rdyc';
-import { quayWalls, type QuayWall, type TownGrid } from '../sim/env/quays';
+import { rdycForeshore, rdycPlatformAt } from '../render/rdyc';
+import { fillBehindQuays, quayWalls, type QuayWall, type TownGrid } from '../sim/env/quays';
 
 /** public/geo/features.json (written by tools/geodata/build.py); local metres, rounded to 0.1 m. */
 export interface DartFeatures {
@@ -188,8 +188,60 @@ export async function loadDartData(base = BASE): Promise<DartData> {
   if (roads.status === 'fulfilled') out.roads = roads.value;
   else if (m.roads) issue(m.roads.file, roads.reason, 'No roads, cars or people.');
   if (out.town && out.features) out.quays = townQuays(out.town, out.features);
+  // The picture and the physics stand on the same ground: the LIDAR's river surface out of the towns' grid, and the
+  // physics' bed raised to the rocks, banks and quays the picture draws there.
+  if (out.town && out.geo) {
+    out.town = { ...out.town, values: townWithoutWater(out.town, out.geo) };
+    out.geo.setFinerGround(physicsGround(out.town, out.quays ?? []));
+  }
   out.minimapUrl = base + m.minimap.file;
   return out;
+}
+
+/**
+ * Below this (m ODN) the towns' 4 m LIDAR grid may be the river's surface on the day of the survey (−2.6 to −0.4 m
+ * ODN: the flights met different tides), not ground.
+ */
+export const TOWN_WATER_MAX_ODN = 0;
+
+/**
+ * The towns' ground without the river's surface: where the LIDAR is at or below TOWN_WATER_MAX_ODN and the 8 m grid
+ * (which carries the bathymetry) is more than a metre deeper, the 8 m grid's bed. Otherwise the LIDAR stands: the
+ * land, and the foreshore the 8 m grid already takes from it. Near the Higher Ferry the survey met the water at
+ * −0.4 m ODN over 5 m of river, which the picture drew as a dry flat at low tide.
+ */
+export function townWithoutWater(town: TownGrid, geo: { bedElevation(n: number, e: number): number }): Float32Array {
+  const t = town.spec;
+  const out = Float32Array.from(town.values);
+  for (let j = 0; j < t.ny; j++) {
+    for (let i = 0; i < t.nx; i++) {
+      const k = j * t.nx + i;
+      const v = out[k]!;
+      if (v > TOWN_WATER_MAX_ODN) continue;
+      const bed = geo.bedElevation(t.n0 + (j + 0.5) * t.cell, t.e0 + (i + 0.5) * t.cell);
+      if (bed < v - 1) out[k] = bed;
+    }
+  }
+  return out;
+}
+
+/**
+ * The ground the picture draws over the towns, for the physics (src/sim/geo/dart.ts `setFinerGround`): the town
+ * grid with the quays filled behind their walls, the yacht club's terrace on its sea wall, and the bed it draws
+ * lowered in front of that wall (src/render/dart.ts draws the same).
+ */
+export function physicsGround(town: TownGrid, quays: readonly QuayWall[]): TownGrid['spec'] & { values: Float32Array } {
+  const t = town.spec;
+  const values = quays.length ? fillBehindQuays(town, quays) : Float32Array.from(town.values);
+  for (let j = 0; j < t.ny; j++) {
+    for (let i = 0; i < t.nx; i++) {
+      const e = t.e0 + (i + 0.5) * t.cell;
+      const n = t.n0 + (j + 0.5) * t.cell;
+      const k = j * t.nx + i;
+      values[k] = rdycPlatformAt(e, n) ?? rdycForeshore(e, n, values[k]!);
+    }
+  }
+  return { ...t, values };
 }
 
 /**

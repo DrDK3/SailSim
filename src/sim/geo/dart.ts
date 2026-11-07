@@ -47,12 +47,49 @@ export class DartGeo implements Seabed {
     this.cdBelowOdn = m.verticalDatum.chartDatumBelowOdn;
   }
 
+  /**
+   * The towns' finer ground as the picture draws it (4 m, quays filled; src/app/geoLoader.ts `physicsGround`).
+   * Where it stands above the 8 m grid it is the ground: a boat meets the rocks and quays the picture shows instead
+   * of sailing on into them (owner, 6 Nov 2026: the Squib going through solid objects). Absent in tests that load
+   * the 8 m grid alone.
+   */
+  private fine?: Grid;
+
+  /** Use the towns' finer ground (or none) wherever it is above the 8 m grid. */
+  setFinerGround(g: Grid | undefined): void {
+    this.fine = g;
+  }
+
+  /** The finer ground at (n, e) (bilinear between cell centres), or -Infinity outside it. */
+  private fineAt(n: number, e: number): number {
+    const g = this.fine!;
+    const x = (e - g.e0) / g.cell - 0.5;
+    const y = (n - g.n0) / g.cell - 0.5;
+    if (!(x >= 0 && y >= 0 && x < g.nx - 1 && y < g.ny - 1)) return -Infinity;
+    const i = Math.floor(x);
+    const j = Math.floor(y);
+    const fx = x - i;
+    const fy = y - j;
+    const v = g.values;
+    const k = j * g.nx + i;
+    return (v[k]! * (1 - fx) + v[k + 1]! * fx) * (1 - fy) + (v[k + g.nx]! * (1 - fx) + v[k + g.nx + 1]! * fx) * fy;
+  }
+
   bedElevation(n: number, e: number): number {
-    return sampleGrid(this.elevation, n, e);
+    const b = sampleGrid(this.elevation, n, e);
+    if (!this.fine) return b;
+    const f = this.fineAt(n, e);
+    return f > b ? f : b;
   }
 
   bedGradient(n: number, e: number): { n: number; e: number } {
-    return gridGradient(this.elevation, n, e);
+    if (!this.fine || this.fineAt(n, e) === -Infinity) return gridGradient(this.elevation, n, e);
+    // The ground as used (the higher of the two grids), by central differences over ±1 m.
+    const h = 1;
+    return {
+      n: (this.bedElevation(n + h, e) - this.bedElevation(n - h, e)) / (2 * h),
+      e: (this.bedElevation(n, e + h) - this.bedElevation(n, e - h)) / (2 * h),
+    };
   }
 
   /** Ebb-direction stream patterns (unit mean speed across the entrance). */

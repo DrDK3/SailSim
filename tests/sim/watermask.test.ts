@@ -1,46 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { inflateSync } from 'node:zlib';
-import { loadDartGeo } from './helpers';
+import { loadDartGeo, readGreyPng } from './helpers';
 
 /** The picture's water mask (public/geo/watermask.png): where the water surface may be drawn. */
-
-/** Decode an 8-bit greyscale, non-interlaced PNG (what the pipeline writes). */
-function readGreyPng(buf: Buffer): { w: number; h: number; px: Uint8Array } {
-  let off = 8;
-  let w = 0;
-  let h = 0;
-  const idat: Buffer[] = [];
-  while (off < buf.length) {
-    const len = buf.readUInt32BE(off);
-    const type = buf.toString('ascii', off + 4, off + 8);
-    const data = buf.subarray(off + 8, off + 8 + len);
-    if (type === 'IHDR') {
-      w = data.readUInt32BE(0);
-      h = data.readUInt32BE(4);
-      if (data[8] !== 8 || data[9] !== 0 || data[12] !== 0) throw new Error('not an 8-bit greyscale non-interlaced PNG');
-    } else if (type === 'IDAT') idat.push(data);
-    off += 12 + len;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const px = new Uint8Array(w * h);
-  for (let y = 0; y < h; y++) {
-    const f = raw[y * (w + 1)]!;
-    for (let x = 0; x < w; x++) {
-      const v = raw[y * (w + 1) + 1 + x]!;
-      const a = x > 0 ? px[y * w + x - 1]! : 0;
-      const b = y > 0 ? px[(y - 1) * w + x]! : 0;
-      const c = x > 0 && y > 0 ? px[(y - 1) * w + x - 1]! : 0;
-      const p = a + b - c;
-      const pa = Math.abs(p - a);
-      const pb = Math.abs(p - b);
-      const pc = Math.abs(p - c);
-      const paeth = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-      px[y * w + x] = (v + [0, a, b, (a + b) >> 1, paeth][f]!) & 0xff;
-    }
-  }
-  return { w, h, px };
-}
 
 describe('the water mask', () => {
   const m = JSON.parse(readFileSync(new URL('../../public/geo/manifest.json', import.meta.url), 'utf8')) as { waterMask: { file: string; cell: number; nx: number; ny: number; e0: number; n0: number } };

@@ -16,11 +16,13 @@ import {
   squibParams,
   type ConditionsSettings,
 } from '../../src/sim/index';
-import { loadDartGeo, toKn } from './helpers';
+import { loadDartApp, loadDartGeo, toKn } from './helpers';
 import { readGrid } from '../../tools/lib/dartGeoNode';
 
 const LONG = 120_000;
 const geo = loadDartGeo();
+/** The ground the app sails on: over the towns, the rocks, banks and quays the picture draws (src/app/geoLoader.ts). */
+const appGeo = loadDartApp().geo;
 const features = JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as {
   landmarks: { name: string; lat: number; lon: number; e: number; n: number }[];
   marks: { name: string; e: number; n: number }[];
@@ -35,7 +37,7 @@ const reference = JSON.parse(readFileSync(new URL('../fixtures/reference-landmar
 const OFF_RDYC = { n: 0, e: -150 };
 const tideAt = (hwTime: string): ConditionsSettings['tide'] => ({ mode: 'manual', hwTime, hwHeightM: 4.8, lwHeightM: 0.6 });
 
-function dartSim(o: { n: number; e: number; headingDeg: number; speedKn?: number; twsKn?: number; twdDeg?: number; tide?: ConditionsSettings['tide']; startTime?: string; current?: ConditionsSettings['current'] }) {
+function dartSim(o: { n: number; e: number; headingDeg: number; speedKn?: number; twsKn?: number; twdDeg?: number; tide?: ConditionsSettings['tide']; startTime?: string; current?: ConditionsSettings['current'] }, ground = geo) {
   const built = buildConditions(
     {
       startTime: o.startTime ?? '2026-07-15T12:00:00Z',
@@ -44,12 +46,12 @@ function dartSim(o: { n: number; e: number; headingDeg: number; speedKn?: number
       current: o.current ?? { mode: 'none' },
       tide: o.tide,
     },
-    geo,
+    ground,
   );
   return new Simulation({
     params: squibParams(),
     env: built.env,
-    seabed: geo,
+    seabed: ground,
     initial: { n: o.n, e: o.e, headingDeg: o.headingDeg, speedKn: o.speedKn ?? 4 },
     input: { autoMain: true, autoJib: true },
   });
@@ -116,22 +118,29 @@ describe('Phase 3 acceptance: the boat cannot sail through land', () => {
       expect(start.depth).toBeGreaterThan(3);
       const bearing = (sim: Simulation) => Math.atan2(lm.e - sim.state.e, lm.n - sim.state.n);
       const hdg = (Math.atan2(lm.e - start.e, lm.n - start.n) / DEG + 360) % 360;
-      const sim = dartSim({ n: start.n, e: start.e, headingDeg: hdg, speedKn: 5, twsKn: 12, twdDeg: (hdg + 180) % 360, tide: tideAt('2026-07-15T12:00:00Z') });
+      const sim = dartSim({ n: start.n, e: start.e, headingDeg: hdg, speedKn: 5, twsKn: 12, twdDeg: (hdg + 180) % 360, tide: tideAt('2026-07-15T12:00:00Z') }, appGeo);
       sim.controller = (x) => ({ helm: autopilotHelm(x, { mode: 'heading', target: bearing(x) }) });
       let maxBedAboveWater = -Infinity;
       let groundedAt = -1;
+      let where = { n: 0, e: 0 };
       for (let i = 0; i < 30000; i++) {
         sim.stepOnce();
-        maxBedAboveWater = Math.max(maxBedAboveWater, geo.bedElevation(sim.state.n, sim.state.e) - sim.waterLevel());
-        if (groundedAt < 0 && sim.snapshot(false).grounded) groundedAt = sim.time;
+        maxBedAboveWater = Math.max(maxBedAboveWater, appGeo.bedElevation(sim.state.n, sim.state.e) - sim.waterLevel());
+        if (groundedAt < 0 && sim.snapshot(false).grounded) {
+          groundedAt = sim.time;
+          where = { n: sim.state.n, e: sim.state.e };
+        }
         if (groundedAt > 0 && sim.time > groundedAt + 30) break;
       }
       const s = sim.snapshot(false);
       const left = Math.hypot(lm.n - s.n, lm.e - s.e);
-      console.log(`[phase 3] at ${name}: grounded after ${groundedAt.toFixed(1)} s, ${left.toFixed(0)} m short of the landmark, SOG ${toKn(s.sog).toFixed(2)} kn, depth at keel ${s.depthAtKeel.toFixed(2)} m`);
+      const moved = Math.hypot(s.n - where.n, s.e - where.e);
+      console.log(`[phase 3] at ${name}: grounded after ${groundedAt.toFixed(1)} s, ${left.toFixed(0)} m short of the landmark, then ${moved.toFixed(1)} m in 30 s (SOG ${toKn(s.sog).toFixed(2)} kn), depth at keel ${s.depthAtKeel.toFixed(2)} m`);
       expect(groundedAt).toBeGreaterThan(0);
       expect(s.grounded).toBe(true);
-      expect(toKn(s.sog)).toBeLessThan(0.5);
+      // She stays where she hit the shore: on a steep bank she may grind a few metres along it, pivoting on her
+      // keel with the wind on her side, but no further.
+      expect(moved).toBeLessThan(10);
       // The hull centre never reached ground above the water.
       expect(maxBedAboveWater).toBeLessThan(0);
     }, LONG);
@@ -139,7 +148,7 @@ describe('Phase 3 acceptance: the boat cannot sail through land', () => {
 
   it('sailing straight at a bank: stops within seconds of touching, with the keel in about its own draft of water', () => {
     // Towards the Kingswear shore just north of RDYC (the bank is about 140 m east).
-    const sim = dartSim({ n: 60, e: -150, headingDeg: 90, speedKn: 5, twsKn: 12, twdDeg: 0, tide: tideAt('2026-07-15T12:00:00Z') });
+    const sim = dartSim({ n: 60, e: -150, headingDeg: 90, speedKn: 5, twsKn: 12, twdDeg: 0, tide: tideAt('2026-07-15T12:00:00Z') }, appGeo);
     sim.controller = (s) => ({ helm: autopilotHelm(s, { mode: 'heading', target: 90 * DEG }) });
     let touch = -1;
     for (let i = 0; i < 9000 && touch < 0; i++) {
