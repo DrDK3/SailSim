@@ -83,6 +83,26 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
     });
   };
 
+  /** Race a ghost: the recording sailed again to learn its path, then the same scenario from the start, with it beside you. */
+  const raceGhost = (json: unknown, what: string) => {
+    ctl.leaveTo('Racing a ghost', () => {
+      if (ctl.startGhost(json)) {
+        setMessage(`Racing the ghost of ${what}: it is learning the course first.`);
+        onClose();
+      } else setMessage(`Cannot race it: ${ctl.getState().scenarioError ?? 'invalid replay'}`);
+    });
+  };
+  const openGhost = async (file: File) => {
+    let json: unknown;
+    try {
+      json = JSON.parse(await file.text());
+    } catch {
+      setMessage('Not a replay: the file is not JSON.');
+      return;
+    }
+    raceGhost(json, file.name.replace(/\.replay\.json$|\.json$/, ''));
+  };
+
   const row = (s: LibraryScenario) => (
     <li key={s.id} className="lib-row">
       <div className="lib-text">
@@ -144,6 +164,20 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
         <label className="file-btn">
           Open replay…
           <input type="file" accept=".json,application/json" aria-label="Open replay file" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openReplay(f); e.target.value = ''; }} />
+        </label>
+      </div>
+      <h4>Race a ghost</h4>
+      <p className="fine">
+        Sail the same scenario again with an earlier run beside you as a see-through ghost: this run so far, or any replay file. The ghost is only a
+        picture of the recording (no contact, no wind shadow, not in the results).
+      </p>
+      <div className="row left wrap">
+        <button onClick={() => raceGhost(ctl.saveRecording(replayTitle.trim() || 'your run'), 'this run')} disabled={ui.snapshot.t < 10} data-testid="ghost-this-run">
+          Race this run as a ghost
+        </button>
+        <label className="file-btn">
+          Race a ghost from a replay file…
+          <input type="file" accept=".json,application/json" aria-label="Race a ghost from a replay file" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openGhost(f); e.target.value = ''; }} />
         </label>
       </div>
       {message && <p className="fine" role="status" data-testid="library-message">{message}</p>}

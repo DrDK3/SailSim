@@ -48,6 +48,26 @@ interface Entry {
 }
 
 const RIDE_SCRATCH: WaveRide = { heave: 0, pitch: 0, roll: 0 };
+
+/** See-through (a ghost: only a picture of an earlier run): its own copies of the materials, no shadows. */
+export const GHOST_OPACITY = 0.35;
+function makeGhost(group: THREE.Object3D): void {
+  group.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.castShadow = false;
+    m.receiveShadow = false;
+    const one = (x: THREE.Material) => {
+      const c = x.clone();
+      c.transparent = true;
+      c.opacity = GHOST_OPACITY * (x.opacity ?? 1);
+      c.depthWrite = false;
+      return c;
+    };
+    m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material);
+  });
+  group.userData.ghost = true;
+}
 const POSE = new THREE.Object3D();
 
 /** A boat's hull pose in the world (position and orientation of her model) for the wake. */
@@ -81,8 +101,8 @@ export class FleetView {
     }
   }
 
-  /** (Re)build the boats shown: id, label and hull colour. */
-  setBoats(list: { id: string; label: string; colour: number }[]): void {
+  /** (Re)build the boats shown: id, label and hull colour; a ghost (ghost racing) is drawn see-through, without wake. */
+  setBoats(list: { id: string; label: string; colour: number; ghost?: boolean }[]): void {
     for (const [id, e] of this.boats) {
       if (!list.some((b) => b.id === id)) {
         this.group.remove(e.root);
@@ -103,13 +123,14 @@ export class FleetView {
       const h = [...b.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11);
       const model = new SquibModel(this.params, { helm: h % 3 === 0 ? 'female' : 'male', crew: h % 5 < 2 ? 'female' : 'male' });
       model.setHullColour(b.colour);
+      if (b.ghost) makeGhost(model.group);
       root.add(model.group);
-      const label = makeLabel(b.label, '#ffe9a8');
+      const label = makeLabel(b.label, b.ghost ? '#cfe8ff' : '#ffe9a8');
       label.position.set(0, 10.5, 0);
       root.add(label);
       this.group.add(root);
-      const wake = this.sea ? new WakeTrail(this.sea) : undefined;
-      const foam = this.sea ? new HullFoam(this.sea) : undefined;
+      const wake = this.sea && !b.ghost ? new WakeTrail(this.sea) : undefined;
+      const foam = this.sea && !b.ghost ? new HullFoam(this.sea) : undefined;
       for (const x of [wake, foam]) {
         if (!x) continue;
         x.setLight(this.light);

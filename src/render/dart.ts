@@ -6,7 +6,7 @@ import type { NE } from '../sim/boat/forces';
 import { mooringSwingDeg } from '../sim/race/anchored';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
-import { berthOccupancy, type Berth } from '../sim/env/marinas';
+import { FIXED_BOATS, berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
 import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
@@ -22,6 +22,7 @@ import { fillBehindQuays, type QuayWall } from '../sim/env/quays';
 import { RoadNetwork } from './roads';
 import { buildRdycClub, buildRdycPines, buildRdycPontoonGear, rdycForeshore, rdycKeepOut, rdycPlatformAt, type RdycClub } from './rdyc';
 import { buildRoyalDart, passengerPierAsDrawn, type RoyalDart } from './royalDart';
+import { MASK_MARGIN_M } from './water';
 import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
 
 /**
@@ -117,6 +118,8 @@ export class DartScene {
   private readonly buildingUniforms = { uNight: { value: 0 } };
   /** For the water surface (scene.ts): tidal water and its banks, so low ground inland stays dry. */
   readonly waterMask?: WaterMask;
+  /** The same mask read back (signed distance to the tidal water, m, > 0 in it), where the browser could read it. */
+  private readonly maskDistance?: (e: number, n: number) => number;
   private readonly woodland?: Woodland;
   private readonly railway?: RailwayView;
   private readonly street?: StreetLife;
@@ -157,6 +160,7 @@ export class DartScene {
       texture.needsUpdate = true;
       const s = wm.spec;
       this.waterMask = { texture, box: new THREE.Vector4(s.e0, s.n0, s.nx * s.cell, s.ny * s.cell) };
+      this.maskDistance = readWaterMask(s, wm.image);
     }
     this.buildTerrain();
     if (input.quays?.length) this.fixed.add(quayMesh(input.quays));
@@ -185,16 +189,24 @@ export class DartScene {
     }
     if (input.roads && this.roadNet) {
       const net = this.roadNet;
+      const deckAt = f ? fixedDeckAt(f) : () => undefined;
       this.fixed.add(net.mesh((e, n) => this.groundAt(e, n), input.detail === 'low' ? 'low' : 'high'));
       this.street = new StreetLife({
         roads: input.roads,
         groundAt: (e, n) => this.groundAt(e, n),
-        surfaceAt: (e, n) => net.surfaceAt(e, n),
+        // On a fixed jetty people walk on its deck, not on the bed under it.
+        surfaceAt: (e, n) => deckAt(e, n) ?? net.surfaceAt(e, n),
         standing: f ? standingSpots(f) : [],
         queues: f ? ferryQueues(f) : [],
         detail: input.detail,
-        // Nobody walks through the clubhouse or off the end of the footway past its sea wall.
-        keepOut: f ? rdycKeepOut(f.buildings.find((b) => b.n === 'Royal Dart Yacht Club')?.r ?? []) : undefined,
+        // Nobody walks through the clubhouse or off the end of the footway past its sea wall, nor through the river
+        // (owner, 6 Nov 2026: people walking through the water to the foot ferry).
+        keepOut: walkKeepOut({
+          club: f ? rdycKeepOut(f.buildings.find((b) => b.n === 'Royal Dart Yacht Club')?.r ?? []) : () => false,
+          standAt: (e, n) => net.surfaceAt(e, n) ?? this.groundAt(e, n),
+          deckAt,
+          tidal: this.maskDistance ? (e, n) => this.maskDistance!(e, n) > -MASK_MARGIN_M : undefined,
+        }),
       });
       this.fixed.add(this.street.fixed);
       this.floating.add(this.street.floating);
@@ -784,6 +796,11 @@ export class DartScene {
   }
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
+  /** Letters by the vessels' sidelights for players who cannot tell red from green (src/render/navLights.ts). */
+  setLightLabels(on: boolean): void {
+    this.traffic.lightLabels = on;
+  }
+
   setDaylight(day: number): void {
     this.traffic.setDaylight(day);
     this.street?.setDaylight(day);
@@ -1375,6 +1392,82 @@ export function standingSpots(f: DartFeatures): { e: number; n: number; floating
   return out;
 }
 
+/**
+ * The highest ground (m ODN) the tide covers: high water springs, about +2.3 m ODN (E; the same level counts as
+ * land for marks, docs/COURSES.md). Walkers stay above it wherever the picture can draw the river.
+ */
+export const WALK_DRY_ODN = 2.3;
+
+/** The deck height (m ODN) at (e, n) on a fixed jetty as drawn (src/render/pontoons.ts), else undefined. */
+export function fixedDeckAt(f: DartFeatures): (e: number, n: number) => number | undefined {
+  const decks = f.piers.flatMap((p) => passengerPierAsDrawn(p)).filter((p) => !p.floating);
+  return (e, n) => {
+    for (const p of decks) {
+      if (p.poly && insideRing(p.poly as [number, number][], e, n)) return PONTOON.fixedDeck;
+      if (p.line) {
+        const half = (p.width ?? 2.4) / 2;
+        for (let i = 1; i < p.line.length; i++) {
+          const [ae, an] = p.line[i - 1]!;
+          const [be, bn] = p.line[i]!;
+          const de = be - ae;
+          const dn = bn - an;
+          const t = Math.max(0, Math.min(1, ((e - ae) * de + (n - an) * dn) / (de * de + dn * dn || 1)));
+          if (Math.hypot(e - (ae + de * t), n - (an + dn * t)) <= half) return PONTOON.fixedDeck;
+        }
+      }
+    }
+    return undefined;
+  };
+}
+
+/**
+ * Where nobody walks: the club's keep-out (`club`), and the river: where the picture can draw the water (`tidal`,
+ * from the water mask; without one, anywhere) and the walker would stand (`standAt`, m ODN) below high water
+ * springs, unless on a fixed jetty's deck (`deckAt`). An OSM footway can run over water where the drawing differs
+ * from the data: along the Kingswear passenger pier's old fixed jetty, now drawn as a gangway to a pontoon
+ * (src/render/royalDart.ts), people walked across the river. People on floating pontoons are the standing and
+ * queueing spots, which ride with the tide. Low ground inland that the tide does not reach (Dartmouth's town centre,
+ * +1.3 to +1.9 m ODN) is walked as before.
+ */
+export function walkKeepOut(o: {
+  club: (e: number, n: number) => boolean;
+  standAt: (e: number, n: number) => number;
+  deckAt: (e: number, n: number) => number | undefined;
+  tidal?: (e: number, n: number) => boolean;
+}): (e: number, n: number) => boolean {
+  return (e, n) => o.club(e, n) || (o.deckAt(e, n) === undefined && (o.tidal?.(e, n) ?? true) && o.standAt(e, n) < WALK_DRY_ODN);
+}
+
+/**
+ * The water mask read back from its image: signed distance (m) to the tidal water at (e, n), > 0 in the water, as
+ * the water shader reads it (src/render/water.ts). Undefined where there is no 2D canvas to read it with (tests).
+ */
+export function readWaterMask(spec: { cell: number; nx: number; ny: number; e0: number; n0: number }, image: TexImageSource): ((e: number, n: number) => number) | undefined {
+  if (typeof document === 'undefined') return undefined;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = spec.nx;
+    canvas.height = spec.ny;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return undefined;
+    ctx.drawImage(image as CanvasImageSource, 0, 0, spec.nx, spec.ny);
+    const rgba = ctx.getImageData(0, 0, spec.nx, spec.ny).data;
+    return maskSampler(spec, (i) => rgba[i * 4]!);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Signed distance (m) from the mask's grey levels (`grey(index)`, rows north to south), nearest cell; outside it, far inland. */
+export function maskSampler(spec: { cell: number; nx: number; ny: number; e0: number; n0: number }, grey: (index: number) => number): (e: number, n: number) => number {
+  return (e, n) => {
+    const i = Math.floor((e - spec.e0) / spec.cell);
+    const j = spec.ny - 1 - Math.floor((n - spec.n0) / spec.cell);
+    if (i < 0 || j < 0 || i >= spec.nx || j >= spec.ny) return -1000;
+    return (grey(j * spec.nx + i) - 128) / 2;
+  };
+}
+
 function insideRing(ring: [number, number][], x: number, y: number): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -1392,24 +1485,16 @@ function insideRing(ring: [number, number][], x: number, y: number): boolean {
  * src/sim/env/traffic.ts, drawn as herself by src/render/traffic.ts.)
  */
 export function namedBerths(): THREE.Object3D[] {
-  /** A boat's place `off` m to the right of a pontoon's centre line a→b, t of the way along, bow towards b. */
-  const along = (a: [number, number], b: [number, number], t: number, off: number, model: THREE.Object3D, name: string) => {
-    const de = b[0] - a[0];
-    const dn = b[1] - a[1];
-    const len = Math.hypot(de, dn);
-    const ue = de / len;
-    const un = dn / len;
-    const e = a[0] + de * t + un * off;
-    const n = a[1] + dn * t - ue * off;
-    model.position.set(e, 0, -n);
-    // The models' bows point along -z (north): turn them to the bearing of a→b.
-    model.rotation.y = -Math.atan2(ue, un);
-    model.name = name;
-    return model;
-  };
   return [
     // Sandquay: the east arm of the college's pontoon, from its south end to its north end; the river to its east.
-    ...[0.22, 0.5, 0.78].map((t, i) => along([-315.8, 1300.4], [-356.05, 1346.15], t, 4.4, navyTrainingBoatModel(15, 4.4, i + 1), `navy-training-boat-${i + 1}`)),
+    ...FIXED_BOATS.map((b, i) => {
+      const m = navyTrainingBoatModel(b.length, b.beam, i + 1);
+      m.position.set(b.e, 0, -b.n);
+      // The models' bows point along -z (north): turn them to the boat's heading.
+      m.rotation.y = -b.heading;
+      m.name = b.name;
+      return m;
+    }),
   ];
 }
 

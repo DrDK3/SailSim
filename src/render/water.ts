@@ -15,7 +15,7 @@ const N_COMP = 8;
 const FIELD_N = 32;
 const FIELD_CELL = 50;
 /** How far onto the bank (m, beyond the tidal water outline) the water may be drawn: high water springs, E. */
-const MASK_MARGIN_M = 24;
+export const MASK_MARGIN_M = 24;
 const FACTORS = [0.45, 0.58, 0.72, 0.86, 1.0, 1.17, 1.38, 1.7];
 /** Directions of the trains about the mean (rad): a wide spread keeps the crests short, as a wind sea's are. */
 const SPREAD = [-0.85, 0.5, -0.3, 0.12, -0.06, 0.35, -0.6, 0.8];

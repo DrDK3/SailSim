@@ -56,6 +56,8 @@ export interface VesselState {
   ramp?: number;
   /** Solid outlines for contact (the float and its tug for the Lower Ferry). */
   parts: VesselPart[];
+  /** Keeping out of a sailing boat's way (COLREGs Rule 18(a)), for as long as she has to: +1 off to starboard, −1 to port. */
+  givingWay?: 1 | -1;
 }
 
 /** Where marina traffic starts and ends (from OSM, via the geodata), and where it goes. */
@@ -228,7 +230,7 @@ const SERVICES: Record<string, ServiceSpec> = {
     kind: 'passenger-ferry', label: 'Passenger ferry Dartmouth–Kingswear', length: 18, beam: 5.2, ram: false,
     vMax: 2.8, accel: 0.25, decel: 0.3, interval: 7.5,
     hours: () => ({ a: [7 * 60 + 30, 23 * 60], b: [7 * 60 + 34, 23 * 60] }),
-    notes: 'Drawn as the Dartmouth Princess (18 m, 156 passengers, blue hull, F7); beam, timetable and speed estimated (E).',
+    notes: 'Drawn as the Dartmouth Princess (18 m, 156 passengers, F7) in the operator\'s river-boat livery: dark blue hull, white boot top and superstructure (her sister the Dittisham Princess, F7b; her own shade not published, E); beam, timetable and speed estimated (E).',
   },
   'Dartmouth Castle Ferry': {
     kind: 'launch', label: 'Castle Ferry', length: 10, beam: 3.5, ram: false,
@@ -276,6 +278,14 @@ const MARINA_KINDS: { kind: VesselKind; share: number; length: number; beam: num
   { kind: 'yacht', share: 0.35, length: 10, beam: 3.3, vHarbour: 2.5, vSea: 3.0, label: 'yacht under engine' },
   { kind: 'rib', share: 0.15, length: 6.5, beam: 2.5, vHarbour: 2.9, vSea: 10, label: 'RIB' },
 ];
+
+/** Rule 18(a) give-way (E): how close a pass counts (beyond half her length), how soon, how far off her track, how fast across. */
+export const GIVE_WAY_CPA_M = 25;
+export const GIVE_WAY_WITHIN_S = 45;
+export const GIVE_WAY_MAX_M = 12;
+export const GIVE_WAY_RATE = 1;
+const GIVE_WAY_BACK_RATE = 0.5;
+const GIVE_WAY_DEPTH_M = 1.5;
 
 /** Marina movements a day (each way counts one), by month (E): for a marina without berths, and per 100 berths. */
 const MARINA_MOVES = [4, 4, 6, 12, 20, 26, 32, 32, 22, 12, 6, 4];
@@ -634,6 +644,102 @@ export class RiverTraffic {
   }
 
   /** Every vessel on the water at this moment. */
+  // ------------------------------------------------------------ keeping out of the way of sailing boats
+
+  /**
+   * COLREGs Rule 18(a): a power-driven vessel under way keeps out of the way of a sailing vessel (except where Rules
+   * 9, 10 and 13 require otherwise). The marina boats (motor cruisers, yachts under engine, RIBs; all under 20 m)
+   * do: when a sailing boat would pass within GIVE_WAY_CPA_M of one in the next GIVE_WAY_WITHIN_S, she eases off
+   * her track, away from where the boat would pass (to starboard when they meet end on), up to GIVE_WAY_MAX_M and
+   * only into water GIVE_WAY_DEPTH_M deep, then back once clear. The ferries (restricted in their ability to
+   * manoeuvre) and the paddle steamer (confined to the channel: Rule 9(b), the Squib must not impede her) keep
+   * their courses. A simplification (E): sideways only, no slowing down. Deterministic: it follows the sailing
+   * boats' own (replayed) paths, fed by the fleet every 0.1 s. Rule text checked against secondary copies (docs/SOURCES.md K1–K4): a teaching aid, not an authority.
+   */
+  private readonly giveWay = new Map<string, { off: number; side: 1 | -1 | 0; rate: number }>();
+
+  /** Forget every offset (a new run starts with the boats on their tracks). */
+  resetGiveWay(): void {
+    this.giveWay.clear();
+  }
+
+  /** The marina boats' offsets now, for the fleet's tests and the picture. */
+  get keepingClear(): ReadonlyMap<string, { off: number; side: 1 | -1 | 0; rate: number }> {
+    return this.giveWay;
+  }
+
+  /** Update the give-way offsets for time epochMs; `sailing`: the sailing boats (m, m/s). Returns whether any changed. */
+  keepClearOf(epochMs: number, dt: number, sailing: readonly { n: number; e: number; vn: number; ve: number }[]): boolean {
+    let changed = false;
+    const seen = new Set<string>();
+    for (const v of this.marinaStates(epochMs)) {
+      seen.add(v.id);
+      const g = this.giveWay.get(v.id) ?? { off: 0, side: 0 as const, rate: 0 };
+      const right = { n: -Math.sin(v.heading), e: Math.cos(v.heading) };
+      const at = { n: v.n + right.n * g.off, e: v.e + right.e * g.off };
+      const vv = { n: v.sog * Math.cos(v.heading), e: v.sog * Math.sin(v.heading) };
+      // The most pressing sailing boat: soonest within the pass distance.
+      let threat: { t: number; lateral: number } | undefined;
+      if (v.phase === 'underway' && v.sog > 0.5) {
+        for (const b of sailing) {
+          const rn = b.n - at.n;
+          const re = b.e - at.e;
+          if (rn * rn + re * re > 150 * 150) continue;
+          const wn = b.vn - vv.n;
+          const we = b.ve - vv.e;
+          const w2 = wn * wn + we * we;
+          const t = w2 < 1e-6 ? 0 : -(rn * wn + re * we) / w2;
+          if (t <= 0 || t > GIVE_WAY_WITHIN_S) continue;
+          const cn = rn + wn * t;
+          const ce = re + we * t;
+          if (Math.hypot(cn, ce) > GIVE_WAY_CPA_M + v.length / 2) continue;
+          // Which side of her the boat would pass (+ to starboard), measured across her heading.
+          const lateral = cn * right.n + ce * right.e;
+          if (!threat || t < threat.t) threat = { t, lateral };
+        }
+      }
+      let side = g.side;
+      let rate = 0;
+      if (threat) {
+        // Away from where the boat would pass; to starboard when it is close to dead ahead (Rule 14).
+        if (side === 0) side = Math.abs(threat.lateral) < 3 ? 1 : threat.lateral > 0 ? -1 : 1;
+        const next = g.off + side * GIVE_WAY_RATE * dt;
+        if (Math.abs(next) <= GIVE_WAY_MAX_M && this.deepEnough(epochMs, v.n + right.n * next, v.e + right.e * next)) rate = side * GIVE_WAY_RATE;
+      } else {
+        side = 0;
+        if (Math.abs(g.off) > 1e-6) rate = -Math.sign(g.off) * Math.min(GIVE_WAY_BACK_RATE, Math.abs(g.off) / dt);
+      }
+      const off = g.off + rate * dt;
+      if (off !== g.off || side !== g.side || rate !== g.rate) changed = true;
+      if (Math.abs(off) < 1e-6 && side === 0) this.giveWay.delete(v.id);
+      else this.giveWay.set(v.id, { off, side, rate });
+    }
+    // Trips that have ended forget their offsets.
+    for (const id of [...this.giveWay.keys()]) if (!seen.has(id)) this.giveWay.delete(id);
+    return changed;
+  }
+
+  private deepEnough(epochMs: number, n: number, e: number): boolean {
+    const f = this.opts.fairway;
+    if (!f) return true;
+    if (!f.inDomain(n, e)) return false;
+    const level = this.opts.waterLevel?.(epochMs) ?? f.waterLevelOdn;
+    if (level - f.bedElevation(n, e) < GIVE_WAY_DEPTH_M) return false;
+    const r = f.avoidRadius ?? 0;
+    return !r || !(f.avoid ?? []).some((a) => (a.n - n) ** 2 + (a.e - e) ** 2 < r * r);
+  }
+
+  /** A marina boat moved off her track by her give-way offset, turned by the rate she is moving across at. */
+  private offsetState(v: VesselState): VesselState {
+    const g = this.giveWay.get(v.id);
+    if (!g) return v;
+    const right = { n: -Math.sin(v.heading), e: Math.cos(v.heading) };
+    const n = v.n + right.n * g.off;
+    const e = v.e + right.e * g.off;
+    const heading = v.heading + Math.atan2(g.rate, Math.max(0.5, v.sog));
+    return { ...v, n, e, heading, givingWay: g.side !== 0 ? g.side : undefined, parts: [{ ...v.parts[0]!, n, e, heading }] };
+  }
+
   states(epochMs: number): VesselState[] {
     const out: VesselState[] = [];
     for (const sv of this.services) {
@@ -643,7 +749,7 @@ export class RiverTraffic {
         if (st) out.push(st);
       }
     }
-    out.push(...this.marinaStates(epochMs));
+    for (const v of this.marinaStates(epochMs)) out.push(this.giveWay.size ? this.offsetState(v) : v);
     const ps = this.steamerState(epochMs);
     if (ps) out.push(ps);
     return out;

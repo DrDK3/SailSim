@@ -72,6 +72,9 @@ export const SEA_WALL_SOUTH_TOP = 2.6;
 /** The whole frontage wall, north to south: the club's stretch, then on south in front of the white houses. */
 const FRONTAGE: [number, number][] = [...SEA_WALL, ...SEA_WALL_SOUTH.slice(1)];
 
+/** The frontage wall's face (local e, n, north to south, the land on its left): solid to the boats, as the quays are. */
+export const RDYC_FRONTAGE: readonly [number, number][] = FRONTAGE;
+
 /**
  * How far (m) a point lies on the river side of the club's frontage wall: positive in the water, negative behind
  * the wall; undefined where the nearest point of the wall is one of its two ends (beyond the wall, either way).

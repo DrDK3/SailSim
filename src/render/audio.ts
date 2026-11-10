@@ -360,6 +360,45 @@ export class SoundScape {
     }
   }
 
+  /**
+   * A vessel's whistle (COLREGs Rules 32, 34, 35; src/app/soundSignals.ts): short blasts 1 s, prolonged 5 s. Bigger
+   * vessels sound lower (the pitches are estimates, E); further away is quieter and duller.
+   */
+  whistle(blasts: readonly ('short' | 'prolonged')[], distanceM: number, lengthM: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.buses || !blasts.length) return;
+    const rapid = blasts.length >= 5 && blasts.every((b) => b === 'short');
+    const gap = rapid ? 0.4 : 1;
+    const hz = lengthM >= 75 ? 180 : lengthM >= 20 ? 260 : 400;
+    const level = 0.3 / (1 + distanceM / 150);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 400 + 2600 / (1 + distanceM / 300);
+    f.connect(this.buses.effects);
+    let t = ctx.currentTime + 0.05;
+    for (const b of blasts) {
+      const len = b === 'short' ? 1 : 5;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(level, t + 0.06);
+      g.gain.setValueAtTime(level, t + len - 0.1);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      g.connect(f);
+      // A ship's whistle: a fundamental with a fifth above it, slightly detuned.
+      for (const [mult, share] of [[1, 1], [1.5, 0.45], [1.004, 0.6]] as const) {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = hz * mult;
+        const og = ctx.createGain();
+        og.gain.value = share * 0.5;
+        o.connect(og).connect(g);
+        o.start(t);
+        o.stop(t + len + 0.02);
+      }
+      t += len + gap;
+    }
+  }
+
   /** A knock on the hull (contact with a boat, mark or pontoon): a dull thump, louder the harder. */
   knock(severity: number): void {
     const ctx = this.ctx;

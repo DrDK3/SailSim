@@ -2,20 +2,36 @@ import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { mmss } from '../app/lessons';
 
-/** The six lessons, with what is done in this browser and a Start button for each. */
+/**
+ * The lessons, with what is done in this browser and a Start button for each: the six basics, then seamanship
+ * (open to everyone, suggested once the basics are done).
+ */
 export function LessonList({ ui, onStart }: { ui: UiState; onStart: (id: UiState['lessons'][number]['id']) => void }) {
+  // Progress kept in this browser: the first lesson not yet done is the one to take next (every lesson stays open).
+  const next = ui.lessons.find((l) => !l.done)?.id;
+  const basicsDone = ui.lessons.filter((l) => l.group === 'basics').every((l) => l.done);
   return (
-    <ol className="lesson-list" data-testid="lesson-list">
-      {ui.lessons.map((l) => (
-        <li key={l.id} className={l.done ? 'done' : ''}>
+    <>
+      <LessonGroupList lessons={ui.lessons.filter((l) => l.group === 'basics')} next={next} onStart={onStart} testId="lesson-list" />
+      <h4 className="lesson-group">Seamanship{basicsDone ? '' : <span className="fine-inline"> · best after the six basics</span>}</h4>
+      <LessonGroupList lessons={ui.lessons.filter((l) => l.group === 'seamanship')} next={next} onStart={onStart} testId="lesson-list-seamanship" />
+    </>
+  );
+}
+
+function LessonGroupList({ lessons, next, onStart, testId }: { lessons: UiState['lessons']; next?: string; onStart: (id: UiState['lessons'][number]['id']) => void; testId: string }) {
+  return (
+    <ol className="lesson-list" data-testid={testId}>
+      {lessons.map((l) => (
+        <li key={l.id} className={l.done ? 'done' : l.id === next ? 'next' : ''}>
           <span className="lesson-tick" aria-hidden="true">{l.done ? '✓' : l.number}</span>
           <span className="lesson-text">
             <strong>{l.title}</strong>
             <span className="fine-inline"> · about {l.minutes} min{l.done ? ` · done${l.bestS !== undefined ? `, best ${mmss(l.bestS)}` : ''}` : ''}</span>
             <span className="lesson-summary">{l.summary}</span>
           </span>
-          <button onClick={() => onStart(l.id)} aria-label={`Start lesson ${l.number}: ${l.title}${l.done ? ' (done)' : ''}`}>
-            {l.done ? 'Again' : 'Start'}
+          <button className={l.id === next ? 'primary' : ''} onClick={() => onStart(l.id)} aria-label={`Start lesson ${l.number}: ${l.title}${l.done ? ' (done)' : l.id === next ? ' (next)' : ''}`}>
+            {l.done ? 'Again' : l.id === next ? 'Start next' : 'Start'}
           </button>
         </li>
       ))}
@@ -46,7 +62,7 @@ export function TutorialPanel({ ctl, ui, onRace }: { ctl: SimController; ui: UiS
   const head = (
     <div className="tutorial-head">
       <span className="fine">
-        Lesson {t.lesson.number} of {t.lesson.count} · {t.lesson.title}
+        {t.lesson.group === 'seamanship' ? 'Seamanship' : 'Lesson'} {t.lesson.inGroup} of {t.lesson.count} · {t.lesson.title}
         {!t.result && !list && ` · step ${t.index + 1} of ${t.total}`}
       </span>
       <button className="link" onClick={() => ctl.endTutorial()} aria-label="End the lesson">

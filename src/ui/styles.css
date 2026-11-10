@@ -394,10 +394,12 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
 .lesson-readout { margin-top: 6px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
 .lesson-result { margin: 6px 0; padding-left: 18px; line-height: 1.45; }
 .lesson-result .best { color: var(--good); font-weight: 600; }
+.lesson-group { margin: 10px 0 2px; font-size: 13px; }
 .lesson-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
 .lesson-list li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; }
 .lesson-tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, 0.1); }
 .lesson-list li.done .lesson-tick { background: color-mix(in srgb, var(--good) 30%, transparent); color: var(--good); }
+.lesson-list li.next .lesson-tick { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); }
 .lesson-text { display: flex; flex-direction: column; font-size: 13px; line-height: 1.35; }
 .lesson-summary { opacity: 0.8; font-size: 12px; }
 .tutorial-target { outline: 2px solid var(--warn); outline-offset: 3px; border-radius: 8px; animation: tutorial-pulse 1.6s ease-in-out infinite; }
@@ -560,6 +562,20 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
   font-size: 13px; line-height: 1.35; z-index: 2; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 .coach-tip-label { font-weight: 700; margin-right: 6px; color: var(--accent); }
+.hint-card {
+  position: absolute; top: 112px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 32px));
+  padding: 10px 14px; border-radius: 12px; background: var(--panel-strong); border: 1px solid var(--accent);
+  font-size: 13.5px; line-height: 1.4; z-index: 3; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.hint-card p { margin: 0 0 8px; }
+.hint-card .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tiller-drag { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.tiller-drag:active { cursor: grabbing; }
+.ghost-chip { position: absolute; top: 112px; right: 16px; display: flex; gap: 8px; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; z-index: 2; }
+.report-problem { display: flex; flex-direction: column; gap: 8px; }
+.report-problem label { display: flex; flex-direction: column; gap: 4px; }
+.report-problem textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
+.report-shot { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--panel-border); }
 .coach-tip.tone-warn .coach-tip-label { color: var(--warn); }
 .coach-tip.tone-good .coach-tip-label { color: var(--good); }
 .coach-head button.link { font-size: 12px; }

@@ -157,7 +157,7 @@ export function ExperienceHub({
             id="learn"
             title="Learn to sail"
             icon={<IconLearn />}
-            text={`Six short lessons, each checked as you sail: steering, the wind, trim, tacking and gybing, the start, the stream. ${lessonsDone ? `${lessonsDone} of 6 done.` : 'About 3–5 minutes each.'}`}
+            text={`Six short lessons, each checked as you sail: steering, the wind, trim, tacking and gybing, the start, the stream; then seamanship: a mooring, coming alongside, man overboard. ${lessonsDone ? `${lessonsDone} of 6 basics done.` : 'About 3–5 minutes each.'}`}
             onClick={onLearn}
           />
           <Door id="free" title="Free sailing" icon={<IconSail />} focus={!first} text={freeText(activity)} onClick={onFree} />

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { shared, sharedAll } from './dispose';
+import { buildLights, colregsLights, type LightRole } from './navLights';
+import { sharedAll } from './dispose';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
@@ -207,10 +208,12 @@ export interface HullSpec {
 }
 
 export interface Hull {
-  /** Sheer height and deck height at z, and the deck's half-breadth there. */
+  /** Sheer height and deck height at z, and the hull's half-breadth at the sheer there (outside, for fenders and names). */
   sheer(z: number): number;
   deck(z: number): number;
   half(z: number): number;
+  /** The deck's half-breadth at z: inside the shell at the deck's height (narrower than the sheer's on a flared hull). */
+  deckHalf(z: number): number;
   /** Points along the sheer, one side (+1 starboard). */
   sheerLine(side: number, inset?: number, from?: number, to?: number): THREE.Vector3[];
   length: number;
@@ -300,12 +303,49 @@ export function hull(kit: Kit, s: HullSpec, material: THREE.Material = VMAT.pain
     }
     return out.set(side * x, y, zOf(t, Math.min(1, Math.max(0, (y + k) / (h + k)))));
   };
-  const colourAt = (y: number, h: number): number => {
-    if (y < 0) return s.colours.bottom;
-    if (y < boot) return s.colours.boot;
-    if (s.stripe && y > h - s.stripe[0] && y < h - s.stripe[1]) return s.colours.stripe ?? s.colours.boot;
-    return s.colours.topsides;
+  const tmp = new THREE.Vector3();
+  /** The section parameter (0 keel … 1 sheer) at which station t reaches height y (the sections rise steadily). */
+  const uAt = (t: number, y: number): number => {
+    if (point(t, 0, 1, tmp).y >= y) return 0;
+    if (point(t, 1, 1, tmp).y <= y) return 1;
+    let lo = 0;
+    let hi = 1;
+    for (let k = 0; k < 28; k++) {
+      const m = (lo + hi) / 2;
+      if (point(t, m, 1, tmp).y < y) lo = m;
+      else hi = m;
+    }
+    return (lo + hi) / 2;
   };
+  // The paint bands up each section: antifouling, boot top, topsides (and a stripe below the sheer). Each band has
+  // rows of its own, starting and ending exactly at its edges, so a colour changes along a straight line on the
+  // hull rather than across the triangles of a coarse grid (owner, 6 Nov 2026: a white sawtooth along the
+  // foot ferry's waterline). The same rows at every station keep the grid regular.
+  const M = s.sections ?? SECTION;
+  const bandColours = s.stripe ? [s.colours.bottom, s.colours.boot, s.colours.topsides, s.colours.stripe ?? s.colours.boot, s.colours.topsides] : [s.colours.bottom, s.colours.boot, s.colours.topsides];
+  const nBottom = Math.max(2, Math.round(M * 0.45));
+  const bandRows = s.stripe ? [nBottom, 2, Math.max(2, M - nBottom - 5), 1, 2] : [nBottom, 2, Math.max(2, M - nBottom - 2)];
+  /** The rows of station t: (u, colour) per row, band after band (a band's first row repeats the last one's u). */
+  const rows = (t: number): { u: number; colour: number }[] => {
+    const h = sheer(t);
+    const edges = [0, uAt(t, 0), uAt(t, Math.min(boot, h)), ...(s.stripe ? [uAt(t, h - s.stripe[0]), uAt(t, h - s.stripe[1])] : []), 1];
+    for (let k = 1; k < edges.length; k++) edges[k] = Math.max(edges[k]!, edges[k - 1]!);
+    const out: { u: number; colour: number }[] = [];
+    bandRows.forEach((n, k) => {
+      for (let r = 0; r <= n; r++) out.push({ u: edges[k]! + ((edges[k + 1]! - edges[k]!) * r) / n, colour: bandColours[k]! });
+    });
+    return out;
+  };
+  const R = bandRows.reduce((a, n) => a + n + 1, 0);
+  /** Quads between rows j and j + 1 lie within a band (not across a band's edge, where the two rows coincide). */
+  const within: number[] = [];
+  {
+    let j = 0;
+    for (const n of bandRows) {
+      for (let r = 0; r < n; r++) within.push(j + r);
+      j += n + 1;
+    }
+  }
 
   // Shell: each side keel to sheer, stations bow to stern.
   const pos: number[] = [];
@@ -319,54 +359,52 @@ export function hull(kit: Kit, s: HullSpec, material: THREE.Material = VMAT.pain
     return pos.length / 3 - 1;
   };
   const N = s.stations ?? STATIONS;
-  const M = s.sections ?? SECTION;
+  const stationRows = Array.from({ length: N + 1 }, (_, i) => rows(i / N));
   for (let side = -1; side <= 1; side += 2) {
     const base = pos.length / 3;
     for (let i = 0; i <= N; i++) {
       const t = i / N;
-      const h = sheer(t);
-      for (let j = 0; j <= M; j++) {
-        point(t, j / M, side, v);
-        push(v, colourAt(v.y, h));
+      for (const r of stationRows[i]!) {
+        point(t, r.u, side, v);
+        push(v, r.colour);
       }
     }
     for (let i = 0; i < N; i++) {
-      for (let j = 0; j < M; j++) {
-        const a = base + i * (M + 1) + j;
-        const b = a + M + 1;
+      for (const j of within) {
+        const a = base + i * R + j;
+        const b = a + R;
         // Outward faces (counter-clockwise seen from outside).
         if (side > 0) idx.push(a, a + 1, b, b, a + 1, b + 1);
         else idx.push(a, b, a + 1, b, b + 1, a + 1);
       }
     }
   }
-  // Transom: the stern section closed up each side and across under the deck edge.
-  {
-    const t = 1;
+  // The transom (and a pontoon's bow end): the end section closed across in the same paint bands, row by row, and
+  // capped under the deck's camber. Facing aft (+z) at the stern, forward at the bow.
+  const closeEnd = (t: number, aft: boolean) => {
     const h = sheer(t);
-    const ring: THREE.Vector3[] = [];
-    for (let j = 0; j <= M; j++) ring.push(point(t, j / M, -1, new THREE.Vector3()));
+    const rs = stationRows[t === 0 ? 0 : N]!;
+    const port = rs.map((r) => push(point(t, r.u, -1, new THREE.Vector3()), r.colour));
+    const stbd = rs.map((r) => push(point(t, r.u, 1, new THREE.Vector3()), r.colour));
+    const tri = (a: number, b: number, c: number) => (aft ? idx.push(a, b, c) : idx.push(a, c, b));
+    for (const j of within) {
+      tri(port[j]!, stbd[j]!, stbd[j + 1]!);
+      tri(port[j]!, stbd[j + 1]!, port[j + 1]!);
+    }
     const bD = half(t);
+    const top = s.colours.topsides;
+    const cap: number[] = [];
     for (let k = 1; k < 8; k++) {
       const x = -bD + (2 * bD * k) / 8;
-      ring.push(new THREE.Vector3(x, h + camber * 0.5 * (1 - (x / bD) ** 2), zOf(t, 1)));
+      cap.push(push(new THREE.Vector3(x, h + camber * 0.5 * (1 - (x / bD) ** 2), zOf(t, 1)), top));
     }
-    for (let j = M; j >= 0; j--) ring.push(point(t, j / M, 1, new THREE.Vector3()));
-    const c = ring.reduce((a, p) => a.add(p), new THREE.Vector3()).divideScalar(ring.length);
-    const ci = push(c, colourAt(c.y, h));
-    const ids = ring.map((p) => push(p, colourAt(p.y, h)));
-    for (let k = 0; k < ids.length - 1; k++) idx.push(ci, ids[k + 1]!, ids[k]!);
-    if (s.pontoon) {
-      // Bow end too (both ends are alike).
-      const ring2: THREE.Vector3[] = [];
-      for (let j = 0; j <= M; j++) ring2.push(point(0, j / M, -1, new THREE.Vector3()));
-      for (let j = M; j >= 0; j--) ring2.push(point(0, j / M, 1, new THREE.Vector3()));
-      const c2 = ring2.reduce((a, p) => a.add(p), new THREE.Vector3()).divideScalar(ring2.length);
-      const c2i = push(c2, colourAt(c2.y, sheer(0)));
-      const ids2 = ring2.map((p) => push(p, colourAt(p.y, sheer(0))));
-      for (let k = 0; k < ids2.length - 1; k++) idx.push(c2i, ids2[k]!, ids2[k + 1]!);
-    }
-  }
+    const ps = push(point(t, 1, -1, new THREE.Vector3()), top);
+    const ss = push(point(t, 1, 1, new THREE.Vector3()), top);
+    const arc = [...cap, ss];
+    for (let k = 0; k < arc.length - 1; k++) tri(ps, arc[k + 1]!, arc[k]!);
+  };
+  closeEnd(1, true);
+  if (s.pontoon) closeEnd(0, false);
   const shell = new THREE.BufferGeometry();
   shell.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   shell.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -374,17 +412,28 @@ export function hull(kit: Kit, s: HullSpec, material: THREE.Material = VMAT.pain
   shell.computeVertexNormals();
   kit.add(shell, material);
 
-  // Deck: across from sheer to sheer (below it by the bulwark), cambered.
+  /**
+   * The hull's inside at the deck's height at station t: half-breadth and position along (the shell's own point
+   * there). The deck and the bulwarks' inside stop at it: a flared hull is narrower at its deck than at its sheer,
+   * and a deck as wide as the sheer showed through the topsides (owner, 6 Nov 2026: a tan wedge at the foot
+   * ferry's stem).
+   */
+  const deckEdge = (t: number) => {
+    const y0 = sheer(t) - bulwark;
+    point(t, uAt(t, y0), 1, tmp);
+    return { half: Math.max(0, tmp.x - (bulwark > 0 ? 0.06 : 0.02)), z: tmp.z, y: y0 };
+  };
+  // Deck: across from side to side (below the sheer by the bulwark), cambered.
   const dp: number[] = [];
   const di: number[] = [];
   const C = 8;
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const bD = half(t) - (bulwark > 0 ? 0.06 : 0);
-    const y0 = sheer(t) - bulwark;
+    const e = deckEdge(t);
+    const bD = e.half;
     for (let c = 0; c <= C; c++) {
       const x = -bD + (2 * bD * c) / C;
-      dp.push(x, y0 + camber * (1 - (x / Math.max(bD, 1e-3)) ** 2), zOf(t, 1 - bulwark / Math.max(0.3, sheer(t) + keel(t))));
+      dp.push(x, e.y + camber * (1 - (x / Math.max(bD, 1e-3)) ** 2), e.z);
     }
     if (i < N) for (let c = 0; c < C; c++) {
       const a = i * (C + 1) + c;
@@ -396,21 +445,30 @@ export function hull(kit: Kit, s: HullSpec, material: THREE.Material = VMAT.pain
   deck.setIndex(di);
   deck.computeVertexNormals();
   kit.add(deck, VMAT.paint, s.colours.deck);
-  // Bulwarks: the inside face, and a capping rail along the top.
+  // Bulwarks: the inside face, from the sheer down to the deck, following the shell's curve 6 cm inside it (a
+  // straight face would cut through a flared topside), and a capping rail along the top.
   if (bulwark > 0) {
+    const K = 4;
     for (const side of [-1, 1]) {
       const bp: number[] = [];
       const bi: number[] = [];
       for (let i = 0; i <= N; i++) {
         const t = i / N;
-        const bD = half(t) - 0.06;
         const h = sheer(t);
-        const z = zOf(t, 1);
-        bp.push(side * bD, h, z, side * bD, h - bulwark, z);
+        for (let r = 0; r <= K; r++) {
+          // r = 0 at the sheer, K at the deck.
+          const y = h - (bulwark * r) / K;
+          point(t, r === 0 ? 1 : uAt(t, y), 1, tmp);
+          bp.push(side * Math.max(0, tmp.x - 0.06), y, tmp.z);
+        }
         // Facing inboard.
         if (i < N) {
-          if (side > 0) bi.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
-          else bi.push(i * 2, i * 2 + 2, i * 2 + 1, i * 2 + 1, i * 2 + 2, i * 2 + 3);
+          for (let r = 0; r < K; r++) {
+            const a = i * (K + 1) + r;
+            const b = a + K + 1;
+            if (side > 0) bi.push(a, a + 1, b, a + 1, b + 1, b);
+            else bi.push(a, b, a + 1, a + 1, b, b + 1);
+          }
         }
       }
       const g = new THREE.BufferGeometry();
@@ -426,6 +484,7 @@ export function hull(kit: Kit, s: HullSpec, material: THREE.Material = VMAT.pain
     sheer: (z) => sheer(tOf(z)),
     deck: (z) => sheer(tOf(z)) - bulwark + camber,
     half: (z) => half(tOf(z)),
+    deckHalf: (z) => deckEdge(tOf(z)).half,
     sheerLine: (side, inset = 0, from = 0, to = 1) => {
       const pts: THREE.Vector3[] = [];
       for (let i = 0; i <= 24; i++) {
@@ -604,33 +663,14 @@ export function lifebuoy(kit: Kit, x: number, y: number, z: number, side: number
   kit.add(g, VMAT.paint, undefined, place(x, y, z, side * (Math.PI / 2)));
 }
 
-const LIGHTS = new Map<number, THREE.MeshStandardMaterial>();
-const LIGHT_GEO = shared(new THREE.SphereGeometry(0.1, 8, 6));
-/** Every vessel's lights on (at dusk) or off. */
-export function setLightsOn(on: boolean): void {
-  for (const m of LIGHTS.values()) m.emissiveIntensity = on ? 3 : 0;
-}
-
-/** Navigation and signal lights on a mast (lit at dusk by setLightsOn). */
-export function navLights(group: THREE.Group, o: { length: number; beam: number; mastY: number; mastZ?: number; sideY?: number; ram?: boolean }): void {
-  const lights = new THREE.Group();
-  lights.name = 'lights';
-  const add = (hex: number, x: number, y: number, z: number) => {
-    let m = LIGHTS.get(hex);
-    if (!m) LIGHTS.set(hex, (m = new THREE.MeshStandardMaterial({ color: 0x151515, emissive: hex, emissiveIntensity: 0 })));
-    const l = new THREE.Mesh(LIGHT_GEO, m);
-    l.position.set(x, y, z);
-    lights.add(l);
-  };
-  const mz = o.mastZ ?? -o.length * 0.1;
-  const sy = o.sideY ?? o.mastY * 0.55;
-  add(0xff2020, -o.beam / 2 + 0.15, sy, mz + 0.4);
-  add(0x20ff40, o.beam / 2 - 0.15, sy, mz + 0.4);
-  add(0xffffff, 0, o.mastY, mz);
-  add(0xffffff, 0, sy * 0.8, o.length / 2 - 0.15);
-  // Restricted in her ability to manoeuvre: red, white, red all-round lights in a vertical line.
-  if (o.ram) for (const [i, hex] of [0xff2020, 0xffffff, 0xff2020].entries()) add(hex, 0, o.mastY + 0.5 + i * 0.5, mz);
-  group.add(lights);
+/**
+ * A vessel's navigation lights after the COLREGs (src/render/navLights.ts): the set for her role (under 12 m under
+ * power, an all-round white and sidelights; otherwise masthead, side and stern lights), and the red-white-red of a
+ * vessel restricted in her ability to manoeuvre (`ram`). Each shows only inside its arc and range, lit at dusk.
+ */
+export function navLights(group: THREE.Group, o: { length: number; beam: number; mastY: number; mastZ?: number; sideY?: number; ram?: boolean; role?: LightRole }): void {
+  const role: LightRole = o.role ?? (o.length < 12 ? 'power-small' : 'power');
+  group.add(buildLights(colregsLights(role, o, o.ram)));
 }
 
 /** A mast with a cross-tree, VHF aerial and (optionally) a radar scanner. */
