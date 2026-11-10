@@ -94,7 +94,7 @@ describe('a lofted hull', () => {
 describe('the foot ferry', () => {
   it("wears the river boats' dark blue, not the old bright blue", () => {
     const view = new TrafficView();
-    view.update([{ id: 'pf', name: 'test', label: 'test', unit: 0, kind: 'passenger-ferry', length: 18, beam: 5.2, ram: false, n: 0, e: 0, heading: 0, sog: 0, moving: false, phase: 'berthed', ramp: 1, parts: [] } as never], 0);
+    view.update([{ id: 'pf', name: 'test', label: 'test', unit: 0, kind: 'passenger-ferry', length: 18, beam: 5.2, ram: false, n: 0, e: 0, heading: 0, sog: 0, moving: false, phase: 'berthed', ramp: 1, parts: [] } as never], 0, new THREE.PerspectiveCamera(), false);
     let navy = 0;
     let oldBlue = 0;
     view.group.traverse((o) => {
