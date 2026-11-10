@@ -7,13 +7,13 @@ const CI_SLOW = process.env.CI ? 2 : 1;
 
 /** Phase 6 in the browser: the scenario library, replays (save, open, verify, diverge, take over), visual weather. */
 
-async function open(page: Page): Promise<string[]> {
+async function open(page: Page, query = ''): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
-  await page.goto('/');
+  await page.goto(`/${query}`);
   await expect(page.getByTestId('stw')).toBeVisible();
   await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
   return errors;
@@ -100,8 +100,9 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
 });
 
 test('Phase 6: scenario library: built-ins, save in the browser, export and import, bad files reported', async ({ page }, info) => {
-  test.setTimeout(180_000 * CI_SLOW);
-  const errors = await open(page);
+  // A test of the library, not the picture: the lighter scenery (CI draws in software, on two cores, slowly).
+  test.setTimeout(300_000 * CI_SLOW);
+  const errors = await open(page, '?quality=low');
   await page.getByRole('button', { name: 'Library' }).click();
   const lib = library(page);
   // The bundled Met Office replay and the River Dart scenarios are available here.

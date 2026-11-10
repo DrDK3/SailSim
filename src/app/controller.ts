@@ -10,6 +10,7 @@ import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
+import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
 import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
 import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
@@ -185,6 +186,11 @@ export interface UiState {
   resume?: { label: string; summary: string; note?: string };
   /** Sailing the kept run again to where it was left (0–1), before handing over. */
   catchingUp?: number;
+  /**
+   * The light (src/app/daylightView.ts): the real sun's height, whether it is down, whether this run is in real time,
+   * whether the picture is drawn in the daylight view now, and whether to offer it (a dark real-time run).
+   */
+  light: { sunDeg: number; dark: boolean; realTime: boolean; daylightView: boolean; offer: boolean; clock: string };
   /** Racing a ghost: its title and how long its recording lasts; or learning its path (0–1). */
   ghost?: { title: string; endS: number };
   ghostLoading?: number;
@@ -319,6 +325,10 @@ export class SimController {
   /** "Continue where you left off": the run kept from the last visit (not in automated tests unless &resume). */
   private resumePoint = typeof location === 'undefined' || !new URLSearchParams(location.search).has('nowelcome') || new URLSearchParams(location.search).has('resume') ? loadResume() : undefined;
   private catchUp?: { from: number; to: number };
+  /** This run started at the real clock (Real time, or today's live weather): its dark is the river's real dark. */
+  private realTime = false;
+  /** "Keep it dark": the daylight view is not offered again this visit (nor in automated tests unless &dark). */
+  private darkDismissed = typeof location !== 'undefined' && new URLSearchParams(location.search).has('nowelcome') && !new URLSearchParams(location.search).has('dark');
   /** Ghost racing: the recorded boat's poses every GHOST_EVERY steps, and the scenario it belongs to. */
   private ghost?: { title: string; poses: FleetPose[]; scenario: string; endS: number };
   /** Sailing the ghost's recording through to learn its path (0–1). */
@@ -495,6 +505,7 @@ export class SimController {
     this.scenarioError = undefined;
     this.traffic = traffic;
     this.scenario = structuredClone(scenario);
+    this.realTime = Math.abs(Date.parse(scenario.conditions.startTime) - Date.now()) < REAL_TIME_WITHIN_MS;
     this.built = built;
     this.race = race;
     this.sim = sim;
@@ -1516,9 +1527,29 @@ export class SimController {
   /** The sky (cloud, visibility, rain) and the sun for the current moment of the run, for the scene. */
   sceneWeather(): SceneWeather {
     const sim = this.sim;
-    const epochMs = (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000;
-    const sun = sunPosition(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+    // The daylight view (a picture setting): the day's midday sun when the real one is low or down.
+    const sun = viewSun(this.epochNow(), RDYC_ORIGIN.lat, RDYC_ORIGIN.lon, this.prefs.daylightView);
     return { sky: (sim.env.sky ?? presetSky('clear')).at(sim.time), sunElevationDeg: sun.elevationDeg, sunAzimuthDeg: sun.azimuthDeg };
+  }
+
+  /** The run's moment as a real time (ms). */
+  private epochNow(): number {
+    return (this.sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + this.sim.time * 1000;
+  }
+
+  private lightState(): UiState['light'] {
+    const epoch = this.epochNow();
+    const real = sunPosition(epoch, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+    const dark = real.elevationDeg < SUNSET_DEG;
+    const daylightView = this.prefs.daylightView && real.elevationDeg < DAYLIGHT_VIEW_BELOW_DEG;
+    const offer = dark && this.realTime && !this.prefs.daylightView && !this.darkDismissed && !this.tutorial && !this.replay;
+    return { sunDeg: real.elevationDeg, dark, realTime: this.realTime, daylightView, offer, clock: ukClock(epoch) };
+  }
+
+  /** "Keep it dark": do not offer the daylight view again this visit. */
+  dismissDark(): void {
+    this.darkDismissed = true;
+    this.publish(true);
   }
 
   /** Draw the 3D view for this moment (alpha: between the last two physics states). */
@@ -1723,6 +1754,8 @@ export class SimController {
     this.prefs = { ...this.prefs, ...change };
     savePrefs(this.prefs);
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
+    // The light changes at once (the sky is otherwise refreshed once a second).
+    if ('daylightView' in change) this.lastWeather = -Infinity;
     this.publish(true);
   }
 
@@ -2199,6 +2232,7 @@ export class SimController {
             note: this.resumePoint.rec.build !== BUILD_ID ? 'Kept by an earlier version: she may not end exactly where you left her.' : undefined,
           }
         : undefined,
+      light: this.lightState(),
       ghost: this.ghost ? { title: this.ghost.title, endS: this.ghost.endS } : undefined,
       ghostLoading: this.ghostLoading,
       catchingUp: this.catchUp ? clamp((this.sim.step - this.catchUp.from) / Math.max(1, this.catchUp.to - this.catchUp.from), 0, 1) : undefined,
