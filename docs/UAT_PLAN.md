@@ -277,6 +277,20 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 20.4 | At high water, look at the waterfront sheds and boathouses (Hoodown, the Ferry Office, Old Mill Creek) | Each stands on a hardstanding, not in the river | |
 | 20.5 | On your own computer, sail in the chase view with the boat heeling and the camera moving | No ripple or moiré across the deck; in the helm view the non-slip pattern shows on the deck just ahead | |
 
+## 21. Hints, lights, sound signals, traffic, continue, ghosts, seamanship (10 Nov 2026) (25 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 21.1 | In a fresh browser (or after clearing site data), point the boat into the wind and let her stop | After about 5 s a card: "In irons" with Show me; Show me turns her away from the wind within about 12 s; the same card does not come back next time | |
+| 21.2 | Sail at night (Scenario: a start time after sunset, e.g. 18:00 in November; or Real time after dark) near the Lower Ferry and a marina boat; walk the camera round them | Red to port, green to starboard, white masthead and sternlights only in their arcs; the ferry's red-white-red; with "Name the ships' sidelights" on, P and S beside them | |
+| 21.3 | Choose the fog scenario and sail near the ferries | A whistle every couple of minutes from each, captioned with the rule (one prolonged, two short for the ferries) | |
+| 21.4 | Sail across a marina boat's path in the river | She eases off to one side, sounds one or two short blasts (captioned), passes clear and goes back to her track; the ferries do not alter | |
+| 21.5 | Settings → Report a visual problem; type a note; Save the report | A picture of the 3D view and the details in one HTML file in your downloads; nothing sent | |
+| 21.6 | Sail freely for a minute, close the tab, open the app again | A card offers to continue; Continue catches up and hands over where you left off | |
+| 21.7 | On a phone: drag the tiller picture left and right | The tiller follows your finger and the boat turns; let go and it centres; the battery saver is on in Settings | |
+| 21.8 | After a race, Library → Race this run as a ghost | The race starts again with a see-through boat sailing your earlier race; Stop the ghost removes it | |
+| 21.9 | Learn → Seamanship: pick up the mooring | You can stop with the buoy at the bow by sailing in on a close reach, letting the sheets go and luffing; the lesson finishes with your distance | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

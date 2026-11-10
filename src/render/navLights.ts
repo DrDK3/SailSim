@@ -3,7 +3,7 @@ import * as THREE from 'three';
 /**
  * Navigation lights after the COLREGs (owner, 10 Nov 2026: "shipping lights for night, aligned with COLREGS lighting
  * requirements"). The rules were checked against secondary sources (study texts and rule summaries; the IMO text
- * itself could not be fetched here: docs/SOURCES.md C1–C6), so this is a teaching aid, not an authority:
+ * itself could not be fetched here: docs/SOURCES.md K1–K4), so this is a teaching aid, not an authority:
  *
  * - Rule 21 (arcs): masthead light 225° (dead ahead to 22.5° abaft the beam each side); sidelights 112.5° each (dead
  *   ahead to 22.5° abaft the beam on their own side), green to starboard, red to port; sternlight 135° (67.5° either

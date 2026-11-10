@@ -1,6 +1,6 @@
 # Outstanding issues and risks
 
-Updated: 5 Nov 2026 (the owner's photographs and requests: RDYC flicker and walkers, ferries, Noss, Sandquay, the dock); before that, 3 Nov 2026 (comprehensive review: decisions D1–D12 and Package 1)
+Updated: 10 Nov 2026 (the red team's recommendations: hints, COLREGs lights and sound signals, give-way traffic, report a problem, continue, phones, ghosts, seamanship; issues 142–149); 5 Nov 2026 (the owner's photographs and requests: RDYC flicker and walkers, ferries, Noss, Sandquay, the dock); before that, 3 Nov 2026 (comprehensive review: decisions D1–D12 and Package 1)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
@@ -145,3 +145,11 @@ Updated: 5 Nov 2026 (the owner's photographs and requests: RDYC flicker and walk
 | 139 | The deck's ripple was not seen in the software renderer used for the screenshots here; the fix (the non-slip bump fading with distance) follows from measuring the pattern against the pixel | If a ripple remains on the owner's computer, its cause is something else | A screenshot or a note of the view, the graphics quality and the device (UAT 20.5) |
 | 140 | Three buildings stand out in the river beside floating pontoons (by the Riverboat Pontoon 200 m off the lifeboat station, at (−270, 408) and at (192, 277)); the data does not say what supports them, and they are drawn from the bed up | At low water they show as tall boxes out of the river | Photographs, or whether they float |
 | 141 | The waterfront hardstandings (53 buildings) are laid at +2.6 m ODN with a 3 m apron, by rule (E) | Their edges are ramps of the ground grid, not walls | The EA LIDAR at 1 m or photographs |
+| 142 | The COLREGs text was checked against secondary copies only (K1–K4); the IMO text could not be fetched | The lights, sound signals and give-way are a teaching aid, not an authority | Allowlist an official copy of the COLREGs (or the owner supplies one) and re-check Rules 9, 18, 21–35 |
+| 143 | No sector or leading lights: the Kingswear (Iso WRG 3s) and Bayard's Cove (Fl WRG 2s) lights' positions were not established | The entrance at night lacks its guiding lights | Their positions and sectors from the Admiralty List of Lights or the harbour authority |
+| 144 | Give-way traffic moves sideways only (at most 12 m), never slows or stops; boats under 12 m sound no fog signal (their "other efficient sound signal" is not modelled); restricted visibility is taken as below 2 km (E) | Close encounters in a narrow reach are simplified | Slowing for a give-way vessel; a measured visibility threshold |
+| 145 | No "back the jib" control: getting out of irons takes about 12 s with the helm alone | Show me and the in-irons hint are slower than a real crew | A backed-jib input (sheet to windward) |
+| 146 | No reefing control or lesson; whether the class rules allow a reef was not established (K5) | Heavy-weather teaching stops at easing and flattening | Read the current class rules; add a reef only if allowed |
+| 147 | The seamanship lessons are in open water: coming alongside uses a buoy for the pontoon's end, and getting the person back aboard is not simulated | Teaches the approach and the stop only | A lesson at a real pontoon on the river, with the stream |
+| 148 | "Continue where you left off" keeps at most 2.5 MB (very long sessions are not kept); a different build may not land exactly where the run was left | A long session may not be offered next visit | Compress the recording |
+| 149 | Ghosts are pictures only (no wind shadow, no contact) | Racing a ghost is a time trial, not a race | — |

@@ -2,7 +2,7 @@ import type { VesselState } from '../sim/env/traffic';
 
 /**
  * The river traffic's sound signals after the COLREGs (red team, 10 Nov 2026). A teaching aid, not an authoritative
- * statement of the rules; the rule text was checked against secondary copies (docs/SOURCES.md C1–C8).
+ * statement of the rules; the rule text was checked against secondary copies (docs/SOURCES.md K1–K4).
  *
  *  - Rule 32: a short blast is about 1 s, a prolonged blast 4–6 s (here 1 s and 5 s).
  *  - Rule 35, in or near restricted visibility, at intervals of not more than 2 minutes (here 110 s):

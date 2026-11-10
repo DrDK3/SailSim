@@ -654,7 +654,7 @@ export class RiverTraffic {
    * only into water GIVE_WAY_DEPTH_M deep, then back once clear. The ferries (restricted in their ability to
    * manoeuvre) and the paddle steamer (confined to the channel: Rule 9(b), the Squib must not impede her) keep
    * their courses. A simplification (E): sideways only, no slowing down. Deterministic: it follows the sailing
-   * boats' own (replayed) paths, fed by the fleet every 0.1 s.
+   * boats' own (replayed) paths, fed by the fleet every 0.1 s. Rule text checked against secondary copies (docs/SOURCES.md K1–K4): a teaching aid, not an authority.
    */
   private readonly giveWay = new Map<string, { off: number; side: 1 | -1 | 0; rate: number }>();
 
