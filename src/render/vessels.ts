@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { shared, sharedAll } from './dispose';
+import { buildLights, colregsLights, type LightRole } from './navLights';
+import { sharedAll } from './dispose';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
@@ -662,33 +663,14 @@ export function lifebuoy(kit: Kit, x: number, y: number, z: number, side: number
   kit.add(g, VMAT.paint, undefined, place(x, y, z, side * (Math.PI / 2)));
 }
 
-const LIGHTS = new Map<number, THREE.MeshStandardMaterial>();
-const LIGHT_GEO = shared(new THREE.SphereGeometry(0.1, 8, 6));
-/** Every vessel's lights on (at dusk) or off. */
-export function setLightsOn(on: boolean): void {
-  for (const m of LIGHTS.values()) m.emissiveIntensity = on ? 3 : 0;
-}
-
-/** Navigation and signal lights on a mast (lit at dusk by setLightsOn). */
-export function navLights(group: THREE.Group, o: { length: number; beam: number; mastY: number; mastZ?: number; sideY?: number; ram?: boolean }): void {
-  const lights = new THREE.Group();
-  lights.name = 'lights';
-  const add = (hex: number, x: number, y: number, z: number) => {
-    let m = LIGHTS.get(hex);
-    if (!m) LIGHTS.set(hex, (m = new THREE.MeshStandardMaterial({ color: 0x151515, emissive: hex, emissiveIntensity: 0 })));
-    const l = new THREE.Mesh(LIGHT_GEO, m);
-    l.position.set(x, y, z);
-    lights.add(l);
-  };
-  const mz = o.mastZ ?? -o.length * 0.1;
-  const sy = o.sideY ?? o.mastY * 0.55;
-  add(0xff2020, -o.beam / 2 + 0.15, sy, mz + 0.4);
-  add(0x20ff40, o.beam / 2 - 0.15, sy, mz + 0.4);
-  add(0xffffff, 0, o.mastY, mz);
-  add(0xffffff, 0, sy * 0.8, o.length / 2 - 0.15);
-  // Restricted in her ability to manoeuvre: red, white, red all-round lights in a vertical line.
-  if (o.ram) for (const [i, hex] of [0xff2020, 0xffffff, 0xff2020].entries()) add(hex, 0, o.mastY + 0.5 + i * 0.5, mz);
-  group.add(lights);
+/**
+ * A vessel's navigation lights after the COLREGs (src/render/navLights.ts): the set for her role (under 12 m under
+ * power, an all-round white and sidelights; otherwise masthead, side and stern lights), and the red-white-red of a
+ * vessel restricted in her ability to manoeuvre (`ram`). Each shows only inside its arc and range, lit at dusk.
+ */
+export function navLights(group: THREE.Group, o: { length: number; beam: number; mastY: number; mastZ?: number; sideY?: number; ram?: boolean; role?: LightRole }): void {
+  const role: LightRole = o.role ?? (o.length < 12 ? 'power-small' : 'power');
+  group.add(buildLights(colregsLights(role, o, o.ram)));
 }
 
 /** A mast with a cross-tree, VHF aerial and (optionally) a radar scanner. */

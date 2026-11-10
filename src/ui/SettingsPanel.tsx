@@ -178,6 +178,15 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
           </label>
         </div>
+        <h4>Seeing and help</h4>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.lightLabels} onChange={(e) => ctl.setPrefs({ lightLabels: e.target.checked })} data-testid="pref-light-labels" />
+          Name the ships' sidelights at night (P port, red; S starboard, green), for anyone who finds red and green hard to tell apart
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.hints} onChange={(e) => ctl.setPrefs({ hints: e.target.checked })} data-testid="pref-hints" />
+          Hints when you are stuck (in irons, sails flapping, aground)
+        </label>
         <h4>Sound</h4>
         <div className="settings-grid">
           <label className="check">

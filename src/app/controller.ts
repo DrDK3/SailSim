@@ -4,6 +4,7 @@ import { ocsGuide, type OcsGuide } from './ocsGuide';
 import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
 import { quayPiers } from '../sim/env/quays';
+import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
@@ -186,6 +187,8 @@ export interface UiState {
   /** The simulation is not keeping up with real time: the share it manages, and any preset the graphics were lowered to. */
   runningSlow?: { ratio: number; lowered?: string };
   autoLowerGraphics: boolean;
+  /** The player's preferences kept in this browser (src/app/prefs.ts). */
+  prefs: Prefs;
   scenarioError?: string;
   race?: RaceUi;
   weatherSources: DataSource[];
@@ -289,6 +292,8 @@ export class SimController {
   private runningSlow?: { ratio: number; lowered?: GraphicsPreset };
   /** Step the graphics down when the simulation cannot keep up (a setting; on by default). */
   autoLowerGraphics = true;
+  /** The player's own preferences, kept in this browser (src/app/prefs.ts). */
+  prefs: Prefs = loadPrefs();
   /** The GPU context is lost, and whether that (not the user) paused the run. */
   private graphicsLost = false;
   private pausedForGraphics = false;
@@ -1107,6 +1112,7 @@ export class SimController {
     if (data.geo && data.manifest && this.view) {
       try {
         this.dartScene = new DartScene({ manifest: data.manifest, geo: data.geo, features: data.features, drape: data.drape, town: data.town, waterMask: data.waterMask, roads: data.roads, quays: data.quays, detail: this.view.quality });
+        this.dartScene.setLightLabels(this.prefs.lightLabels);
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
         this.settlePace();
         // A course already drawn learns which of its marks are real buoys the harbour now draws.
@@ -1388,6 +1394,14 @@ export class SimController {
 
   setAutoLowerGraphics(on: boolean): void {
     this.autoLowerGraphics = on;
+    this.publish(true);
+  }
+
+  /** Change and keep a preference (src/app/prefs.ts). */
+  setPrefs(change: Partial<Prefs>): void {
+    this.prefs = { ...this.prefs, ...change };
+    savePrefs(this.prefs);
+    this.dartScene?.setLightLabels(this.prefs.lightLabels);
     this.publish(true);
   }
 
@@ -1824,6 +1838,7 @@ export class SimController {
       graphicsLost: this.graphicsLost,
       runningSlow: this.paused ? undefined : this.runningSlow,
       autoLowerGraphics: this.autoLowerGraphics,
+      prefs: { ...this.prefs },
       scenarioError: this.scenarioError,
       race: this.raceUi(),
       weatherSources: this.weatherSources,

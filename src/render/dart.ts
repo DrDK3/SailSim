@@ -796,6 +796,11 @@ export class DartScene {
   }
 
   /** 0 by day … 1 at night: lights some windows (src/render/scene.ts passes the sun's daylight). */
+  /** Letters by the vessels' sidelights for players who cannot tell red from green (src/render/navLights.ts). */
+  setLightLabels(on: boolean): void {
+    this.traffic.lightLabels = on;
+  }
+
   setDaylight(day: number): void {
     this.traffic.setDaylight(day);
     this.street?.setDaylight(day);

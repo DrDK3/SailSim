@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type { VesselKind, VesselState } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
-import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn, type Hull } from './vessels';
+import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, type Hull } from './vessels';
+import { updateLights } from './navLights';
 import { flagDroop, flagYaw } from './vane';
 import { Exhaust } from './railway';
 import { longAxisDeg } from './landmarks';
@@ -221,7 +222,7 @@ function tugModel(): THREE.Group {
   kit.box(1.2, 0.12, 1.2, VMAT.paint, TUG_CREAM, 0, h.deck(2) + 0.06, 2);
   addPerson(kit, 0.4, wy, wz + 0.2, 0, 11);
   g.add(kit.build('tug-hull'));
-  navLights(g, { length: L, beam: B, mastY: wy + 4.4, mastZ: wz + 0.3, sideY: wy + 1.6, ram: true });
+  navLights(g, { length: L, beam: B, mastY: wy + 4.4, mastZ: wz + 0.3, sideY: wy + 1.6, ram: true, role: 'towing-alongside' });
   g.add(wake(B));
   return g;
 }
@@ -301,7 +302,7 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
     pivot.add(rk.build('ramp'));
     g.add(pivot);
   }
-  navLights(g, { length: deckL, beam, mastY: deckY + 3.4, mastZ: 2, sideY: deckY + 2.4, ram: true });
+  navLights(g, { length: deckL, beam, mastY: deckY + 3.4, mastZ: 2, sideY: deckY + 2.4, role: 'towed-alongside' });
   return g;
 }
 
@@ -939,7 +940,7 @@ function yachtModel(length: number, beam: number, seed: number): THREE.Group {
   if (seed % 2) addPerson(kit, 0.6, h.deck(wz - 1), wz - 0.9, Math.PI / 2, seed + 4, true);
   ensign(g, kit, 0.3, h.sheer(L / 2 - 0.3), L / 2 - 0.3);
   g.add(kit.build('yacht'));
-  navLights(g, { length: L, beam, mastY: top, mastZ: mz, sideY: h.sheer(-L * 0.4) + 0.3 });
+  navLights(g, { length: L, beam, mastY: top * 0.6, mastZ: mz, sideY: h.sheer(-L * 0.4) + 0.3, role: 'power' });
   g.add(wake(beam));
   return g;
 }
@@ -1024,7 +1025,8 @@ interface Entry {
   ramps: THREE.Object3D[];
   ensigns: THREE.Object3D[];
   wakes: THREE.Mesh[];
-  lights: THREE.Mesh[];
+  /** Each vessel's (and her tug's) group of navigation lights (src/render/navLights.ts). */
+  lights: THREE.Object3D[];
   seen: number;
 }
 
@@ -1130,13 +1132,13 @@ export class TrafficView {
     const ramps: THREE.Object3D[] = [];
     const ensigns: THREE.Object3D[] = [];
     const wakes: THREE.Mesh[] = [];
-    const lights: THREE.Mesh[] = [];
+    const lights: THREE.Object3D[] = [];
     for (const g of [root, ...(tug ? [tug] : [])]) {
       g.traverse((o) => {
         if (o.name.startsWith('ramp-')) ramps.push(o);
         if (o.name === 'ensign') ensigns.push(o);
         if (o.name === 'wake') wakes.push(o as THREE.Mesh);
-        if (o.parent?.name === 'lights') lights.push(o as THREE.Mesh);
+        if (o.name === 'lights') lights.push(o);
         if (o instanceof THREE.Mesh && o.name !== 'wake') {
           o.castShadow = o.receiveShadow = true;
         }
@@ -1151,6 +1153,9 @@ export class TrafficView {
     this.day = day;
   }
 
+  /** Letters by the sidelights (P port, S starboard) for players who cannot tell red from green. */
+  lightLabels = false;
+
   /** The labels, for decluttering with the place labels. */
   labels(): THREE.Sprite[] {
     return [...this.entries.values()].flatMap((e) => (e.label ? [e.label] : []));
@@ -1160,7 +1165,6 @@ export class TrafficView {
   update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean, wind?: { fromDir: number; speed: number }, waterLevel = 0): void {
     const stamp = time;
     const lit = this.day < 0.35;
-    setLightsOn(lit);
     for (const s of states) {
       let e = this.entries.get(s.id);
       if (!e) {
@@ -1193,8 +1197,10 @@ export class TrafficView {
           f.children[0]!.rotation.z = -flagDroop(aws);
         }
       }
-      // Unlit, the lamps are not drawn at all (small housings, not dark balls in the air).
-      for (const l of e.lights) l.visible = lit;
+      // Each light inside its arc and range from where you look; none by day (src/render/navLights.ts).
+      if (e.tug) e.tug.updateMatrixWorld();
+      e.root.updateMatrixWorld();
+      for (const l of e.lights) updateLights(l, camera, lit, this.lightLabels);
       for (const w of e.wakes) (w.material as THREE.MeshBasicMaterial).opacity = Math.min(0.75, Math.max(0, (s.sog - 0.3) / 3));
       if (e.tug && s.tug) {
         e.tug.visible = true;
