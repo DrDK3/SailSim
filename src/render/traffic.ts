@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { VesselKind, VesselState } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
-import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn } from './vessels';
+import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, setLightsOn, type Hull } from './vessels';
 import { flagDroop, flagYaw } from './vane';
 import { Exhaust } from './railway';
 import { longAxisDeg } from './landmarks';
@@ -19,6 +19,19 @@ import { longAxisDeg } from './landmarks';
  * illustrative (E): no measured drawings were found.
  * Model frame: x = starboard, y = up (0 = waterline), z = aft (bow towards -z), as the Squib's.
  */
+
+/**
+ * The Dartmouth river boats' dark blue hulls, as the owner's photograph of the Cardiff Castle shows them (P3) and as
+ * the operator's Dittisham Princess is described (dark blue hull, white boot top and superstructure; F7b).
+ */
+const RIVERBOATS_NAVY = 0x18212f;
+
+/** The deck's narrowest half-breadth over z0 … z1: a straight bench or rail along that stretch stays inside the hull. */
+function deckHalfOver(h: Hull, z0: number, z1: number): number {
+  let m = Infinity;
+  for (let k = 0; k <= 8; k++) m = Math.min(m, h.deckHalf(z0 + ((z1 - z0) * k) / 8));
+  return m;
+}
 
 const C = {
   antifouling: 0x6b1d1d,
@@ -401,13 +414,18 @@ function bridgeModel(length: number, beam: number): THREE.Group {
 
 // ------------------------------------------------------------------ passenger vessels
 
-/** The Dartmouth-Kingswear passenger ferry (Dartmouth Princess: 18 m, blue hull): saloon, open upper deck. */
+/**
+ * The Dartmouth-Kingswear passenger ferry (Dartmouth Princess: 18 m, her hull blue since 2000, F7): saloon, open upper
+ * deck. In the operator's river-boat livery (owner, 6 Nov 2026: check the foot ferry's colours): the dark blue hull,
+ * white boot top and white superstructure of her sister the Dittisham Princess (F7b) and of the Cardiff Castle (P3).
+ * Her own shade of blue is not published: E.
+ */
 function passengerFerry(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
   const kit = new Kit();
   const h = hull(kit, {
     length, beam, freeboard: 1.15, draft: 1.1, sheerBow: 0.5, sheerStern: 0.2, stemRake: 1.2, entry: 0.4, transom: 0.72, transomRake: 0.15,
-    flare: 0.1, bulwark: 0.85, colours: { bottom: C.antifouling, boot: C.white, topsides: C.blue, deck: C.wood, bulwarkInside: C.white },
+    flare: 0.1, bulwark: 0.85, colours: { bottom: C.antifouling, boot: C.white, topsides: RIVERBOATS_NAVY, deck: C.wood, bulwarkInside: C.white },
     bootTop: 0.18,
   });
   const L = length;
@@ -420,13 +438,13 @@ function passengerFerry(length: number, beam: number, seed: number): THREE.Group
   const rw = (beam - 1.1) / 2 - 0.1;
   rail(kit, [V(-rw, top, sz + sl / 2 - 0.2), V(-rw, top, sz - sl / 2 + 2.2), V(0, top, sz - sl / 2 + 0.5), V(rw, top, sz - sl / 2 + 2.2), V(rw, top, sz + sl / 2 - 0.2), V(-rw, top, sz + sl / 2 - 0.2)], 1.0, { spacing: 1.5 });
   // Small wheelhouse at the front of the upper deck.
-  cabin(kit, { z: sz - sl / 2 + 2.6, y: top, length: 2.2, width: 2.3, height: 1.7, rFront: 0.6, rBack: 0.2, rake: 0.2, colour: C.white, windows: [0.45, 0.92], front: [0.4, 0.94], roof: { overhang: 0.12, thickness: 0.08, colour: C.blue } });
+  cabin(kit, { z: sz - sl / 2 + 2.6, y: top, length: 2.2, width: 2.3, height: 1.7, rFront: 0.6, rBack: 0.2, rake: 0.2, colour: C.white, windows: [0.45, 0.92], front: [0.4, 0.94], roof: { overhang: 0.12, thickness: 0.08, colour: C.white } });
   mast(kit, 0, top + 1.8, sz - sl / 2 + 2.9, 1.8);
   for (let i = 0; i < 2; i++) bench(kit, (i ? 1 : -1) * 0.75, top, sz + 1.2, sl * 0.45, i ? -1 : 1, 3, seed + i * 5);
   // Aft deck: benches along the bulwarks, people; ensign.
   const az = sz + sl / 2 + (L / 2 - (sz + sl / 2)) / 2;
   const al = L / 2 - (sz + sl / 2) - 1.2;
-  for (const s of [-1, 1]) bench(kit, s * (h.half(az) - 0.45), h.deck(az), az, al, -s, 3, seed + 10 + s);
+  for (const s of [-1, 1]) bench(kit, s * (deckHalfOver(h, az - al / 2, az + al / 2) - 0.3), h.deck(az), az, al, -s, 3, seed + 10 + s);
   for (let i = 0; i < 2; i++) addPerson(kit, (i - 0.5) * 0.8, h.deck(az), az + 0.6, i * 0.6, seed + 30 + i);
   lifebuoy(kit, -(beam / 2 - 0.55), sy + 1.0, sz + sl / 2 - 0.3, -1);
   lifebuoy(kit, beam / 2 - 0.55, sy + 1.0, sz + sl / 2 - 0.3, 1);
@@ -454,7 +472,7 @@ function launchModel(length: number, beam: number, seed: number): THREE.Group {
   const cy = h.deck(0) + 1.95;
   for (const s of [-1, 1]) for (const z of [cz0, (cz0 + cz1) / 2, cz1]) kit.rod(V(s * (h.half(z) - 0.25), h.sheer(z), z), V(s * (h.half(z) - 0.25), cy, z), 0.03, VMAT.steel);
   kit.box(beam - 0.3, 0.05, cz1 - cz0 + 0.4, VMAT.canvas, seed % 2 ? 0x1f3550 : 0x2d6a4f, 0, cy + 0.02, (cz0 + cz1) / 2);
-  for (const s of [-1, 1]) bench(kit, s * (h.half((cz0 + cz1) / 2) - 0.5), h.deck(0), (cz0 + cz1) / 2, cz1 - cz0 - 0.4, -s, 2 + (seed % 2), seed + s * 3);
+  for (const s of [-1, 1]) bench(kit, s * (deckHalfOver(h, cz0, cz1) - 0.35), h.deck(0), (cz0 + cz1) / 2, cz1 - cz0 - 0.4, -s, 2 + (seed % 2), seed + s * 3);
   // Helm console aft, the skipper standing.
   kit.box(0.6, 0.9, 0.5, VMAT.paint, C.cream, 0.5, h.deck(L * 0.38) + 0.45, L * 0.36);
   addPerson(kit, 0.5, h.deck(L * 0.4), L * 0.42, 0, seed + 7);
@@ -513,7 +531,7 @@ export function nossFerryModel(length = 10, beam = 3.4): THREE.Group {
   const cy = h.deck(0) + 1.95;
   for (const s of [-1, 1]) for (const z of [cz0, cz1]) kit.rod(V(s * (h.half(z) - 0.25), h.sheer(z), z), V(s * (h.half(z) - 0.25), cy, z), 0.03, VMAT.steel);
   kit.box(beam - 0.35, 0.06, cz1 - cz0 + 0.3, VMAT.canvas, 0x23356b, 0, cy + 0.02, (cz0 + cz1) / 2);
-  for (const s of [-1, 1]) bench(kit, s * (h.half((cz0 + cz1) / 2) - 0.45), h.deck(0), (cz0 + cz1) / 2, cz1 - cz0 - 0.3, -s, 1, 31 + s);
+  for (const s of [-1, 1]) bench(kit, s * (deckHalfOver(h, cz0, cz1) - 0.3), h.deck(0), (cz0 + cz1) / 2, cz1 - cz0 - 0.3, -s, 1, 31 + s);
   mast(kit, 0, wy + 2.07, wz, 1.6, { radar: false });
   for (const s of [-1, 1]) lifebuoy(kit, s * (h.half(wz) + 0.02), wy + 0.9, wz + 0.4, s);
   addPerson(kit, 0.4, wy, wz - 0.2, 0, 17);
@@ -565,7 +583,7 @@ export function navyTrainingBoatModel(length = 15, beam = 4.4, seed = 1): THREE.
     const pts: THREE.Vector3[] = [];
     for (let k = 0; k <= 8; k++) {
       const z = -L * 0.42 + (k / 8) * L * 0.86;
-      pts.push(V(sd * (h.half(z) - 0.12), h.deck(z), z));
+      pts.push(V(sd * (h.deckHalf(z) - 0.05), h.deck(z), z));
     }
     rail(kit, pts, 0.85, { spacing: 1.5, colour: GREY });
   }
@@ -576,8 +594,7 @@ export function navyTrainingBoatModel(length = 15, beam = 4.4, seed = 1): THREE.
   return g;
 }
 
-/** The river boats' hull navy: darker than the passenger ferry's, as the Cardiff Castle's photograph shows (P3). */
-const CARDIFF_NAVY = 0x18212f;
+const CARDIFF_NAVY = RIVERBOATS_NAVY;
 
 /** A river ferry or cruise boat: the Totnes cruise as the Cardiff Castle (30 m, three decks); smaller ones shorter. */
 function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
@@ -643,7 +660,7 @@ function cruiserModel(length: number, beam: number, seed: number): THREE.Group {
     const az1 = L / 2 - 1;
     for (const s of [-1, 1]) for (const z of [az0, az1]) kit.rod(V(s * (h.half(z) - 0.3), h.sheer(z), z), V(s * (h.half(z) - 0.3), my + 2.05, z), 0.03, VMAT.steel);
     kit.box(beam - 0.5, 0.05, az1 - az0 + 0.4, VMAT.canvas, seed % 2 ? 0x2d6a4f : C.navy, 0, my + 2.07, (az0 + az1) / 2);
-    for (const s of [-1, 1]) bench(kit, s * (h.half((az0 + az1) / 2) - 0.5), h.deck(az0), (az0 + az1) / 2, az1 - az0 - 0.3, -s, 3, seed + s * 4);
+    for (const s of [-1, 1]) bench(kit, s * (deckHalfOver(h, az0, az1) - 0.35), h.deck(az0), (az0 + az1) / 2, az1 - az0 - 0.3, -s, 3, seed + s * 4);
     mast(kit, 0, top, mz - ml * 0.1, 1.6);
   }
   for (const s of [-1, 1]) lifebuoy(kit, s * (mw / 2 + 0.02), my + 1.2, mz + ml * 0.3, s);
@@ -697,7 +714,7 @@ export function minehunterModel(length = 52.5, beam = 10.5): THREE.Group {
     const pts: THREE.Vector3[] = [];
     for (let k = 0; k <= 12; k++) {
       const z = -L * 0.42 + (k / 12) * L * 0.9;
-      pts.push(V(sd * (h.half(z) - 0.15), h.deck(z), z));
+      pts.push(V(sd * (h.deckHalf(z) - 0.08), h.deck(z), z));
     }
     rail(kit, pts, 1.0, { spacing: 2, colour: GREY });
   }

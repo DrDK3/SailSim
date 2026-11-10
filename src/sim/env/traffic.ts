@@ -228,7 +228,7 @@ const SERVICES: Record<string, ServiceSpec> = {
     kind: 'passenger-ferry', label: 'Passenger ferry Dartmouth–Kingswear', length: 18, beam: 5.2, ram: false,
     vMax: 2.8, accel: 0.25, decel: 0.3, interval: 7.5,
     hours: () => ({ a: [7 * 60 + 30, 23 * 60], b: [7 * 60 + 34, 23 * 60] }),
-    notes: 'Drawn as the Dartmouth Princess (18 m, 156 passengers, blue hull, F7); beam, timetable and speed estimated (E).',
+    notes: 'Drawn as the Dartmouth Princess (18 m, 156 passengers, F7) in the operator\'s river-boat livery: dark blue hull, white boot top and superstructure (her sister the Dittisham Princess, F7b; her own shade not published, E); beam, timetable and speed estimated (E).',
   },
   'Dartmouth Castle Ferry': {
     kind: 'launch', label: 'Castle Ferry', length: 10, beam: 3.5, ram: false,
