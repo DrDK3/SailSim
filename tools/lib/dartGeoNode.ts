@@ -4,6 +4,7 @@ import { DartGeo, type DartManifest } from '../../src/sim/geo/dart';
 import { GRID_PACKING, decodeGridPlanes, isGzip } from '../../src/sim/geo/pack';
 import { physicsGround, townQuays, townWithoutWater, type DartFeatures } from '../../src/app/geoLoader';
 import type { QuayWall, TownGrid } from '../../src/sim/env/quays';
+import { layPads } from '../../src/app/pads';
 
 /** public/geo, where the River Dart data lives (docs/GEODATA.md). */
 export const GEO_DIR = new URL('../../public/geo/', import.meta.url);
@@ -25,7 +26,8 @@ export function loadDartGeoNode(dir: URL = GEO_DIR): DartGeo {
 
 /**
  * The River Dart data as the app sets it up (src/app/geoLoader.ts): the towns' 4 m ground without the LIDAR's river
- * surface, the quay walls, and the physics standing on the ground the picture draws over the towns.
+ * surface, the quay walls, the hardstandings under waterfront buildings (src/app/pads.ts), and the physics standing
+ * on the ground the picture draws over the towns.
  */
 export function loadDartAppNode(dir: URL = GEO_DIR): { geo: DartGeo; town: TownGrid; quays: QuayWall[]; features: DartFeatures } {
   const geo = loadDartGeoNode(dir);
@@ -35,7 +37,9 @@ export function loadDartAppNode(dir: URL = GEO_DIR): { geo: DartGeo; town: TownG
   const raw = new Int16Array(readGrid(dir, t));
   const town0: TownGrid = { spec: t, values: Float32Array.from(raw, (v) => v * t.scale) };
   const quays = townQuays(town0, features);
-  const town: TownGrid = { spec: t, values: townWithoutWater(town0, geo) };
+  const cleaned: TownGrid = { spec: t, values: townWithoutWater(town0, geo) };
+  const pads = layPads(features, cleaned, geo, quays);
+  const town: TownGrid = { spec: t, values: pads.town ?? cleaned.values };
   geo.setFinerGround(physicsGround(town, quays));
   return { geo, town, quays, features };
 }

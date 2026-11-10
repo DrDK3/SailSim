@@ -5,6 +5,7 @@ import { GRID_PACKING, decodeGridPlanes, isGzip } from '../sim/geo/pack';
 import type { RoadsData } from '../render/population';
 import { rdycForeshore, rdycPlatformAt } from '../render/rdyc';
 import { fillBehindQuays, quayWalls, type QuayWall, type TownGrid } from '../sim/env/quays';
+import { layPads } from './pads';
 
 /** public/geo/features.json (written by tools/geodata/build.py); local metres, rounded to 0.1 m. */
 export interface DartFeatures {
@@ -190,10 +191,13 @@ export async function loadDartData(base = BASE): Promise<DartData> {
   if (out.town && out.features) out.quays = townQuays(out.town, out.features);
   // The picture and the physics stand on the same ground: the LIDAR's river surface out of the towns' grid, and the
   // physics' bed raised to the rocks, banks and quays the picture draws there.
-  if (out.town && out.geo) {
-    out.town = { ...out.town, values: townWithoutWater(out.town, out.geo) };
-    out.geo.setFinerGround(physicsGround(out.town, out.quays ?? []));
+  if (out.town && out.geo) out.town = { ...out.town, values: townWithoutWater(out.town, out.geo) };
+  // Hardstandings under the waterfront buildings, in the grid each is drawn on (src/app/pads.ts).
+  if (out.geo && out.features) {
+    const pads = layPads(out.features, out.town, out.geo, out.quays ?? []);
+    if (out.town && pads.town) out.town = { ...out.town, values: pads.town };
   }
+  if (out.town && out.geo) out.geo.setFinerGround(physicsGround(out.town, out.quays ?? []));
   out.minimapUrl = base + m.minimap.file;
   return out;
 }

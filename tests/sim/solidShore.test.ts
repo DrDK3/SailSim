@@ -13,6 +13,7 @@ import { raceStructures } from '../../src/sim/race/setup';
 import { PierGrid, pierPieces } from '../../src/sim/race/piers';
 import { gridGround, quayPiers, type TownGrid } from '../../src/sim/env/quays';
 import { physicsGround, TOWN_WATER_MAX_ODN, townWithoutWater } from '../../src/app/geoLoader';
+import { PAD_ODN } from '../../src/app/pads';
 import { RDYC_FRONTAGE } from '../../src/render/rdyc';
 import { readGrid } from '../../tools/lib/dartGeoNode';
 import { loadDartApp, loadDartGeo } from './helpers';
@@ -91,10 +92,14 @@ describe('the ground the boat sails on is the ground the picture draws', () => {
     expect(gridGround(rawGrid, e, n)!).toBeGreaterThan(-1);
     expect(gridGround(rawGrid, e, n)!).toBeLessThan(TOWN_WATER_MAX_ODN);
     expect(gridGround(app.town, e, n)!).toBeLessThan(-2.5);
-    expect(townWithoutWater(rawGrid, plain)).toEqual(app.town.values);
-    // The land is untouched: it is all the LIDAR's.
+    // The app's town ground is the cleaned grid, with the waterfront buildings' pads (src/app/pads.ts) raised to PAD_ODN.
+    const cleaned = townWithoutWater(rawGrid, plain);
+    let other = 0;
+    for (let k = 0; k < cleaned.length; k++) if (app.town.values[k] !== cleaned[k] && app.town.values[k] !== Math.fround(PAD_ODN)) other++;
+    expect(other).toBe(0);
+    // The land is untouched (it is all the LIDAR's) but for the waterfront buildings' pads.
     let changedLand = 0;
-    for (let k = 0; k < raw.length; k++) if (rawGrid.values[k]! > TOWN_WATER_MAX_ODN && app.town.values[k] !== rawGrid.values[k]) changedLand++;
+    for (let k = 0; k < raw.length; k++) if (rawGrid.values[k]! > TOWN_WATER_MAX_ODN && app.town.values[k] !== rawGrid.values[k] && app.town.values[k] !== Math.fround(PAD_ODN)) changedLand++;
     expect(changedLand).toBe(0);
   });
 });
