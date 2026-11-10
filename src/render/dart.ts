@@ -6,7 +6,7 @@ import type { NE } from '../sim/boat/forces';
 import { mooringSwingDeg } from '../sim/race/anchored';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
-import { berthOccupancy, type Berth } from '../sim/env/marinas';
+import { FIXED_BOATS, berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
 import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
@@ -1485,24 +1485,16 @@ function insideRing(ring: [number, number][], x: number, y: number): boolean {
  * src/sim/env/traffic.ts, drawn as herself by src/render/traffic.ts.)
  */
 export function namedBerths(): THREE.Object3D[] {
-  /** A boat's place `off` m to the right of a pontoon's centre line a→b, t of the way along, bow towards b. */
-  const along = (a: [number, number], b: [number, number], t: number, off: number, model: THREE.Object3D, name: string) => {
-    const de = b[0] - a[0];
-    const dn = b[1] - a[1];
-    const len = Math.hypot(de, dn);
-    const ue = de / len;
-    const un = dn / len;
-    const e = a[0] + de * t + un * off;
-    const n = a[1] + dn * t - ue * off;
-    model.position.set(e, 0, -n);
-    // The models' bows point along -z (north): turn them to the bearing of a→b.
-    model.rotation.y = -Math.atan2(ue, un);
-    model.name = name;
-    return model;
-  };
   return [
     // Sandquay: the east arm of the college's pontoon, from its south end to its north end; the river to its east.
-    ...[0.22, 0.5, 0.78].map((t, i) => along([-315.8, 1300.4], [-356.05, 1346.15], t, 4.4, navyTrainingBoatModel(15, 4.4, i + 1), `navy-training-boat-${i + 1}`)),
+    ...FIXED_BOATS.map((b, i) => {
+      const m = navyTrainingBoatModel(b.length, b.beam, i + 1);
+      m.position.set(b.e, 0, -b.n);
+      // The models' bows point along -z (north): turn them to the boat's heading.
+      m.rotation.y = -b.heading;
+      m.name = b.name;
+      return m;
+    }),
   ];
 }
 

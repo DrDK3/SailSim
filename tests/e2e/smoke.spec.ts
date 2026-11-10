@@ -392,6 +392,13 @@ test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, r
   await page.evaluate(() => {
     for (let i = 0; i < 60 && !window.__squib!.controller.getState().race!.raceOver; i++) window.__squib!.advance(30);
   });
+  // If the race has not closed, say where everyone is (for a failure on another machine).
+  const state = await page.evaluate(() => {
+    const c = window.__squib!.controller as unknown as { race?: { session: { fleet: { boats: { id: string; sim: { state: { n: number; e: number } } }[] } } }; getState: () => { snapshot: { t: number }; race?: { raceOver: boolean; phase: string; attempt: number; log: { t: number; text: string }[]; signals: { t: number; text: string }[] } } };
+    const st = c.getState();
+    return { t: st.snapshot.t, over: st.race?.raceOver, phase: st.race?.phase, attempt: st.race?.attempt, log: st.race?.log.map((l) => `${Math.round(l.t)} ${l.text}`), signals: st.race?.signals.map((l) => `${Math.round(l.t)} ${l.text}`), boats: c.race?.session.fleet.boats.map((b) => `${b.id} ${Math.round(b.sim.state.n)},${Math.round(b.sim.state.e)}`) };
+  });
+  expect(state.over, JSON.stringify(state)).toBe(true);
   const results = page.getByTestId('results');
   await expect(results).toBeVisible();
   await expect(results).toContainText('AI01');

@@ -1607,3 +1607,14 @@ The owner asked for a red team of a quick-start tutorial ("press here to do this
 | **Progress kept**: the lesson list marks the next lesson (all stay open), the welcome counts the basics done; lesson times and bests were already kept | `src/ui/TutorialPanel.tsx`, `src/ui/Welcome.tsx` | `tests/e2e/ux.spec.ts` |
 
 **Not inspected on a real GPU** (GR-1): the lights, the ghost and the report's picture were checked in software rendering only.
+
+### Boats in their berths are solid (the owner, 10 Nov 2026)
+
+The owner: "the squib sails through boats in the marina areas" (a screenshot inside a marina, her bow through a moored motor cruiser). The picture draws a boat in every taken berth of the marinas and the river's pontoons (852 berths), and three training boats at the Sandquay pontoon, but the physics knew only the swinging moorings, the pontoons and the moving traffic. Now the fleet meets every boat lying in a berth while the berth is taken, using the same occupancy as the picture (the traffic's timetable: boats out, visitors in), checked once a second of the run, as a hard hull a little inside the boat's length and beam (E). The Sandquay boats' positions now come from one list shared by the picture and the physics. Physics changed only near berths: the determinism hash is unchanged (`11824f89f479d0f4`).
+
+| What changed | Files | Checked by |
+|---|---|---|
+| Taken berths and the Sandquay training boats are solid; a contact is reported as "a boat in her berth (the marina)" with its damage; an empty berth lets her through | `src/sim/race/fleet.ts`, `src/sim/env/marinas.ts` (`FIXED_BOATS`), `src/render/dart.ts` | `tests/sim/berthedSolid.test.ts` (sailed square into six outer berths at 4 kn: she stops against the boat, at most 0.16 m into her box); in the app, Dart Marina, contacts at 1.1–2.3 m/s with their damage (software rendering) |
+
+Also this round, for CI's software renderer: while a kept run or a ghost's recording is sailed through, the 3D view is not redrawn (it only showed the run paused), so the sailing gets the device's time; and the hints look for ferries only where the traffic can be.
+

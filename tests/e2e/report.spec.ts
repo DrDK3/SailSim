@@ -12,12 +12,15 @@ test('report a visual problem: a picture of the view and the details, saved loca
   const sent: string[] = [];
   await page.goto('/?nowelcome&quality=low');
   await expect(page.getByTestId('stw')).toBeVisible();
+  // The River Dart data and its first frames (shaders compiling in software rendering) hold the page for a while.
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 * CI_SLOW });
+  await page.waitForFunction(() => new Promise<boolean>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { timeout: 60_000 * CI_SLOW });
   // From here on, any request at all would be the report leaving the device.
   page.on('request', (r) => {
     if (r.method() !== 'GET') sent.push(`${r.method()} ${r.url()}`);
   });
   await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
-  await page.getByTestId('report-start').click({ timeout: 30_000 * CI_SLOW });
+  await page.getByTestId('report-start').click({ timeout: 60_000 * CI_SLOW });
   const box = page.getByTestId('report-problem');
   await expect(box).toBeVisible();
   // The picture is the frame drawn: a PNG of the canvas's size, not blank.

@@ -442,3 +442,36 @@ export class MarinaPlanner {
     return out;
   }
 }
+
+/**
+ * Boats drawn lying at their own pontoons that are not in the berth model: the college's three training boats on the
+ * east arm of the Sandquay pontoon (15 m by 4.4 m, E), 4.4 m off its centre line, bows north. The picture
+ * (src/render/dart.ts namedBerths) and the physics (src/sim/race/fleet.ts) both use these.
+ */
+export interface FixedBoat {
+  name: string;
+  label: string;
+  n: number;
+  e: number;
+  /** Bow direction (rad, compass). */
+  heading: number;
+  length: number;
+  beam: number;
+}
+
+function alongPontoon(a: [number, number], b: [number, number], t: number, off: number): { n: number; e: number; heading: number } {
+  const de = b[0] - a[0];
+  const dn = b[1] - a[1];
+  const len = Math.hypot(de, dn);
+  const ue = de / len;
+  const un = dn / len;
+  return { e: a[0] + de * t + un * off, n: a[1] + dn * t - ue * off, heading: Math.atan2(ue, un) };
+}
+
+export const FIXED_BOATS: readonly FixedBoat[] = [0.22, 0.5, 0.78].map((t, i) => ({
+  name: `navy-training-boat-${i + 1}`,
+  label: 'a training boat at the Sandquay pontoon',
+  ...alongPontoon([-315.8, 1300.4], [-356.05, 1346.15], t, 4.4),
+  length: 15,
+  beam: 4.4,
+}));

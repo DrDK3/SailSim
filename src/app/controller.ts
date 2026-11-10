@@ -266,6 +266,8 @@ export interface UiState {
 type Listener = () => void;
 
 /** Helm and sheet rates for held keys/buttons (fraction of full travel per second). */
+/** Sailing a recording through (continue, ghosts): run this long between letting the page update (ms). */
+const CATCH_UP_SLICE_MS = 150;
 const HELM_RATE = 1.4;
 const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
@@ -886,7 +888,8 @@ export class SimController {
     this.lastMainSide = s.mainSide;
     let ferryM: number | undefined;
     const fleet = this.race?.session.fleet ?? this.soloFleet;
-    if (fleet) {
+    // Only where the traffic can be (its routes' box): elsewhere there is nothing to be close to.
+    if (fleet && fleet.nearFerries(s.n, s.e)) {
       for (const v of fleet.ferriesAt(s.t)) {
         if (!v.moving || !(v.kind === 'tug-float' || v.kind === 'floating-bridge' || v.kind === 'passenger-ferry' || v.kind === 'paddle-steamer' || v.kind === 'river-cruiser')) continue;
         const d = Math.hypot(v.n - s.n, v.e - s.e) - v.length / 2;
@@ -1096,7 +1099,7 @@ export class SimController {
     const chunk = () => {
       if (!this.catchUp || !this.replay) return;
       const t0 = performance.now();
-      while (this.sim.step < this.catchUp.to && !this.replay.ended && performance.now() - t0 < 40) {
+      while (this.sim.step < this.catchUp.to && !this.replay.ended && performance.now() - t0 < CATCH_UP_SLICE_MS) {
         this.stepSim();
         if (this.sim.step % 10 === 0) this.recordTelemetry(this.sim.snapshot());
       }
@@ -1195,7 +1198,7 @@ export class SimController {
     const chunk = () => {
       if (!this.replay || this.ghostLoading === undefined) return;
       const t0 = performance.now();
-      while (this.sim.step <= end && performance.now() - t0 < 40) {
+      while (this.sim.step <= end && performance.now() - t0 < CATCH_UP_SLICE_MS) {
         if (this.sim.step % GHOST_EVERY === 0) poses.push(poseOf('ghost', this.sim.snapshot(false)));
         if (this.sim.step === end || this.replay.ended) break;
         this.stepSim();
@@ -1585,7 +1588,9 @@ export class SimController {
       this.renderTime += dt;
       this.watchPace(rawDt, steps * DT);
     }
-    this.drawScene(now, this.paused ? 1 : clamp(this.accumulator / DT, 0, 1), dt);
+    // While a kept run or a ghost's recording is sailed through, the picture would only show it paused: skip drawing,
+    // so the device spends its time on the sailing (a software renderer takes seconds a frame).
+    if (this.catchUp === undefined && this.ghostLoading === undefined) this.drawScene(now, this.paused ? 1 : clamp(this.accumulator / DT, 0, 1), dt);
     this.frames++;
     if (now - this.fpsT0 > 1000) {
       this.fps = (this.frames * 1000) / (now - this.fpsT0);

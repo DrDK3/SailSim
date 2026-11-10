@@ -9,6 +9,7 @@ import { hypot2 } from '../math/hypot';
 import { PIER_CONTACT, PierGrid, pierPieces, type PierInput } from './piers';
 import { impactEnergy } from '../boat/damage';
 import { COMMITTEE_OUTLINE, committeeHeading, mooredBoatPose } from './anchored';
+import { FIXED_BOATS } from '../env/marinas';
 
 export { mooredBoatPose } from './anchored';
 
@@ -129,6 +130,13 @@ export class Fleet {
   private readonly startEpochMs: number;
   private touching = new Set<string>();
   private readonly mooredOutline = new Map<number, Outline>();
+  /**
+   * Boats lying in the marinas' and pontoons' berths (the traffic's berth model: one is there only while her berth
+   * is taken, as the picture shows), and the boats drawn at their own pontoons (FIXED_BOATS): solid, in 25 m cells.
+   */
+  private berthed: { n: number; e: number; heading: number; reach: number; outline: Outline; label: string; berth?: number }[] = [];
+  private readonly berthGrid = new Map<string, number[]>();
+  private berthsTaken?: { second: number; taken: Uint8Array };
   private piers?: PierGrid;
   private readonly nearPiers: number[] = [];
   private readonly hullPts: Vec[] = [];
@@ -165,6 +173,20 @@ export class Fleet {
       this.traffic = o.traffic ?? new RiverTraffic(o.ferries!, { current: (ms, n, e) => this.env.current((ms - start) / 1000, n, e) });
       // A run starts with every marina boat on her track (the app reuses one traffic model from run to run).
       this.traffic.resetGiveWay();
+      // The berths (only the Dart's traffic has them) and the boats at their own pontoons.
+      this.berthed = [];
+      this.berthGrid.clear();
+      if (this.traffic.berths.length) {
+        // A hull is narrower than her box at bow and stern: the box a little inside her length and beam (E).
+        this.traffic.berths.forEach((b, i) => this.berthed.push({ n: b.n, e: b.e, heading: b.heading, reach: b.length / 2 + 1, outline: boxOutline(b.length * 0.95, b.beam * 0.9), label: `a boat in her berth (${b.place})`, berth: i }));
+        for (const b of FIXED_BOATS) this.berthed.push({ n: b.n, e: b.e, heading: b.heading, reach: b.length / 2 + 1, outline: boxOutline(b.length * 0.95, b.beam * 0.9), label: b.label });
+      }
+      this.berthed.forEach((b, i) => {
+        const k = `${Math.floor(b.n / 25)},${Math.floor(b.e / 25)}`;
+        const list = this.berthGrid.get(k) ?? [];
+        list.push(i);
+        this.berthGrid.set(k, list);
+      });
       const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route), ...this.traffic.steamerTrack()];
       this.ferryBox = pts.length
         ? { nMin: Math.min(...pts.map((p) => p[1])) - 150, nMax: Math.max(...pts.map((p) => p[1])) + 150, eMin: Math.min(...pts.map((p) => p[0])) - 150, eMax: Math.max(...pts.map((p) => p[0])) + 150 }
@@ -180,6 +202,13 @@ export class Fleet {
         this.mooredGrid.set(k, list);
       });
     }
+  }
+
+  /** Which berths are taken this second of the run (the traffic's own timetable: deterministic). */
+  private takenNow(): Uint8Array {
+    const second = Math.floor(this.time);
+    if (this.berthsTaken?.second !== second) this.berthsTaken = { second, taken: this.traffic!.berthsTaken(this.startEpochMs + second * 1000) };
+    return this.berthsTaken.taken;
   }
 
   boat(id: string): FleetBoat | undefined {
@@ -343,6 +372,30 @@ export class Fleet {
               const f = force(c, { n: -va.n, e: -va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
               apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.boat);
               touch(pairKey(oa.id, `moored-${k}`), { kind: 'moored', a: oa.id, b: `moored-${k}`, label: `a moored boat (${mb.area})`, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point });
+            }
+          }
+        }
+      }
+      // Boats in their berths near this boat: solid while the berth is taken (checked once a second of the run).
+      if (this.berthed.length) {
+        const ci = Math.floor(A.n / 25);
+        const cj = Math.floor(A.e / 25);
+        let taken: Uint8Array | undefined;
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            const list = this.berthGrid.get(`${ci + di},${cj + dj}`);
+            if (!list) continue;
+            for (const k of list) {
+              const bb = this.berthed[k]!;
+              const reach = oa.outline.radius + bb.reach;
+              if ((A.n - bb.n) ** 2 + (A.e - bb.e) ** 2 > reach * reach) continue;
+              if (bb.berth !== undefined && !(taken ??= this.takenNow())[bb.berth]) continue;
+              const c = polygonContact(A.pts, placeOutline(bb.outline, bb.n, bb.e, bb.heading));
+              if (!c) continue;
+              const va = pointVel(A, c.point);
+              const f = force(c, { n: -va.n, e: -va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
+              apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.boat);
+              touch(pairKey(oa.id, `berthed-${k}`), { kind: 'moored', a: oa.id, b: `berthed-${k}`, label: bb.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point });
             }
           }
         }
