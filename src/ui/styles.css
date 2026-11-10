@@ -598,6 +598,17 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .quick-race .more-options, .quick-race .bests { margin: 6px 0; }
 .quick-race .more-options summary, .quick-race .bests summary { cursor: pointer; font-size: 13px; }
 .quick-race .bests ul { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+/* Start-line readouts and the start drill (src/app/startLine.ts). */
+.line-readouts { margin-top: 6px; display: grid; gap: 2px; }
+.line-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.line-cells > div { display: grid; }
+.line-val { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
+.line-val.late { color: var(--bad); }
+.drill-card { margin: 6px 0; padding: 8px; border-radius: 6px; font-size: 12.5px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.drill-card p { margin: 4px 0; }
+.drill-table { border-collapse: collapse; margin: 2px 0 6px; }
+.drill-table th { text-align: left; font-weight: 500; padding: 1px 10px 1px 0; color: var(--muted); }
+.drill-table td { padding: 1px 0; font-variant-numeric: tabular-nums; }
 .race-best { margin: 6px 0; padding: 6px 8px; border-radius: 6px; font-size: 12.5px; background: color-mix(in srgb, var(--good) 14%, transparent); }
 .quick-race .qr-count { display: flex; align-items: center; gap: var(--s2); }
 .quick-race .qr-count input { flex: 1; min-width: 120px; }

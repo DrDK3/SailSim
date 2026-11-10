@@ -52,6 +52,7 @@ import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLe
 import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
+import { WindFollower, drillVerdict, lineBias, lineReadout, scoreStart, type DrillStart, type LineBias, type LineReadout, type P } from './startLine';
 import { SoundScape, type AudioSettings } from '../render/audio';
 import { presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { lightingStart, type LightingPreset } from './lighting';
@@ -142,6 +143,10 @@ export interface RaceUi {
   results?: FleetRow[];
   raceOver: boolean;
   disqualified?: string;
+  /** Before you start: where you are against the line and which end the wind favours (src/app/startLine.ts). */
+  line?: { readout: LineReadout; bias?: LineBias; ends: [string, string] };
+  /** A start drill: this start scored once made, and the starts before it this session. */
+  drill?: { attempt: number; last?: DrillStart & { verdict: string }; history: DrillStart[]; bestLateS?: number };
   /** Your start and finish against your bests in this browser (src/app/bests.ts). */
   best?: { start?: { delayS: number; best: boolean; previousS?: number }; finish?: { timeS: number; best: boolean; previousS?: number; label: string } };
 }
@@ -280,6 +285,9 @@ type Listener = () => void;
 /** Helm and sheet rates for held keys/buttons (fraction of full travel per second). */
 /** Sailing a recording through (continue, ghosts): run this long between letting the page update (ms). */
 const CATCH_UP_SLICE_MS = 150;
+/** A drill start is scored this long after the gun if you have not started (s, E), and so many are kept. */
+const DRILL_SCORE_AFTER_S = 30;
+const DRILL_HISTORY = 12;
 const HELM_RATE = 1.4;
 const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
@@ -373,6 +381,18 @@ export class SimController {
   private raceTag?: { key: string; scenario: string };
   /** This race's start and finish against your bests (once each). */
   private raceBest: NonNullable<RaceUi['best']> = {};
+  /** The wind at the start line, followed slowly so the line's bias shows the shifts that last (src/app/startLine.ts). */
+  private lineWind = new WindFollower();
+  /** A start drill (src/app/startLine.ts): the same start again and again, each one scored. */
+  private drill?: {
+    options: QuickRaceOptions;
+    scenario: string;
+    attempt: number;
+    history: DrillStart[];
+    gun?: { t: number; pos: P; vel: P; bias: LineBias; ocs: boolean };
+    crossed?: P;
+    scored?: DrillStart;
+  };
   /** The teaching overlay outside lessons (Settings; on by default at the Learn level). */
   private teachingOn = readFlag('squib.teaching', false);
   private interfaceLevel: InterfaceLevel = loadLevel();
@@ -553,6 +573,10 @@ export class SimController {
     this.showResults = false;
     this.track.clear();
     this.incidents.reset();
+    this.lineWind.reset();
+    // A drill goes on through a Reset of its own start (the next attempt); anything else ends it.
+    if (this.drill && this.drill.scenario === JSON.stringify(this.scenario)) this.drill = { ...this.drill, attempt: this.drill.attempt + 1, gun: undefined, crossed: undefined, scored: undefined };
+    else this.drill = undefined;
     this.showProtest = false;
     this.resultsShown = false;
     this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
@@ -617,6 +641,7 @@ export class SimController {
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
     if (this.sim.step % (TRACK_EVERY_S * 100) === 0) this.recordTrack();
     if (this.race && !this.replay && this.sim.step % Math.round(FRAME_EVERY_S * 100) === 0) this.recordFleetFrame();
+    if (this.race && this.sim.step % 10 === 0) this.followLine();
     // Only your own sailing counts towards your bests, not a replay of a recording.
     if (this.race && !this.replay && this.sim.step % 50 === 0) this.checkRaceBests();
   }
@@ -692,6 +717,73 @@ export class SimController {
     this.raceTag = o.challenge ? { key: o.challenge, scenario: JSON.stringify(q.scenario) } : undefined;
     if (this.paused) this.togglePause();
     return { summary: q.summary, note: q.note };
+  }
+
+  /**
+   * A start drill (src/app/startLine.ts): a race set up as usual but sailed for its start, which is scored once you
+   * have started (or half a minute after the gun); then the same start again, or a new wind.
+   */
+  startDrill(o: QuickRaceOptions, keepHistory = false): { summary: string; note?: string } | undefined {
+    const prev = keepHistory ? this.drill : undefined;
+    this.drill = undefined;
+    const r = this.startQuickRace(o);
+    if (!r) return undefined;
+    this.drill = { options: o, scenario: JSON.stringify(this.scenario), attempt: (prev?.attempt ?? 0) + 1, history: prev?.history ?? [] };
+    this.publish(true);
+    return r;
+  }
+
+  /** The drill again: the same start (`newWind`: a fresh draw of the random conditions). */
+  drillAgain(newWind = false): void {
+    const d = this.drill;
+    if (!d) return;
+    if (!newWind) {
+      this.restart();
+      return;
+    }
+    this.startDrill({ ...d.options, seed: 1 + Math.floor(Math.random() * 9998) }, true);
+  }
+
+  /** Stop drilling: the race goes on as an ordinary race. */
+  endDrill(): void {
+    this.drill = undefined;
+    this.publish(true);
+  }
+
+  get drilling(): boolean {
+    return !!this.drill;
+  }
+
+  /** The ends of the start line in words: the committee boat, the pin end, or the mark's name. */
+  private endLabels(r: NonNullable<SimController['race']>): [string, string] {
+    const kindOf = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
+    const label = (id: string) => (kindOf(id) === 'committee-boat' ? 'the committee boat' : kindOf(id) === 'pin' ? 'the pin end' : (r.course.marks.find((m) => m.id === id)?.name ?? id));
+    const [ia, ib] = r.course.start.ends;
+    return [label(ia), label(ib)];
+  }
+
+  /** Ten times a second in a race: the wind at the line followed; in a drill, the gun and your start caught and scored. */
+  private followLine(): void {
+    const r = this.race!;
+    const [a, b] = r.resolved.start;
+    const t = this.sim.time;
+    this.lineWind.update(this.sim.env.wind(t, (a.n + b.n) / 2, (a.e + b.e) / 2), 0.1);
+    const d = this.drill;
+    if (!d || d.scored || this.replay) return;
+    const cm = r.session.committee;
+    const st = r.session.judgeOf('you').state(t);
+    const s = this.sim.snapshot(false);
+    const vel = { n: s.sog * Math.cos(s.cog), e: s.sog * Math.sin(s.cog) };
+    const first = r.resolved.legs[0]?.target ?? { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    // A general recall moves the gun: catch it again.
+    if (d.gun && d.gun.t !== cm.startTime) d.gun = undefined;
+    if (!d.gun && t >= cm.startTime) d.gun = { t: cm.startTime, pos: { n: s.n, e: s.e }, vel, bias: lineBias([a, b], first, this.lineWind.value ?? vel), ocs: st.ocs };
+    if (st.startTime !== undefined && !d.crossed) d.crossed = { n: s.n, e: s.e };
+    const done = d.gun && ((st.startTime !== undefined && t >= st.startTime + 2) || t >= cm.startTime + DRILL_SCORE_AFTER_S);
+    if (!done || !d.gun) return;
+    d.scored = scoreStart({ attempt: d.attempt, line: [a, b], firstMark: first, gunT: d.gun.t, startedT: st.startTime, ocs: d.gun.ocs, atGun: d.gun.pos, velocityAtGun: d.gun.vel, crossed: d.crossed, bias: d.gun.bias });
+    d.history = [...d.history, d.scored].slice(-DRILL_HISTORY);
+    this.publish(true);
   }
 
   /**
@@ -2331,11 +2423,9 @@ export class SimController {
 
   /** The nearer end of the starting line from the user's boat, for a boat over the line at the start. */
   private ocsGuideNow(r: NonNullable<SimController['race']>, s: { n: number; e: number; psi: number }, sinceStartS: number): OcsGuide {
-    const kindOf = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
-    const label = (id: string) => (kindOf(id) === 'committee-boat' ? 'the committee boat' : kindOf(id) === 'pin' ? 'the pin end' : (r.course.marks.find((m) => m.id === id)?.name ?? id));
     const [a, b] = r.resolved.start;
-    const [ia, ib] = r.course.start.ends;
-    return ocsGuide({ n: s.n, e: s.e, headingRad: s.psi }, [{ ...a, label: label(ia) }, { ...b, label: label(ib) }], sinceStartS);
+    const [la, lb] = this.endLabels(r);
+    return ocsGuide({ n: s.n, e: s.e, headingRad: s.psi }, [{ ...a, label: la }, { ...b, label: lb }], sinceStartS);
   }
 
   private raceUi(): RaceUi | undefined {
@@ -2406,7 +2496,25 @@ export class SimController {
       raceOver,
       disqualified: dq,
       best: this.raceBest.start || this.raceBest.finish ? { ...this.raceBest } : undefined,
+      line: st.phase === 'pre-start' && !st.ocs ? this.lineUi(r, cm.startTime - t) : undefined,
+      drill: this.drill
+        ? {
+            attempt: this.drill.attempt,
+            last: this.drill.scored ? { ...this.drill.scored, verdict: drillVerdict(this.drill.scored) } : undefined,
+            history: this.drill.history,
+            bestLateS: this.drill.history.reduce<number | undefined>((m, h) => (h.lateS === undefined || h.ocs ? m : m === undefined ? h.lateS : Math.min(m, h.lateS)), undefined),
+          }
+        : undefined,
     };
+  }
+
+  private lineUi(r: NonNullable<SimController['race']>, toGunS: number): NonNullable<RaceUi['line']> {
+    const [a, b] = r.resolved.start;
+    const s = this.currSnap;
+    const first = r.resolved.legs[0]?.target ?? { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    const vel = { n: s.sog * Math.cos(s.cog), e: s.sog * Math.sin(s.cog) };
+    const w = this.lineWind.value;
+    return { readout: lineReadout([a, b], first, { n: s.n, e: s.e }, vel, toGunS), bias: w ? lineBias([a, b], first, w) : undefined, ends: this.endLabels(r) };
   }
 
   subscribe = (l: Listener): (() => void) => {

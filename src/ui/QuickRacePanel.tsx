@@ -54,7 +54,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
   const practice = o.venue === 'start-bay' && o.course !== 'short' ? PRACTICE_KINDS.find((k) => k.kind === o.course) : undefined;
   const library = allCourses();
 
-  const start = (opts: QuickRaceOptions, remember = true) => {
+  const start = (opts: QuickRaceOptions, remember = true, drill = false) => {
     if (remember) {
       try {
         localStorage.setItem(KEY, JSON.stringify(opts));
@@ -63,7 +63,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
       }
     }
     ctl.leaveTo('Starting a new race', () => {
-      const r = ctl.startQuickRace(opts);
+      const r = drill ? ctl.startDrill(opts) : ctl.startQuickRace(opts);
       if (!r) setMessage(`Could not start: ${ctl.getState().scenarioError ?? 'invalid settings'}`);
       else {
         setMessage(r.note ? `${r.summary}. ${r.note}` : `${r.summary}.`);
@@ -241,6 +241,13 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
       <div className="row left wrap">
         <button className="primary" onClick={() => startNew(o.conditions === 'random')} data-testid="quick-race-start">Start race</button>
         {o.conditions === 'random' && <button onClick={() => startNew(false)} title={`Sail the same random conditions again (seed ${o.seed})`}>Same conditions again</button>}
+        <button
+          onClick={() => start(o, true, true)}
+          title="The start of this race, again and again: each start scored (how late you crossed, where on the line, your speed at the gun), with the time and distance to the line and the line's bias shown before the gun"
+          data-testid="drill-start"
+        >
+          Practise the start
+        </button>
       </div>
       {(Object.keys(bests.races).length > 0 || bests.start) && (
         <details className="bests" data-testid="bests">

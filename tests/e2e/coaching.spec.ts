@@ -89,3 +89,30 @@ test('the protest room: a contact in a race, watched again with the rule in plai
   await expect(page.getByTestId('protest-play')).toHaveText(/Play|Watch again/);
   expect(errors).toEqual([]);
 });
+
+test('start drill: the line readouts before the gun, the start scored, and the same start again', async ({ page }) => {
+  test.setTimeout(240_000 * CI_SLOW);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await ready(page);
+  await page.evaluate(() => window.__squib!.controller.startDrill({ competitors: 0, level: 'good', venue: 'start-bay', course: 'short', conditions: 'random', wind: 'medium', seed: 5, sequence: 'one-minute' }));
+  await page.evaluate(() => window.__squib!.controller.togglePause());
+  const toStart = await page.evaluate(() => window.__squib!.controller.getState().race!.toStart);
+  await page.evaluate((s) => window.__squib!.advance(s), toStart - 20);
+  await expect(page.getByTestId('line-readouts')).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await expect(page.getByTestId('line-distance')).toHaveText(/^\d+ m( over)?$/);
+  await expect(page.getByTestId('line-bias')).toHaveText(/Line square to the wind|Favoured: (the committee boat|the pin end|.+), by .+ \(\d+°\)/);
+  const line = await page.evaluate(() => window.__squib!.controller.getState().race!.line!);
+  expect(line.readout.distanceM).toBeGreaterThan(0);
+  await expect(page.getByTestId('drill')).toContainText('Start drill · start 1');
+  // Past the gun: scored half a minute after it (or once started).
+  await page.evaluate(() => window.__squib!.advance(55));
+  await expect(page.getByTestId('drill-verdict')).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  const d = await page.evaluate(() => window.__squib!.controller.getState().race!.drill!);
+  expect(d.history).toHaveLength(1);
+  expect(Number.isFinite(d.last!.atGunM)).toBe(true);
+  await page.getByTestId('drill-again').dispatchEvent('click');
+  await expect(page.getByTestId('drill')).toContainText('Start drill · start 2', { timeout: 30_000 * CI_SLOW });
+  expect(await page.evaluate(() => window.__squib!.controller.getState().race!.toStart)).toBeGreaterThan(50);
+  expect(errors).toEqual([]);
+});
