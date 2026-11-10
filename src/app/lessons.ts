@@ -4,7 +4,7 @@ import type { ControlInput } from '../sim/simulation';
 import { angleDiff, type LessonRecord, type StepMemory, type TutorialSample, type TutorialStep } from './tutorial';
 
 /**
- * Six short lessons (review §8.1 and U9), each with its own water and wind, a goal per step checked as you sail,
+ * Six short lessons (review §8.1 and U9), then three in seamanship (below), each with its own water and wind, a goal per step checked as you sail,
  * and a result card at the end with what you did and the next lesson. They replace the one long tutorial.
  *
  *  1. Steering: heading against course over the ground, and a buoy to sail to.
@@ -19,13 +19,17 @@ import { angleDiff, type LessonRecord, type StepMemory, type TutorialSample, typ
  * Getting out of irons is not taught: drifting backwards out of irons is not modelled yet (review PH-4).
  */
 
-export type LessonId = 'steer' | 'wind' | 'trim' | 'turns' | 'start' | 'tide';
+export type LessonId = 'steer' | 'wind' | 'trim' | 'turns' | 'start' | 'tide' | 'mooring' | 'alongside' | 'mob';
+
+/** The six basics, then seamanship (open to all, suggested after the basics). */
+export type LessonGroup = 'basics' | 'seamanship';
 
 /** Parts of the teaching overlay a lesson shows in the 3D view (src/render/teaching.ts). */
 export type OverlayPart = 'heading' | 'cog' | 'current' | 'wind' | 'vmg';
 
 export interface Lesson {
   id: LessonId;
+  group: LessonGroup;
   number: number;
   title: string;
   /** One line for the list of lessons. */
@@ -135,9 +139,169 @@ function tackStep(id: string, title: string, body: string, n: number): TutorialS
   };
 }
 
+// ------------------------------------------------------------------ seamanship (red team, 10 Nov 2026)
+
+/**
+ * Three seamanship lessons, in the same steady open water: picking up a mooring, stopping alongside, and recovering a
+ * man overboard. They teach slowing the boat to a stop where you choose, by turning towards the wind and letting
+ * the sheets go. The methods are general practice in sail training, not any body's syllabus, and the thresholds are
+ * the simulator's (E). There is no reefing lesson: the boat has no reefing control, and whether the class rules
+ * allow a reef was not established. There is no capsize-recovery lesson: a Squib is a ballasted keelboat, and
+ * righting a capsized dinghy does not apply to her.
+ */
+
+/** The lessons' wind comes from here (openWater). */
+const LESSON_WIND_FROM = 225;
+/** a − b in degrees, −180 … 180. */
+const angleDiffSigned = (a: number, b: number) => ((((a - b) % 360) + 540) % 360) - 180;
+
+/** Stopped, as the lessons judge it: slower than this over the ground (kn, E). */
+const STOP_KN = 0.8;
+const near = (s: TutorialSample, m: number) => (s.targetDistM ?? Infinity) < m;
+const relOf = (s: TutorialSample) => Math.abs(s.targetBearingRelDeg ?? 180);
+const stopReadout = (what: string) => (s: TutorialSample) =>
+  s.targetDistM === undefined ? undefined : `${what} ${Math.round(s.targetDistM)} m · ${(s.sogKn ?? s.stwKn).toFixed(1)} kn over the ground`;
+
+const SEAMANSHIP: Lesson[] = [
+  {
+    id: 'mooring',
+    group: 'seamanship',
+    number: 7,
+    title: 'Picking up a mooring',
+    summary: 'Come to a stop with the mooring buoy at the bow, heading into the wind.',
+    minutes: 4,
+    scenario: openWater(8, 135),
+    input: AUTO,
+    overlay: ['heading', 'wind'],
+    target: { bearingDeg: 110, distM: 170 },
+    steps: [
+      explain(
+        'intro',
+        'Stopping where you choose',
+        'A sailing boat has no brakes. To stop, you point towards the wind and let the sheets go: the sails stop driving and the boat coasts to a halt. A moored boat lies head to wind (or to the stream), so you pick up her mooring heading the same way. The yellow buoy is the mooring.',
+        { hint: 'Press Next when you are ready.', targets: ['compass'] },
+      ),
+      {
+        id: 'below',
+        title: 'Set up downwind of it',
+        body: 'Get about four to seven boat lengths (20–45 m) from the buoy on its downwind side, so that you can sail up to it on a close reach (about 60° off the wind) and then turn into the wind beside it.',
+        hint: 'The wind arrow shows where the wind comes from: you want the buoy between you and the wind.',
+        targets: ['helm'],
+        goal: (s) => near(s, 45) && !near(s, 18) && Math.abs(angleDiffSigned(s.targetBearingDeg ?? 0, LESSON_WIND_FROM)) < 70,
+        readout: stopReadout('Buoy'),
+      },
+      {
+        id: 'stop',
+        title: 'Pick it up',
+        body: 'Sail towards the buoy and let both sheets go (S and Q, or ease them right out) when you are a few boat lengths off: the boat slows as she coasts up to it, and a last turn into the wind stops her. Stop with the buoy at the bow: within 5 m, ahead of you, under 0.8 kn.',
+        hint: 'Too fast? Turn away a little and come round again. Too slow and short? Sheet in for a moment to get going.',
+        targets: ['helm', 'main', 'jib'],
+        goal: (s) => near(s, 5) && relOf(s) < 45 && (s.sogKn ?? s.stwKn) < STOP_KN,
+        holdS: 1,
+        onDone: (s, m, rec) => {
+          rec.stopS = s.t - m.start.t;
+          rec.stopDistM = s.targetDistM ?? NaN;
+        },
+        readout: stopReadout('Buoy'),
+      },
+      explain('result', 'Head to wind', 'Turning into the wind is how you stop a sailing boat. On the river the stream matters as much as the wind: a moored boat lies to whichever is stronger, and you approach the way she lies.'),
+    ],
+    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.stopDistM !== undefined ? `You stopped ${rec.stopDistM.toFixed(1)} m from the buoy.` : 'You skipped the pick-up.'],
+  },
+  {
+    id: 'alongside',
+    group: 'seamanship',
+    number: 8,
+    title: 'Coming alongside',
+    summary: 'Stop with a pontoon’s end (the buoy) beside you, as you would to step ashore.',
+    minutes: 4,
+    scenario: openWater(8, 135),
+    input: AUTO,
+    overlay: ['heading', 'wind'],
+    target: { bearingDeg: 100, distM: 170 },
+    steps: [
+      explain(
+        'intro',
+        'Alongside',
+        'Coming alongside a pontoon is the same skill as picking up a mooring, but you stop with the pontoon beside you rather than at the bow. The yellow buoy marks the end of the pontoon. Approach slowly, into the wind, and plan to stop with it abeam.',
+        { hint: 'Press Next when you are ready.', targets: ['compass'] },
+      ),
+      {
+        id: 'stop',
+        title: 'Stop beside it',
+        body: 'Come up into the wind with the sheets eased and stop with the buoy beside you: within 5 m, abeam (off the side of the boat), under 0.8 kn, for 2 seconds.',
+        hint: 'Aim a boat’s width to one side of it, so it ends up beside you and not under the bow.',
+        targets: ['helm', 'main', 'jib'],
+        goal: (s) => near(s, 5) && relOf(s) > 50 && relOf(s) < 130 && (s.sogKn ?? s.stwKn) < STOP_KN,
+        holdS: 2,
+        onDone: (s, m, rec) => {
+          rec.stopS = s.t - m.start.t;
+          rec.stopDistM = s.targetDistM ?? NaN;
+        },
+        readout: stopReadout('Pontoon end'),
+      },
+      explain('result', 'Slow is good', 'Alongside, speed is what does damage: no faster than you would walk into a wall. The wind and stream on the river decide which way to approach.'),
+    ],
+    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.stopDistM !== undefined ? `You stopped alongside, ${rec.stopDistM.toFixed(1)} m off.` : 'You skipped the approach.'],
+  },
+  {
+    id: 'mob',
+    group: 'seamanship',
+    number: 9,
+    title: 'Man overboard',
+    summary: 'Sail away, turn, come back and stop beside the person in the water.',
+    minutes: 5,
+    scenario: openWater(8, 135),
+    input: AUTO,
+    overlay: ['heading', 'wind'],
+    // Just astern of the boat as the lesson begins (she starts heading 135°).
+    target: { bearingDeg: 315, distM: 10 },
+    steps: [
+      explain(
+        'intro',
+        'Man overboard!',
+        'Someone has gone over the side: the yellow buoy marks them. Shout “man overboard”, and have one of the crew point at them and never stop pointing. You will sail away a short distance, turn, and come back to stop beside them.',
+        { hint: 'Press Next to start.', targets: ['compass'] },
+      ),
+      {
+        id: 'away',
+        title: 'Sail away',
+        body: 'Keep sailing across the wind (a beam reach) for about ten boat lengths: get 50 m from the person, so you have room to turn and come back under control.',
+        targets: ['helm', 'twa'],
+        goal: (s) => !near(s, 50),
+        readout: stopReadout('Person'),
+      },
+      {
+        id: 'turn',
+        title: 'Turn',
+        body: 'Tack: turn through the wind onto the other tack, so you can sail back.',
+        targets: ['helm'],
+        goal: (s, m) => s.mainSide !== m.start.mainSide && s.twaDeg >= 35,
+        readout: stopReadout('Person'),
+      },
+      {
+        id: 'back',
+        title: 'Come back and stop',
+        body: 'Sail back, get a few boat lengths downwind of them, then turn into the wind with the sheets eased and stop beside them: within 5 m, under 0.8 kn, for 2 seconds.',
+        hint: 'Approach slowly: a moving boat is dangerous to someone in the water.',
+        targets: ['helm', 'main', 'jib'],
+        goal: (s) => near(s, 5) && (s.sogKn ?? s.stwKn) < STOP_KN,
+        holdS: 2,
+        onDone: (s, m, rec) => {
+          rec.recoverS = s.t;
+        },
+        readout: stopReadout('Person'),
+      },
+      explain('result', 'Recovered', 'Getting them back aboard is the hard part on a real boat, and is not simulated. Practise the drill on the water with an instructor.'),
+    ],
+    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.recoverS !== undefined ? `Back beside them after ${mmss(rec.recoverS)} of sailing.` : 'You skipped the recovery.'],
+  },
+];
+
 export const LESSONS: Lesson[] = [
   {
     id: 'steer',
+    group: 'basics',
     number: 1,
     title: 'Steering',
     summary: 'The helm, your heading against your course over the ground, and a buoy to sail to.',
@@ -176,6 +340,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'wind',
+    group: 'basics',
     number: 2,
     title: 'The wind',
     summary: 'True and apparent wind, the points of sail, and the no-go zone.',
@@ -227,6 +392,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'trim',
+    group: 'basics',
     number: 3,
     title: 'Trim',
     summary: 'Telltales, luffing and stalling, and when to use auto-trim.',
@@ -274,6 +440,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'turns',
+    group: 'basics',
     number: 4,
     title: 'Tacking and gybing',
     summary: 'Turning through the wind and with it, timed against the model.',
@@ -317,6 +484,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'start',
+    group: 'basics',
     number: 5,
     title: 'The start',
     summary: 'The countdown, the line, being over early and clearing.',
@@ -371,6 +539,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'tide',
+    group: 'basics',
     number: 6,
     title: 'The stream',
     summary: 'Speed through the water against over the ground, and VMG, in a steady stream.',
@@ -419,6 +588,7 @@ export const LESSONS: Lesson[] = [
     ],
     result: (rec, t) => [`Lesson time ${mmss(t)}.`, ...(rec.vmgKn !== undefined ? [`VMG held at ${kn1(rec.vmgKn)} kn.`] : [])],
   },
+  ...SEAMANSHIP,
 ];
 
 export function lessonById(id: LessonId): Lesson {
@@ -454,12 +624,19 @@ export function saveLessonDone(id: LessonId, timeS: number, now = new Date()): {
   return { progress: p, best };
 }
 
-/** The first lesson not yet done (the first again when all are). */
+/** The first lesson not yet done, basics first (the first again when all are). */
 export function nextLessonFor(p: LessonProgress): Lesson {
   return LESSONS.find((l) => !p[l.id]) ?? LESSONS[0]!;
 }
 
+/** The next lesson in the same group (the basics end at the stream; seamanship at man overboard). */
 export function lessonAfter(id: LessonId): Lesson | undefined {
   const i = LESSONS.findIndex((l) => l.id === id);
-  return LESSONS[i + 1];
+  const next = LESSONS[i + 1];
+  return next && next.group === LESSONS[i]!.group ? next : undefined;
+}
+
+/** The lessons of a group (for "Lesson 2 of 6"). */
+export function lessonsIn(group: LessonGroup): Lesson[] {
+  return LESSONS.filter((l) => l.group === group);
 }

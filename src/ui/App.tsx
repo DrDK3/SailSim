@@ -401,7 +401,7 @@ export function App({ ctl }: { ctl: SimController }) {
             ctl.setSteering(m);
           }}
           onSailNow={() => closeHub(() => (ui.level === 'learn' ? ctl.leaveTo('Starting lesson 1', () => ctl.startLesson('steer')) : ctl.leaveTo('Free sailing', () => ctl.freeSail())))}
-          lessonsDone={ui.lessons.filter((l) => l.done).length}
+          lessonsDone={ui.lessons.filter((l) => l.done && l.group === 'basics').length}
         />
       )}
       {ui.confirmLeave && (

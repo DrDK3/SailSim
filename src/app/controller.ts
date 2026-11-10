@@ -44,7 +44,7 @@ import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecor
 import { Tutorial, type TutorialState } from './tutorial';
 import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
-import { LESSONS, lessonAfter, lessonById, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
+import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
@@ -214,12 +214,12 @@ export interface UiState {
   /** The lesson running (src/app/lessons.ts), with its step, and its result card once it is finished. */
   tutorial?: TutorialState & {
     finished: boolean;
-    lesson: { id: LessonId; number: number; title: string; count: number };
+    lesson: { id: LessonId; number: number; title: string; count: number; group: LessonGroup; inGroup: number };
     /** The result card: what you did, whether it was your best time, and the next lesson. */
     result?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
   };
   /** The six lessons, with what is done in this browser. */
-  lessons: { id: LessonId; number: number; title: string; summary: string; minutes: number; done: boolean; bestS?: number }[];
+  lessons: { id: LessonId; group: LessonGroup; number: number; title: string; summary: string; minutes: number; done: boolean; bestS?: number }[];
   /** The teaching overlay (heading, course over ground, stream, winds, VMG) is on outside the lessons. */
   teaching: boolean;
   /** How much the interface shows by default (src/app/level.ts). */
@@ -957,6 +957,8 @@ export class SimController {
       jib: sailState(s.forces.jib),
       autoJib: s.input.autoJib,
       targetDistM: tg ? Math.hypot(tg.n - s.n, tg.e - s.e) : undefined,
+      targetBearingRelDeg: tg ? ((((Math.atan2(tg.e - s.e, tg.n - s.n) - s.heading) * R2D) % 360) + 540) % 360 - 180 : undefined,
+      targetBearingDeg: tg ? (((Math.atan2(tg.e - s.e, tg.n - s.n) * R2D) % 360) + 360) % 360 : undefined,
       race,
     };
   }
@@ -2068,11 +2070,18 @@ export class SimController {
           ? {
               ...this.tutorial.state,
               finished: this.tutorial.finished,
-              lesson: { id: this.lesson.id, number: this.lesson.number, title: this.lesson.title, count: LESSONS.length },
+              lesson: {
+                id: this.lesson.id,
+                number: this.lesson.number,
+                title: this.lesson.title,
+                group: this.lesson.group,
+                count: lessonsIn(this.lesson.group).length,
+                inGroup: lessonsIn(this.lesson.group).findIndex((l) => l.id === this.lesson!.id) + 1,
+              },
               result: this.lessonResult,
             }
           : undefined,
-      lessons: LESSONS.map((l) => ({ id: l.id, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id], bestS: this.lessonProgress[l.id]?.bestS })),
+      lessons: LESSONS.map((l) => ({ id: l.id, group: l.group, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id], bestS: this.lessonProgress[l.id]?.bestS })),
       teaching: this.teachingOn,
       level: this.interfaceLevel,
       confirmReset: this.confirmReset,

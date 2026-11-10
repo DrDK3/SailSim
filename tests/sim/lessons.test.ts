@@ -76,8 +76,8 @@ describe('lesson step logic', () => {
     return time;
   };
 
-  it('six lessons, each starting with its own water and ending on a result', () => {
-    expect(LESSONS.map((l) => l.id)).toEqual(['steer', 'wind', 'trim', 'turns', 'start', 'tide']);
+  it('six lessons, then three in seamanship, each starting with its own water and ending on a result', () => {
+    expect(LESSONS.map((l) => l.id)).toEqual(['steer', 'wind', 'trim', 'turns', 'start', 'tide', 'mooring', 'alongside', 'mob']);
     for (const l of LESSONS) {
       expect(l.steps.length).toBeGreaterThanOrEqual(3);
       expect(l.steps.at(-1)!.goal).toBeUndefined(); // the result card

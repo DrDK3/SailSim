@@ -394,6 +394,7 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
 .lesson-readout { margin-top: 6px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
 .lesson-result { margin: 6px 0; padding-left: 18px; line-height: 1.45; }
 .lesson-result .best { color: var(--good); font-weight: 600; }
+.lesson-group { margin: 10px 0 2px; font-size: 13px; }
 .lesson-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
 .lesson-list li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; }
 .lesson-tick { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, 0.1); }

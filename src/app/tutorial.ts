@@ -34,6 +34,9 @@ export interface TutorialSample {
   autoJib?: boolean;
   /** Distance to the lesson's target buoy, when it has one. */
   targetDistM?: number;
+  /** Where the target buoy lies from the bow (deg, −180 … 180, + to starboard), and its compass bearing (deg). */
+  targetBearingRelDeg?: number;
+  targetBearingDeg?: number;
   /** In a race: seconds to the start signal (negative after it), over the line early, and when this boat started. */
   race?: { toStart: number; ocs: boolean; startedAt?: number; signalAt: number };
 }
