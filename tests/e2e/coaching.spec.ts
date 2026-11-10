@@ -147,3 +147,49 @@ test('graphics check card: the result once for this graphics card, with the repo
   await expect(card).toContainText(/now drawing (without sky reflections|with simple materials)/);
   expect(errors).toEqual([]);
 });
+
+/** Sound (review, 10 Nov 2026): the committee's horn placed at the committee boat; the spoken countdown's option. */
+test('sound: the horn comes from the committee boat; the countdown speaks only with an on-device voice', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  // Keep every panner the page makes, to read where each sound was placed.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __panners: PannerNode[] };
+    w.__panners = [];
+    const orig = AudioContext.prototype.createPanner;
+    AudioContext.prototype.createPanner = function (this: AudioContext) {
+      const p = orig.call(this);
+      w.__panners.push(p);
+      return p;
+    };
+  });
+  await ready(page);
+  // A key press is the gesture that lets the sound start.
+  await page.keyboard.press('KeyP');
+  await page.keyboard.press('KeyP');
+  await expect.poll(() => page.evaluate(() => window.__squib!.controller.sound.running), { timeout: 30_000 * CI_SLOW }).toBe(true);
+  await page.evaluate(() => window.__squib!.controller.startQuickRace({ competitors: 0, level: 'good', venue: 'start-bay', course: 'windward-leeward', conditions: 'random', wind: 'medium', seed: 3, sequence: 'one-minute' }));
+  await page.evaluate(() => window.__squib!.controller.togglePause());
+  const toStart = await page.evaluate(() => window.__squib!.controller.getState().race!.toStart);
+  await page.evaluate((s) => window.__squib!.advance(s), toStart - 59);
+  await expect(page.getByTestId('sound-caption')).toHaveText(/One long sound: one-minute signal/);
+  const r = await page.evaluate(() => {
+    type M = { id: string; kind: string };
+    const c = window.__squib!.controller as unknown as { race: { resolved: { start: { n: number; e: number }[] }; course: { marks: M[]; start: { ends: string[] } } } };
+    const ends = c.race.course.start.ends;
+    const i = ends.findIndex((id) => c.race.course.marks.find((m) => m.id === id)?.kind === 'committee-boat');
+    const cb = c.race.resolved.start[i < 0 ? 0 : i]!;
+    const at = (window as unknown as { __panners: PannerNode[] }).__panners.map((p) => [p.positionX.value, p.positionY.value, p.positionZ.value]);
+    return { cb: i < 0 ? undefined : [cb.e, 3, -cb.n], at, models: (window as unknown as { __panners: PannerNode[] }).__panners.map((p) => p.panningModel) };
+  });
+  expect(r.cb).toBeDefined();
+  expect(r.at.some((p) => Math.abs(p[0]! - r.cb![0]!) < 0.01 && p[1] === 3 && Math.abs(p[2]! - r.cb![2]!) < 0.01)).toBe(true);
+  expect(r.models.every((m) => m === 'HRTF')).toBe(true);
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
+  const box = page.getByTestId('pref-countdown');
+  await expect(box).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await expect(page.getByTestId('settings-panel')).toContainText(/Spoken start countdown.*(no voice on this device|·)/);
+  await expect(page.getByTestId('settings-panel')).toContainText('No recordings are included');
+  expect(errors).toEqual([]);
+});

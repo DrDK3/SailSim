@@ -13,6 +13,8 @@ export interface Prefs {
   daylightView: boolean;
   /** The physics and developer tools in the More menu (also shown at the Expert level). */
   devTools: boolean;
+  /** The start countdown spoken by the device's own voice (src/app/countdown.ts, src/render/speech.ts). */
+  spokenCountdown: boolean;
 }
 
 /** A touch screen with no mouse (a phone or tablet): the battery saver starts on there. */
@@ -24,7 +26,7 @@ export function touchOnly(): boolean {
   }
 }
 
-export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false, daylightView: false, devTools: false };
+export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false, daylightView: false, devTools: false, spokenCountdown: false };
 
 function defaults(): Prefs {
   return { ...DEFAULT_PREFS, batterySaver: touchOnly() };
@@ -43,6 +45,7 @@ export function loadPrefs(): Prefs {
       batterySaver: typeof p.batterySaver === 'boolean' ? p.batterySaver : d.batterySaver,
       daylightView: typeof p.daylightView === 'boolean' ? p.daylightView : d.daylightView,
       devTools: typeof p.devTools === 'boolean' ? p.devTools : d.devTools,
+      spokenCountdown: typeof p.spokenCountdown === 'boolean' ? p.spokenCountdown : d.spokenCountdown,
     };
   } catch {
     return defaults();

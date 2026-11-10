@@ -191,7 +191,17 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           ))}
         </div>
         {!a.muted && !ui.audioRunning && <p className="fine">Sound starts when you press a key or click in the view.</p>}
-        <p className="fine">The sounds are made in the browser from the wind, the boat's speed and her sails; nothing is downloaded.</p>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.spokenCountdown} onChange={(e) => ctl.setPrefs({ spokenCountdown: e.target.checked })} data-testid="pref-countdown" />
+          Spoken start countdown in races (the minutes, 30 and 20 seconds, then from ten), in this device's own voice
+          {ui.voice ? <span className="fine-inline"> · {ui.voice}</span> : <span className="fine-inline"> · no voice on this device: nothing will be spoken</span>}
+        </label>
+        <p className="fine">
+          The sounds are made in the browser from the wind, the boat's speed and her sails, and placed round you (the horn at the committee boat, ships'
+          whistles at each ship, halyards at the moorings): best on headphones.{' '}
+          {ui.recordedSounds.length ? `Recordings in use: ${ui.recordedSounds.join(', ')}.` : 'No recordings are included; any added to the audio folder are used in place of the synthesised sound (docs/SOUND.md).'} The
+          countdown uses only voices on this device; nothing is sent anywhere.
+        </p>
         <h4 className="settings-group">Troubleshooting</h4>
         <h5>Graphics check</h5>
         <div data-testid="gpu-check">

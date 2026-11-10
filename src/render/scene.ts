@@ -789,6 +789,16 @@ export class SceneView {
     return [this.water.mesh, this.water.farMesh, this.wake.mesh, this.hullFoam.mesh, this.spray.points, this.rain.lines];
   }
 
+  /** Where the sound is heard (the camera, src/render/audio.ts): its position and which way it looks and is up. */
+  listenerPose(): { at: [number, number, number]; forward: [number, number, number]; up: [number, number, number] } {
+    const c = this.camera;
+    const e = c.matrixWorld.elements;
+    // The camera looks down its own −z; its up is its own +y.
+    const f = new THREE.Vector3(-e[8]!, -e[9]!, -e[10]!).normalize();
+    const u = new THREE.Vector3(e[4]!, e[5]!, e[6]!).normalize();
+    return { at: [e[12]!, e[13]!, e[14]!], forward: [f.x, f.y, f.z], up: [u.x, u.y, u.z] };
+  }
+
   /** The graphics card's name, as the browser reports it. */
   get gpuName(): string {
     return rendererName(this.renderer);

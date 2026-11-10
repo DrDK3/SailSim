@@ -52,6 +52,8 @@ import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLe
 import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
+import { countdownCall } from './countdown';
+import { Speaker } from '../render/speech';
 import { WindFollower, drillVerdict, lineBias, lineReadout, scoreStart, type DrillStart, type LineBias, type LineReadout, type P } from './startLine';
 import { SoundScape, type AudioSettings } from '../render/audio';
 import { presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
@@ -274,6 +276,10 @@ export interface UiState {
   steering: SteeringMode;
   /** The graphics check of painted surfaces on this card (src/render/gpuCheck.ts), and the mode in use. */
   materialCheck?: { fault: boolean; reason: string; mode: string; at: string };
+  /** The device's own voice for the spoken countdown, if it has one (src/render/speech.ts). */
+  voice?: string;
+  /** Recorded sounds in use in place of the synthesised ones (src/render/audioSamples.ts). */
+  recordedSounds: string[];
   /** The automatic graphics check has just run: show its result (a fault found, fixed or not), with the report to copy or save. */
   gpuCard?: 'none' | 'fixed' | 'unfixed';
   materialMode?: MaterialFix;
@@ -1771,7 +1777,7 @@ export class SimController {
   private readonly whistles = new SignalScheduler();
   private whistleAt = -Infinity;
   private caption?: { text: string; t: number };
-  private harbour = { at: -Infinity, value: 0 };
+  private harbour: { at: number; value: number; where?: [number, number, number] } = { at: -Infinity, value: 0 };
   private onGesture = () => this.sound.resume();
   private onPageHide = () => this.keepResumePoint();
 
@@ -1791,11 +1797,53 @@ export class SimController {
     if (now - this.harbour.at > 1000) {
       this.harbour.at = now;
       let best = Infinity;
-      for (const m of this.dartData?.features?.moorings ?? []) best = Math.min(best, (m.n - c.n) ** 2 + (m.e - c.e) ** 2);
+      let at: { n: number; e: number } | undefined;
+      for (const m of this.dartData?.features?.moorings ?? []) {
+        const d = (m.n - c.n) ** 2 + (m.e - c.e) ** 2;
+        if (d < best) {
+          best = d;
+          at = m;
+        }
+      }
       this.harbour.value = Math.max(0, 1 - Math.sqrt(best) / 180);
+      this.harbour.where = at ? scenePoint(at, 0) : undefined;
     }
-    this.sound.update({ aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed, harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended });
+    this.sound.update({
+      aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed,
+      harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended,
+      listener: this.view?.listenerPose(), boat: scenePoint(c, 1.5), harbourAt: this.harbour.where,
+    });
     this.eventSounds();
+    this.speakCountdown();
+  }
+
+  /** The time to the start signal at the last frame, for the spoken countdown. */
+  private lastToStart?: number;
+
+  /** The start countdown, spoken by the device's own voice when chosen (src/app/countdown.ts). */
+  private speakCountdown(): void {
+    const r = this.race;
+    if (!r || !this.prefs.spokenCountdown || this.replay || this.paused || this.timeScale !== 1 || this.sound.settings.muted) {
+      this.lastToStart = undefined;
+      return;
+    }
+    const toStart = r.session.committee.startTime - this.sim.time;
+    const call = this.lastToStart !== undefined ? countdownCall(this.lastToStart, toStart) : undefined;
+    this.lastToStart = toStart;
+    if (call) this.speaker.say(call.text, this.sound.settings.master * 1.6);
+  }
+
+  /** The device's own voices (src/render/speech.ts): none are fetched or sent anywhere. */
+  readonly speaker = new Speaker();
+
+  /** The committee boat (where the horn sounds), or the line's middle. */
+  private committeeAt(): { n: number; e: number } | undefined {
+    const r = this.race;
+    if (!r) return undefined;
+    const [a, b] = r.resolved.start;
+    const [ia, ib] = r.course.start.ends;
+    const kind = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
+    return kind(ia) === 'committee-boat' ? a : kind(ib) === 'committee-boat' ? b : { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
   }
 
   /** Twice a second: the traffic's fog signals and doubt signal, heard and captioned (not in replays). */
@@ -1811,7 +1859,7 @@ export class SimController {
     const due = this.whistles.update(now, fleet.ferriesAt(now), visibilityM, own);
     for (const sig of due) {
       const d = Math.hypot(sig.n - s.n, sig.e - s.e);
-      this.sound.whistle(sig.blasts, d, sig.lengthM);
+      this.sound.whistle(sig.blasts, d, sig.lengthM, scenePoint(sig, 6));
       this.caption = { text: `${sig.label}: ${blastsInWords(sig.blasts)} (${sig.rule}: ${sig.meaning})`, t: now };
     }
   }
@@ -1832,7 +1880,9 @@ export class SimController {
         const s = log[h.signals]!;
         const text = signalCaption(s);
         if (!text) continue;
-        this.sound.horn(s.long ? 1 : s.sounds, !!s.long);
+        const cb = this.committeeAt();
+        const own = this.currSnap;
+        this.sound.horn(s.long ? 1 : s.sounds, !!s.long, cb ? scenePoint(cb, 3) : undefined, cb ? Math.hypot(cb.n - own.n, cb.e - own.e) : 0);
         this.caption = { text, t: now };
       }
     }
@@ -2433,6 +2483,8 @@ export class SimController {
       audioRunning: this.sound.running,
       steering: this.steeringMode,
       gpuCard: this.lastMaterialCheck ? this.gpuCard : undefined,
+      voice: this.speaker.voiceName,
+      recordedSounds: this.sound.recorded.kinds,
       materialCheck: this.lastMaterialCheck && { fault: this.lastMaterialCheck.fault, reason: this.lastMaterialCheck.reason, mode: this.lastMaterialCheck.mode, at: this.lastMaterialCheck.at },
       materialMode: this.view?.materialMode,
       gpuName: this.view?.gpuName,
@@ -2587,4 +2639,9 @@ function writeFlag(key: string, on: boolean): void {
   } catch {
     // Not remembered: storage is unavailable.
   }
+}
+
+/** A point on the chart (n, e) at `y` m up, in the scene's coordinates (x east, y up, z south). */
+function scenePoint(p: { n: number; e: number }, y: number): [number, number, number] {
+  return [p.e, y, -p.n];
 }
