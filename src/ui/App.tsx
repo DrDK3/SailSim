@@ -6,6 +6,8 @@ import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
 import { CoachCard, CoachTip } from './Coach';
+import { HintCard } from './HintCard';
+import { ResumeCard } from './ResumeCard';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
@@ -339,6 +341,7 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       <CoachTip ui={ui} />
+      {ui.resume || ui.catchingUp !== undefined ? <ResumeCard ctl={ctl} ui={ui} /> : !ui.tutorial && <HintCard ctl={ctl} ui={ui} />}
       {ui.paused && (
         // Below the toolbar however many rows it wraps onto (it covered the pill on a two-row toolbar), and below
         // a camera strip if one is showing.

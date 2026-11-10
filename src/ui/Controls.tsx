@@ -37,7 +37,7 @@ export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMod
   const blade = { x: Math.sin(a) * 9, y: stock.y + Math.cos(a) * 9 };
   const text = centred ? 'Tiller centred' : `Tiller ${Math.round(d)}° to ${tiller} · bow turning to ${bow}`;
   return (
-    <div className="rudder-dial" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} (More → Graphics and sound to change)`} data-testid="tiller">
+    <div className="rudder-dial" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} Or drag the tiller. (More → Graphics and sound to change)`} data-testid="tiller">
       <svg viewBox="-34 -2 68 44" aria-hidden="true" className="tiller-svg">
         <path className="tv-hull" d="M -30 -2 L -27 28 Q -24 36 -16 37 L 16 37 Q 24 36 27 28 L 30 -2" />
         <line className="tv-blade" x1={stock.x} y1={stock.y} x2={blade.x} y2={blade.y} />
@@ -45,6 +45,40 @@ export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMod
         <circle className="tv-stock" cx={stock.x} cy={stock.y} r="2.2" />
       </svg>
       <span className="sr-only">{text}</span>
+    </div>
+  );
+}
+
+/**
+ * The tiller picture as a control (phones and tablets; a mouse works too): drag it and the tiller follows the finger,
+ * at the keys' rate; let go and it comes back to the middle, as with the keys. Push it to port and the bow turns to
+ * starboard, whichever steering mode the keys use, because it is the tiller you are moving.
+ */
+function DragTiller({ ctl, rudder, mode }: { ctl: SimController; rudder: number; mode: SteeringMode }) {
+  const target = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    // The tip to the left (port) is the helm to starboard (+): the bow turns to starboard.
+    return -((e.clientX - (r.left + r.width / 2)) / (r.width / 2)) * 1.4;
+  };
+  return (
+    <div
+      className="tiller-drag"
+      onPointerDown={(e) => {
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // Synthetic events have no capturable pointer.
+        }
+        ctl.setHelmDrag(target(e));
+      }}
+      onPointerMove={(e) => {
+        if (e.buttons || e.pointerType === 'touch') ctl.setHelmDrag(target(e));
+      }}
+      onPointerUp={() => ctl.setHelmDrag(undefined)}
+      onPointerCancel={() => ctl.setHelmDrag(undefined)}
+      data-testid="tiller-drag"
+    >
+      <TillerView rudder={rudder} mode={mode} />
     </div>
   );
 }
@@ -168,7 +202,7 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
       <div className="mod helm-mod" data-tutorial="helm" role="group" aria-label="Helm">
         <div className="mod-row">
           <Hold ctl={ctl} action={helmAction('left', ui.steering)} label={tillerMode ? 'Tiller to port, bow to starboard (A / ←)' : 'Steer to port (A / ←)'}>◀ <Key k="A" /></Hold>
-          <TillerView rudder={s.rudder} mode={ui.steering} />
+          <DragTiller ctl={ctl} rudder={s.rudder} mode={ui.steering} />
           <Hold ctl={ctl} action={helmAction('right', ui.steering)} label={tillerMode ? 'Tiller to starboard, bow to port (D / →)' : 'Steer to starboard (D / →)'}><Key k="D" /> ▶</Hold>
         </div>
         <div className="mod-row">

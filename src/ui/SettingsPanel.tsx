@@ -1,6 +1,7 @@
 import { LEVELS } from '../app/level';
 import { useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
+import { ReportProblem } from './ReportProblem';
 import { useModal } from './useModal';
 import { PRESETS, matchPreset, presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { LIGHTING_PRESETS } from '../app/lighting';
@@ -160,6 +161,8 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             Graphics card: {ui.gpuName ?? 'unknown'} · build {ui.build.id} ({ui.build.time})
           </p>
         </div>
+        <h4>Something looks wrong?</h4>
+        <ReportProblem ctl={ctl} />
         <h4>Interface level</h4>
         <div className="row left wrap" role="radiogroup" aria-label="Interface level" data-testid="level">
           {LEVELS.map((l) => (
@@ -186,6 +189,10 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         <label className="check">
           <input type="checkbox" checked={ui.prefs.hints} onChange={(e) => ctl.setPrefs({ hints: e.target.checked })} data-testid="pref-hints" />
           Hints when you are stuck (in irons, sails flapping, aground)
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.batterySaver} onChange={(e) => ctl.setPrefs({ batterySaver: e.target.checked })} data-testid="pref-battery" />
+          Battery saver: draw at most 30 frames a second (the sailing is the same; on by default on phones and tablets)
         </label>
         <h4>Sound</h4>
         <div className="settings-grid">

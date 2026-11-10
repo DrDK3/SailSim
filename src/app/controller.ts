@@ -5,6 +5,11 @@ import { helmAction, loadSteering, saveSteering, type SteeringMode } from './ste
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
 import { quayPiers } from '../sim/env/quays';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import { HintEngine, loadMilestones, loadSeenHints, saveMilestones, saveSeenHints, type Hint, type HintSample, type Milestones, type ShowMe } from './hints';
+import { autopilotHelm } from '../sim/control/autopilot';
+import type { ReportDetail } from './visualReport';
+import { SignalScheduler, blastsInWords } from './soundSignals';
+import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
 import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
@@ -172,6 +177,13 @@ export interface UiState {
   droneFollow: boolean;
   /** The race coach (races only): its briefing, latest tips and, after the finish, the debrief. */
   coach?: { on: boolean; briefing: string[]; tips: readonly Tip[]; debrief?: Debrief; now: number };
+  /** A hint when you are stuck (src/app/hints.ts), and your first sails counted in this browser. */
+  hint?: Hint;
+  milestones: Milestones;
+  /** A run kept from the last visit, offered as "Continue where you left off" (src/app/resume.ts). */
+  resume?: { label: string; summary: string; note?: string };
+  /** Sailing the kept run again to where it was left (0–1), before handing over. */
+  catchingUp?: number;
   showForces: boolean;
   showDebug: boolean;
   showHelp: boolean;
@@ -294,6 +306,20 @@ export class SimController {
   autoLowerGraphics = true;
   /** The player's own preferences, kept in this browser (src/app/prefs.ts). */
   prefs: Prefs = loadPrefs();
+  private readonly hints = new HintEngine(loadSeenHints());
+  /** Hints are kept out of automated test runs (?nowelcome) unless asked for (&hints): they appear on their own. */
+  private readonly hintsAllowed = typeof location === 'undefined' || !new URLSearchParams(location.search).has('nowelcome') || new URLSearchParams(location.search).has('hints');
+  private milestones: Milestones = loadMilestones();
+  /** "Continue where you left off": the run kept from the last visit (not in automated tests unless &resume). */
+  private resumePoint = typeof location === 'undefined' || !new URLSearchParams(location.search).has('nowelcome') || new URLSearchParams(location.search).has('resume') ? loadResume() : undefined;
+  private catchUp?: { from: number; to: number };
+  /** The tiller dragged on a touch screen: the helm it is being moved to. */
+  private helmDrag?: number;
+  /** Battery saver: when the last frame was drawn (ms). */
+  private lastDrawn = -Infinity;
+  /** "Show me": the boat sails herself out of trouble until `until` (simulated time). */
+  private showMe?: { action: ShowMe; until: number; side: number };
+  private lastMainSide = 0;
   /** The GPU context is lost, and whether that (not the user) paused the run. */
   private graphicsLost = false;
   private pausedForGraphics = false;
@@ -498,6 +524,13 @@ export class SimController {
     this.view?.resetSea(); // and the sea's field at once
     this.accumulator = 0;
     this.telemetry.clear();
+    this.showMe = undefined;
+    this.lastMainSide = 0;
+    if (!this.replay) {
+      this.milestones.sessions++;
+      this.milestones.firstVisit ??= new Date().toISOString().slice(0, 10);
+      saveMilestones(this.milestones);
+    }
     this.lastRecordT = -Infinity;
     this.publish(true);
     return true;
@@ -541,7 +574,9 @@ export class SimController {
     else this.sim.stepOnce();
     if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
     if (this.tutorial && this.sim.step % 10 === 0) this.updateTutorial();
+    else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
+    if (this.sim.step % 6000 === 0) this.keepResumePoint();
     // Only your own sailing counts towards your bests, not a replay of a recording.
     if (this.race && !this.replay && this.sim.step % 50 === 0) this.checkRaceBests();
   }
@@ -821,6 +856,77 @@ export class SimController {
     this.publish(true);
   }
 
+  /** Hints when you are stuck, and the first-sail milestones (src/app/hints.ts). */
+  private updateHints(): void {
+    const s = this.sim.snapshot(false);
+    const KN = 0.514444;
+    const R2D = 180 / Math.PI;
+    const stwKn = s.stw / KN;
+    // Milestones: the first time she sails at 2 kn, the first tack.
+    const m = this.milestones;
+    let changed = false;
+    if (m.firstSailS === undefined && stwKn > 2) {
+      m.firstSailS = Math.round(s.t);
+      changed = true;
+    }
+    if (this.lastMainSide && s.mainSide !== this.lastMainSide && Math.abs(s.twa) * R2D < 90 && m.firstTackS === undefined) {
+      m.firstTackS = Math.round(s.t);
+      changed = true;
+    }
+    this.lastMainSide = s.mainSide;
+    let ferryM: number | undefined;
+    const fleet = this.race?.session.fleet ?? this.soloFleet;
+    if (fleet) {
+      for (const v of fleet.ferriesAt(s.t)) {
+        if (!v.moving || !(v.kind === 'tug-float' || v.kind === 'floating-bridge' || v.kind === 'passenger-ferry')) continue;
+        const d = Math.hypot(v.n - s.n, v.e - s.e) - v.length / 2;
+        ferryM = Math.min(ferryM ?? Infinity, d);
+      }
+    }
+    const sample: HintSample = {
+      t: s.t,
+      twaDeg: Math.abs(s.twa) * R2D,
+      stwKn,
+      sogKn: s.sog / KN,
+      heelDeg: Math.abs(s.heel) * R2D,
+      grounded: s.grounded,
+      main: sailState(s.forces.main),
+      jib: sailState(s.forces.jib),
+      autoMain: s.input.autoMain,
+      autoJib: s.input.autoJib,
+      // The harbour's 6 kn limit runs from Castle Ledge buoy (n −1651 here) up the river (harbour guide).
+      inHarbour: !!this.dartData?.geo && s.n > -1651 && s.n < 9000,
+      ferryM,
+    };
+    const was = this.hints.current?.id;
+    const h = this.hints.update(sample);
+    if (h) {
+      m.hintsShown++;
+      changed = true;
+      saveSeenHints(this.hints.seenIds);
+    }
+    if (changed) saveMilestones(m);
+    if (h || was !== this.hints.current?.id) this.publish(true);
+  }
+
+  /** Close the hint showing. */
+  dismissHint(): void {
+    this.hints.dismiss();
+    this.publish(true);
+  }
+
+  /** The hint's "Show me": the boat sails out of it herself for a few seconds, or the crew take the sheets. */
+  hintShowMe(): void {
+    const a = this.hints.current?.showMe?.action;
+    if (!a) return;
+    this.milestones.showMeUsed++;
+    saveMilestones(this.milestones);
+    if (a.kind === 'auto-sheets') this.sim.setInput({ autoMain: true, autoJib: true });
+    else this.showMe = { action: a, until: this.sim.time + a.seconds, side: Math.sign(this.sim.snapshot(false).twa) || 1 };
+    this.hints.dismiss();
+    this.publish(true);
+  }
+
   /** What the lesson sees of the boat now. */
   private lessonSample() {
     const s = this.sim.snapshot(false);
@@ -949,9 +1055,67 @@ export class SimController {
     return true;
   }
 
+  // ------------------------------------------------------------ continue where you left off
+
+  /** Keep the run so far in this browser (free sailing and races, after the first 30 s; not lessons or replays). */
+  private keepResumePoint(): void {
+    // Not while last visit's run is still on offer (unanswered), so ignoring the card for a minute does not lose it.
+    if (this.resumePoint || this.replay || this.catchUp || this.tutorial || this.sim.time < RESUME_MIN_S) return;
+    if (this.race && this.race.session.judgeOf('you').phase === 'finished') return;
+    const loc = START_LOCATIONS.find((l) => l.id === this.scenario.startLocation)?.label ?? this.scenario.startLocation;
+    const label = this.race ? `Race: ${this.race.course.name}` : `Free sailing from ${loc.charAt(0).toLowerCase()}${loc.slice(1)}`;
+    saveResume({ rec: this.saveRecording('Where you left off'), label, savedAt: new Date().toISOString() });
+  }
+
+  /**
+   * Sail the kept run again, step by step and as fast as the device allows (a little at a time, so the page keeps
+   * drawing), to where it was left; then hand over. The same build lands exactly there; another may differ a little.
+   */
+  continueSession(): boolean {
+    const p = this.resumePoint;
+    if (!p) return false;
+    this.resumePoint = undefined;
+    if (!this.startReplay(p.rec)) {
+      this.publish(true);
+      return false;
+    }
+    this.catchUp = { from: this.sim.step, to: p.rec.endStep };
+    this.paused = true;
+    const chunk = () => {
+      if (!this.catchUp || !this.replay) return;
+      const t0 = performance.now();
+      while (this.sim.step < this.catchUp.to && !this.replay.ended && performance.now() - t0 < 40) {
+        this.stepSim();
+        if (this.sim.step % 10 === 0) this.recordTelemetry(this.sim.snapshot());
+      }
+      if (this.sim.step < this.catchUp.to && !this.replay.ended) {
+        this.publish(true);
+        setTimeout(chunk, 0);
+        return;
+      }
+      this.catchUp = undefined;
+      this.currSnap = this.sim.snapshot(false);
+      this.prevSnap = this.currSnap;
+      this.captureFleet();
+      this.fleetPrev = this.fleetCurr;
+      this.takeOver();
+    };
+    this.publish(true);
+    setTimeout(chunk, 0);
+    return true;
+  }
+
+  /** "Start fresh": forget the kept run. */
+  dismissResume(): void {
+    this.resumePoint = undefined;
+    clearResume();
+    this.publish(true);
+  }
+
   /** Stop the replay here and sail on from this point (the recording continues from the replayed part). */
   takeOver(): void {
     this.replay = undefined;
+    this.catchUp = undefined;
     this.timeScale = 1;
     this.held.clear();
     this.paused = false;
@@ -1147,12 +1311,16 @@ export class SimController {
     this.fpsT0 = this.lastFrame;
     const loop = (now: number) => {
       this.raf = requestAnimationFrame(loop);
+      // Battery saver (Settings; on by default on touch screens): draw at most 30 frames a second.
+      if (this.prefs.batterySaver && now - this.lastDrawn < 1000 / 30 - 4) return;
+      this.lastDrawn = now;
       this.frame(now);
     };
     this.raf = requestAnimationFrame(loop);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
+    window.addEventListener('pagehide', this.onPageHide);
     window.addEventListener('pointerdown', this.onGesture);
     document.addEventListener('visibilitychange', this.onVisibility);
     void this.discoverSources();
@@ -1206,12 +1374,60 @@ export class SimController {
     return lines.join('\n');
   }
 
+  /**
+   * A picture of the 3D view (a PNG data URL): drawn now and read in the same task, since the canvas keeps no copy of
+   * a frame once it is shown. Undefined without a 3D view or if the browser refuses.
+   */
+  captureView(): Promise<string | undefined> {
+    if (!this.view) return Promise.resolve(undefined);
+    try {
+      this.drawScene(performance.now(), 1, 0);
+      return Promise.resolve(this.view.renderer.domElement.toDataURL('image/png'));
+    } catch {
+      return Promise.resolve(undefined);
+    }
+  }
+
+  /** Everything needed to see the view again: build, graphics, settings, the scenario, the boat and the camera. */
+  visualReportDetails(): ReportDetail[] {
+    const v = this.view;
+    const s = this.currSnap;
+    const sc = this.scenario;
+    const R2D = 180 / Math.PI;
+    const KN = 0.514444;
+    const w = sc.conditions.weather;
+    const epochMs = (this.sim.env.startEpochMs ?? Date.parse(sc.conditions.startTime)) + this.sim.time * 1000;
+    const pose = v?.cameraPose();
+    const f1 = (x: number) => x.toFixed(1);
+    const out: ReportDetail[] = [
+      { label: 'Made', value: new Date().toISOString() },
+      { label: 'Build', value: `${BUILD_ID} (${BUILD_TIME})` },
+      { label: 'Address', value: location.pathname + location.search },
+      { label: 'Browser', value: navigator.userAgent },
+      { label: 'Screen', value: `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}×` },
+      { label: 'Graphics card', value: v?.gpuName ?? (this.webglError || 'unknown') },
+      { label: 'Graphics', value: v ? `preset ${v.graphics.preset} · scenery and shadows built ${v.quality} · drawing mode ${v.materialMode} · ${f1(this.fps)} frames/s` : 'no 3D view' },
+      { label: 'Graphics settings', value: v ? JSON.stringify(v.graphics) : '' },
+      { label: 'Camera', value: v && pose ? `${v.cameraMode} · at ${pose.position.map(f1).join(', ')} · looking at ${pose.target.map(f1).join(', ')} (x east, y up, z south; metres from the club)` : '' },
+      { label: 'Boat', value: `n ${f1(s.n)} m, e ${f1(s.e)} m from the club · heading ${Math.round(((s.heading * R2D) % 360 + 360) % 360)}° · heel ${f1(s.heel * R2D)}° · ${f1(s.stw / KN)} kn${s.grounded ? ' · aground' : ''}` },
+      { label: 'Time in the run', value: `${f1(this.sim.time)} s (${new Date(epochMs).toISOString()})` },
+      { label: 'Start', value: `${sc.startLocation} · heading ${sc.startHeadingDeg}° · ${sc.startSpeedKn} kn${sc.boat ? ` · ${sc.boat}` : ''}` },
+      { label: 'Wind', value: w.source === 'manual' ? `set: ${w.twsKn} kn from ${w.twdDeg}°` : `Met Office${w.replay ? ' (replayed)' : ''} · now ${f1(s.twsGround / KN)} kn from ${Math.round(((s.twdGround * R2D) % 360 + 360) % 360)}°` },
+      { label: 'Sky', value: JSON.stringify(sc.conditions.sky ?? 'default') },
+      { label: 'Water level', value: `${this.sim.waterLevel().toFixed(2)} m ODN` },
+      { label: 'Mode', value: [this.race ? 'race' : this.tutorial ? 'lesson' : 'free sailing', this.replay ? 'replay' : ''].filter(Boolean).join(' · ') },
+    ];
+    for (const c of v?.materialChecks ?? []) out.push({ label: `Graphics check ${c.at}`, value: `[${c.mode}] ${c.fault ? 'FAULT' : 'ok'}: ${c.reason}` });
+    return out;
+  }
+
   detach(): void {
     window.clearTimeout(this.checkTimer);
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+    window.removeEventListener('pagehide', this.onPageHide);
     window.removeEventListener('pointerdown', this.onGesture);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.sound.dispose();
@@ -1229,6 +1445,37 @@ export class SimController {
     const epochMs = (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000;
     const sun = sunPosition(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
     return { sky: (sim.env.sky ?? presetSky('clear')).at(sim.time), sunElevationDeg: sun.elevationDeg, sunAzimuthDeg: sun.azimuthDeg };
+  }
+
+  /** Draw the 3D view for this moment (alpha: between the last two physics states). */
+  private drawScene(now: number, alpha: number, dt: number): void {
+    const info = this.detailSnap.env;
+    const sim = this.sim;
+    if (now - this.lastWeather > 1000) {
+      this.lastWeather = now;
+      this.view?.setWeather(this.sceneWeather());
+    }
+    this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
+      puffs: sim.env.windField?.puffs() ?? [],
+      windAgainstTide: info?.windAgainstTide ?? false,
+      sea: sim.env.seaState ? (n, e) => sim.env.seaState!(sim.time, n, e) : undefined,
+      dart: this.dartScene
+        ? {
+            waterLevel: sim.waterLevel(),
+            epochMs: (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000,
+            stream: (n, e) => sim.env.current(sim.time, n, e),
+            traffic: this.traffic,
+            windFromDir: this.currSnap.twdGround,
+            windSpeed: this.currSnap.twsGround,
+            showLabels: this.showLabels,
+            mooredPose: (m) => mooredBoatPose(m, sim.env, sim.time),
+          }
+        : undefined,
+      course: this.race
+        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e) }
+        : undefined,
+      fleet: this.race ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
+    });
   }
 
   private frame(now: number): void {
@@ -1267,34 +1514,7 @@ export class SimController {
       this.renderTime += dt;
       this.watchPace(rawDt, steps * DT);
     }
-    const alpha = this.paused ? 1 : clamp(this.accumulator / DT, 0, 1);
-    const info = this.detailSnap.env;
-    const sim = this.sim;
-    if (now - this.lastWeather > 1000) {
-      this.lastWeather = now;
-      this.view?.setWeather(this.sceneWeather());
-    }
-    this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
-      puffs: sim.env.windField?.puffs() ?? [],
-      windAgainstTide: info?.windAgainstTide ?? false,
-      sea: sim.env.seaState ? (n, e) => sim.env.seaState!(sim.time, n, e) : undefined,
-      dart: this.dartScene
-        ? {
-            waterLevel: sim.waterLevel(),
-            epochMs: (sim.env.startEpochMs ?? Date.parse(this.scenario.conditions.startTime)) + sim.time * 1000,
-            stream: (n, e) => sim.env.current(sim.time, n, e),
-            traffic: this.traffic,
-            windFromDir: this.currSnap.twdGround,
-            windSpeed: this.currSnap.twsGround,
-            showLabels: this.showLabels,
-            mooredPose: (m) => mooredBoatPose(m, sim.env, sim.time),
-          }
-        : undefined,
-      course: this.race
-        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e) }
-        : undefined,
-      fleet: this.race ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
-    });
+    this.drawScene(now, this.paused ? 1 : clamp(this.accumulator / DT, 0, 1), dt);
     this.frames++;
     if (now - this.fpsT0 > 1000) {
       this.fps = (this.frames * 1000) / (now - this.fpsT0);
@@ -1312,10 +1532,16 @@ export class SimController {
   private lastBoomT = -1;
   /** What the event sounds have played so far (the committee's signal log, contacts, groundings). */
   private heard = { log: undefined as unknown, signals: 0, contactT: -1, groundT: -1, knockAt: -1, crunchT: -1 };
+  /** The river traffic's whistle signals (COLREGs Rules 34–35; src/app/soundSignals.ts). */
+  private readonly whistles = new SignalScheduler();
+  private whistleAt = -Infinity;
   private caption?: { text: string; t: number };
   private harbour = { at: -Infinity, value: 0 };
   private onGesture = () => this.sound.resume();
+  private onPageHide = () => this.keepResumePoint();
+
   private onVisibility = () => {
+    if (document.hidden) this.keepResumePoint();
     this.sound.setHidden(document.hidden);
     this.pace.skipFrames = Math.max(this.pace.skipFrames, 1);
   };
@@ -1337,6 +1563,24 @@ export class SimController {
     this.eventSounds();
   }
 
+  /** Twice a second: the traffic's fog signals and doubt signal, heard and captioned (not in replays). */
+  private trafficSignals(now: number): void {
+    if (now < this.whistleAt) this.whistles.reset();
+    if (Math.abs(now - this.whistleAt) < 0.5) return;
+    this.whistleAt = now;
+    const fleet = this.race?.session.fleet ?? this.soloFleet;
+    if (!fleet || this.replay) return;
+    const s = this.currSnap;
+    const visibilityM = (this.sim.env.sky ?? presetSky('clear')).at(now).visibilityM;
+    const own = { n: s.n, e: s.e, vn: s.sog * Math.cos(s.cog), ve: s.sog * Math.sin(s.cog) };
+    const due = this.whistles.update(now, fleet.ferriesAt(now), visibilityM, own);
+    for (const sig of due) {
+      const d = Math.hypot(sig.n - s.n, sig.e - s.e);
+      this.sound.whistle(sig.blasts, d, sig.lengthM);
+      this.caption = { text: `${sig.label}: ${blastsInWords(sig.blasts)} (${sig.rule}: ${sig.meaning})`, t: now };
+    }
+  }
+
   /**
    * Sounds for events (review GR-6): the race committee's sound signals with a caption, a knock for a contact and a
    * scrape for a grounding (their banner is the visual equivalent). Each event sounds once; a new run starts over.
@@ -1345,6 +1589,7 @@ export class SimController {
     const h = this.heard;
     const now = this.sim.time;
     if (now < h.contactT || now < h.groundT) Object.assign(h, { contactT: -1, groundT: -1, knockAt: -1, crunchT: -1 });
+    this.trafficSignals(now);
     const log = this.race?.session.committee.log;
     if (log !== h.log) Object.assign(h, { log, signals: 0 });
     if (log) {
@@ -1448,9 +1693,26 @@ export class SimController {
     }
     const i = this.sim.input;
     const change: Partial<ControlInput> = {};
+    // "Show me" (a hint): the boat sails herself out of trouble for a few seconds; any key takes over again.
+    const sm = this.showMe;
+    if (sm && (this.sim.time >= sm.until || this.held.size > 0)) this.showMe = undefined;
+    else if (sm) {
+      // With no way on she answers the helm slowly (about 3°/s: there is no "back the jib" control yet).
+      if (sm.action.kind === 'bear-away') change.helm = autopilotHelm(this.sim, { mode: 'twa', target: (sm.side * sm.action.twaDeg * Math.PI) / 180 });
+      else if (sm.action.kind === 'ease-main') {
+        change.autoMain = false;
+        change.mainSheet = clamp(this.sim.currentSheet('main') + SHEET_RATE * DT, 0, 1);
+      }
+      return change;
+    }
     const left = this.held.has('helmLeft');
     const right = this.held.has('helmRight');
     if (left !== right) change.helm = clamp(i.helm + (right ? 1 : -1) * HELM_RATE * DT, -1, 1);
+    // Dragging the tiller (touch screens): the helm follows the finger at the keys' rate.
+    else if (this.helmDrag !== undefined) {
+      const d = this.helmDrag - i.helm;
+      if (Math.abs(d) > 1e-4) change.helm = i.helm + Math.sign(d) * Math.min(Math.abs(d), HELM_RATE * DT);
+    }
     else if (!this.held.has('helmHold') && i.helm !== 0) {
       const d = Math.min(Math.abs(i.helm), HELM_RETURN * DT);
       change.helm = i.helm - Math.sign(i.helm) * d;
@@ -1467,6 +1729,12 @@ export class SimController {
     sheet('main', 'mainIn', 'mainOut');
     sheet('jib', 'jibIn', 'jibOut');
     return Object.keys(change).length ? change : undefined;
+  }
+
+  /** Dragging the tiller picture (touch): where the helm should go (−1 … 1), or undefined on letting go. */
+  setHelmDrag(target: number | undefined): void {
+    if (this.replay) return;
+    this.helmDrag = target === undefined ? undefined : clamp(target, -1, 1);
   }
 
   /** Held controls (keyboard or on-screen buttons). */
@@ -1839,6 +2107,16 @@ export class SimController {
       runningSlow: this.paused ? undefined : this.runningSlow,
       autoLowerGraphics: this.autoLowerGraphics,
       prefs: { ...this.prefs },
+      hint: this.hints.current,
+      milestones: { ...this.milestones },
+      resume: this.resumePoint
+        ? {
+            label: this.resumePoint.label,
+            summary: resumeSummary(this.resumePoint, new Date(), DT),
+            note: this.resumePoint.rec.build !== BUILD_ID ? 'Kept by an earlier version: she may not end exactly where you left her.' : undefined,
+          }
+        : undefined,
+      catchingUp: this.catchUp ? clamp((this.sim.step - this.catchUp.from) / Math.max(1, this.catchUp.to - this.catchUp.from), 0, 1) : undefined,
       scenarioError: this.scenarioError,
       race: this.raceUi(),
       weatherSources: this.weatherSources,

@@ -7,22 +7,39 @@ export interface Prefs {
   lightLabels: boolean;
   /** Hints when you are stuck (in irons, sails flapping, aground …): src/app/hints.ts. */
   hints: boolean;
+  /** Draw at most 30 frames a second, to save the battery (the physics is unchanged). */
+  batterySaver: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true };
+/** A touch screen with no mouse (a phone or tablet): the battery saver starts on there. */
+export function touchOnly(): boolean {
+  try {
+    return typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+  } catch {
+    return false;
+  }
+}
+
+export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false };
+
+function defaults(): Prefs {
+  return { ...DEFAULT_PREFS, batterySaver: touchOnly() };
+}
 const KEY = 'squib.prefs.v1';
 
 export function loadPrefs(): Prefs {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
-    if (!raw) return { ...DEFAULT_PREFS };
+    const d = defaults();
+    if (!raw) return d;
     const p = JSON.parse(raw) as Partial<Prefs>;
     return {
-      lightLabels: typeof p.lightLabels === 'boolean' ? p.lightLabels : DEFAULT_PREFS.lightLabels,
-      hints: typeof p.hints === 'boolean' ? p.hints : DEFAULT_PREFS.hints,
+      lightLabels: typeof p.lightLabels === 'boolean' ? p.lightLabels : d.lightLabels,
+      hints: typeof p.hints === 'boolean' ? p.hints : d.hints,
+      batterySaver: typeof p.batterySaver === 'boolean' ? p.batterySaver : d.batterySaver,
     };
   } catch {
-    return { ...DEFAULT_PREFS };
+    return defaults();
   }
 }
 

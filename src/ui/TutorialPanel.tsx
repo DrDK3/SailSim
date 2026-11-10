@@ -4,18 +4,20 @@ import { mmss } from '../app/lessons';
 
 /** The six lessons, with what is done in this browser and a Start button for each. */
 export function LessonList({ ui, onStart }: { ui: UiState; onStart: (id: UiState['lessons'][number]['id']) => void }) {
+  // Progress kept in this browser: the first lesson not yet done is the one to take next (every lesson stays open).
+  const next = ui.lessons.find((l) => !l.done)?.id;
   return (
     <ol className="lesson-list" data-testid="lesson-list">
       {ui.lessons.map((l) => (
-        <li key={l.id} className={l.done ? 'done' : ''}>
+        <li key={l.id} className={l.done ? 'done' : l.id === next ? 'next' : ''}>
           <span className="lesson-tick" aria-hidden="true">{l.done ? '✓' : l.number}</span>
           <span className="lesson-text">
             <strong>{l.title}</strong>
             <span className="fine-inline"> · about {l.minutes} min{l.done ? ` · done${l.bestS !== undefined ? `, best ${mmss(l.bestS)}` : ''}` : ''}</span>
             <span className="lesson-summary">{l.summary}</span>
           </span>
-          <button onClick={() => onStart(l.id)} aria-label={`Start lesson ${l.number}: ${l.title}${l.done ? ' (done)' : ''}`}>
-            {l.done ? 'Again' : 'Start'}
+          <button className={l.id === next ? 'primary' : ''} onClick={() => onStart(l.id)} aria-label={`Start lesson ${l.number}: ${l.title}${l.done ? ' (done)' : l.id === next ? ' (next)' : ''}`}>
+            {l.done ? 'Again' : l.id === next ? 'Start next' : 'Start'}
           </button>
         </li>
       ))}
