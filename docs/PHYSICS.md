@@ -342,7 +342,7 @@ The environment flags it when the wind (direction it blows to) and the current a
 
 ## 15. Grounding: contact with the bottom (`boat/contact.ts`)
 
-With a seabed (the River Dart data), three points can touch the bottom:
+With a seabed (the River Dart data), three points can touch the bottom. The bed is the 8 m grid, and over the towns the ground the picture draws wherever that is higher (the 4 m LIDAR with the quays filled and the waterfront hardstandings: `geo/dart.ts` `setFinerGround`), so a boat meets the rocks and quays she is shown against:
 
 | Point | Body x | Depth below the waterline |
 |---|---|---|

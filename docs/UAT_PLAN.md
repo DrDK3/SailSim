@@ -267,6 +267,16 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 19.10 | Hit something hard at the bow, or knock the windward side by the mast | The forestay parts and the mast falls aft, or the shroud breaks and the mast falls to leeward: the mast broken at the deck and lying with the sails in the water, dragging her round | |
 | 19.11 | Keep sailing holed until she fills | She settles lower and lower; awash on her buoyancy tanks with the deck under ("Awash"); with a buoyancy tank holed too she sinks and lies on the bottom ("Sunk"), and Start again restarts | |
 
+## 20. Walkers, the foot ferry, solid shores, the deck (6 and 10 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 20.1 | Look at the Kingswear passenger pier (the white truss gangway by the Royal Dart) from the river, at any tide | Nobody walks over the water beside the gangway; people stand and queue on the landing stage | |
+| 20.2 | Look at the foot ferry close to, from astern and abeam | A dark blue hull, a straight white boot top at the waterline, red below; white saloon and wheelhouse; no saw-tooth, no tan wedge, no bench showing through her side | |
+| 20.3 | Sail at full speed into Kingswear's rocks south of the town, into a quay wall, and into the yacht club's sea wall | She stops against them (grinding, aground or with a contact report); her hull is never inside the rock or the wall | |
+| 20.4 | At high water, look at the waterfront sheds and boathouses (Hoodown, the Ferry Office, Old Mill Creek) | Each stands on a hardstanding, not in the river | |
+| 20.5 | On your own computer, sail in the chase view with the boat heeling and the camera moving | No ripple or moiré across the deck; in the helm view the non-slip pattern shows on the deck just ahead | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
