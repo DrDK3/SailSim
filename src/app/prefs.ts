@@ -9,6 +9,8 @@ export interface Prefs {
   hints: boolean;
   /** Draw at most 30 frames a second, to save the battery (the physics is unchanged). */
   batterySaver: boolean;
+  /** Daylight view: when the real sun is low or down, light the picture as at midday (src/app/daylightView.ts). */
+  daylightView: boolean;
 }
 
 /** A touch screen with no mouse (a phone or tablet): the battery saver starts on there. */
@@ -20,7 +22,7 @@ export function touchOnly(): boolean {
   }
 }
 
-export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false };
+export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false, daylightView: false };
 
 function defaults(): Prefs {
   return { ...DEFAULT_PREFS, batterySaver: touchOnly() };
@@ -37,6 +39,7 @@ export function loadPrefs(): Prefs {
       lightLabels: typeof p.lightLabels === 'boolean' ? p.lightLabels : d.lightLabels,
       hints: typeof p.hints === 'boolean' ? p.hints : d.hints,
       batterySaver: typeof p.batterySaver === 'boolean' ? p.batterySaver : d.batterySaver,
+      daylightView: typeof p.daylightView === 'boolean' ? p.daylightView : d.daylightView,
     };
   } catch {
     return defaults();

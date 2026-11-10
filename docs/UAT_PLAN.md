@@ -291,6 +291,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 21.8 | After a race, Library → Race this run as a ghost | The race starts again with a see-through boat sailing your earlier race; Stop the ghost removes it | |
 | 21.9 | Learn → Seamanship: pick up the mooring | You can stop with the buoy at the bow by sailing in on a close reach, letting the sheets go and luffing; the lesson finishes with your distance | |
 | 21.10 | Sail into the boats lying in Dart Marina's berths (and the training boats at Sandquay) | She stops against them with a contact report; she never passes through a boat; where a berth is empty she can sail into it |
+| 21.11 | Open the app after sunset (Real time) | A card says it is dark on the Dart now; Daylight view lights the river as at midday while the clock in the instruments, the tide and the wind stay as they were; More → Daylight view when dark turns it off again; Keep it dark hides the card for the visit |
 
 ## Accepting the build
 

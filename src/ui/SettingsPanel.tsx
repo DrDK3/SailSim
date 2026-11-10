@@ -110,7 +110,12 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
               </p>
             )}
             <h4>Light</h4>
-            <p className="fine">Restarts the scenario at that time of day on the same date (the tide follows); the wind is kept. Real time: now, in today's live weather where the site has it.</p>
+            <label className="check">
+              <input type="checkbox" checked={ui.prefs.daylightView} onChange={(e) => ctl.setPrefs({ daylightView: e.target.checked })} data-testid="pref-daylight" />
+              Daylight view when it is dark: the picture lit as at midday whenever the sun is low or down; the time, tide, wind and traffic stay real
+              {ui.light.daylightView ? <span className="fine-inline"> · on now</span> : ui.light.dark ? <span className="fine-inline"> · it is dark now</span> : null}
+            </label>
+            <p className="fine">Or change the time itself: these restart the scenario at that time of day on the same date (the tide follows); the wind is kept. Real time: now, in today's live weather where the site has it.</p>
             <div className="seg">
               {LIGHTING_PRESETS.map((l) => (
                 <button key={l.id} title={l.detail} onClick={() => ctl.leaveTo(`Changing the light to ${l.label.toLowerCase()}`, () => ctl.setLighting(l.id))}>

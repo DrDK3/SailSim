@@ -1618,3 +1618,15 @@ The owner: "the squib sails through boats in the marina areas" (a screenshot ins
 
 Also this round, for CI's software renderer: while a kept run or a ghost's recording is sailed through, the 3D view is not redrawn (it only showed the run paused), so the sailing gets the device's time; and the hints look for ferries only where the traffic can be.
 
+### Daylight view when it is dark in real time (the owner, 10 Nov 2026)
+
+The owner: "I need an option to switch to day mode if it is dark in real time". In real time (the Real time light, or today's live weather, which the site starts with) the picture follows the real sun, so after sunset the river is dark, as it is on the water. The **daylight view** lights the picture as at that day's midday whenever the real sun is below 6°, while the run stays real: its clock, the tide, the wind, the stream and the traffic are unchanged, and the determinism hash with them (`11824f89f479d0f4`). It is a picture setting kept in this browser. The other way, a real change of the time of day (Settings → Light → Bright midday), restarts the run and moves the tide with it; the card offers that too.
+
+| What was built | Files | Checked by |
+|---|---|---|
+| The daylight view: the day's midday sun in the picture (in November about 22° up, due south) when the real sun is low or down; everything the sun lights follows it (sky, sea, haze, shadows, windows, ships' lights) | `src/app/daylightView.ts`, `src/app/controller.ts` (`sceneWeather`), `src/app/prefs.ts` | `tests/sim/daylightView.test.ts` (the run's state hash and clock unchanged by switching it on) |
+| A card when a real-time run is dark: "It is dark on the Dart now (18:03, the sun 14° below the horizon)", with Daylight view, Keep it dark (not offered again this visit) and Or restart at midday. Not offered for a run set at night on purpose | `src/ui/DarkCard.tsx`, `src/ui/App.tsx` | `daylightView.test.ts`; `tests/e2e/daylight.spec.ts` (the page's clock at 19:30 in November) |
+| A switch in More (Daylight view when dark) and in Settings → Light, with "on now" or "it is dark now" beside it | `src/ui/App.tsx`, `src/ui/SettingsPanel.tsx` | `daylight.spec.ts` |
+
+Left as real: the club's ensign comes down at the real sunset (the clock is real); the ships' sidelights go out in the daylight view, as they would by day. **Checked in software rendering only.**
+
