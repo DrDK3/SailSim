@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { SunLight } from '../../src/render/sunlight';
+import { addWetBand, addWireAA } from '../../src/render/materialFx';
 
 /** Cascaded shadows: every lit material is set up once, keeping its own shader changes and program key. */
 
@@ -38,6 +39,22 @@ describe('cascaded shadows', () => {
     });
     expect(lights).toHaveLength(3);
     expect(lights.every((l) => l.castShadow)).toBe(true);
+  });
+
+  it('materials with the same chained hook source but different additions keep different programs', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, 1.6, 0.1, 25000);
+    const sun = new SunLight(scene, camera, 'high');
+    const wet = new THREE.MeshStandardMaterial();
+    const wire = new THREE.MeshStandardMaterial();
+    addWetBand(wet);
+    addWireAA(wire);
+    // The chained hooks are the same function source; their own keys are not.
+    expect(wet.onBeforeCompile.toString()).toBe(wire.onBeforeCompile.toString());
+    for (const m of [wet, wire]) scene.add(new THREE.Mesh(new THREE.BoxGeometry(), m));
+    sun.update(new THREE.Vector3());
+    expect(wet.customProgramCacheKey()).not.toBe(wire.customProgramCacheKey());
+    expect(wire.customProgramCacheKey()).toMatch(/wireaa1\|csm$/);
   });
 
   it('a copy of a material (three.js copies neither its shader hook nor its defines) is set up too', () => {

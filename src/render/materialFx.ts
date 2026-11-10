@@ -67,3 +67,39 @@ roughnessFactor = mix(roughnessFactor, 0.08, wetBand);`,
       );
   });
 }
+
+/** The drawing buffer's height (px), set by the scene each frame: how large a pixel is at a given depth. */
+export const VIEWPORT = { uViewportH: { value: 800 } };
+
+/**
+ * Thin wires and spars (the stays and shrouds, and the mast, spreaders and boom seen from afar) drawn at least
+ * `minPx` pixels wide, their coverage cut in proportion so they look no heavier ("phone-wire anti-aliasing",
+ * E. Persson, 2012). Finer than a pixel, a wire otherwise breaks into dashes that crawl as it moves, which
+ * multisampling alone cannot fix. For a cylinder whose axis is its local y (rod() and the spars in squibModel.ts);
+ * the coverage needs multisampling (alpha to coverage), which the main view has.
+ */
+export function addWireAA(m: THREE.MeshStandardMaterial, minPx = 1): void {
+  m.alphaToCoverage = true;
+  chain(m, `wireaa${minPx}`, (shader) => {
+    shader.uniforms.uViewportH = VIEWPORT.uViewportH;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uViewportH;\nvarying float vWireCover;').replace(
+      '#include <begin_vertex>',
+      /* glsl */ `#include <begin_vertex>
+vWireCover = 1.0;
+{
+  float wireR = length(transformed.xz);
+  if (wireR > 1e-5) {
+    vec4 wireAxis = modelViewMatrix * vec4(0.0, transformed.y, 0.0, 1.0);
+    // One pixel's size at this depth: 2 d / (P11 H) in perspective.
+    float wirePx = 2.0 * max(-wireAxis.z, 0.0) / (projectionMatrix[1][1] * uViewportH);
+    float wireWant = max(wireR, ${(minPx * 0.5).toFixed(3)} * wirePx);
+    transformed.xz *= wireWant / wireR;
+    vWireCover = wireR / wireWant;
+  }
+}`,
+    );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vWireCover;')
+      .replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\ndiffuseColor.a *= vWireCover;');
+  });
+}

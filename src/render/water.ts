@@ -131,6 +131,11 @@ uniform vec3 uBedColour;
 uniform sampler2D envMap;    // the sky's light (PMREM of the sky without the sun's disc)
 #include <cube_uv_reflection_fragment>
 #endif
+#ifdef PLANAR_REFLECT
+uniform sampler2D uReflect;  // the scene mirrored in the water (reflection.ts), linear light
+uniform mat4 uReflectMatrix; // world → its projective texture coordinates
+uniform float uReflectOn;    // 0 … 1: how calm the wind leaves the water (setWind); 0 = not drawn this frame
+#endif
 varying vec3 vWorld;
 varying vec2 vPlanar;
 
@@ -265,6 +270,23 @@ void main() {
   float facing = max(dot(n, viewDir), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
   vec3 skyCol = skyLight(reflect(-viewDir, n), rough);
+#ifdef PLANAR_REFLECT
+  // Calm water mirrors the shore, the boats and the sky; the waves' slope shifts the picture (more for nearer
+  // water) so it wobbles and breaks up, and wind ripples, a puff, a swell or roughness the pixel cannot resolve
+  // fade it into the sky's light (the amounts are chosen for the eye, E).
+  if (uReflectOn > 0.0) {
+    vec4 rp = uReflectMatrix * vec4(vPlanar.x, 0.0, vPlanar.y, 1.0);
+    vec2 ruv = rp.xy / rp.w + n.xz * (0.9 / (1.0 + dist * 0.04));
+    vec3 mirror = texture2D(uReflect, clamp(ruv, vec2(0.001), vec2(0.999))).rgb;
+    #ifdef TONE_MAPPING
+    mirror = toneMapping(mirror);
+    #endif
+    float calm = uReflectOn * (1.0 - smoothstep(0.2, 0.45, strength)) * (1.0 - smoothstep(0.12, 0.5, f.r)) * (1.0 - smoothstep(0.05, 0.22, rough));
+    // Off the picture's edge (looking down past its bottom) there is nothing to show.
+    calm *= smoothstep(0.0, 0.04, ruv.y) * smoothstep(1.0, 0.96, ruv.y);
+    skyCol = mix(skyCol, mirror, calm);
+  }
+#endif
   vec3 body = mix(uDeep, uShallow, pow(1.0 - facing, 2.0) * 0.5) * uLight;
   // Shallows along the banks: lighter and greener over the bed (as the photographs from above show), fading
   // out over the first 40 m (E). Where the bed is known, through the water's depth instead: the bed shows less
@@ -448,6 +470,9 @@ export class Water {
         uBed: { value: null },
         uBedBox: { value: new THREE.Vector4(0, 0, 0, 0) },
         uWaterLevel: { value: 0 },
+        uReflect: { value: null },
+        uReflectMatrix: { value: new THREE.Matrix4() },
+        uReflectOn: { value: 0 },
         // Estuary mud and sand seen through a little water (E).
         uBedColour: { value: new THREE.Color(0x6a6440) },
       },
@@ -517,10 +542,40 @@ export class Water {
     else delete d.WATER_HIGH;
     this.setRipples();
     this.setEnv(want ? this.env : null, true);
+    this.setReflection(this.reflectTex);
     this.material.needsUpdate = true;
   }
 
   private env: THREE.Texture | null = null;
+  private reflectTex: THREE.Texture | null = null;
+  /** How calm the wind leaves the surface for reflections (0 … 1), from setWind. */
+  private calm = 1;
+
+  /**
+   * The scene mirrored in the water (reflection.ts), or null for none: only with detailed water. Its matrix is
+   * the same object every frame.
+   */
+  setReflection(tex: THREE.Texture | null, matrix?: THREE.Matrix4): void {
+    this.reflectTex = tex;
+    const d = this.material.defines as Record<string, unknown>;
+    const want = !!tex && !!d.WATER_HIGH;
+    this.material.uniforms.uReflect!.value = want ? tex : null;
+    if (matrix) this.material.uniforms.uReflectMatrix!.value = matrix;
+    if (!!d.PLANAR_REFLECT === want) return;
+    if (want) d.PLANAR_REFLECT = 1;
+    else delete d.PLANAR_REFLECT;
+    this.material.needsUpdate = true;
+  }
+
+  /** Whether reflections would show at all now (calm enough, detailed water): the pass is skipped otherwise. */
+  get reflectionWanted(): boolean {
+    return !!(this.material.defines as Record<string, unknown>).PLANAR_REFLECT && this.calm > 0.01;
+  }
+
+  /** This frame's reflection was drawn (or not): the water shows it only when it was. */
+  reflectionDrawn(drawn: boolean): void {
+    this.material.uniforms.uReflectOn!.value = drawn ? this.calm : 0;
+  }
 
   /**
    * The sky's light to reflect: a PMREM (cube UV) texture of the sky, or null for the gradient. Its size sets
@@ -629,6 +684,10 @@ export class Water {
   setWind(twsMs: number, twdFrom: number): void {
     const s = Math.min(1, twsMs / 10);
     this.material.uniforms.uRipple!.value = 0.15 + 0.5 * s;
+    // Reflections: clear in a light air, broken by a sailing breeze, gone by about 14 kn (E, for the eye).
+    const r = 0.15 + 0.5 * s;
+    const t = Math.min(1, Math.max(0, (r - 0.33) / (0.5 - 0.33)));
+    this.calm = 1 - t * t * (3 - 2 * t);
     // The ripples run downwind (Three.js xz of the compass direction the wind blows to).
     (this.material.uniforms.uWindTo!.value as THREE.Vector2).set(Math.sin(twdFrom + Math.PI), -Math.cos(twdFrom + Math.PI));
     this.setRipples();

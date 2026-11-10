@@ -7,7 +7,7 @@ import type { SquibTypeId } from '../sim/boat/squib';
 import { CrewFigure, type BodyFrame, type CrewBuild, type CrewPose } from './crew';
 import { Burgee, BURGEE_STICK } from './burgee';
 import { nonSlipTexture, sailTexture, transomTexture, woodTexture } from './squibTextures';
-import { addTranslucency, addWetBand } from './materialFx';
+import { addTranslucency, addWetBand, addWireAA } from './materialFx';
 
 /**
  * Procedural Squib. Principal dimensions come from the class data (LOA, beam, draft, mast, boom, sail
@@ -160,6 +160,9 @@ const MAT = sharedAll({
 });
 // The gelcoat at the waterline stays wet: darker and glossier (materialFx.ts).
 addWetBand(MAT.hull);
+// The stays and shrouds (7-8 mm) are finer than a pixel from a few metres; the mast and boom from a few tens.
+addWireAA(MAT.wire);
+addWireAA(MAT.spar);
 addHullPaint(MAT.hull);
 
 /**
@@ -937,6 +940,9 @@ export class SquibModel {
   ): void {
     const pos = geo.getAttribute('position') as THREE.BufferAttribute;
     const flog = 1 - s.luff;
+    // Starting to luff: the bubble behind the luff (none drawing fully, gone again once the whole sail flogs).
+    const bubble = smoothstep(0.97, 0.6, s.luff) * smoothstep(0.15, 0.45, s.luff);
+    const bubbleReach = 0.12 + 0.3 * smoothstep(0.97, 0.45, s.luff);
     // Draft position (share of the chord) and the NACA mean line through it, peak 1 there.
     const p = Math.min(0.55, Math.max(0.3, trim.draft));
     const meanLine = (x: number) => (x < p ? (2 * p * x - x * x) / (p * p) : (1 - 2 * p + 2 * p * x - x * x) / ((1 - p) * (1 - p)));
@@ -954,12 +960,20 @@ export class SquibModel {
       const nx = -cz * belly;
       const nz = cx * belly;
       const camber = (0.11 * s.luff + 0.03) * trim.depth * (1 - 0.3 * fv) * (1 - flatFoot * (1 - smoothstep(0, 0.35, fv)));
+      // Flogging comes in bursts, not as a steady beat: its strength wanders along the sail and in time (E).
+      const burst = 0.7 + 0.3 * Math.sin(time * 1.7 + fv * 2.3) * Math.sin(time * 0.93 + 1.3);
       for (let u = 0; u <= nu; u++) {
         const fu = u / nu;
         const shape = meanLine(fu);
-        const depth = chord * camber * shape;
-        // A flogging sail: a wave running aft along the cloth, faster and larger in more wind.
-        const wave = flog * chord * trim.flutterAmp * Math.sin(fu * 9 - time * trim.flutterW + fv * 5) * (0.3 + fu);
+        // The luff bubble: as a sail starts to luff (sheeted too little, or sailed too high), the cloth just behind
+        // the mast or the forestay backs first, lifting to windward, and the bubble spreads aft as it luffs more,
+        // with a shiver along its edge: the sign sailors trim by (E: sizes for the eye).
+        const front = bubble > 0 ? 1 - smoothstep(bubbleReach * 0.55, bubbleReach, fu) : 0;
+        const depth = chord * camber * shape * (1 - 2 * bubble * front) + bubble * front * chord * 0.012 * Math.sin(time * trim.flutterW * 1.3 + fv * 7 + fu * 11);
+        // A flogging sail: two waves running aft along the cloth, faster and harder in more wind, whipping most at
+        // the free leech (the luff is held by the mast or the stay).
+        const wave =
+          flog * chord * trim.flutterAmp * burst * (Math.sin(fu * 9 - time * trim.flutterW + fv * 5) + 0.45 * Math.sin(fu * 17 - time * trim.flutterW * 1.9 + fv * 9 + 1.1)) * (0.2 + 1.15 * fu * fu);
         const off = depth + wave;
         const x = luff.x + cx * chord * fu + nx * off;
         const y = luff.y;

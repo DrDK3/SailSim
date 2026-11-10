@@ -9,8 +9,8 @@ import type { AudioSettings } from '../render/audio';
 
 const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
   performance: { label: 'Performance', note: 'For older laptops: lower resolution, simple water and shadows, less scenery detail.' },
-  balanced: { label: 'Balanced', note: 'Sky reflections in the water, foam and spray, haze, shadows over the town and woods.' },
-  ultra: { label: 'Ultra', note: 'As Balanced, drawn at full sharpness on high-density screens.' },
+  balanced: { label: 'Balanced', note: 'The sky and, in calm water, the shore and boats reflected; foam and spray, haze, shadows over the town and woods.' },
+  ultra: { label: 'Ultra', note: 'As Balanced, with sharper reflections and shadows, drawn at full sharpness on high-density screens.' },
 };
 
 /**
@@ -75,6 +75,14 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
                 <select value={g.water} onChange={(e) => setG({ water: e.target.value as 'low' | 'high' })}>
                   <option value="high">Detailed: reflects the sky, fine ripples</option>
                   <option value="low">Simple</option>
+                </select>
+              </label>
+              <label>
+                Reflections in calm water
+                <select value={g.water === 'high' ? g.reflections : 'off'} disabled={g.water !== 'high'} onChange={(e) => setG({ reflections: e.target.value as 'off' | 'low' | 'high' })}>
+                  <option value="high">Sharp: the shore and boats mirrored (costs more)</option>
+                  <option value="low">Soft</option>
+                  <option value="off">Off: the sky only</option>
                 </select>
               </label>
               <label>
