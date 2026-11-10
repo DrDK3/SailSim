@@ -9,6 +9,7 @@ import { HintEngine, loadMilestones, loadSeenHints, saveMilestones, saveSeenHint
 import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
+import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, type TrackPoint } from './sailLog';
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
 import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
@@ -246,6 +247,8 @@ export interface UiState {
   showLayers: boolean;
   showEditor: boolean;
   showResults: boolean;
+  /** The debrief panel: the track, the tacks and gybes, the start. */
+  showDebrief: boolean;
   /** Other boats of the fleet (for the minimap), 10 Hz. */
   fleet: { id: string; n: number; e: number; heading: number; colour: number; label: string }[];
   /** The user's latest contact with a boat, mark, moored boat or ferry, for 8 s after it happened. */
@@ -401,6 +404,9 @@ export class SimController {
   private fleetPrev = new Map<string, FleetPose>();
   private fleetCurr = new Map<string, FleetPose>();
   private showResults = false;
+  /** The debrief (src/app/sailLog.ts): the boat's track once a second, and whether its panel is open. */
+  private readonly track = new SailTrack();
+  private showDebrief = false;
   /** Free sailing: the user's boat in a one-boat fleet (contact with moored boats and ferries). */
   private soloFleet?: Fleet;
   private resultsShown = false;
@@ -539,6 +545,7 @@ export class SimController {
     this.captureFleet();
     this.fleetPrev = this.fleetCurr;
     this.showResults = false;
+    this.track.clear();
     this.resultsShown = false;
     this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
@@ -600,6 +607,7 @@ export class SimController {
     else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
+    if (this.sim.step % (TRACK_EVERY_S * 100) === 0) this.recordTrack();
     // Only your own sailing counts towards your bests, not a replay of a recording.
     if (this.race && !this.replay && this.sim.step % 50 === 0) this.checkRaceBests();
   }
@@ -1889,6 +1897,29 @@ export class SimController {
     this.publish(true);
   }
 
+  // --------------------------------------------------------------- the debrief
+
+  private recordTrack(): void {
+    const s = this.sim.snapshot(false);
+    this.track.add({ t: s.t, n: s.n, e: s.e, sog: s.sog, vmg: s.vmg, twaDeg: (Math.abs(s.twa) * 180) / Math.PI, mainSide: s.mainSide });
+  }
+
+  toggleDebrief(force?: boolean): void {
+    this.showDebrief = force ?? !this.showDebrief;
+    this.publish(true);
+  }
+
+  /** The sail so far: its track, the tacks and gybes with what each cost, and in a race the start (src/app/sailLog.ts). */
+  sailDebrief(): { points: readonly TrackPoint[]; summary: SailSummary; line?: [{ n: number; e: number }, { n: number; e: number }]; coach?: Debrief } {
+    let start: StartInfo | undefined;
+    if (this.race) {
+      const cm = this.race.session.committee;
+      const st = this.race.session.judgeOf('you').state(this.sim.time);
+      if (this.sim.time >= cm.startTime) start = { gunT: cm.startTime, line: this.race.resolved.start, startedT: st.startTime, ocs: st.ocs };
+    }
+    return { points: this.track.points, summary: summarise(this.track.points, start), line: this.race?.resolved.start, coach: this.debrief };
+  }
+
   setInput(change: Partial<ControlInput>): void {
     if (this.replay) return; // playing back: the recording drives the boat
     this.sim.setInput(change);
@@ -2248,6 +2279,7 @@ export class SimController {
       showLayers: this.showLayers,
       showEditor: this.showEditor,
       showResults: this.showResults,
+      showDebrief: this.showDebrief,
       fleet: (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, n: b.sim.state.n, e: b.sim.state.e, heading: b.sim.state.psi, colour: b.colour, label: b.sailNumber })),
       contact: this.contactText(),
       soundCaption: this.caption && this.sim.time - this.caption.t < 5 && this.sim.time >= this.caption.t ? this.caption.text : undefined,

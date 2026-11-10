@@ -14,7 +14,7 @@ const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
 };
 
 /**
- * Graphics and sound: three presets and the options they set, the lighting presets (a time of day and sky for
+ * Settings, in groups (display, controls, help and accessibility, sound, troubleshooting). Display: three presets and the options they set, the lighting presets (a time of day and sky for
  * the scenario's date), and the sound's levels. Everything is visual or audible only: the physics never changes.
  */
 export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
@@ -32,17 +32,18 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
   useModal(ref, onClose);
   const [copied, setCopied] = useState(false);
   return (
-    <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Graphics and sound" onClick={onClose}>
+    <div ref={ref} className="overlay" role="dialog" aria-modal="true" aria-label="Settings" onClick={onClose}>
       <section className="panel settings" onClick={(e) => e.stopPropagation()} data-testid="settings-panel">
         <div className="dash-head">
-          <h3>Graphics and sound</h3>
+          <h3>Settings</h3>
           <button onClick={onClose}>Close</button>
         </div>
+        <h4 className="settings-group">Display</h4>
         {!g ? (
           <p className="error">The 3D view is not running.</p>
         ) : (
           <>
-            <h4>Graphics quality</h4>
+            <h5>Graphics quality</h5>
             <div className="seg" role="radiogroup" aria-label="Graphics preset">
               {(Object.keys(PRESETS) as GraphicsPreset[]).map((p) => (
                 <button key={p} role="radio" aria-checked={g.preset === p} className={g.preset === p ? 'on' : ''} title={PRESET_INFO[p].note} onClick={() => ctl.setGraphics(presetSettings(p, g.cameraMotion))}>
@@ -109,7 +110,7 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
                 The scenery and shadow settings take effect when the page is reloaded. <button onClick={() => location.reload()}>Reload now</button>
               </p>
             )}
-            <h4>Light</h4>
+            <h5>Light</h5>
             <label className="check">
               <input type="checkbox" checked={ui.prefs.daylightView} onChange={(e) => ctl.setPrefs({ daylightView: e.target.checked })} data-testid="pref-daylight" />
               Daylight view when it is dark: the picture lit as at midday whenever the sun is low or down; the time, tide, wind and traffic stay real
@@ -125,7 +126,66 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             </div>
           </>
         )}
-        <h4>Graphics check</h4>
+        <h4 className="settings-group">Controls</h4>
+        <h5>Steering</h5>
+        <div className="row left" role="radiogroup" aria-label="Steering keys">
+          <label className="check">
+            <input type="radio" name="steering" checked={ui.steering === 'bow'} onChange={() => ctl.setSteering('bow')} /> Turn the bow (A / ← bow to port)
+          </label>
+          <label className="check">
+            <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
+          </label>
+        </div>
+        <h5>Interface level</h5>
+        <div className="row left wrap" role="radiogroup" aria-label="Interface level" data-testid="level">
+          {LEVELS.map((l) => (
+            <label key={l.id} className="check" title={l.text}>
+              <input type="radio" name="level" checked={ui.level === l.id} onChange={() => ctl.setLevel(l.id)} /> {l.label}
+            </label>
+          ))}
+        </div>
+        <p className="fine">{LEVELS.find((l) => l.id === ui.level)?.text} It sets what is shown by default; each part can still be switched on or off.</p>
+        <h4 className="settings-group">Help and accessibility</h4>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.lightLabels} onChange={(e) => ctl.setPrefs({ lightLabels: e.target.checked })} data-testid="pref-light-labels" />
+          Name the ships' sidelights at night (P port, red; S starboard, green), for anyone who finds red and green hard to tell apart
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.hints} onChange={(e) => ctl.setPrefs({ hints: e.target.checked })} data-testid="pref-hints" />
+          Hints when you are stuck (in irons, sails flapping, aground)
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.batterySaver} onChange={(e) => ctl.setPrefs({ batterySaver: e.target.checked })} data-testid="pref-battery" />
+          Battery saver: draw at most 30 frames a second (the sailing is the same; on by default on phones and tablets)
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.devTools} onChange={(e) => ctl.setPrefs({ devTools: e.target.checked })} data-testid="pref-dev" />
+          Physics and developer tools in the More menu (validation dashboard, polar sweep, physics panel, force arrows; on at the Expert level)
+        </label>
+        <h4 className="settings-group">Sound</h4>
+        <div className="settings-grid">
+          <label className="check">
+            <input type="checkbox" checked={!a.muted} onChange={(e) => setA({ muted: !e.target.checked })} /> Sound on <kbd>U</kbd>
+          </label>
+          {(
+            [
+              ['master', 'Volume'],
+              ['wind', 'Wind'],
+              ['water', 'Water'],
+              ['effects', 'Sails and boom'],
+              ['ambience', 'Harbour'],
+            ] as const
+          ).map(([k, label]) => (
+            <label key={k}>
+              {label} <span className="fine">{pct(a[k])}</span>
+              <input type="range" min={0} max={1} step={0.05} value={a[k]} disabled={a.muted} onChange={(e) => setA({ [k]: Number(e.target.value) })} />
+            </label>
+          ))}
+        </div>
+        {!a.muted && !ui.audioRunning && <p className="fine">Sound starts when you press a key or click in the view.</p>}
+        <p className="fine">The sounds are made in the browser from the wind, the boat's speed and her sails; nothing is downloaded.</p>
+        <h4 className="settings-group">Troubleshooting</h4>
+        <h5>Graphics check</h5>
         <div data-testid="gpu-check">
           <p className="fine">
             Measures how this graphics card draws painted surfaces (hulls, racing marks) and, if they come out black, uses the first drawing mode that
@@ -166,61 +226,8 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             Graphics card: {ui.gpuName ?? 'unknown'} · build {ui.build.id} ({ui.build.time})
           </p>
         </div>
-        <h4>Something looks wrong?</h4>
+        <h5>Something looks wrong?</h5>
         <ReportProblem ctl={ctl} />
-        <h4>Interface level</h4>
-        <div className="row left wrap" role="radiogroup" aria-label="Interface level" data-testid="level">
-          {LEVELS.map((l) => (
-            <label key={l.id} className="check" title={l.text}>
-              <input type="radio" name="level" checked={ui.level === l.id} onChange={() => ctl.setLevel(l.id)} /> {l.label}
-            </label>
-          ))}
-        </div>
-        <p className="fine">{LEVELS.find((l) => l.id === ui.level)?.text} It sets what is shown by default; each part can still be switched on or off.</p>
-        <h4>Steering</h4>
-        <div className="row left" role="radiogroup" aria-label="Steering keys">
-          <label className="check">
-            <input type="radio" name="steering" checked={ui.steering === 'bow'} onChange={() => ctl.setSteering('bow')} /> Turn the bow (A / ← bow to port)
-          </label>
-          <label className="check">
-            <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
-          </label>
-        </div>
-        <h4>Seeing and help</h4>
-        <label className="check">
-          <input type="checkbox" checked={ui.prefs.lightLabels} onChange={(e) => ctl.setPrefs({ lightLabels: e.target.checked })} data-testid="pref-light-labels" />
-          Name the ships' sidelights at night (P port, red; S starboard, green), for anyone who finds red and green hard to tell apart
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={ui.prefs.hints} onChange={(e) => ctl.setPrefs({ hints: e.target.checked })} data-testid="pref-hints" />
-          Hints when you are stuck (in irons, sails flapping, aground)
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={ui.prefs.batterySaver} onChange={(e) => ctl.setPrefs({ batterySaver: e.target.checked })} data-testid="pref-battery" />
-          Battery saver: draw at most 30 frames a second (the sailing is the same; on by default on phones and tablets)
-        </label>
-        <h4>Sound</h4>
-        <div className="settings-grid">
-          <label className="check">
-            <input type="checkbox" checked={!a.muted} onChange={(e) => setA({ muted: !e.target.checked })} /> Sound on <kbd>U</kbd>
-          </label>
-          {(
-            [
-              ['master', 'Volume'],
-              ['wind', 'Wind'],
-              ['water', 'Water'],
-              ['effects', 'Sails and boom'],
-              ['ambience', 'Harbour'],
-            ] as const
-          ).map(([k, label]) => (
-            <label key={k}>
-              {label} <span className="fine">{pct(a[k])}</span>
-              <input type="range" min={0} max={1} step={0.05} value={a[k]} disabled={a.muted} onChange={(e) => setA({ [k]: Number(e.target.value) })} />
-            </label>
-          ))}
-        </div>
-        {!a.muted && !ui.audioRunning && <p className="fine">Sound starts when you press a key or click in the view.</p>}
-        <p className="fine">The sounds are made in the browser from the wind, the boat's speed and her sails; nothing is downloaded.</p>
       </section>
     </div>
   );

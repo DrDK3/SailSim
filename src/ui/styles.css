@@ -261,7 +261,9 @@ h4 { margin: 10px 0 4px; font-size: 12.5px; color: var(--muted); text-transform:
 .chip.bad::before { content: '⚠ '; }
 .layers { position: static; width: min(900px, calc(100% - 24px)); max-height: calc(100% - 40px); overflow: auto; }
 .settings { position: static; width: min(640px, calc(100% - 24px)); max-height: calc(100% - 40px); overflow: auto; }
-.settings h4 { margin: 12px 0 6px; }
+.settings h4.settings-group { margin: 18px 0 4px; padding-top: 10px; border-top: 1px solid var(--panel-border); font-size: 15px; }
+.settings h4.settings-group:first-of-type { border-top: none; padding-top: 0; }
+.settings h5 { margin: 12px 0 6px; font-size: 13px; }
 .settings .seg { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .settings .seg button.on { outline: 2px solid currentColor; font-weight: 600; }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; align-items: center; }
@@ -572,6 +574,14 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .tiller-drag { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .tiller-drag:active { cursor: grabbing; }
 .ghost-chip { position: absolute; top: 112px; right: 16px; display: flex; gap: 8px; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; z-index: 2; }
+.debrief-panel { width: min(620px, calc(100% - 24px)); }
+.debrief-chart { position: relative; border-radius: 8px; overflow: hidden; }
+.debrief-chart canvas { display: block; }
+.debrief-tip { position: absolute; transform: translate(-50%, -140%); padding: 3px 8px; border-radius: 6px; background: var(--panel-strong); border: 1px solid var(--panel-border); font-size: 12px; white-space: nowrap; pointer-events: none; }
+.debrief-legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; margin: 6px 0 8px; }
+.debrief-legend .ramp { display: inline-block; width: 110px; height: 8px; border-radius: 4px; }
+.debrief-legend .key { margin-left: auto; opacity: 0.85; }
+.debrief-stats th { text-align: left; font-weight: 500; }
 .report-problem { display: flex; flex-direction: column; gap: 8px; }
 .report-problem label { display: flex; flex-direction: column; gap: 4px; }
 .report-problem textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }

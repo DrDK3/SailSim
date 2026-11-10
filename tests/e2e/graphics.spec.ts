@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 const CI_SLOW = process.env.CI ? 2 : 1;
 
 /**
- * The graphics round: the Graphics and sound panel (presets kept across a reload, the sound's mute), the
+ * The graphics round: the Settings panel (presets kept across a reload, the sound's mute), the
  * scenic camera, and the chase camera's zoom. Visual settings never change the simulation.
  */
 async function ready(page: Page): Promise<string[]> {
@@ -29,7 +29,7 @@ test('graphics and sound: presets apply and are kept, sound mutes with U, the ph
     return c.width / c.clientWidth;
   });
   await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByRole('menuitemcheckbox', { name: /Graphics and sound/ }).click();
+  await page.getByRole('menuitemcheckbox', { name: /^Settings$/ }).click();
   const panel = page.getByTestId('settings-panel');
   await expect(panel).toBeVisible();
   // A software renderer starts on Performance.

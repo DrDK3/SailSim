@@ -17,11 +17,16 @@ const CODES: Record<string, string> = {
 };
 
 /** Results of the race: Appendix A low points for one race; provisional until the race is over. */
-export function ResultsPanel({ rows, final, onClose }: { rows: FleetRow[]; final: boolean; onClose: () => void }) {
+export function ResultsPanel({ rows, final, onClose, onDebrief }: { rows: FleetRow[]; final: boolean; onClose: () => void; onDebrief?: () => void }) {
   return (
     <section className="panel results" aria-label="Results" data-testid="results">
       <div className="race-head">
         <strong>Results{final ? '' : ' (provisional: race still running)'}</strong>
+        {onDebrief && (
+          <button onClick={onDebrief} data-testid="results-debrief">
+            Your sail
+          </button>
+        )}
         <button onClick={onClose} aria-label="Close results">×</button>
       </div>
       <table>

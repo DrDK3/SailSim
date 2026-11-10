@@ -5,7 +5,7 @@ import { DamageBanner, DamageCard } from './DamageCard';
 import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
-import { CoachCard, CoachTip } from './Coach';
+import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
 import { GhostStatus, ResumeCard } from './ResumeCard';
 import { DarkCard } from './DarkCard';
@@ -28,6 +28,7 @@ const PolarPanel = lazy(() => import('./PolarPanel').then((m) => ({ default: m.P
 const LayersPanel = lazy(() => import('./LayersPanel').then((m) => ({ default: m.LayersPanel })));
 const SettingsPanel = lazy(() => import('./SettingsPanel').then((m) => ({ default: m.SettingsPanel })));
 const ResultsPanel = lazy(() => import('./ResultsPanel').then((m) => ({ default: m.ResultsPanel })));
+const DebriefPanel = lazy(() => import('./DebriefPanel').then((m) => ({ default: m.DebriefPanel })));
 const CourseEditor = lazy(() => import('./CourseEditor').then((m) => ({ default: m.CourseEditor })));
 const LibraryPanel = lazy(() => import('./LibraryPanel').then((m) => ({ default: m.LibraryPanel })));
 const QuickRacePanel = lazy(() => import('./QuickRacePanel').then((m) => ({ default: m.QuickRacePanel })));
@@ -289,18 +290,24 @@ export function App({ ctl }: { ctl: SimController }) {
                 { section: 'Learn and plan', label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
                 { label: 'Teaching overlay', checked: ui.teaching, onSelect: () => ctl.toggleTeaching() },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
+                { label: 'Your sail (debrief)', checked: ui.showDebrief, onSelect: () => ctl.toggleDebrief() },
                 { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
                 { label: 'Daylight view when dark', checked: ui.prefs.daylightView, onSelect: () => ctl.setPrefs({ daylightView: !ui.prefs.daylightView }) },
                 { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
-                { label: 'Force arrows', keys: 'F', checked: ui.showForces, onSelect: () => ctl.toggleForces() },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
-                { section: 'Settings', label: 'Graphics and sound', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
+                { section: 'Settings', label: 'Settings', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
                 { label: ui.audio.muted ? 'Sound off' : 'Sound on', keys: 'U', checked: !ui.audio.muted, onSelect: () => ctl.toggleMute() },
-                { section: 'Physics tools', label: 'Validation dashboard', keys: 'V', checked: ui.showDashboard, onSelect: () => ctl.toggleDashboard() },
-                { label: 'Polar sweep', checked: ui.showPolar, onSelect: () => ctl.togglePolar() },
-                { label: 'Physics panel', keys: 'G', checked: ui.showDebug, onSelect: () => ctl.toggleDebug() },
+                // The engineering tools (calibration and checking the physics): Expert level, or Settings → Help and accessibility.
+                ...(ui.prefs.devTools || ui.level === 'expert'
+                  ? [
+                      { section: 'Physics tools', label: 'Validation dashboard', keys: 'V', checked: ui.showDashboard, onSelect: () => ctl.toggleDashboard() },
+                      { label: 'Polar sweep', checked: ui.showPolar, onSelect: () => ctl.togglePolar() },
+                      { label: 'Physics panel', keys: 'G', checked: ui.showDebug, onSelect: () => ctl.toggleDebug() },
+                      { label: 'Force arrows', keys: 'F', checked: ui.showForces, onSelect: () => ctl.toggleForces() },
+                    ]
+                  : []),
               ]}
             />
             <button className="tb-help" onClick={() => ctl.toggleHelp()} title="Help and keys (H)" data-tutorial="help" aria-label="Help">
@@ -342,13 +349,15 @@ export function App({ ctl }: { ctl: SimController }) {
           <span className="fine">Drag to look around · double-click to look ahead · wheel to zoom</span>
         </div>
       )}
-      <CoachTip ui={ui} />
+      {/* One message at a time, most important first (the owner's review: no cards on top of one another). */}
       {ui.ghostLoading !== undefined ? (
         <GhostStatus ctl={ctl} ui={ui} />
       ) : ui.resume || ui.catchingUp !== undefined ? (
         <ResumeCard ctl={ctl} ui={ui} />
       ) : ui.light.offer ? (
         <DarkCard ctl={ctl} ui={ui} />
+      ) : coachTipShowing(ui) ? (
+        <CoachTip ui={ui} />
       ) : (
         !ui.tutorial && <HintCard ctl={ctl} ui={ui} />
       )}
@@ -377,7 +386,8 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} />}</Suspense>
+      <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
       <Suspense fallback={null}>
         {ui.showHelp && (

@@ -168,3 +168,9 @@ Closed class rules: "if these rules do not say that you can – then you can not
 
 - **Package 4:** Admiralty Chart 2253 holds the soundings and tidal diamonds; a licence question (D5, D6).
 - **Packages 4 and 7:** MS1–MS5, needed for river course R2, could be placed from the chart or OSM seamarks.
+
+## 4. Owner statements
+
+| Date | Statement | Provenance | Used for |
+|---|---|---|---|
+| 10 Nov 2026 | **RDYC is an accredited RYA Training Centre.** | The owner (O); no document seen | The review's RYA recommendations (a skills log mapped to the courses RDYC runs, checked by its instructors; an instructor mode). Which courses RDYC runs, and the course criteria, are still to come from the club. The simulator does not carry RYA approval or the RYA's marks: the accreditation is the club's, not the software's |
