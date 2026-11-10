@@ -9,6 +9,7 @@ import { HintEngine, loadMilestones, loadSeenHints, saveMilestones, saveSeenHint
 import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
+import { FRAME_EVERY_S, IncidentRecorder, type ProtestCase } from './protestRoom';
 import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, type TrackPoint } from './sailLog';
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
@@ -249,6 +250,8 @@ export interface UiState {
   showResults: boolean;
   /** The debrief panel: the track, the tacks and gybes, the start. */
   showDebrief: boolean;
+  /** The protest room: whether it is open, and how many of your incidents it holds. */
+  protest: { open: boolean; count: number };
   /** Other boats of the fleet (for the minimap), 10 Hz. */
   fleet: { id: string; n: number; e: number; heading: number; colour: number; label: string }[];
   /** The user's latest contact with a boat, mark, moored boat or ferry, for 8 s after it happened. */
@@ -407,6 +410,9 @@ export class SimController {
   /** The debrief (src/app/sailLog.ts): the boat's track once a second, and whether its panel is open. */
   private readonly track = new SailTrack();
   private showDebrief = false;
+  /** The protest room (src/app/protestRoom.ts): clips of your incidents in a race, and whether its panel is open. */
+  private readonly incidents = new IncidentRecorder();
+  private showProtest = false;
   /** Free sailing: the user's boat in a one-boat fleet (contact with moored boats and ferries). */
   private soloFleet?: Fleet;
   private resultsShown = false;
@@ -546,6 +552,8 @@ export class SimController {
     this.fleetPrev = this.fleetCurr;
     this.showResults = false;
     this.track.clear();
+    this.incidents.reset();
+    this.showProtest = false;
     this.resultsShown = false;
     this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
@@ -608,6 +616,7 @@ export class SimController {
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
     if (this.sim.step % (TRACK_EVERY_S * 100) === 0) this.recordTrack();
+    if (this.race && !this.replay && this.sim.step % Math.round(FRAME_EVERY_S * 100) === 0) this.recordFleetFrame();
     // Only your own sailing counts towards your bests, not a replay of a recording.
     if (this.race && !this.replay && this.sim.step % 50 === 0) this.checkRaceBests();
   }
@@ -1904,6 +1913,27 @@ export class SimController {
     this.track.add({ t: s.t, n: s.n, e: s.e, sog: s.sog, vmg: s.vmg, twaDeg: (Math.abs(s.twa) * 180) / Math.PI, mainSide: s.mainSide });
   }
 
+  /** Five times a second in a race: the fleet's poses, for the protest room's clips. */
+  private recordFleetFrame(): void {
+    const r = this.race!;
+    const boats = r.session.fleet.boats.map((b) => {
+      const sn = b.sim.snapshot(false);
+      return { id: b.id, label: b.id === 'you' ? 'You' : b.sailNumber, n: sn.n, e: sn.e, heading: sn.heading, mainSide: sn.mainSide };
+    });
+    const fresh = this.incidents.record({ t: this.sim.time, boats }, r.session.incidents, this.currSnap.twdGround);
+    if (fresh.length) this.publish(true);
+  }
+
+  toggleProtestRoom(force?: boolean): void {
+    this.showProtest = force ?? !this.showProtest;
+    this.publish(true);
+  }
+
+  /** The protest room's cases: your incidents in this race, each with its clip. */
+  get protestCases(): readonly ProtestCase[] {
+    return this.incidents.cases;
+  }
+
   toggleDebrief(force?: boolean): void {
     this.showDebrief = force ?? !this.showDebrief;
     this.publish(true);
@@ -2280,6 +2310,7 @@ export class SimController {
       showEditor: this.showEditor,
       showResults: this.showResults,
       showDebrief: this.showDebrief,
+      protest: { open: this.showProtest, count: this.incidents.cases.length },
       fleet: (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, n: b.sim.state.n, e: b.sim.state.e, heading: b.sim.state.psi, colour: b.colour, label: b.sailNumber })),
       contact: this.contactText(),
       soundCaption: this.caption && this.sim.time - this.caption.t < 5 && this.sim.time >= this.caption.t ? this.caption.text : undefined,

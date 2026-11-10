@@ -582,6 +582,10 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .debrief-legend .ramp { display: inline-block; width: 110px; height: 8px; border-radius: 4px; }
 .debrief-legend .key { margin-left: auto; opacity: 0.85; }
 .debrief-stats th { text-align: left; font-weight: 500; }
+.protest-room { width: min(580px, calc(100% - 24px)); }
+.protest-timeline { align-items: center; gap: 8px; margin: 6px 0; }
+.protest-timeline input[type=range] { flex: 1; }
+.contact-banner .link { margin-left: 8px; }
 .report-problem { display: flex; flex-direction: column; gap: 8px; }
 .report-problem label { display: flex; flex-direction: column; gap: 4px; }
 .report-problem textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }

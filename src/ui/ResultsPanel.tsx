@@ -17,7 +17,7 @@ const CODES: Record<string, string> = {
 };
 
 /** Results of the race: Appendix A low points for one race; provisional until the race is over. */
-export function ResultsPanel({ rows, final, onClose, onDebrief }: { rows: FleetRow[]; final: boolean; onClose: () => void; onDebrief?: () => void }) {
+export function ResultsPanel({ rows, final, onClose, onDebrief, onProtest }: { rows: FleetRow[]; final: boolean; onClose: () => void; onDebrief?: () => void; onProtest?: () => void }) {
   return (
     <section className="panel results" aria-label="Results" data-testid="results">
       <div className="race-head">
@@ -25,6 +25,11 @@ export function ResultsPanel({ rows, final, onClose, onDebrief }: { rows: FleetR
         {onDebrief && (
           <button onClick={onDebrief} data-testid="results-debrief">
             Your sail
+          </button>
+        )}
+        {onProtest && (
+          <button onClick={onProtest} data-testid="results-protest">
+            Protest room
           </button>
         )}
         <button onClick={onClose} aria-label="Close results">×</button>

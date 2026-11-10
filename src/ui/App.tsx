@@ -29,6 +29,7 @@ const LayersPanel = lazy(() => import('./LayersPanel').then((m) => ({ default: m
 const SettingsPanel = lazy(() => import('./SettingsPanel').then((m) => ({ default: m.SettingsPanel })));
 const ResultsPanel = lazy(() => import('./ResultsPanel').then((m) => ({ default: m.ResultsPanel })));
 const DebriefPanel = lazy(() => import('./DebriefPanel').then((m) => ({ default: m.DebriefPanel })));
+const ProtestRoom = lazy(() => import('./ProtestRoom').then((m) => ({ default: m.ProtestRoom })));
 const CourseEditor = lazy(() => import('./CourseEditor').then((m) => ({ default: m.CourseEditor })));
 const LibraryPanel = lazy(() => import('./LibraryPanel').then((m) => ({ default: m.LibraryPanel })));
 const QuickRacePanel = lazy(() => import('./QuickRacePanel').then((m) => ({ default: m.QuickRacePanel })));
@@ -291,6 +292,7 @@ export function App({ ctl }: { ctl: SimController }) {
                 { label: 'Teaching overlay', checked: ui.teaching, onSelect: () => ctl.toggleTeaching() },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
                 { label: 'Your sail (debrief)', checked: ui.showDebrief, onSelect: () => ctl.toggleDebrief() },
+                ...(ui.race ? [{ label: `Protest room${ui.protest.count ? ` (${ui.protest.count})` : ''}`, checked: ui.protest.open, onSelect: () => ctl.toggleProtestRoom() }] : []),
                 { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
                 { label: 'Daylight view when dark', checked: ui.prefs.daylightView, onSelect: () => ctl.setPrefs({ daylightView: !ui.prefs.daylightView }) },
@@ -376,7 +378,16 @@ export function App({ ctl }: { ctl: SimController }) {
           {ui.runningSlow.lowered ? ` · graphics lowered to ${ui.runningSlow.lowered[0]!.toUpperCase()}${ui.runningSlow.lowered.slice(1)}` : ''}
         </div>
       )}
-      {ui.contact && <div className="banner error contact-banner" role="alert" data-testid="contact">{ui.contact}</div>}
+      {ui.contact && (
+        <div className="banner error contact-banner" role="alert" data-testid="contact">
+          {ui.contact}
+          {ui.race && ui.protest.count > 0 && (
+            <button className="link" onClick={() => ctl.toggleProtestRoom(true)} data-testid="contact-review">
+              Review it in the protest room
+            </button>
+          )}
+        </div>
+      )}
       {ui.showMinimap && <Minimap ctl={ctl} ui={ui} />}
       {(ui.dart.issues.length > 0 || ui.dart.status === 'unavailable') && (
         <div className="banner warn-banner" role="alert" data-testid="dart-warning">
@@ -386,8 +397,9 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} />}</Suspense>
       <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
+      <Suspense fallback={null}>{ui.protest.open && <ProtestRoom ctl={ctl} ui={ui} onClose={() => ctl.toggleProtestRoom(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
       <Suspense fallback={null}>
         {ui.showHelp && (
