@@ -189,7 +189,8 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         <div data-testid="gpu-check">
           <p className="fine">
             Measures how this graphics card draws painted surfaces (hulls, racing marks) and, if they come out black, uses the first drawing mode that
-            fixes it. On a graphics card it runs by itself in daylight, 8 s after loading.
+            fixes it. On a graphics card it runs by itself in daylight, 8 s after loading, and shows its result once for each graphics card (and whenever
+            it finds a fault). The report stays on this device until you paste or attach it.
           </p>
           <p>
             {ui.materialCheck ? (

@@ -221,3 +221,28 @@ export function saveFix(rendererName: string, fix: MaterialFix): void {
     // storage unavailable
   }
 }
+
+const SHOWN_KEY = 'squib.gpucheck.shown.v1';
+
+/**
+ * The graphics check's result card is shown once for each graphics card (and again whenever it finds a fault), so the
+ * report is easy to send without opening Settings (owner item, 10 Nov 2026).
+ */
+export function gpuCardSeen(rendererName: string): boolean {
+  try {
+    const r = JSON.parse(localStorage.getItem(SHOWN_KEY) ?? '[]') as unknown;
+    return Array.isArray(r) && r.includes(rendererName);
+  } catch {
+    return false;
+  }
+}
+
+export function markGpuCardSeen(rendererName: string): void {
+  try {
+    const r = JSON.parse(localStorage.getItem(SHOWN_KEY) ?? '[]') as unknown;
+    const list = Array.isArray(r) ? r.filter((x): x is string => typeof x === 'string' && x !== rendererName) : [];
+    localStorage.setItem(SHOWN_KEY, JSON.stringify([...list, rendererName].slice(-8)));
+  } catch {
+    // storage unavailable: shown again next visit
+  }
+}

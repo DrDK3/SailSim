@@ -116,3 +116,34 @@ test('start drill: the line readouts before the gun, the start scored, and the s
   expect(await page.evaluate(() => window.__squib!.controller.getState().race!.toStart)).toBeGreaterThan(50);
   expect(errors).toEqual([]);
 });
+
+/**
+ * Owner item, 10 Nov 2026: the graphics check's report should be easy to send. The automatic check's result comes up
+ * as a card once for each graphics card (and whenever it finds a fault), with the report to copy or save.
+ */
+test('graphics check card: the result once for this graphics card, with the report to save', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  // `?gpucheck` runs the automatic check on the software renderer too.
+  await page.goto('/?nowelcome&quality=low&gpucheck=1');
+  const card = page.getByTestId('gpu-card');
+  await expect(card).toBeVisible({ timeout: 90_000 * CI_SLOW });
+  await expect(card).toContainText('Graphics check: painted surfaces draw correctly');
+  const download = page.waitForEvent('download');
+  await page.getByTestId('gpu-card-save').dispatchEvent('click');
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^squib-graphics-check-\d{4}-\d{2}-\d{2}\.txt$/);
+  await page.getByTestId('gpu-card-close').dispatchEvent('click');
+  await expect(card).toBeHidden();
+  // Seen for this graphics card: not again, unless the check finds a fault.
+  await page.goto('/?nowelcome&quality=low&gpucheck=1');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => !!window.__squib!.controller.getState().materialCheck, null, { timeout: 90_000 * CI_SLOW });
+  await expect(card).toBeHidden();
+  await page.goto('/?nowelcome&quality=low&gpucheck=fault');
+  await expect(card).toBeVisible({ timeout: 90_000 * CI_SLOW });
+  await expect(card).toContainText('a fault was found and fixed');
+  await expect(card).toContainText(/now drawing (without sky reflections|with simple materials)/);
+  expect(errors).toEqual([]);
+});

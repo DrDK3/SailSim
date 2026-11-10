@@ -1,4 +1,4 @@
-import { saveFix, type MaterialCheck, type MaterialFix } from '../render/gpuCheck';
+import { gpuCardSeen, markGpuCardSeen, saveFix, type MaterialCheck, type MaterialFix } from '../render/gpuCheck';
 import { signalCaption } from './signalCaption';
 import { ocsGuide, type OcsGuide } from './ocsGuide';
 import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
@@ -274,6 +274,8 @@ export interface UiState {
   steering: SteeringMode;
   /** The graphics check of painted surfaces on this card (src/render/gpuCheck.ts), and the mode in use. */
   materialCheck?: { fault: boolean; reason: string; mode: string; at: string };
+  /** The automatic graphics check has just run: show its result (a fault found, fixed or not), with the report to copy or save. */
+  gpuCard?: 'none' | 'fixed' | 'unfixed';
   materialMode?: MaterialFix;
   gpuName?: string;
   /** This build: the commit it was made from and when. */
@@ -1520,22 +1522,39 @@ export class SimController {
     void this.discoverSources();
     // The graphics check, once the scene has been drawn for a while (owner review, 4 Nov 2026), on a graphics card
     // (the fault was seen on one; a software renderer draws these surfaces correctly). Settings runs it anywhere.
-    if (this.view && !/swiftshader|llvmpipe|software|basic render/i.test(this.view.gpuName)) this.checkTimer = window.setTimeout(() => this.runMaterialCheck(), 8000);
+    // `?gpucheck` runs it on a software renderer too (tests).
+    const forced = new URLSearchParams(location.search).has('gpucheck');
+    if (this.view && (forced || !/swiftshader|llvmpipe|software|basic render/i.test(this.view.gpuName))) this.checkTimer = window.setTimeout(() => this.runMaterialCheck(true), 8000);
     this.publish(true);
   }
 
   private checkTimer = 0;
   private lastMaterialCheck?: MaterialCheck;
+  /** The automatic graphics check's result card is showing, and what it found. */
+  private gpuCard?: 'none' | 'fixed' | 'unfixed';
+
+  dismissGpuCard(): void {
+    this.gpuCard = undefined;
+    this.publish(true);
+  }
 
   /**
    * Measure how this graphics card draws painted surfaces and apply the first fix that works if they come out
    * black (src/render/gpuCheck.ts). `?gpucheck=fault` simulates the fault (tests).
    */
-  runMaterialCheck(): MaterialCheck | undefined {
+  runMaterialCheck(auto = false): MaterialCheck | undefined {
     if (!this.view) return undefined;
     const simulate = new URLSearchParams(location.search).get('gpucheck') === 'fault';
+    const before = this.view.materialChecks.length;
     const c = this.view.checkMaterials(simulate);
     if (c) this.lastMaterialCheck = c;
+    // The automatic check's result as a card, once for each graphics card and whenever it finds a fault (fixed by
+    // another drawing mode, or not).
+    const found = this.view.materialChecks.slice(before).some((m) => m.fault);
+    if (c && auto && (found || !gpuCardSeen(this.view.gpuName))) {
+      this.gpuCard = c.fault ? 'unfixed' : found ? 'fixed' : 'none';
+      markGpuCardSeen(this.view.gpuName);
+    }
     this.settlePace();
     this.publish(true);
     return c;
@@ -2413,6 +2432,7 @@ export class SimController {
       audio: this.sound.settings,
       audioRunning: this.sound.running,
       steering: this.steeringMode,
+      gpuCard: this.lastMaterialCheck ? this.gpuCard : undefined,
       materialCheck: this.lastMaterialCheck && { fault: this.lastMaterialCheck.fault, reason: this.lastMaterialCheck.reason, mode: this.lastMaterialCheck.mode, at: this.lastMaterialCheck.at },
       materialMode: this.view?.materialMode,
       gpuName: this.view?.gpuName,

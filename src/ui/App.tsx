@@ -9,6 +9,7 @@ import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
 import { GhostStatus, ResumeCard } from './ResumeCard';
 import { DarkCard } from './DarkCard';
+import { GpuCard } from './GpuCard';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
@@ -356,6 +357,8 @@ export function App({ ctl }: { ctl: SimController }) {
         <GhostStatus ctl={ctl} ui={ui} />
       ) : ui.resume || ui.catchingUp !== undefined ? (
         <ResumeCard ctl={ctl} ui={ui} />
+      ) : ui.gpuCard ? (
+        <GpuCard ctl={ctl} ui={ui} />
       ) : ui.light.offer ? (
         <DarkCard ctl={ctl} ui={ui} />
       ) : coachTipShowing(ui) ? (
