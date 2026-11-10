@@ -522,7 +522,7 @@ export class SceneView {
   }
 
   /** The other boats to draw (id, sail-number label, hull colour); an empty list removes them. */
-  setFleet(list: { id: string; label: string; colour: number }[]): void {
+  setFleet(list: { id: string; label: string; colour: number; ghost?: boolean }[]): void {
     this.fleet.setBoats(list);
   }
 

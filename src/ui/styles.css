@@ -571,6 +571,7 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 .hint-card .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tiller-drag { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .tiller-drag:active { cursor: grabbing; }
+.ghost-chip { position: absolute; top: 112px; right: 16px; display: flex; gap: 8px; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; z-index: 2; }
 .report-problem { display: flex; flex-direction: column; gap: 8px; }
 .report-problem label { display: flex; flex-direction: column; gap: 4px; }
 .report-problem textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }

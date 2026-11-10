@@ -7,7 +7,7 @@ import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
 import { CoachCard, CoachTip } from './Coach';
 import { HintCard } from './HintCard';
-import { ResumeCard } from './ResumeCard';
+import { GhostStatus, ResumeCard } from './ResumeCard';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
@@ -316,7 +316,7 @@ export function App({ ctl }: { ctl: SimController }) {
         <Suspense fallback={null}>{ui.showDebug && <DebugPanel ui={ui} />}</Suspense>
       </div>
       <Suspense fallback={null}>{ui.showDashboard && <Dashboard ctl={ctl} ui={ui} onClose={() => ctl.toggleDashboard(false)} />}</Suspense>
-      {ui.replay ? (
+      {ui.replay && ui.ghostLoading === undefined && ui.catchingUp === undefined ? (
         <ReplayBar ctl={ctl} ui={ui} />
       ) : controlsHidden ? (
         <button className="panel controls-show" onClick={() => setControlsHidden(false)} title="Show the trim, helm and crew controls">
@@ -341,7 +341,8 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       <CoachTip ui={ui} />
-      {ui.resume || ui.catchingUp !== undefined ? <ResumeCard ctl={ctl} ui={ui} /> : !ui.tutorial && <HintCard ctl={ctl} ui={ui} />}
+      {ui.ghostLoading !== undefined ? <GhostStatus ctl={ctl} ui={ui} /> : ui.resume || ui.catchingUp !== undefined ? <ResumeCard ctl={ctl} ui={ui} /> : !ui.tutorial && <HintCard ctl={ctl} ui={ui} />}
+      {ui.ghost && ui.ghostLoading === undefined && <GhostStatus ctl={ctl} ui={ui} />}
       {ui.paused && (
         // Below the toolbar however many rows it wraps onto (it covered the pill on a two-row toolbar), and below
         // a camera strip if one is showing.

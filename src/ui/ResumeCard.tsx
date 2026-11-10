@@ -31,3 +31,24 @@ export function ResumeCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     </div>
   );
 }
+
+/** Ghost racing (src/app/ghost.ts): learning the recording's path, then a small reminder that a ghost is out there. */
+export function GhostStatus({ ctl, ui }: { ctl: SimController; ui: UiState }) {
+  if (ui.ghostLoading !== undefined) {
+    return (
+      <div className="hint-card" role="status" aria-live="polite" data-testid="ghost-loading">
+        <p>
+          <strong>Learning the ghost’s course…</strong> sailing the recording through quickly ({Math.round(ui.ghostLoading * 100)}%).
+        </p>
+        <progress max={1} value={ui.ghostLoading} style={{ width: '100%' }} />
+      </div>
+    );
+  }
+  if (!ui.ghost) return null;
+  return (
+    <div className="ghost-chip panel" data-testid="ghost-chip">
+      <span>Ghost: {ui.ghost.title}</span>
+      <button className="link" onClick={() => ctl.endGhost()}>Stop the ghost</button>
+    </div>
+  );
+}

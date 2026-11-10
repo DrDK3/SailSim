@@ -9,6 +9,7 @@ import { HintEngine, loadMilestones, loadSeenHints, saveMilestones, saveSeenHint
 import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
+import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
 import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
@@ -184,6 +185,9 @@ export interface UiState {
   resume?: { label: string; summary: string; note?: string };
   /** Sailing the kept run again to where it was left (0–1), before handing over. */
   catchingUp?: number;
+  /** Racing a ghost: its title and how long its recording lasts; or learning its path (0–1). */
+  ghost?: { title: string; endS: number };
+  ghostLoading?: number;
   showForces: boolean;
   showDebug: boolean;
   showHelp: boolean;
@@ -313,6 +317,10 @@ export class SimController {
   /** "Continue where you left off": the run kept from the last visit (not in automated tests unless &resume). */
   private resumePoint = typeof location === 'undefined' || !new URLSearchParams(location.search).has('nowelcome') || new URLSearchParams(location.search).has('resume') ? loadResume() : undefined;
   private catchUp?: { from: number; to: number };
+  /** Ghost racing: the recorded boat's poses every GHOST_EVERY steps, and the scenario it belongs to. */
+  private ghost?: { title: string; poses: FleetPose[]; scenario: string; endS: number };
+  /** Sailing the ghost's recording through to learn its path (0–1). */
+  private ghostLoading?: number;
   /** The tiller dragged on a touch screen: the helm it is being moved to. */
   private helmDrag?: number;
   /** Battery saver: when the last frame was drawn (ms). */
@@ -502,6 +510,8 @@ export class SimController {
     this.leave = undefined;
     this.raceBest = {};
     if (this.raceTag && this.raceTag.scenario !== JSON.stringify(scenario)) this.raceTag = undefined;
+    // The ghost stays for a reset of its own scenario; anything else ends it.
+    if (this.ghost && this.ghost.scenario !== JSON.stringify(scenario)) this.ghost = undefined;
     // Starting anything other than the lesson's own scenario ends the lesson (a Reset keeps it).
     if (this.tutorial && JSON.stringify(scenario) !== JSON.stringify(this.lesson?.scenario)) this.endLesson();
     else if (this.tutorial) {
@@ -1118,6 +1128,7 @@ export class SimController {
   takeOver(): void {
     this.replay = undefined;
     this.catchUp = undefined;
+    this.ghostLoading = undefined;
     this.timeScale = 1;
     this.held.clear();
     this.paused = false;
@@ -1153,8 +1164,71 @@ export class SimController {
   }
 
   /** The other boats of the fleet (for the 3D view). */
-  private fleetList(): { id: string; label: string; colour: number }[] {
-    return (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, label: b.sailNumber, colour: b.colour }));
+  private fleetList(): { id: string; label: string; colour: number; ghost?: boolean }[] {
+    const list: { id: string; label: string; colour: number; ghost?: boolean }[] = (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, label: b.sailNumber, colour: b.colour }));
+    if (this.ghost) list.push({ id: 'ghost', label: `Ghost: ${this.ghost.title}`, colour: 0xbfe3ff, ghost: true });
+    return list;
+  }
+
+  // ------------------------------------------------------------ ghost racing
+
+  /**
+   * Race a ghost (red team, 10 Nov 2026): a recording (a replay file, src/app/replay.ts) is sailed again quickly,
+   * step by step, to learn where its boat was every 0.1 s; then the same scenario starts again and you sail it with
+   * that boat drawn as a ghost beside you. The ghost is only a picture: no contact, no wind shadow, not in the race.
+   */
+  startGhost(json: unknown): boolean {
+    let rec: Recording;
+    try {
+      rec = parseRecording(json);
+    } catch (err) {
+      this.scenarioError = (err as Error).message;
+      this.publish(true);
+      return false;
+    }
+    if (!this.startReplay(rec)) return false;
+    const poses: FleetPose[] = [];
+    this.ghost = undefined;
+    this.ghostLoading = 0;
+    this.paused = true;
+    const end = rec.endStep;
+    const chunk = () => {
+      if (!this.replay || this.ghostLoading === undefined) return;
+      const t0 = performance.now();
+      while (this.sim.step <= end && performance.now() - t0 < 40) {
+        if (this.sim.step % GHOST_EVERY === 0) poses.push(poseOf('ghost', this.sim.snapshot(false)));
+        if (this.sim.step === end || this.replay.ended) break;
+        this.stepSim();
+      }
+      if (this.sim.step < end && !this.replay.ended) {
+        this.ghostLoading = this.sim.step / Math.max(1, end);
+        this.publish(true);
+        setTimeout(chunk, 0);
+        return;
+      }
+      this.ghostLoading = undefined;
+      this.replay = undefined;
+      if (!this.restart(rec.scenario, { initialInput: rec.initialInput })) return;
+      this.ghost = { title: rec.title, poses, scenario: JSON.stringify(rec.scenario), endS: end * DT };
+      this.captureFleet();
+      this.fleetPrev = this.fleetCurr;
+      this.view?.setFleet(this.fleetList());
+      this.paused = false;
+      this.lastFrame = performance.now();
+      this.publish(true);
+    };
+    this.publish(true);
+    setTimeout(chunk, 0);
+    return true;
+  }
+
+  /** Stop showing the ghost. */
+  endGhost(): void {
+    this.ghost = undefined;
+    this.view?.setFleet(this.fleetList());
+    this.captureFleet();
+    this.fleetPrev = this.fleetCurr;
+    this.publish(true);
   }
 
   /** Poses of the other boats now (kept for the last two physics states, for render interpolation). */
@@ -1162,15 +1236,10 @@ export class SimController {
     const m = new Map<string, FleetPose>();
     for (const b of this.race?.session.fleet.boats ?? []) {
       if (b.id === 'you') continue;
-      const sn = b.sim.snapshot(false);
-      m.set(b.id, {
-        id: b.id, n: sn.n, e: sn.e, heading: sn.heading, heel: sn.heel, boomMain: sn.boomMain, boomJib: sn.boomJib,
-        mainSide: sn.mainSide, jibSide: sn.jibSide, mainLuff: sn.forces.main.luff, jibLuff: sn.forces.jib.luff,
-        mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
-        rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, sailsDown: sn.damage.rig >= 1, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater, stw: sn.stw,
-        damage: sn.damage.version > 0 || sn.damage.state !== 'afloat' ? sn.damage : undefined,
-      });
+      m.set(b.id, poseOf(b.id, b.sim.snapshot(false)));
     }
+    const g = this.ghost && ghostPoseAt(this.ghost.poses, this.sim.step / GHOST_EVERY);
+    if (g) m.set('ghost', g);
     this.fleetCurr = m;
   }
 
@@ -1476,7 +1545,7 @@ export class SimController {
       course: this.race
         ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e) }
         : undefined,
-      fleet: this.race ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
+      fleet: this.race || this.ghost ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
     });
   }
 
@@ -2125,6 +2194,8 @@ export class SimController {
             note: this.resumePoint.rec.build !== BUILD_ID ? 'Kept by an earlier version: she may not end exactly where you left her.' : undefined,
           }
         : undefined,
+      ghost: this.ghost ? { title: this.ghost.title, endS: this.ghost.endS } : undefined,
+      ghostLoading: this.ghostLoading,
       catchingUp: this.catchUp ? clamp((this.sim.step - this.catchUp.from) / Math.max(1, this.catchUp.to - this.catchUp.from), 0, 1) : undefined,
       scenarioError: this.scenarioError,
       race: this.raceUi(),
