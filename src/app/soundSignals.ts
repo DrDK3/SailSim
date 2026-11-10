@@ -12,6 +12,9 @@ import type { VesselState } from '../sim/env/traffic';
  *        short (the Lower Ferry's tug and float, and the Higher Ferry: restricted, harbour guide p.33).
  *    A vessel of less than 12 m need not give these signals but must make some other efficient sound signal; that
  *    other signal is not modelled, so boats under 12 m are silent here.
+ *  - Rule 34(a): a power-driven vessel in sight, altering course as the rules allow or require: one short blast
+ *    "I am altering my course to starboard", two short "to port". Sounded by a marina boat as she begins to keep
+ *    out of your way (Rule 18(a); src/sim/env/traffic.ts).
  *  - Rule 34(d): vessels in sight of one another, approaching, when one doubts the other is taking enough action to
  *    avoid collision: at least five short and rapid blasts. Here a vessel under way sounds it at you when you are on
  *    course to pass within a few metres of her in the next 20 s.
@@ -48,6 +51,9 @@ export const FOG_HEARD_M = 1500;
 export const DOUBT_PASS_M = 8;
 export const DOUBT_WITHIN_S = 20;
 const DOUBT_AGAIN_S = 60;
+const ALTER_AGAIN_S = 60;
+/** The traffic that keeps out of a sailing boat's way (src/sim/env/traffic.ts: the marina boats). */
+const GIVES_WAY = new Set<VesselState['kind']>(['motor-cruiser', 'yacht', 'rib']);
 
 const POWER = new Set<VesselState['kind']>(['passenger-ferry', 'launch', 'river-cruiser', 'paddle-steamer', 'motor-cruiser', 'yacht', 'rib']);
 
@@ -105,6 +111,7 @@ export function closestApproach(own: { n: number; e: number; vn: number; ve: num
 export class SignalScheduler {
   private lastFog = new Map<string, number>();
   private lastDoubt = new Map<string, number>();
+  private altering = new Map<string, { side: 1 | -1; t: number }>();
 
   /** Signals due at time t (s): fog signals when visibility is restricted, the doubt signal when you stand into danger. */
   update(t: number, vessels: readonly VesselState[], visibilityM: number, own: { n: number; e: number; vn: number; ve: number }): SoundSignal[] {
@@ -125,8 +132,15 @@ export class SignalScheduler {
           }
         }
       } else this.lastFog.delete(v.id);
+      // Rule 34(a): altering course (in sight), once as she begins (not again within a minute the same way).
+      const last = this.altering.get(v.id);
+      if (v.givingWay && !(last && last.side === v.givingWay && t - last.t < ALTER_AGAIN_S) && dist < visibilityM && dist < 400) {
+        out.push({ ...base, blasts: v.givingWay > 0 ? ['short'] : ['short', 'short'], rule: 'Rule 34(a)', meaning: v.givingWay > 0 ? 'altering course to starboard, keeping out of your way' : 'altering course to port, keeping out of your way' });
+      }
+      if (v.givingWay && !(last && last.side === v.givingWay && t - last.t < ALTER_AGAIN_S)) this.altering.set(v.id, { side: v.givingWay, t });
       // Rule 34(d) is for vessels in sight of one another.
-      if (v.moving && v.sog > 0.3 && dist < 150 && dist < visibilityM && t - (this.lastDoubt.get(v.id) ?? -Infinity) > DOUBT_AGAIN_S) {
+      // Not from a boat that is herself keeping out of your way (the marina boats): the ferries and the steamer stand on.
+      if (!GIVES_WAY.has(v.kind) && v.moving && v.sog > 0.3 && dist < 150 && dist < visibilityM && t - (this.lastDoubt.get(v.id) ?? -Infinity) > DOUBT_AGAIN_S) {
         const c = closestApproach(own, v);
         if (c.t > 0 && c.t < DOUBT_WITHIN_S && c.d < v.length / 2 + DOUBT_PASS_M) {
           this.lastDoubt.set(v.id, t);
@@ -140,5 +154,6 @@ export class SignalScheduler {
   reset(): void {
     this.lastFog.clear();
     this.lastDoubt.clear();
+    this.altering.clear();
   }
 }

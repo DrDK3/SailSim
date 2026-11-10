@@ -878,7 +878,7 @@ export class SimController {
     const fleet = this.race?.session.fleet ?? this.soloFleet;
     if (fleet) {
       for (const v of fleet.ferriesAt(s.t)) {
-        if (!v.moving || !(v.kind === 'tug-float' || v.kind === 'floating-bridge' || v.kind === 'passenger-ferry')) continue;
+        if (!v.moving || !(v.kind === 'tug-float' || v.kind === 'floating-bridge' || v.kind === 'passenger-ferry' || v.kind === 'paddle-steamer' || v.kind === 'river-cruiser')) continue;
         const d = Math.hypot(v.n - s.n, v.e - s.e) - v.length / 2;
         ferryM = Math.min(ferryM ?? Infinity, d);
       }

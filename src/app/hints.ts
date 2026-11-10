@@ -68,7 +68,7 @@ export const HINTS: Record<HintId, Omit<Hint, 'id'>> = {
   },
   'ferry-close': {
     title: 'Keep clear of the ferries',
-    text: 'The harbour guide asks every boat to keep clear of the ferries at all times: they are restricted in their ability to manoeuvre and cannot get out of your way.',
+    text: 'The harbour guide asks every boat to keep clear of the ferries at all times: they are restricted in their ability to manoeuvre and cannot get out of your way. The same goes for the paddle steamer and the river cruisers in the channel: a sailing boat must not impede a vessel that can only navigate within it (COLREGs Rule 9). Small motor boats keep out of your way (Rule 18).',
   },
 };
 

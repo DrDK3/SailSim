@@ -163,6 +163,8 @@ export class Fleet {
     if (o.traffic || o.ferries) {
       const start = this.startEpochMs;
       this.traffic = o.traffic ?? new RiverTraffic(o.ferries!, { current: (ms, n, e) => this.env.current((ms - start) / 1000, n, e) });
+      // A run starts with every marina boat on her track (the app reuses one traffic model from run to run).
+      this.traffic.resetGiveWay();
       const pts = [...(o.ferries ?? []).flatMap((f) => f.route), ...this.traffic.fairways.flatMap((f) => f.route), ...this.traffic.steamerTrack()];
       this.ferryBox = pts.length
         ? { nMin: Math.min(...pts.map((p) => p[1])) - 150, nMax: Math.max(...pts.map((p) => p[1])) + 150, eMin: Math.min(...pts.map((p) => p[0])) - 150, eMax: Math.max(...pts.map((p) => p[0])) + 150 }
@@ -238,6 +240,16 @@ export class Fleet {
       }
       const m = 40;
       wf.setFocus({ nMin: nMin - m, nMax: nMax + m, eMin: eMin - m, eMax: eMax + m });
+    }
+    // Marina boats keep out of the way of the sailing boats near them (COLREGs Rule 18(a); src/sim/env/traffic.ts), every 0.1 s.
+    if (this.traffic && this.step % 10 === 0) {
+      const sailing: { n: number; e: number; vn: number; ve: number }[] = [];
+      for (const b of this.boats) {
+        if (!this.nearFerries(b.sim.state.n, b.sim.state.e)) continue;
+        const B = this.body(b);
+        sailing.push({ n: B.n, e: B.e, vn: B.vn, ve: B.ve });
+      }
+      if ((sailing.length || this.traffic.keepingClear.size) && this.traffic.keepClearOf(this.startEpochMs + this.time * 1000, 10 * DT, sailing)) this.ferryCache.clear();
     }
     this.env.step?.(this.time, DT);
     const bodies = this.boats.map((b) => this.body(b));
