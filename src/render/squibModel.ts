@@ -200,6 +200,22 @@ diffuseColor.rgb = diffuse * paint;`,
   m.customProgramCacheKey = () => `${baseKey}|hullpaint`;
   m.needsUpdate = true;
 }
+/** The non-slip pattern's bump strength on the deck and the cockpit sole, seen close (src/render/squibTextures.ts). */
+const NON_SLIP_BUMP = { deck: 0.6, sole: 0.8 };
+/**
+ * The non-slip diamonds are about 1 cm apart (the deck's texture runs 6 repeats a metre, 16 diamonds each): seen
+ * from more than a few metres they are finer than a pixel, and their bump shading aliased into moiré ripples that
+ * crawled across the deck as the boat moved (owner, 10 Nov 2026: "a rippling effect across the top of the
+ * squib"). Full within NEAR m of the camera (the helm's view of the deck ahead), none beyond FAR (chase, drone): a
+ * diamond is then always more than 2.5 pixels across where it shows.
+ */
+export const NON_SLIP_FADE = { near: 1.5, far: 3 };
+
+/** The non-slip bump's strength (0 … 1) for a camera `distance` m from the boat. */
+export function nonSlipStrength(distance: number): number {
+  return Math.min(1, Math.max(0, (NON_SLIP_FADE.far - distance) / (NON_SLIP_FADE.far - NON_SLIP_FADE.near)));
+}
+
 let texturesApplied = false;
 function applyTextures(): void {
   if (texturesApplied || typeof document === 'undefined') return;
@@ -207,9 +223,9 @@ function applyTextures(): void {
   const ns = nonSlipTexture();
   ns.repeat.set(6, 6);
   MAT.deck.bumpMap = ns;
-  MAT.deck.bumpScale = 0.6;
+  MAT.deck.bumpScale = NON_SLIP_BUMP.deck;
   MAT.greySole.bumpMap = ns;
-  MAT.greySole.bumpScale = 0.8;
+  MAT.greySole.bumpScale = NON_SLIP_BUMP.sole;
   MAT.varnish.map = woodTexture();
   MAT.tiller.map = woodTexture();
   for (const m of [MAT.deck, MAT.greySole, MAT.varnish, MAT.tiller]) m.needsUpdate = true;
@@ -1018,6 +1034,16 @@ export class SquibModel {
         o.material = m;
       }
     });
+  }
+
+  /**
+   * How far the camera is from the boat (m): the deck's non-slip pattern fades out with distance (NON_SLIP_FADE).
+   * The deck and sole materials are shared by every Squib drawn; the nearest one (the user's) sets them.
+   */
+  setViewDistance(distance: number): void {
+    const k = nonSlipStrength(distance);
+    MAT.deck.bumpScale = NON_SLIP_BUMP.deck * k;
+    MAT.greySole.bumpScale = NON_SLIP_BUMP.sole * k;
   }
 
   update(params: {

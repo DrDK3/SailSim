@@ -702,6 +702,7 @@ export class SceneView {
     this.boatRoot.position.set(x, this.ride.heave - sink, z);
     orientBoat(this.boatRoot, heading, heel + this.ride.roll, this.ride.pitch - trim);
     this.boat.setDamage(dmg, frameDt);
+    this.boat.setViewDistance(this.camera.position.distanceTo(this.boatRoot.position));
     const moved = prevPos.distanceTo(this.boatRoot.position);
 
     const mainAngle = lerpAngle(prev.boomMain, curr.boomMain, alpha);
