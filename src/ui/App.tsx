@@ -7,7 +7,7 @@ import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
 import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
-import { GhostStatus, ResumeCard } from './ResumeCard';
+import { GhostChip, GhostStatus, ResumeCard } from './ResumeCard';
 import { DarkCard } from './DarkCard';
 import { GpuCard } from './GpuCard';
 import { ReplayBar } from './ReplayBar';
@@ -353,7 +353,7 @@ export function App({ ctl }: { ctl: SimController }) {
         </div>
       )}
       {/* One message at a time, most important first (the owner's review: no cards on top of one another). */}
-      {ui.ghostLoading !== undefined ? (
+      {ui.ghostLoading !== undefined || ui.shareError ? (
         <GhostStatus ctl={ctl} ui={ui} />
       ) : ui.resume || ui.catchingUp !== undefined ? (
         <ResumeCard ctl={ctl} ui={ui} />
@@ -366,7 +366,7 @@ export function App({ ctl }: { ctl: SimController }) {
       ) : (
         !ui.tutorial && <HintCard ctl={ctl} ui={ui} />
       )}
-      {ui.ghost && ui.ghostLoading === undefined && <GhostStatus ctl={ctl} ui={ui} />}
+      <GhostChip ctl={ctl} ui={ui} />
       {ui.paused && (
         // Below the toolbar however many rows it wraps onto (it covered the pill on a two-row toolbar), and below
         // a camera strip if one is showing.
@@ -400,7 +400,7 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={() => copyShareLink(ctl)} />}</Suspense>
       <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.protest.open && <ProtestRoom ctl={ctl} ui={ui} onClose={() => ctl.toggleProtestRoom(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>
@@ -447,4 +447,16 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
     </div>
   );
+}
+
+/** This run as a link on the clipboard (src/app/shareLink.ts), and what happened, in words. */
+async function copyShareLink(ctl: SimController): Promise<string | undefined> {
+  const r = await ctl.shareLink(ctl.getState().race?.courseName ? `a race on ${ctl.getState().race!.courseName}` : 'a friend’s run');
+  if (!r.url) return r.reason;
+  try {
+    await navigator.clipboard.writeText(r.url);
+  } catch {
+    return `Copy this link: ${r.url}`;
+  }
+  return `Link copied: whoever opens it races you as a ghost.${r.long ? ' It is long: if a messaging app cuts it short, save the replay file (Library) and send that.' : ''}`;
 }

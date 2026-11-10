@@ -193,3 +193,36 @@ test('sound: the horn comes from the committee boat; the countdown speaks only w
   await expect(page.getByTestId('settings-panel')).toContainText('No recordings are included');
   expect(errors).toEqual([]);
 });
+
+/** Challenge a friend (review, 10 Nov 2026): a run shared as a link opens as a ghost race in another browser. */
+test('a run shared as a link: opened in a fresh page, it is raced as a ghost; the link leaves the address', async ({ page, browser }) => {
+  test.setTimeout(240_000 * CI_SLOW);
+  await ready(page);
+  await page.evaluate(() => {
+    const c = window.__squib!.controller;
+    c.press('helmLeft', true);
+    window.__squib!.advance(4);
+    c.press('helmLeft', false);
+    window.__squib!.advance(20);
+  });
+  const share = await page.evaluate(() => window.__squib!.controller.shareLink('Ann’s run'));
+  expect(share.url).toMatch(/#ghost=r1\.[A-Za-z0-9_-]+$/);
+  expect(share.chars).toBeLessThan(20_000);
+  // Someone else opens it: a new browser context, nothing shared but the link. (Two pages drawing with the software
+  // renderer at once can crash one: the first is closed.)
+  await page.close();
+  const other = await browser.newContext({ storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'squib.welcomed.v1', value: '1' }] }] } });
+  const p2 = await other.newPage();
+  const errors: string[] = [];
+  p2.on('pageerror', (e) => errors.push(e.message));
+  const u = new URL(share.url!);
+  await p2.goto(`/?nowelcome&quality=low${u.hash}`);
+  await expect(p2.getByTestId('ghost-chip')).toBeVisible({ timeout: 120_000 * CI_SLOW });
+  await expect(p2.getByTestId('ghost-chip')).toContainText('Ann’s run');
+  expect(new URL(p2.url()).hash).toBe('');
+  // A cut link says so instead.
+  await p2.goto(`/?nowelcome&quality=low${u.hash.slice(0, 200)}`);
+  await expect(p2.getByTestId('share-error')).toContainText(/damaged or incomplete/, { timeout: 120_000 * CI_SLOW });
+  expect(errors).toEqual([]);
+  await other.close();
+});

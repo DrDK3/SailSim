@@ -53,6 +53,7 @@ import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
 import { countdownCall } from './countdown';
+import { SHARE_LONG_CHARS, SHARE_MAX_CHARS, decodeShare, encodeShare, sharedPayload, shareUrl } from './shareLink';
 import { Speaker } from '../render/speech';
 import { WindFollower, drillVerdict, lineBias, lineReadout, scoreStart, type DrillStart, type LineBias, type LineReadout, type P } from './startLine';
 import { SoundScape, type AudioSettings } from '../render/audio';
@@ -276,6 +277,8 @@ export interface UiState {
   steering: SteeringMode;
   /** The graphics check of painted surfaces on this card (src/render/gpuCheck.ts), and the mode in use. */
   materialCheck?: { fault: boolean; reason: string; mode: string; at: string };
+  /** A shared link (#ghost=…) that could not be opened, and why. */
+  shareError?: string;
   /** The device's own voice for the spoken countdown, if it has one (src/render/speech.ts). */
   voice?: string;
   /** Recorded sounds in use in place of the synthesised ones (src/render/audioSamples.ts). */
@@ -1491,6 +1494,48 @@ export class SimController {
     this.restart(this.scenario);
     // Live data that arrived while the Dart loaded: switch to it now, in one restart.
     this.goLiveIfUntouched();
+    // A shared run in the address (#ghost=…): race it, now the water it was sailed on is here.
+    void this.openSharedLink();
+  }
+
+  // ------------------------------------------------------------ shared runs (src/app/shareLink.ts)
+
+  private sharedOpened = false;
+  /** A link pasted into the address of a page already open (only its fragment changes: no reload). */
+  private onHashChange = () => {
+    if (!sharedPayload(location.hash)) return;
+    this.sharedOpened = false;
+    if (this.dartStatus !== 'loading') void this.openSharedLink();
+  };
+  /** A shared link that could not be opened, and why. */
+  private shareError?: string;
+
+  /** This run as a link: whoever opens it races it as a ghost in their own browser (nothing is uploaded). */
+  async shareLink(title: string): Promise<{ url?: string; chars: number; long: boolean; reason?: string }> {
+    const url = shareUrl(location.href, await encodeShare(this.saveRecording(title)));
+    if (url.length > SHARE_MAX_CHARS) return { chars: url.length, long: true, reason: 'This run is too long to share as a link: save the replay file and send that instead.' };
+    return { url, chars: url.length, long: url.length > SHARE_LONG_CHARS };
+  }
+
+  /** The run in the address's fragment (#ghost=…), raced as a ghost; the fragment is cleared so a reload does not repeat it. */
+  private async openSharedLink(): Promise<void> {
+    if (this.sharedOpened || typeof location === 'undefined') return;
+    this.sharedOpened = true;
+    const payload = sharedPayload(location.hash);
+    if (!payload) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    try {
+      const rec = await decodeShare(payload);
+      if (!this.startGhost(rec)) this.shareError = `The shared run could not be started: ${this.scenarioError ?? 'its scenario is not valid here'}.`;
+    } catch (e) {
+      this.shareError = (e as Error).message;
+    }
+    this.publish(true);
+  }
+
+  dismissShareError(): void {
+    this.shareError = undefined;
+    this.publish(true);
   }
 
   attach(container: HTMLElement): void {
@@ -1523,6 +1568,7 @@ export class SimController {
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
     window.addEventListener('pagehide', this.onPageHide);
+    window.addEventListener('hashchange', this.onHashChange);
     window.addEventListener('pointerdown', this.onGesture);
     document.addEventListener('visibilitychange', this.onVisibility);
     void this.discoverSources();
@@ -1647,6 +1693,7 @@ export class SimController {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
     window.removeEventListener('pagehide', this.onPageHide);
+    window.removeEventListener('hashchange', this.onHashChange);
     window.removeEventListener('pointerdown', this.onGesture);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.sound.dispose();
@@ -2484,6 +2531,7 @@ export class SimController {
       steering: this.steeringMode,
       gpuCard: this.lastMaterialCheck ? this.gpuCard : undefined,
       voice: this.speaker.voiceName,
+      shareError: this.shareError,
       recordedSounds: this.sound.recorded.kinds,
       materialCheck: this.lastMaterialCheck && { fault: this.lastMaterialCheck.fault, reason: this.lastMaterialCheck.reason, mode: this.lastMaterialCheck.mode, at: this.lastMaterialCheck.at },
       materialMode: this.view?.materialMode,

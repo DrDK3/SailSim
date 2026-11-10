@@ -44,7 +44,24 @@ export function GhostStatus({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       </div>
     );
   }
-  if (!ui.ghost) return null;
+  if (ui.shareError) {
+    return (
+      <div className="hint-card" role="alert" data-testid="share-error">
+        <p>
+          <strong>The shared run could not be opened.</strong> {ui.shareError}
+        </p>
+        <div className="row">
+          <button onClick={() => ctl.dismissShareError()}>Close</button>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+/** A small reminder that a ghost is out there, with a way to stop it. */
+export function GhostChip({ ctl, ui }: { ctl: SimController; ui: UiState }) {
+  if (!ui.ghost || ui.ghostLoading !== undefined) return null;
   return (
     <div className="ghost-chip panel" data-testid="ghost-chip">
       <span>Ghost: {ui.ghost.title}</span>
