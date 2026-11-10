@@ -15,7 +15,8 @@
  *
  * Where a sound comes from (review, 10 Nov 2026): the listener is the camera, and the horn (at the committee boat),
  * the ships' whistles (at each vessel), the halyards (at the moored boats) and the boat's own sails, boom and knocks
- * are placed round it with head-related (HRTF) panning, best heard on headphones. Recordings listed in
+ * are placed round it: the horn and whistles with head-related (HRTF) panning, best heard on headphones; the boat's
+ * own sounds and the halyards, which play often or all the time, with cheaper equal-power panning. Recordings listed in
  * public/audio/manifest.json, if any, take the place of the synthesised sound of the same kind (audioSamples.ts);
  * none ship with the simulator.
  */
@@ -174,7 +175,9 @@ export class SoundScape {
       return g;
     };
     this.buses = { wind: bus(), water: bus(), effects: bus(), ambience: bus() };
-    this.boatPan = this.makePanner(this.buses.effects, [0, 1, 0]);
+    // The boat's own sounds play all the time and come from just by the camera: equal-power panning is enough, and
+    // costs far less than head-related filtering running continuously (kept for the distant horn and whistles).
+    this.boatPan = this.makePanner(this.buses.effects, [0, 1, 0], 'equalpower');
     const source = () => {
       const s = ctx.createBufferSource();
       s.buffer = buf;
@@ -240,9 +243,9 @@ export class SoundScape {
    * A panner placing a sound at `at` (scene coordinates) round the listener, head-related (HRTF). It sets only the
    * direction: each sound sets its own level for its distance (and its own dullness with it).
    */
-  private makePanner(out: AudioNode, at: Vec3): PannerNode {
+  private makePanner(out: AudioNode, at: Vec3, model: PanningModelType = 'HRTF'): PannerNode {
     const p = this.ctx!.createPanner();
-    p.panningModel = 'HRTF';
+    p.panningModel = model;
     p.distanceModel = 'linear';
     p.rolloffFactor = 0;
     setPosition(p, at);
@@ -434,7 +437,7 @@ export class SoundScape {
     let pan: AudioNode;
     if (this.harbourAt) {
       const [x, y, z] = this.harbourAt;
-      pan = this.makePanner(this.buses!.ambience, [x + (Math.random() - 0.5) * 40, y + 6, z + (Math.random() - 0.5) * 40]);
+      pan = this.makePanner(this.buses!.ambience, [x + (Math.random() - 0.5) * 40, y + 6, z + (Math.random() - 0.5) * 40], 'equalpower');
     } else {
       const sp = ctx.createStereoPanner();
       sp.pan.value = Math.random() * 1.6 - 0.8;

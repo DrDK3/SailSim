@@ -180,12 +180,14 @@ test('sound: the horn comes from the committee boat; the countdown speaks only w
     const ends = c.race.course.start.ends;
     const i = ends.findIndex((id) => c.race.course.marks.find((m) => m.id === id)?.kind === 'committee-boat');
     const cb = c.race.resolved.start[i < 0 ? 0 : i]!;
-    const at = (window as unknown as { __panners: PannerNode[] }).__panners.map((p) => [p.positionX.value, p.positionY.value, p.positionZ.value]);
-    return { cb: i < 0 ? undefined : [cb.e, 3, -cb.n], at, models: (window as unknown as { __panners: PannerNode[] }).__panners.map((p) => p.panningModel) };
+    const at = (window as unknown as { __panners: PannerNode[] }).__panners.map((p) => ({ p: [p.positionX.value, p.positionY.value, p.positionZ.value], model: p.panningModel }));
+    return { cb: i < 0 ? undefined : [cb.e, 3, -cb.n], at };
   });
   expect(r.cb).toBeDefined();
-  expect(r.at.some((p) => Math.abs(p[0]! - r.cb![0]!) < 0.01 && p[1] === 3 && Math.abs(p[2]! - r.cb![2]!) < 0.01)).toBe(true);
-  expect(r.models.every((m) => m === 'HRTF')).toBe(true);
+  // The horn's panner at the committee boat, head-related.
+  const horn = r.at.filter(({ p }) => Math.abs(p[0]! - r.cb![0]!) < 0.01 && p[1] === 3 && Math.abs(p[2]! - r.cb![2]!) < 0.01);
+  expect(horn.length).toBeGreaterThan(0);
+  expect(horn.every((h) => h.model === 'HRTF')).toBe(true);
   await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
   const box = page.getByTestId('pref-countdown');
   await expect(box).toBeVisible({ timeout: 30_000 * CI_SLOW });

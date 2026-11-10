@@ -4,7 +4,7 @@ Everything you hear is made in the browser from noise and oscillators (`src/rend
 
 ## Where sounds come from
 
-The listener is the camera. These sounds are placed round it with head-related (HRTF) panning, so on headphones you can tell where they come from:
+The listener is the camera. These sounds are placed round it, so on headphones you can tell where they come from. The horn and the ships' whistles use head-related (HRTF) panning; the boat's own sounds and the halyards, which play all the time or often, use cheaper equal-power panning (HRTF filtering running continuously costs too much on a slow device):
 
 | Sound | Comes from |
 |---|---|
