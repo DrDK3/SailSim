@@ -492,9 +492,14 @@ export class DartScene {
     const w = new THREE.Vector3();
     const DEG = Math.PI / 180;
     const kit = new Kit();
+    // Where the data's outlines overlap (23 pairs: the College Chapel lies wholly inside BRNC's; arcades and annexes
+    // in Dartmouth), the hidden building or wall is left out. Drawn, two surfaces in one place take turns to show as
+    // the view moves (owner, 11 Nov 2026: "flickering on BRNC").
+    const cover = buildingCover(f.buildings);
     f.buildings.forEach((bData, idx) => {
       const ring = bData.r;
       if (ring.length < 3) return;
+      if (cover.inside(idx)) return;
       // A landmark may correct the data's heights where photographs show them wrong (src/render/landmarks.ts).
       const spec = landmarkFor(ring);
       const hSpec = spec?.heights;
@@ -583,6 +588,7 @@ export class DartScene {
       const emitWall = (p0: [number, number], p1: [number, number], top0: number, top1: number, windows: boolean) => {
         const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
         if (len < 1e-6) return;
+        if (cover.wallHidden(idx, p0, p1, Math.max(top0, top1))) return;
         const nx = (p1[1] - p0[1]) / len;
         const nz = (p1[0] - p0[0]) / len;
         const u0 = len < WINDOW_BAY_M ? (WINDOW_BAY_M - len) / 2 : -(len % WINDOW_BAY_M) / 2;
@@ -1498,3 +1504,75 @@ export function namedBerths(): THREE.Object3D[] {
   ];
 }
 
+
+/**
+ * Overlapping outlines in the building data (src/render/dart.ts buildBuildings): which buildings lie wholly inside a
+ * taller one, and which walls have a building at least as tall pressed against their outside face. Both would be
+ * hidden, and drawn they fight the surface in front of them for the same pixels. A 40 m grid keeps the search local.
+ */
+export function buildingCover(buildings: readonly { r: readonly (readonly [number, number])[]; t: number; b: number }[]): {
+  inside(i: number): boolean;
+  wallHidden(i: number, p0: readonly [number, number], p1: readonly [number, number], top: number): boolean;
+} {
+  const CELL = 40;
+  const grid = new Map<string, number[]>();
+  const boxes = buildings.map((b) => {
+    const es = b.r.map((p) => p[0]);
+    const ns = b.r.map((p) => p[1]);
+    return [Math.min(...es), Math.max(...es), Math.min(...ns), Math.max(...ns)] as const;
+  });
+  boxes.forEach(([e0, e1, n0, n1], i) => {
+    for (let x = Math.floor(e0 / CELL); x <= Math.floor(e1 / CELL); x++) {
+      for (let y = Math.floor(n0 / CELL); y <= Math.floor(n1 / CELL); y++) {
+        const k = `${x},${y}`;
+        const list = grid.get(k);
+        if (list) list.push(i);
+        else grid.set(k, [i]);
+      }
+    }
+  });
+  const near = (e: number, n: number) => grid.get(`${Math.floor(e / CELL)},${Math.floor(n / CELL)}`) ?? [];
+  const within = (j: number, e: number, n: number) => {
+    const [e0, e1, n0, n1] = boxes[j]!;
+    return e >= e0 && e <= e1 && n >= n0 && n <= n1 && insideRing(buildings[j]!.r as [number, number][], e, n);
+  };
+  const insideCache = new Map<number, boolean>();
+  return {
+    inside(i) {
+      const hit = insideCache.get(i);
+      if (hit !== undefined) return hit;
+      const b = buildings[i]!;
+      const ce = b.r.reduce((a, p) => a + p[0], 0) / b.r.length;
+      const cn = b.r.reduce((a, p) => a + p[1], 0) / b.r.length;
+      // Every corner, drawn 0.3 m in towards the middle, inside one other building that is at least as tall.
+      const pts = b.r.map(([e, n]) => {
+        const d = Math.hypot(ce - e, cn - n) || 1;
+        return [e + ((ce - e) / d) * 0.3, n + ((cn - n) / d) * 0.3] as const;
+      });
+      let res = false;
+      for (const j of near(ce, cn)) {
+        if (j === i || buildings[j]!.t < b.t - 0.2) continue;
+        if (pts.every(([e, n]) => within(j, e, n))) {
+          res = true;
+          break;
+        }
+      }
+      insideCache.set(i, res);
+      return res;
+    },
+    wallHidden(i, p0, p1, top) {
+      const de = p1[0] - p0[0];
+      const dn = p1[1] - p0[1];
+      const len = Math.hypot(de, dn);
+      if (len < 0.5) return false;
+      // Just outside the wall's middle (the ring is counter-clockwise, so outside is to the right).
+      const me = (p0[0] + p1[0]) / 2 + (dn / len) * 0.15;
+      const mn = (p0[1] + p1[1]) / 2 - (de / len) * 0.15;
+      for (const j of near(me, mn)) {
+        if (j === i || buildings[j]!.t < top - 0.2 || buildings[j]!.b > buildings[i]!.b + 0.5) continue;
+        if (within(j, me, mn)) return true;
+      }
+      return false;
+    },
+  };
+}

@@ -42,6 +42,9 @@ export interface SceneEnvironment {
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
 }
+/** The camera's near plane (m): in every view but the helm's, and in the helm's (see setFov). */
+export const NEAR_M = 0.5;
+export const NEAR_HELM_M = 0.2;
 export const CAMERA_MODES: CameraMode[] = ['chase', 'scenic', 'helm', 'orbit', 'drone', 'top', 'line'];
 
 /**
@@ -256,7 +259,7 @@ export class SceneView {
     this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
 
-    this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 25000);
+    this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, NEAR_M, 25000);
     this.camera.position.set(0, 6, 16);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enabled = false;
@@ -591,9 +594,15 @@ export class SceneView {
   }
 
   private setFov(fov: number): void {
-    if (this.camera.fov === fov) return;
+    // The near plane as far out as the view allows: the depth buffer's precision at a distance d goes as
+    // d² / near, so 0.5 m instead of 0.1 m makes distant surfaces (BRNC at a kilometre) five times easier to tell
+    // apart. The helm view needs the tiller and the coaming close to the eye (E: 0.2 m clears them).
+    const near = this.mode === 'helm' ? NEAR_HELM_M : NEAR_M;
+    if (this.camera.fov === fov && this.camera.near === near) return;
     this.camera.fov = fov;
+    this.camera.near = near;
     this.camera.updateProjectionMatrix();
+    this.sun?.resize();
   }
 
   /** Helm view: drag to turn the head, double-click to look ahead, the wheel zooms (binoculars). */
