@@ -4,7 +4,7 @@ import { facing } from './landmarks';
 /**
  * The Royal Castle Hotel on the Quay, Dartmouth, facing the Boatfloat: its name in gold letters across the white
  * front between the upper floors, as a picture of the front shows it (Mike White, 2008, Geograph 940043,
- * CC BY-SA 2.0; docs/SOURCES.md M2). The building itself (white render, navy window surrounds, a castellated
+ * CC BY-SA 2.0; docs/SOURCES.md V2). The building itself (white render, navy window surrounds, a castellated
  * parapet with corner turrets, slate roof) is a landmark look (src/render/landmarks.ts 'royal-castle-hotel'); this
  * adds only what the look cannot carry. Letter size and height on the front E.
  */

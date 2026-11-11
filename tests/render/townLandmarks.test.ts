@@ -1,5 +1,5 @@
 /**
- * Dartmouth's landmarks from the public pictures (docs/SOURCES.md M1–M4): the Royal Castle Hotel on the Quay,
+ * Dartmouth's landmarks from the public pictures (docs/SOURCES.md V1–V7): the Royal Castle Hotel on the Quay,
  * matched to its OSM footprint, four storeys under a castellated parapet with turrets at the front's corners, its
  * sash windows in navy surrounds (the building shader's style 8) and its name across the front facing the
  * Boatfloat; St Saviour's church with its tall embattled west tower and the clock facing the river.

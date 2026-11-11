@@ -11,7 +11,7 @@ import * as THREE from 'three';
  * Window styles, carried in the integer part of the wall attribute's w (the building shader in src/render/dart.ts).
  * 7 is sash windows on a front hung with slate above the ground floor, as many Dartmouth and Kingswear houses are;
  * 8 is sash windows in navy-painted surrounds over a ground floor of wide windows under a navy fascia, as the Royal
- * Castle Hotel's front is (the owner's photographs; Geograph pictures, docs/SOURCES.md M1–M4).
+ * Castle Hotel's front is (the owner's photographs; Geograph pictures, docs/SOURCES.md V1–V7).
  */
 export const WIN = { none: 0, sash: 1, tall: 2, slit: 3, brickAndStone: 4, glazed: 5, shopfront: 6, slateHung: 7, navySash: 8 } as const;
 
@@ -131,7 +131,7 @@ export const LANDMARKS: LandmarkSpec[] = [
         { kind: 'clock', at: pos(endAlong + east * (w / 2 + 0.06)), y: base + h * 0.7, radius: 1.1, facingDeg: (brg + (east > 0 ? 0 : 180)) % 360 },
       ];
     },
-    source: "St Saviour's church, Dartmouth (Grade I, Historic England list entry 1293197): a tall unbuttressed west tower (Historic England's description, as quoted in search results; the full entry could not be read from here) and a plain embattled tower (GENUKI; docs/SOURCES.md M5). The picture of the South Embankment by Tom Jolliffe, 2016 (Geograph 5221398, CC BY-SA 2.0, docs/SOURCES.md M3) shows it from the river in grey stone with pinnacles at its corners and a clock under the belfry. The tower's height (21 m), size and the clock's size and height are estimates from the picture (E); the nave's walls and slate roof follow the data's footprint.",
+    source: "St Saviour's church, Dartmouth (Grade I, Historic England list entry 1293197): a tall unbuttressed west tower (Historic England's description, as quoted in search results; the full entry could not be read from here) and a plain embattled tower (GENUKI; docs/SOURCES.md V5). The picture of the South Embankment by Tom Jolliffe, 2016 (Geograph 5221398, CC BY-SA 2.0, docs/SOURCES.md V3) shows it from the river in grey stone with pinnacles at its corners and a clock under the belfry. The tower's height (21 m), size and the clock's size and height are estimates from the picture (E); the nave's walls and slate roof follow the data's footprint.",
   },
   {
     id: 'castle-tea-room',
@@ -258,7 +258,7 @@ export const LANDMARKS: LandmarkSpec[] = [
       const eaves = top - 2.9;
       return [at(a, 1), at(b, -1)].map((p): Extra => ({ kind: 'tower', at: p, w: 1.5, d: 1.5, bearingDeg: brg, fromM: base, toM: eaves + 0.3, top: 'battlements', walls: 0xf4f3ee, dressing: 0xeceae2 }));
     },
-    source: "The Royal Castle Hotel, the Quay, Dartmouth, facing the Boatfloat: a white front of four storeys, its sash windows in navy-painted surrounds, ROYAL CASTLE HOTEL in gold letters between the upper floors, a castellated parapet with turrets at the corners, a slate roof with dormers and a chimney behind it, wide windows under a navy fascia on the ground floor (picture by Mike White, 2008, Geograph 940043, CC BY-SA 2.0, docs/SOURCES.md M2; the owner's photographs of the Quay). The lettering is drawn by src/render/royalCastle.ts. Heights, the turrets' size and the letter size E.",
+    source: "The Royal Castle Hotel, the Quay, Dartmouth, facing the Boatfloat: a white front of four storeys, its sash windows in navy-painted surrounds, ROYAL CASTLE HOTEL in gold letters between the upper floors, a castellated parapet with turrets at the corners, a slate roof with dormers and a chimney behind it, wide windows under a navy fascia on the ground floor (picture by Mike White, 2008, Geograph 940043, CC BY-SA 2.0, docs/SOURCES.md V2; the owner's photographs of the Quay). The lettering is drawn by src/render/royalCastle.ts. Heights, the turrets' size and the letter size E.",
   },
   // ---- The top of the Square, Kingswear, facing the river up the Lower Ferry's slipway (the owner's photographs,
   // 5 Nov 2026, P8: which footprints these are is judged from where they stand in the photographs, E).
