@@ -39,6 +39,8 @@ describe('graphics presets', () => {
     // Reflections of the shore in calm water: none, a third of the resolution, half.
     expect([PRESETS.performance.reflections, PRESETS.balanced.reflections, PRESETS.ultra.reflections]).toEqual(['off', 'low', 'high']);
     expect(REFLECTION_SCALE.low).toBeLessThan(REFLECTION_SCALE.high);
+    // Soft shadows where surfaces meet (ambient occlusion, a post-processing pass): Ultra only by default.
+    expect([PRESETS.performance.ambientOcclusion, PRESETS.balanced.ambientOcclusion, PRESETS.ultra.ambientOcclusion]).toEqual([false, false, true]);
   });
 
   it('thin wires are drawn at least a pixel wide, their coverage cut to match', () => {

@@ -411,6 +411,11 @@ function polarGrid(rings: number, segments: number, r0: number, r1: number): THR
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  // The shader works out the waves' normals itself; a flat one here is for passes that draw the scene with a
+  // stock material (the ambient occlusion's normals, post.ts), where a missing normal reads as fully occluded.
+  const nor = new Float32Array(pos.length);
+  for (let i = 1; i < nor.length; i += 3) nor[i] = 1;
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setIndex(idx);
   return geo;
 }

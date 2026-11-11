@@ -26,6 +26,8 @@ export interface GraphicsSettings {
    * drawn a second time, at a third ('low') or half ('high') of the resolution.
    */
   reflections: 'off' | 'low' | 'high';
+  /** Ambient occlusion: soft darkening where surfaces meet (post.ts), a post-processing pass. */
+  ambientOcclusion: boolean;
   /** Foam round the hull, the bow wave and the wake's foam texture. */
   hullFoam: boolean;
   /** Spray thrown from the bow when it slams into a wave at speed. */
@@ -37,9 +39,9 @@ export interface GraphicsSettings {
 }
 
 export const PRESETS: Record<GraphicsPreset, Omit<GraphicsSettings, 'preset' | 'cameraMotion'>> = {
-  performance: { resolutionScale: 0.75, maxPixelRatio: 1, scenery: 'low', shadows: 'standard', water: 'low', reflections: 'off', hullFoam: true, spray: false, atmosphere: false },
-  balanced: { resolutionScale: 1, maxPixelRatio: 1.5, scenery: 'high', shadows: 'standard', water: 'high', reflections: 'low', hullFoam: true, spray: true, atmosphere: true },
-  ultra: { resolutionScale: 1, maxPixelRatio: 2, scenery: 'high', shadows: 'fine', water: 'high', reflections: 'high', hullFoam: true, spray: true, atmosphere: true },
+  performance: { resolutionScale: 0.75, maxPixelRatio: 1, scenery: 'low', shadows: 'standard', water: 'low', reflections: 'off', ambientOcclusion: false, hullFoam: true, spray: false, atmosphere: false },
+  balanced: { resolutionScale: 1, maxPixelRatio: 1.5, scenery: 'high', shadows: 'standard', water: 'high', reflections: 'low', ambientOcclusion: false, hullFoam: true, spray: true, atmosphere: true },
+  ultra: { resolutionScale: 1, maxPixelRatio: 2, scenery: 'high', shadows: 'fine', water: 'high', reflections: 'high', ambientOcclusion: true, hullFoam: true, spray: true, atmosphere: true },
 };
 
 export const DEFAULT_CAMERA_MOTION = 0.5;
@@ -84,6 +86,7 @@ export function loadGraphics(rendererName: string): GraphicsSettings {
     shadows: r.shadows === 'standard' || r.shadows === 'fine' ? r.shadows : base.shadows,
     water: r.water === 'low' || r.water === 'high' ? r.water : base.water,
     reflections: r.reflections === 'off' || r.reflections === 'low' || r.reflections === 'high' ? r.reflections : base.reflections,
+    ambientOcclusion: typeof r.ambientOcclusion === 'boolean' ? r.ambientOcclusion : base.ambientOcclusion,
     hullFoam: typeof r.hullFoam === 'boolean' ? r.hullFoam : base.hullFoam,
     spray: typeof r.spray === 'boolean' ? r.spray : base.spray,
     atmosphere: typeof r.atmosphere === 'boolean' ? r.atmosphere : base.atmosphere,

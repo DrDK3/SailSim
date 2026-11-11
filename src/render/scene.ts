@@ -13,6 +13,7 @@ import type { CrewBuild } from './crew';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
 import { PlanarReflection } from './reflection';
+import { PostPipeline } from './post';
 import { WakeTrail, HullFoam, BowSpray } from './boatWater';
 import { SUN_THROUGH, VIEWPORT } from './materialFx';
 import { DEFAULT_CAMERA_MOTION, loadGraphics, pixelRatioFor, saveGraphics, type GraphicsSettings } from './graphics';
@@ -188,6 +189,8 @@ export class SceneView {
   private readonly rain = new Rain();
   /** The scene mirrored in calm water (reflection.ts), as the graphics settings ask. */
   private readonly reflection = new PlanarReflection();
+  /** Finishing effects (post.ts), built when first switched on. */
+  private post?: PostPipeline;
   private readonly bufferSize = new THREE.Vector2();
   private baseFogDensity = FOG_DENSITY;
   private weather?: SceneWeather;
@@ -666,6 +669,7 @@ export class SceneView {
     this.renderer.setPixelRatio(pixelRatioFor(g, window.devicePixelRatio));
     const size = this.renderer.getSize(new THREE.Vector2());
     this.renderer.setSize(size.x, size.y, false);
+    this.post?.resize();
     this.water.setDetail(g.water);
     this.reflection.quality = g.water === 'high' ? g.reflections : 'off';
     this.water.setReflection(this.reflection.quality === 'off' ? null : this.reflection.target.texture, this.reflection.matrix);
@@ -684,6 +688,7 @@ export class SceneView {
   resize(w: number, h: number): void {
     this.spray.setViewport(h * this.renderer.getPixelRatio(), this.camera.fov);
     this.renderer.setSize(w, h);
+    this.post?.resize();
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.sun.resize();
@@ -784,7 +789,10 @@ export class SceneView {
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.drawReflection();
     VIEWPORT.uViewportH.value = this.renderer.getDrawingBufferSize(this.bufferSize).y;
-    this.renderer.render(this.scene, this.camera);
+    if (this.graphics.ambientOcclusion) {
+      this.post ??= new PostPipeline(this.renderer, this.scene, this.camera);
+      this.post.render(frameDt);
+    } else this.renderer.render(this.scene, this.camera);
   }
 
   /** The scene mirrored in calm water (reflection.ts), when the settings and the wind allow it. */
@@ -1084,6 +1092,7 @@ export class SceneView {
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.dispose();
     this.reflection.dispose();
+    this.post?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

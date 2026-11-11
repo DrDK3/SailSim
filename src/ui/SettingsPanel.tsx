@@ -10,7 +10,7 @@ import type { AudioSettings } from '../render/audio';
 const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
   performance: { label: 'Performance', note: 'For older laptops: lower resolution, simple water and shadows, less scenery detail.' },
   balanced: { label: 'Balanced', note: 'The sky and, in calm water, the shore and boats reflected; foam and spray, haze, shadows over the town and woods.' },
-  ultra: { label: 'Ultra', note: 'As Balanced, with sharper reflections and shadows, drawn at full sharpness on high-density screens.' },
+  ultra: { label: 'Ultra', note: 'As Balanced, with sharper reflections and shadows, soft shadows where surfaces meet, drawn at full sharpness on high-density screens.' },
 };
 
 /**
@@ -98,6 +98,10 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
                   <option value="standard">Standard</option>
                   <option value="fine">Fine (sharper, costs more)</option>
                 </select>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={g.ambientOcclusion} onChange={(e) => setG({ ambientOcclusion: e.target.checked })} data-testid="gfx-ao" /> Soft shadows where
+                surfaces meet (ambient occlusion: eaves, corners, the cockpit; costs more)
               </label>
               <label className="check">
                 <input type="checkbox" checked={g.hullFoam} onChange={(e) => setG({ hullFoam: e.target.checked })} /> Foam round the hull and the bow wave
