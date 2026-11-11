@@ -7,8 +7,13 @@ import * as THREE from 'three';
  * but not its size, the proportions are estimates (E): the footprints and heights are the data's.
  */
 
-/** Window style, carried in the integer part of the wall attribute's w (src/render/dart.ts shader). */
-export const WIN = { none: 0, sash: 1, tall: 2, slit: 3, brickAndStone: 4, glazed: 5, shopfront: 6 } as const;
+/**
+ * Window styles, carried in the integer part of the wall attribute's w (the building shader in src/render/dart.ts).
+ * 7 is sash windows on a front hung with slate above the ground floor, as many Dartmouth and Kingswear houses are;
+ * 8 is sash windows in navy-painted surrounds over a ground floor of wide windows under a navy fascia, as the Royal
+ * Castle Hotel's front is (the owner's photographs; Geograph pictures, docs/SOURCES.md M1–M4).
+ */
+export const WIN = { none: 0, sash: 1, tall: 2, slit: 3, brickAndStone: 4, glazed: 5, shopfront: 6, slateHung: 7, navySash: 8 } as const;
 
 export type Extra =
   /** A square tower on plan (w by d m, faces along `bearingDeg`), from `fromM` to `toM` (m ODN), with a top. */
@@ -198,6 +203,31 @@ export const LANDMARKS: LandmarkSpec[] = [
     roof: SLATE,
     win: WIN.glazed,
     source: "The Royal Dart's north wing beside the passenger ferry's gangway: white, a first floor of large windows over an open loggia on white columns where the gangway lands, a slate roof and a small square lantern (the owner's photographs, 5 Nov 2026; drawn by src/render/royalDart.ts). Its heights and details E.",
+  },
+  {
+    id: 'royal-castle-hotel',
+    at: [-375, 390],
+    walls: 0xf4f3ee,
+    roof: SLATE,
+    win: WIN.navySash,
+    shape: 'p',
+    roofDrop: 2.9,
+    parapet: 'battlements',
+    // Four storeys and a parapet over the Quay (the picture), where the data's top (9.4 m ODN) would give two.
+    heights: { base: 2.3, eaves: 2.3 + 11.8, top: 2.3 + 11.8 + 2.9 },
+    // The turrets at the front's corners, rising a little above the parapet, white like the front.
+    extras: (base, top, ring) => {
+      const [a, b] = facing(ring, 30, 130);
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const ue = (b[0] - a[0]) / len;
+      const un = (b[1] - a[1]) / len;
+      const brg = (Math.atan2(ue, un) * 180) / Math.PI;
+      // 0.6 m along the front from each corner and 0.4 m in from its face (E).
+      const at = (p: [number, number], s: number): [number, number] => [p[0] + ue * 0.6 * s - un * 0.4, p[1] + un * 0.6 * s + ue * 0.4];
+      const eaves = top - 2.9;
+      return [at(a, 1), at(b, -1)].map((p): Extra => ({ kind: 'tower', at: p, w: 1.5, d: 1.5, bearingDeg: brg, fromM: base, toM: eaves + 0.3, top: 'battlements', walls: 0xf4f3ee, dressing: 0xeceae2 }));
+    },
+    source: "The Royal Castle Hotel, the Quay, Dartmouth, facing the Boatfloat: a white front of four storeys, its sash windows in navy-painted surrounds, ROYAL CASTLE HOTEL in gold letters between the upper floors, a castellated parapet with turrets at the corners, a slate roof with dormers and a chimney behind it, wide windows under a navy fascia on the ground floor (picture by Mike White, 2008, Geograph 940043, CC BY-SA 2.0, docs/SOURCES.md M2; the owner's photographs of the Quay). The lettering is drawn by src/render/royalCastle.ts. Heights, the turrets' size and the letter size E.",
   },
   // ---- The top of the Square, Kingswear, facing the river up the Lower Ferry's slipway (the owner's photographs,
   // 5 Nov 2026, P8: which footprints these are is judged from where they stand in the photographs, E).
