@@ -131,7 +131,7 @@ export const LANDMARKS: LandmarkSpec[] = [
         { kind: 'clock', at: pos(endAlong + east * (w / 2 + 0.06)), y: base + h * 0.7, radius: 1.1, facingDeg: (brg + (east > 0 ? 0 : 180)) % 360 },
       ];
     },
-    source: "St Saviour's church, Dartmouth (Grade I, Historic England list entry 1293197): a tall unbuttressed west tower (Historic England's description, as quoted in search results; the full entry could not be read from here) and a plain embattled tower (GENUKI). The picture of the South Embankment by Tom Jolliffe, 2016 (Geograph 5221398, CC BY-SA 2.0, docs/SOURCES.md M3) shows it from the river in grey stone with pinnacles at its corners and a clock under the belfry. The tower's height (21 m), size and the clock's size and height are estimates from the picture (E); the nave's walls and slate roof follow the data's footprint.",
+    source: "St Saviour's church, Dartmouth (Grade I, Historic England list entry 1293197): a tall unbuttressed west tower (Historic England's description, as quoted in search results; the full entry could not be read from here) and a plain embattled tower (GENUKI; docs/SOURCES.md M5). The picture of the South Embankment by Tom Jolliffe, 2016 (Geograph 5221398, CC BY-SA 2.0, docs/SOURCES.md M3) shows it from the river in grey stone with pinnacles at its corners and a clock under the belfry. The tower's height (21 m), size and the clock's size and height are estimates from the picture (E); the nave's walls and slate roof follow the data's footprint.",
   },
   {
     id: 'castle-tea-room',

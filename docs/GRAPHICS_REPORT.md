@@ -71,7 +71,7 @@ The plan ranked work by visible impact per unit of cost, judged on the views a s
 | 8 | Bed-depth colour and shore wash | Medium near the banks | One texture lookup | Yes |
 | 9 | Spray | Low–medium, in a seaway only | One draw call, ≤ 360 points | Yes |
 | 10 | Lighting presets | Medium (choice of mood) | None at run time | Yes |
-| — | Ambient occlusion, SMAA, screen-space reflections, volumetric light | High on a fast GPU | Needs an off-screen pipeline that keeps the stencil passes (issue 75) | **Not done** |
+| — | Ambient occlusion, SMAA, screen-space reflections, volumetric light | High on a fast GPU | Needs an off-screen pipeline that keeps the stencil passes (issue 75) | **Ambient occlusion done 11 Nov 2026** (a post-processing chain keeping the stencil; COMPREHENSIVE_REVIEW §20); the rest not done |
 | — | Photographed or scanned assets (sail cloth, rock, recorded sound) | Medium | Licensing, download size | **Not done**: everything is procedural |
 
 The work followed the master prompt's six phases:
