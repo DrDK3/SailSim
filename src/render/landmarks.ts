@@ -27,7 +27,9 @@ export type Extra =
   /** Balconies with glass fronts along a wall a→b at these floor levels (m ODN). */
   | { kind: 'balconies'; a: [number, number]; b: [number, number]; floorsM: number[]; depth: number }
   /** A paved terrace at `floorM` (m ODN) out from the wall a→b, with a rail along its edge and tables with parasols. */
-  | { kind: 'terrace'; a: [number, number]; b: [number, number]; floorM: number; depth: number; tables: number };
+  | { kind: 'terrace'; a: [number, number]; b: [number, number]; floorM: number; depth: number; tables: number }
+  /** A clock face (radius m) centred at `at`, `y` (m ODN), facing the bearing `facingDeg`: dark dial, gilt ring and hands. */
+  | { kind: 'clock'; at: [number, number]; y: number; radius: number; facingDeg: number };
 
 export interface Look {
   /** sRGB colours. */
@@ -101,6 +103,35 @@ export const LANDMARKS: LandmarkSpec[] = [
     shape: 'f',
     parapet: 'battlements',
     source: 'Dartmouth Castle, southern works (gun platforms): stone. Detail E.',
+  },
+  {
+    id: 'st-saviours',
+    at: [-396, 346],
+    walls: 0x7d776d,
+    roof: SLATE,
+    win: WIN.tall,
+    shape: 'g',
+    roofDrop: 0,
+    // The tall west tower (21 m, E) in grey stone, embattled with pinnacles at its corners, and the clock on the face
+    // that looks down the nave to the river.
+    extras: (base, _top, ring) => {
+      const brg = longAxisDeg(ring);
+      const t = (brg * Math.PI) / 180;
+      const along = ring.map(([e, n]) => e * Math.sin(t) + n * Math.cos(t));
+      const across = ring.map(([e, n]) => e * Math.cos(t) - n * Math.sin(t));
+      const westIsLo = Math.sin(t) > 0;
+      const endAlong = westIsLo ? Math.min(...along) + 3.2 : Math.max(...along) - 3.2;
+      const mid = across.reduce((a, x) => a + x, 0) / across.length;
+      const pos = (al: number): [number, number] => [al * Math.sin(t) + mid * Math.cos(t), al * Math.cos(t) - mid * Math.sin(t)];
+      const w = 5.5;
+      const h = 21;
+      const east = westIsLo ? 1 : -1;
+      return [
+        { kind: 'tower', at: pos(endAlong), w, d: w, bearingDeg: brg, fromM: base, toM: base + h, top: 'battlements', walls: 0x7d776d, dressing: 0x8f897e },
+        { kind: 'clock', at: pos(endAlong + east * (w / 2 + 0.06)), y: base + h * 0.7, radius: 1.1, facingDeg: (brg + (east > 0 ? 0 : 180)) % 360 },
+      ];
+    },
+    source: "St Saviour's church, Dartmouth (Grade I, Historic England list entry 1293197): a tall unbuttressed west tower (Historic England's description, as quoted in search results; the full entry could not be read from here) and a plain embattled tower (GENUKI). The picture of the South Embankment by Tom Jolliffe, 2016 (Geograph 5221398, CC BY-SA 2.0, docs/SOURCES.md M3) shows it from the river in grey stone with pinnacles at its corners and a clock under the belfry. The tower's height (21 m), size and the clock's size and height are estimates from the picture (E); the nave's walls and slate roof follow the data's footprint.",
   },
   {
     id: 'castle-tea-room',
@@ -637,6 +668,18 @@ export function buildExtra(kit: Kit, x: Extra): void {
       ring.push([x.at[0] + Math.cos(a) * x.radius, x.at[1] + Math.sin(a) * x.radius]);
     }
     battlements(kit, ring, x.toM, x.walls);
+    return;
+  }
+  if (x.kind === 'clock') {
+    const a = (x.facingDeg * Math.PI) / 180;
+    const m = (dz: number) => new THREE.Matrix4().compose(new THREE.Vector3(x.at[0] + Math.sin(a) * dz, x.y, -(x.at[1] + Math.cos(a) * dz)), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI - a, 0)), new THREE.Vector3(1, 1, 1));
+    kit.add(new THREE.RingGeometry(x.radius * 0.86, x.radius, 32), m(0.02), 0xc9a646);
+    kit.add(new THREE.CircleGeometry(x.radius * 0.86, 32), m(0.01), 0x1c2633);
+    // The hands at ten past ten, gilt like the ring.
+    for (const [len, ang] of [[0.55, -0.9], [0.8, 0.55]] as const) {
+      const hand = new THREE.PlaneGeometry(0.08 * x.radius, len * x.radius).translate(0, (len * x.radius) / 2, 0.03);
+      kit.add(hand, new THREE.Matrix4().compose(new THREE.Vector3(x.at[0], x.y, -x.at[1]), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI - a, ang)), new THREE.Vector3(1, 1, 1)), 0xc9a646);
+    }
     return;
   }
   if (x.kind === 'flagstaff') {
