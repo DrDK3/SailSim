@@ -143,6 +143,21 @@ The checks, for this or a later run:
 
 **Alternative host:** Cloudflare Pages (free tier) works for the static site. However, its Git integration would rebuild on every live-data commit, which is over its monthly build allowance. Use its direct upload (an API token as a CI secret) and keep the live data on GitHub Pages or object storage. Not set up here.
 
+## 6a. Racing other people: what works now, and what would need a server
+
+**Works now, at no cost (no server):** a run shared as a link (Library → "Copy a link to race this run", or "Challenge a friend" in the race results; `src/app/shareLink.ts`). The whole replay is compressed into the link after the `#`, which browsers do not send to the web server, so GitHub Pages never sees it. Whoever opens the link races that run as a ghost in their own browser, in the same scenario (today's challenge included). A ten-minute race makes a link of a few tens of thousands of characters: fine to copy, paste and email; some messaging apps may cut very long links, and then the replay file (Library → Save replay) does the same job.
+
+**Would need a server (not built; an owner decision):**
+
+| Feature | What it needs |
+|---|---|
+| Live racing against other people at the same time | A real-time relay or game server (WebSocket or WebRTC with a signalling server) running all the time, and a way to keep the boats in step over the internet |
+| Shared leaderboards (today's challenge, course records) | A database and a small web API to receive and check results, with protection against faked times (for example re-running each submitted replay on the server) |
+| Accounts or names on leaderboards | Sign-in or a name store, and somewhere to keep it |
+| Any of the above | A privacy notice saying what is collected and kept, why and for how long, and how to have it removed (UK GDPR); moderation of names; someone to run and pay for it |
+
+These are paid or quota-limited services (a hosted database or serverless functions, a real-time service, or a small server), whose prices change: check the provider's current pricing before choosing. GitHub Pages alone cannot do any of them, since it serves fixed files only.
+
 ## 7. How this was tested without GitHub
 
 The full flow was rehearsed against a local bare repository standing in for GitHub (23 Oct 2026):

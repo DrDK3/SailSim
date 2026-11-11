@@ -9,6 +9,8 @@ import { RDYC_ORIGIN } from '../../src/sim/geo/projection';
 import { chaseHeight, followHeave, scenicPose } from '../../src/render/frames';
 import { sailTrim } from '../../src/render/squibModel';
 import { WakeTrail } from '../../src/render/boatWater';
+import { addWireAA } from '../../src/render/materialFx';
+import { REFLECTION_SCALE } from '../../src/render/reflection';
 
 // A stand-in for the browser's storage.
 const store = new Map<string, string>();
@@ -34,6 +36,28 @@ describe('graphics presets', () => {
     expect(PRESETS.performance.water).toBe('low');
     expect(PRESETS.balanced.water).toBe('high');
     expect(PRESETS.ultra.maxPixelRatio).toBeGreaterThan(PRESETS.balanced.maxPixelRatio);
+    // Reflections of the shore in calm water: none, a third of the resolution, half.
+    expect([PRESETS.performance.reflections, PRESETS.balanced.reflections, PRESETS.ultra.reflections]).toEqual(['off', 'low', 'high']);
+    expect(REFLECTION_SCALE.low).toBeLessThan(REFLECTION_SCALE.high);
+  });
+
+  it('thin wires are drawn at least a pixel wide, their coverage cut to match', () => {
+    const m = new THREE.MeshStandardMaterial();
+    addWireAA(m);
+    expect(m.alphaToCoverage).toBe(true);
+    const shader = { uniforms: {} as Record<string, unknown>, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+    m.onBeforeCompile(shader as never, undefined as never);
+    expect(shader.uniforms.uViewportH).toBeDefined();
+    expect(shader.vertexShader).toMatch(/transformed\.xz \*= wireWant \/ wireR/);
+    expect(shader.fragmentShader).toMatch(/diffuseColor\.a \*= vWireCover/);
+    // The same sum in numbers: a 7 mm stay 15 m away on an 800-pixel-high view at 55° is about 0.4 pixel across.
+    const p11 = 1 / Math.tan((55 / 2) * (Math.PI / 180));
+    const px = (2 * 15) / (p11 * 800);
+    const r = 0.0035;
+    expect((2 * r) / px).toBeLessThan(0.5);
+    const want = Math.max(r, 0.5 * px);
+    expect((2 * want) / px).toBeCloseTo(1, 9);
+    expect(r / want).toBeLessThan(0.5);
   });
 
   it("keeps the viewer's choice, recognises a preset, and falls back on bad values", () => {

@@ -168,6 +168,8 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
 test('polar panel sweeps the model in a worker and matches the Node model', async ({ page }) => {
   test.setTimeout(150_000 * CI_SLOW);
   const errors = await open(page);
+  // The physics tools are in the More menu at the Expert level or with the developer tools on.
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   const polar = page.getByRole('region', { name: 'Model polar' });

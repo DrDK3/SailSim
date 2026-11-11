@@ -293,6 +293,22 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 21.10 | Sail into the boats lying in Dart Marina's berths (and the training boats at Sandquay) | She stops against them with a contact report; she never passes through a boat; where a berth is empty she can sail into it |
 | 21.11 | Open the app after sunset (Real time) | A card says it is dark on the Dart now; Daylight view lights the river as at midday while the clock in the instruments, the tide and the wind stay as they were; More → Daylight view when dark turns it off again; Keep it dark hides the card for the visit |
 
+## 22. Debrief, protest room, start drills, graphics, sound, sharing (10 Nov 2026) (30 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 22.1 | Open the app on your graphics card in daylight and wait 10 s | Once: a card with the graphics check's result on your card; Copy the report and Save it as a file work; it does not come back on the next visit unless it finds a fault | |
+| 22.2 | More menu | Settings (not "Graphics and sound"), Your sail; no physics tools unless Settings → Help and accessibility → Physics and developer tools is ticked or the level is Expert | |
+| 22.3 | Sail for a few minutes with two or three tacks, then More → Your sail | The track on the map, brighter where faster; T and G at the tacks and gybes; the table of each with seconds lost; a race also shows the start | |
+| 22.4 | In a race, hit another boat (or a mark); press Review it in the protest room on the banner | The last 15 s replayed from above; the boat that broke the rule outlined red; the rule in plain words, what could have been done and the penalty; the note that it is a simplified judge | |
+| 22.5 | Race set-up → Practise the start; watch the race panel before the gun | Distance to the line, time to it, time to burn, closing or holding, the favoured end; after the start a score card; Same start again restarts the same start | |
+| 22.6 | Sail on the river in a light air (Scenario: 2 kn) on Balanced or Ultra | The hills, houses and boats mirrored in the water, wobbling with the ripples; at 10 kn and more the mirror is gone; Settings → Reflections in calm water: Off removes it | |
+| 22.7 | Look at your boat's rigging from the chase view while turning | The stays and shrouds are fine, unbroken lines, not crawling dashes | |
+| 22.8 | Ease the mainsheet slowly until the main starts to luff | The cloth just behind the mast lifts first (a bubble), then the whole sail flogs, most at the leech | |
+| 22.9 | With headphones, start a race and listen to the horn from different places; sail near the moorings and a ferry in fog | The horn from the committee boat's direction, quieter further off; halyards from the moorings; whistles from each ship | |
+| 22.10 | Settings → Sound → Spoken start countdown; start a race | The minutes, 30 and 20 seconds, then ten to one spoken, or "no voice on this device" in Settings (nothing is spoken then) | |
+| 22.11 | After a race, Results → Challenge a friend; open the copied link in another browser (or send it to someone) | The race starts again there with your run as a ghost; the address loses the long part after # | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

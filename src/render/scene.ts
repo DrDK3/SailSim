@@ -12,8 +12,9 @@ import { SquibModel, sailFill } from './squibModel';
 import type { CrewBuild } from './crew';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
+import { PlanarReflection } from './reflection';
 import { WakeTrail, HullFoam, BowSpray } from './boatWater';
-import { SUN_THROUGH } from './materialFx';
+import { SUN_THROUGH, VIEWPORT } from './materialFx';
 import { DEFAULT_CAMERA_MOTION, loadGraphics, pixelRatioFor, saveGraphics, type GraphicsSettings } from './graphics';
 import { ForceArrows } from './arrows';
 import { TeachingOverlay } from './teaching';
@@ -182,6 +183,9 @@ export class SceneView {
   private readonly sunDir = sunVector(SUN_ELEVATION, SUN_AZIMUTH);
   private readonly clouds = new CloudDome();
   private readonly rain = new Rain();
+  /** The scene mirrored in calm water (reflection.ts), as the graphics settings ask. */
+  private readonly reflection = new PlanarReflection();
+  private readonly bufferSize = new THREE.Vector2();
   private baseFogDensity = FOG_DENSITY;
   private weather?: SceneWeather;
   private envFor = { el: NaN, cloud: NaN };
@@ -654,6 +658,8 @@ export class SceneView {
     const size = this.renderer.getSize(new THREE.Vector2());
     this.renderer.setSize(size.x, size.y, false);
     this.water.setDetail(g.water);
+    this.reflection.quality = g.water === 'high' ? g.reflections : 'off';
+    this.water.setReflection(this.reflection.quality === 'off' ? null : this.reflection.target.texture, this.reflection.matrix);
     this.spray.enabled = g.spray;
     this.fleet.foamOn = g.hullFoam;
     this.spray.setViewport(size.y * this.renderer.getPixelRatio(), this.camera.fov);
@@ -767,7 +773,30 @@ export class SceneView {
       this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
     }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
+    this.drawReflection();
+    VIEWPORT.uViewportH.value = this.renderer.getDrawingBufferSize(this.bufferSize).y;
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** The scene mirrored in calm water (reflection.ts), when the settings and the wind allow it. */
+  private drawReflection(): void {
+    const drawn = this.water.reflectionWanted && this.reflection.render(this.renderer, this.scene, this.camera, this.reflectionHidden(), (this.scene.fog as THREE.FogExp2 | null)?.color ?? FOG);
+    this.water.reflectionDrawn(drawn);
+  }
+
+  /** What only the main view draws: the water itself and what lies on or over it, and the rain. */
+  private reflectionHidden(): THREE.Object3D[] {
+    return [this.water.mesh, this.water.farMesh, this.wake.mesh, this.hullFoam.mesh, this.spray.points, this.rain.lines];
+  }
+
+  /** Where the sound is heard (the camera, src/render/audio.ts): its position and which way it looks and is up. */
+  listenerPose(): { at: [number, number, number]; forward: [number, number, number]; up: [number, number, number] } {
+    const c = this.camera;
+    const e = c.matrixWorld.elements;
+    // The camera looks down its own −z; its up is its own +y.
+    const f = new THREE.Vector3(-e[8]!, -e[9]!, -e[10]!).normalize();
+    const u = new THREE.Vector3(e[4]!, e[5]!, e[6]!).normalize();
+    return { at: [e[12]!, e[13]!, e[14]!], forward: [f.x, f.y, f.z], up: [u.x, u.y, u.z] };
   }
 
   /** The graphics card's name, as the browser reports it. */
@@ -1045,6 +1074,7 @@ export class SceneView {
     this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.dispose();
+    this.reflection.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

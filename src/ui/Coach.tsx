@@ -55,11 +55,18 @@ export function CoachCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   );
 }
 
+/** Whether the coach's latest tip is still showing (10 s after it is given). */
+export function coachTipShowing(ui: UiState): boolean {
+  const c = ui.coach;
+  const tip = c?.on ? c.tips[0] : undefined;
+  return !!tip && !!c && c.now - tip.t <= 10;
+}
+
 /** The coach's latest tip, for a few seconds after it is given. */
 export function CoachTip({ ui }: { ui: UiState }) {
   const c = ui.coach;
   const tip = c?.on ? c.tips[0] : undefined;
-  if (!tip || !c || c.now - tip.t > 10) return null;
+  if (!tip || !c || !coachTipShowing(ui)) return null;
   return (
     <div className={`coach-tip tone-${tip.tone}`} role="status" aria-live="polite" data-testid="coach-tip">
       <span className="coach-tip-label">Coach</span> {tip.text}

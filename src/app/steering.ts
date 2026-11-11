@@ -4,7 +4,7 @@
  *  - 'tiller': A / ← push the tiller to port, so the bow turns to starboard, as on the boat: the helm pushes the
  *    tiller away from the way the bow is to go.
  * The tiller is drawn in the dock in both modes. The choice is asked once, on the first visit ("Have you sailed
- * before?": sailors get the tiller), and can be changed in Graphics and sound. It changes only which key moves
+ * before?": sailors get the tiller), and can be changed in Settings → Controls. It changes only which key moves
  * which way; the physics and recordings (which keep the helm, not the keys) are the same either way.
  */
 export type SteeringMode = 'bow' | 'tiller';

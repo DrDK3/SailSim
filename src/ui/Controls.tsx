@@ -37,7 +37,7 @@ export function TillerView({ rudder, mode }: { rudder: number; mode: SteeringMod
   const blade = { x: Math.sin(a) * 9, y: stock.y + Math.cos(a) * 9 };
   const text = centred ? 'Tiller centred' : `Tiller ${Math.round(d)}° to ${tiller} · bow turning to ${bow}`;
   return (
-    <div className="rudder-dial" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} Or drag the tiller. (More → Graphics and sound to change)`} data-testid="tiller">
+    <div className="rudder-dial" title={`${text}. ${mode === 'tiller' ? 'Steering like a tiller: A / ← push it to port, D / → to starboard.' : 'Steering by the bow: A / ← turn the bow to port, D / → to starboard; the tiller goes the other way.'} Or drag the tiller. (More → Settings → Controls to change)`} data-testid="tiller">
       <svg viewBox="-34 -2 68 44" aria-hidden="true" className="tiller-svg">
         <path className="tv-hull" d="M -30 -2 L -27 28 Q -24 36 -16 37 L 16 37 Q 24 36 27 28 L 30 -2" />
         <line className="tv-blade" x1={stock.x} y1={stock.y} x2={blade.x} y2={blade.y} />

@@ -1,4 +1,4 @@
-import { saveFix, type MaterialCheck, type MaterialFix } from '../render/gpuCheck';
+import { gpuCardSeen, markGpuCardSeen, saveFix, type MaterialCheck, type MaterialFix } from '../render/gpuCheck';
 import { signalCaption } from './signalCaption';
 import { ocsGuide, type OcsGuide } from './ocsGuide';
 import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
@@ -9,6 +9,8 @@ import { HintEngine, loadMilestones, loadSeenHints, saveMilestones, saveSeenHint
 import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
+import { FRAME_EVERY_S, IncidentRecorder, type ProtestCase } from './protestRoom';
+import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, type TrackPoint } from './sailLog';
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
 import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
@@ -50,6 +52,10 @@ import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLe
 import { sailState } from './sailStatus';
 import { RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
+import { countdownCall } from './countdown';
+import { SHARE_LONG_CHARS, SHARE_MAX_CHARS, decodeShare, encodeShare, sharedPayload, shareUrl } from './shareLink';
+import { Speaker } from '../render/speech';
+import { WindFollower, drillVerdict, lineBias, lineReadout, scoreStart, type DrillStart, type LineBias, type LineReadout, type P } from './startLine';
 import { SoundScape, type AudioSettings } from '../render/audio';
 import { presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { lightingStart, type LightingPreset } from './lighting';
@@ -140,6 +146,10 @@ export interface RaceUi {
   results?: FleetRow[];
   raceOver: boolean;
   disqualified?: string;
+  /** Before you start: where you are against the line and which end the wind favours (src/app/startLine.ts). */
+  line?: { readout: LineReadout; bias?: LineBias; ends: [string, string] };
+  /** A start drill: this start scored once made, and the starts before it this session. */
+  drill?: { attempt: number; last?: DrillStart & { verdict: string }; history: DrillStart[]; bestLateS?: number };
   /** Your start and finish against your bests in this browser (src/app/bests.ts). */
   best?: { start?: { delayS: number; best: boolean; previousS?: number }; finish?: { timeS: number; best: boolean; previousS?: number; label: string } };
 }
@@ -246,6 +256,10 @@ export interface UiState {
   showLayers: boolean;
   showEditor: boolean;
   showResults: boolean;
+  /** The debrief panel: the track, the tacks and gybes, the start. */
+  showDebrief: boolean;
+  /** The protest room: whether it is open, and how many of your incidents it holds. */
+  protest: { open: boolean; count: number };
   /** Other boats of the fleet (for the minimap), 10 Hz. */
   fleet: { id: string; n: number; e: number; heading: number; colour: number; label: string }[];
   /** The user's latest contact with a boat, mark, moored boat or ferry, for 8 s after it happened. */
@@ -263,6 +277,14 @@ export interface UiState {
   steering: SteeringMode;
   /** The graphics check of painted surfaces on this card (src/render/gpuCheck.ts), and the mode in use. */
   materialCheck?: { fault: boolean; reason: string; mode: string; at: string };
+  /** A shared link (#ghost=…) that could not be opened, and why. */
+  shareError?: string;
+  /** The device's own voice for the spoken countdown, if it has one (src/render/speech.ts). */
+  voice?: string;
+  /** Recorded sounds in use in place of the synthesised ones (src/render/audioSamples.ts). */
+  recordedSounds: string[];
+  /** The automatic graphics check has just run: show its result (a fault found, fixed or not), with the report to copy or save. */
+  gpuCard?: 'none' | 'fixed' | 'unfixed';
   materialMode?: MaterialFix;
   gpuName?: string;
   /** This build: the commit it was made from and when. */
@@ -274,6 +296,9 @@ type Listener = () => void;
 /** Helm and sheet rates for held keys/buttons (fraction of full travel per second). */
 /** Sailing a recording through (continue, ghosts): run this long between letting the page update (ms). */
 const CATCH_UP_SLICE_MS = 150;
+/** A drill start is scored this long after the gun if you have not started (s, E), and so many are kept. */
+const DRILL_SCORE_AFTER_S = 30;
+const DRILL_HISTORY = 12;
 const HELM_RATE = 1.4;
 const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
@@ -367,6 +392,18 @@ export class SimController {
   private raceTag?: { key: string; scenario: string };
   /** This race's start and finish against your bests (once each). */
   private raceBest: NonNullable<RaceUi['best']> = {};
+  /** The wind at the start line, followed slowly so the line's bias shows the shifts that last (src/app/startLine.ts). */
+  private lineWind = new WindFollower();
+  /** A start drill (src/app/startLine.ts): the same start again and again, each one scored. */
+  private drill?: {
+    options: QuickRaceOptions;
+    scenario: string;
+    attempt: number;
+    history: DrillStart[];
+    gun?: { t: number; pos: P; vel: P; bias: LineBias; ocs: boolean };
+    crossed?: P;
+    scored?: DrillStart;
+  };
   /** The teaching overlay outside lessons (Settings; on by default at the Learn level). */
   private teachingOn = readFlag('squib.teaching', false);
   private interfaceLevel: InterfaceLevel = loadLevel();
@@ -401,6 +438,12 @@ export class SimController {
   private fleetPrev = new Map<string, FleetPose>();
   private fleetCurr = new Map<string, FleetPose>();
   private showResults = false;
+  /** The debrief (src/app/sailLog.ts): the boat's track once a second, and whether its panel is open. */
+  private readonly track = new SailTrack();
+  private showDebrief = false;
+  /** The protest room (src/app/protestRoom.ts): clips of your incidents in a race, and whether its panel is open. */
+  private readonly incidents = new IncidentRecorder();
+  private showProtest = false;
   /** Free sailing: the user's boat in a one-boat fleet (contact with moored boats and ferries). */
   private soloFleet?: Fleet;
   private resultsShown = false;
@@ -539,6 +582,13 @@ export class SimController {
     this.captureFleet();
     this.fleetPrev = this.fleetCurr;
     this.showResults = false;
+    this.track.clear();
+    this.incidents.reset();
+    this.lineWind.reset();
+    // A drill goes on through a Reset of its own start (the next attempt); anything else ends it.
+    if (this.drill && this.drill.scenario === JSON.stringify(this.scenario)) this.drill = { ...this.drill, attempt: this.drill.attempt + 1, gun: undefined, crossed: undefined, scored: undefined };
+    else this.drill = undefined;
+    this.showProtest = false;
     this.resultsShown = false;
     this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
@@ -600,6 +650,9 @@ export class SimController {
     else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
+    if (this.sim.step % (TRACK_EVERY_S * 100) === 0) this.recordTrack();
+    if (this.race && !this.replay && this.sim.step % Math.round(FRAME_EVERY_S * 100) === 0) this.recordFleetFrame();
+    if (this.race && this.sim.step % 10 === 0) this.followLine();
     // Only your own sailing counts towards your bests, not a replay of a recording.
     if (this.race && !this.replay && this.sim.step % 50 === 0) this.checkRaceBests();
   }
@@ -675,6 +728,73 @@ export class SimController {
     this.raceTag = o.challenge ? { key: o.challenge, scenario: JSON.stringify(q.scenario) } : undefined;
     if (this.paused) this.togglePause();
     return { summary: q.summary, note: q.note };
+  }
+
+  /**
+   * A start drill (src/app/startLine.ts): a race set up as usual but sailed for its start, which is scored once you
+   * have started (or half a minute after the gun); then the same start again, or a new wind.
+   */
+  startDrill(o: QuickRaceOptions, keepHistory = false): { summary: string; note?: string } | undefined {
+    const prev = keepHistory ? this.drill : undefined;
+    this.drill = undefined;
+    const r = this.startQuickRace(o);
+    if (!r) return undefined;
+    this.drill = { options: o, scenario: JSON.stringify(this.scenario), attempt: (prev?.attempt ?? 0) + 1, history: prev?.history ?? [] };
+    this.publish(true);
+    return r;
+  }
+
+  /** The drill again: the same start (`newWind`: a fresh draw of the random conditions). */
+  drillAgain(newWind = false): void {
+    const d = this.drill;
+    if (!d) return;
+    if (!newWind) {
+      this.restart();
+      return;
+    }
+    this.startDrill({ ...d.options, seed: 1 + Math.floor(Math.random() * 9998) }, true);
+  }
+
+  /** Stop drilling: the race goes on as an ordinary race. */
+  endDrill(): void {
+    this.drill = undefined;
+    this.publish(true);
+  }
+
+  get drilling(): boolean {
+    return !!this.drill;
+  }
+
+  /** The ends of the start line in words: the committee boat, the pin end, or the mark's name. */
+  private endLabels(r: NonNullable<SimController['race']>): [string, string] {
+    const kindOf = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
+    const label = (id: string) => (kindOf(id) === 'committee-boat' ? 'the committee boat' : kindOf(id) === 'pin' ? 'the pin end' : (r.course.marks.find((m) => m.id === id)?.name ?? id));
+    const [ia, ib] = r.course.start.ends;
+    return [label(ia), label(ib)];
+  }
+
+  /** Ten times a second in a race: the wind at the line followed; in a drill, the gun and your start caught and scored. */
+  private followLine(): void {
+    const r = this.race!;
+    const [a, b] = r.resolved.start;
+    const t = this.sim.time;
+    this.lineWind.update(this.sim.env.wind(t, (a.n + b.n) / 2, (a.e + b.e) / 2), 0.1);
+    const d = this.drill;
+    if (!d || d.scored || this.replay) return;
+    const cm = r.session.committee;
+    const st = r.session.judgeOf('you').state(t);
+    const s = this.sim.snapshot(false);
+    const vel = { n: s.sog * Math.cos(s.cog), e: s.sog * Math.sin(s.cog) };
+    const first = r.resolved.legs[0]?.target ?? { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    // A general recall moves the gun: catch it again.
+    if (d.gun && d.gun.t !== cm.startTime) d.gun = undefined;
+    if (!d.gun && t >= cm.startTime) d.gun = { t: cm.startTime, pos: { n: s.n, e: s.e }, vel, bias: lineBias([a, b], first, this.lineWind.value ?? vel), ocs: st.ocs };
+    if (st.startTime !== undefined && !d.crossed) d.crossed = { n: s.n, e: s.e };
+    const done = d.gun && ((st.startTime !== undefined && t >= st.startTime + 2) || t >= cm.startTime + DRILL_SCORE_AFTER_S);
+    if (!done || !d.gun) return;
+    d.scored = scoreStart({ attempt: d.attempt, line: [a, b], firstMark: first, gunT: d.gun.t, startedT: st.startTime, ocs: d.gun.ocs, atGun: d.gun.pos, velocityAtGun: d.gun.vel, crossed: d.crossed, bias: d.gun.bias });
+    d.history = [...d.history, d.scored].slice(-DRILL_HISTORY);
+    this.publish(true);
   }
 
   /**
@@ -1374,6 +1494,48 @@ export class SimController {
     this.restart(this.scenario);
     // Live data that arrived while the Dart loaded: switch to it now, in one restart.
     this.goLiveIfUntouched();
+    // A shared run in the address (#ghost=…): race it, now the water it was sailed on is here.
+    void this.openSharedLink();
+  }
+
+  // ------------------------------------------------------------ shared runs (src/app/shareLink.ts)
+
+  private sharedOpened = false;
+  /** A link pasted into the address of a page already open (only its fragment changes: no reload). */
+  private onHashChange = () => {
+    if (!sharedPayload(location.hash)) return;
+    this.sharedOpened = false;
+    if (this.dartStatus !== 'loading') void this.openSharedLink();
+  };
+  /** A shared link that could not be opened, and why. */
+  private shareError?: string;
+
+  /** This run as a link: whoever opens it races it as a ghost in their own browser (nothing is uploaded). */
+  async shareLink(title: string): Promise<{ url?: string; chars: number; long: boolean; reason?: string }> {
+    const url = shareUrl(location.href, await encodeShare(this.saveRecording(title)));
+    if (url.length > SHARE_MAX_CHARS) return { chars: url.length, long: true, reason: 'This run is too long to share as a link: save the replay file and send that instead.' };
+    return { url, chars: url.length, long: url.length > SHARE_LONG_CHARS };
+  }
+
+  /** The run in the address's fragment (#ghost=…), raced as a ghost; the fragment is cleared so a reload does not repeat it. */
+  private async openSharedLink(): Promise<void> {
+    if (this.sharedOpened || typeof location === 'undefined') return;
+    this.sharedOpened = true;
+    const payload = sharedPayload(location.hash);
+    if (!payload) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    try {
+      const rec = await decodeShare(payload);
+      if (!this.startGhost(rec)) this.shareError = `The shared run could not be started: ${this.scenarioError ?? 'its scenario is not valid here'}.`;
+    } catch (e) {
+      this.shareError = (e as Error).message;
+    }
+    this.publish(true);
+  }
+
+  dismissShareError(): void {
+    this.shareError = undefined;
+    this.publish(true);
   }
 
   attach(container: HTMLElement): void {
@@ -1406,27 +1568,45 @@ export class SimController {
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
     window.addEventListener('pagehide', this.onPageHide);
+    window.addEventListener('hashchange', this.onHashChange);
     window.addEventListener('pointerdown', this.onGesture);
     document.addEventListener('visibilitychange', this.onVisibility);
     void this.discoverSources();
     // The graphics check, once the scene has been drawn for a while (owner review, 4 Nov 2026), on a graphics card
     // (the fault was seen on one; a software renderer draws these surfaces correctly). Settings runs it anywhere.
-    if (this.view && !/swiftshader|llvmpipe|software|basic render/i.test(this.view.gpuName)) this.checkTimer = window.setTimeout(() => this.runMaterialCheck(), 8000);
+    // `?gpucheck` runs it on a software renderer too (tests).
+    const forced = new URLSearchParams(location.search).has('gpucheck');
+    if (this.view && (forced || !/swiftshader|llvmpipe|software|basic render/i.test(this.view.gpuName))) this.checkTimer = window.setTimeout(() => this.runMaterialCheck(true), 8000);
     this.publish(true);
   }
 
   private checkTimer = 0;
   private lastMaterialCheck?: MaterialCheck;
+  /** The automatic graphics check's result card is showing, and what it found. */
+  private gpuCard?: 'none' | 'fixed' | 'unfixed';
+
+  dismissGpuCard(): void {
+    this.gpuCard = undefined;
+    this.publish(true);
+  }
 
   /**
    * Measure how this graphics card draws painted surfaces and apply the first fix that works if they come out
    * black (src/render/gpuCheck.ts). `?gpucheck=fault` simulates the fault (tests).
    */
-  runMaterialCheck(): MaterialCheck | undefined {
+  runMaterialCheck(auto = false): MaterialCheck | undefined {
     if (!this.view) return undefined;
     const simulate = new URLSearchParams(location.search).get('gpucheck') === 'fault';
+    const before = this.view.materialChecks.length;
     const c = this.view.checkMaterials(simulate);
     if (c) this.lastMaterialCheck = c;
+    // The automatic check's result as a card, once for each graphics card and whenever it finds a fault (fixed by
+    // another drawing mode, or not).
+    const found = this.view.materialChecks.slice(before).some((m) => m.fault);
+    if (c && auto && (found || !gpuCardSeen(this.view.gpuName))) {
+      this.gpuCard = c.fault ? 'unfixed' : found ? 'fixed' : 'none';
+      markGpuCardSeen(this.view.gpuName);
+    }
     this.settlePace();
     this.publish(true);
     return c;
@@ -1513,6 +1693,7 @@ export class SimController {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
     window.removeEventListener('pagehide', this.onPageHide);
+    window.removeEventListener('hashchange', this.onHashChange);
     window.removeEventListener('pointerdown', this.onGesture);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.sound.dispose();
@@ -1643,7 +1824,7 @@ export class SimController {
   private readonly whistles = new SignalScheduler();
   private whistleAt = -Infinity;
   private caption?: { text: string; t: number };
-  private harbour = { at: -Infinity, value: 0 };
+  private harbour: { at: number; value: number; where?: [number, number, number] } = { at: -Infinity, value: 0 };
   private onGesture = () => this.sound.resume();
   private onPageHide = () => this.keepResumePoint();
 
@@ -1663,11 +1844,53 @@ export class SimController {
     if (now - this.harbour.at > 1000) {
       this.harbour.at = now;
       let best = Infinity;
-      for (const m of this.dartData?.features?.moorings ?? []) best = Math.min(best, (m.n - c.n) ** 2 + (m.e - c.e) ** 2);
+      let at: { n: number; e: number } | undefined;
+      for (const m of this.dartData?.features?.moorings ?? []) {
+        const d = (m.n - c.n) ** 2 + (m.e - c.e) ** 2;
+        if (d < best) {
+          best = d;
+          at = m;
+        }
+      }
       this.harbour.value = Math.max(0, 1 - Math.sqrt(best) / 180);
+      this.harbour.where = at ? scenePoint(at, 0) : undefined;
     }
-    this.sound.update({ aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed, harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended });
+    this.sound.update({
+      aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed,
+      harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended,
+      listener: this.view?.listenerPose(), boat: scenePoint(c, 1.5), harbourAt: this.harbour.where,
+    });
     this.eventSounds();
+    this.speakCountdown();
+  }
+
+  /** The time to the start signal at the last frame, for the spoken countdown. */
+  private lastToStart?: number;
+
+  /** The start countdown, spoken by the device's own voice when chosen (src/app/countdown.ts). */
+  private speakCountdown(): void {
+    const r = this.race;
+    if (!r || !this.prefs.spokenCountdown || this.replay || this.paused || this.timeScale !== 1 || this.sound.settings.muted) {
+      this.lastToStart = undefined;
+      return;
+    }
+    const toStart = r.session.committee.startTime - this.sim.time;
+    const call = this.lastToStart !== undefined ? countdownCall(this.lastToStart, toStart) : undefined;
+    this.lastToStart = toStart;
+    if (call) this.speaker.say(call.text, this.sound.settings.master * 1.6);
+  }
+
+  /** The device's own voices (src/render/speech.ts): none are fetched or sent anywhere. */
+  readonly speaker = new Speaker();
+
+  /** The committee boat (where the horn sounds), or the line's middle. */
+  private committeeAt(): { n: number; e: number } | undefined {
+    const r = this.race;
+    if (!r) return undefined;
+    const [a, b] = r.resolved.start;
+    const [ia, ib] = r.course.start.ends;
+    const kind = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
+    return kind(ia) === 'committee-boat' ? a : kind(ib) === 'committee-boat' ? b : { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
   }
 
   /** Twice a second: the traffic's fog signals and doubt signal, heard and captioned (not in replays). */
@@ -1683,7 +1906,7 @@ export class SimController {
     const due = this.whistles.update(now, fleet.ferriesAt(now), visibilityM, own);
     for (const sig of due) {
       const d = Math.hypot(sig.n - s.n, sig.e - s.e);
-      this.sound.whistle(sig.blasts, d, sig.lengthM);
+      this.sound.whistle(sig.blasts, d, sig.lengthM, scenePoint(sig, 6));
       this.caption = { text: `${sig.label}: ${blastsInWords(sig.blasts)} (${sig.rule}: ${sig.meaning})`, t: now };
     }
   }
@@ -1704,7 +1927,9 @@ export class SimController {
         const s = log[h.signals]!;
         const text = signalCaption(s);
         if (!text) continue;
-        this.sound.horn(s.long ? 1 : s.sounds, !!s.long);
+        const cb = this.committeeAt();
+        const own = this.currSnap;
+        this.sound.horn(s.long ? 1 : s.sounds, !!s.long, cb ? scenePoint(cb, 3) : undefined, cb ? Math.hypot(cb.n - own.n, cb.e - own.e) : 0);
         this.caption = { text, t: now };
       }
     }
@@ -1887,6 +2112,50 @@ export class SimController {
   toggleResults(force?: boolean): void {
     this.showResults = force ?? !this.showResults;
     this.publish(true);
+  }
+
+  // --------------------------------------------------------------- the debrief
+
+  private recordTrack(): void {
+    const s = this.sim.snapshot(false);
+    this.track.add({ t: s.t, n: s.n, e: s.e, sog: s.sog, vmg: s.vmg, twaDeg: (Math.abs(s.twa) * 180) / Math.PI, mainSide: s.mainSide });
+  }
+
+  /** Five times a second in a race: the fleet's poses, for the protest room's clips. */
+  private recordFleetFrame(): void {
+    const r = this.race!;
+    const boats = r.session.fleet.boats.map((b) => {
+      const sn = b.sim.snapshot(false);
+      return { id: b.id, label: b.id === 'you' ? 'You' : b.sailNumber, n: sn.n, e: sn.e, heading: sn.heading, mainSide: sn.mainSide };
+    });
+    const fresh = this.incidents.record({ t: this.sim.time, boats }, r.session.incidents, this.currSnap.twdGround);
+    if (fresh.length) this.publish(true);
+  }
+
+  toggleProtestRoom(force?: boolean): void {
+    this.showProtest = force ?? !this.showProtest;
+    this.publish(true);
+  }
+
+  /** The protest room's cases: your incidents in this race, each with its clip. */
+  get protestCases(): readonly ProtestCase[] {
+    return this.incidents.cases;
+  }
+
+  toggleDebrief(force?: boolean): void {
+    this.showDebrief = force ?? !this.showDebrief;
+    this.publish(true);
+  }
+
+  /** The sail so far: its track, the tacks and gybes with what each cost, and in a race the start (src/app/sailLog.ts). */
+  sailDebrief(): { points: readonly TrackPoint[]; summary: SailSummary; line?: [{ n: number; e: number }, { n: number; e: number }]; coach?: Debrief } {
+    let start: StartInfo | undefined;
+    if (this.race) {
+      const cm = this.race.session.committee;
+      const st = this.race.session.judgeOf('you').state(this.sim.time);
+      if (this.sim.time >= cm.startTime) start = { gunT: cm.startTime, line: this.race.resolved.start, startedT: st.startTime, ocs: st.ocs };
+    }
+    return { points: this.track.points, summary: summarise(this.track.points, start), line: this.race?.resolved.start, coach: this.debrief };
   }
 
   setInput(change: Partial<ControlInput>): void {
@@ -2248,6 +2517,8 @@ export class SimController {
       showLayers: this.showLayers,
       showEditor: this.showEditor,
       showResults: this.showResults,
+      showDebrief: this.showDebrief,
+      protest: { open: this.showProtest, count: this.incidents.cases.length },
       fleet: (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, n: b.sim.state.n, e: b.sim.state.e, heading: b.sim.state.psi, colour: b.colour, label: b.sailNumber })),
       contact: this.contactText(),
       soundCaption: this.caption && this.sim.time - this.caption.t < 5 && this.sim.time >= this.caption.t ? this.caption.text : undefined,
@@ -2258,6 +2529,10 @@ export class SimController {
       audio: this.sound.settings,
       audioRunning: this.sound.running,
       steering: this.steeringMode,
+      gpuCard: this.lastMaterialCheck ? this.gpuCard : undefined,
+      voice: this.speaker.voiceName,
+      shareError: this.shareError,
+      recordedSounds: this.sound.recorded.kinds,
       materialCheck: this.lastMaterialCheck && { fault: this.lastMaterialCheck.fault, reason: this.lastMaterialCheck.reason, mode: this.lastMaterialCheck.mode, at: this.lastMaterialCheck.at },
       materialMode: this.view?.materialMode,
       gpuName: this.view?.gpuName,
@@ -2268,11 +2543,9 @@ export class SimController {
 
   /** The nearer end of the starting line from the user's boat, for a boat over the line at the start. */
   private ocsGuideNow(r: NonNullable<SimController['race']>, s: { n: number; e: number; psi: number }, sinceStartS: number): OcsGuide {
-    const kindOf = (id: string) => r.course.marks.find((m) => m.id === id)?.kind;
-    const label = (id: string) => (kindOf(id) === 'committee-boat' ? 'the committee boat' : kindOf(id) === 'pin' ? 'the pin end' : (r.course.marks.find((m) => m.id === id)?.name ?? id));
     const [a, b] = r.resolved.start;
-    const [ia, ib] = r.course.start.ends;
-    return ocsGuide({ n: s.n, e: s.e, headingRad: s.psi }, [{ ...a, label: label(ia) }, { ...b, label: label(ib) }], sinceStartS);
+    const [la, lb] = this.endLabels(r);
+    return ocsGuide({ n: s.n, e: s.e, headingRad: s.psi }, [{ ...a, label: la }, { ...b, label: lb }], sinceStartS);
   }
 
   private raceUi(): RaceUi | undefined {
@@ -2343,7 +2616,25 @@ export class SimController {
       raceOver,
       disqualified: dq,
       best: this.raceBest.start || this.raceBest.finish ? { ...this.raceBest } : undefined,
+      line: st.phase === 'pre-start' && !st.ocs ? this.lineUi(r, cm.startTime - t) : undefined,
+      drill: this.drill
+        ? {
+            attempt: this.drill.attempt,
+            last: this.drill.scored ? { ...this.drill.scored, verdict: drillVerdict(this.drill.scored) } : undefined,
+            history: this.drill.history,
+            bestLateS: this.drill.history.reduce<number | undefined>((m, h) => (h.lateS === undefined || h.ocs ? m : m === undefined ? h.lateS : Math.min(m, h.lateS)), undefined),
+          }
+        : undefined,
     };
+  }
+
+  private lineUi(r: NonNullable<SimController['race']>, toGunS: number): NonNullable<RaceUi['line']> {
+    const [a, b] = r.resolved.start;
+    const s = this.currSnap;
+    const first = r.resolved.legs[0]?.target ?? { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    const vel = { n: s.sog * Math.cos(s.cog), e: s.sog * Math.sin(s.cog) };
+    const w = this.lineWind.value;
+    return { readout: lineReadout([a, b], first, { n: s.n, e: s.e }, vel, toGunS), bias: w ? lineBias([a, b], first, w) : undefined, ends: this.endLabels(r) };
   }
 
   subscribe = (l: Listener): (() => void) => {
@@ -2396,4 +2687,9 @@ function writeFlag(key: string, on: boolean): void {
   } catch {
     // Not remembered: storage is unavailable.
   }
+}
+
+/** A point on the chart (n, e) at `y` m up, in the scene's coordinates (x east, y up, z south). */
+function scenePoint(p: { n: number; e: number }, y: number): [number, number, number] {
+  return [p.e, y, -p.n];
 }

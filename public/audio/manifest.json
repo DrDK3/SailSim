@@ -1,0 +1,4 @@
+{
+  "about": "Recorded sounds that take the place of the synthesised ones (src/render/audioSamples.ts; docs/SOUND.md). None are included: add a file to this folder and an entry here with its source and licence.",
+  "samples": {}
+}

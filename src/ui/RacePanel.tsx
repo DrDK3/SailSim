@@ -95,6 +95,7 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
               <div className="cell-label">Start in</div>
               <div className="race-big" data-testid="countdown">{clock(race.toStart)}</div>
               {race.nextSignal && race.nextSignal !== 'start' && <div className="fine-inline">next: {race.nextSignal} signal</div>}
+              {race.line && <LineReadouts line={race.line} />}
             </>
           ) : race.ocs ? (
             <div className="race-alert bad" role="alert" data-testid="ocs-guide">
@@ -114,7 +115,10 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
               )}
             </div>
           ) : (
-            <div className="race-alert warn">Start signal made {clock(-race.toStart)} ago: cross the line to start</div>
+            <>
+              <div className="race-alert warn">Start signal made {clock(-race.toStart)} ago: cross the line to start</div>
+              {race.line && <LineReadouts line={race.line} />}
+            </>
           )}
         </div>
       )}
@@ -137,7 +141,8 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
           <div className="fine-inline">from the start signal</div>
         </div>
       )}
-      {race.best && (
+      {race.drill && <DrillCard drill={race.drill} ctl={ctl} />}
+      {race.best && !race.drill?.last && (
         <div className="race-best" data-testid="race-best" role="status">
           {race.best.start && (
             <div>
@@ -187,5 +192,99 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
       </div>
       <p className="fine">Simplified rules, not an authoritative adjudication; AI sail numbers invented.</p>
     </section>
+  );
+}
+
+const KN = 0.514444;
+
+/**
+ * Where you are against the start line (src/app/startLine.ts): the distance, the time to it at your present
+ * speed, the time to burn before the gun, and which end the wind favours.
+ */
+function LineReadouts({ line }: { line: NonNullable<RaceUi['line']> }) {
+  const r = line.readout;
+  const over = r.distanceM < 0;
+  const motion = r.motion === 'holding' ? 'holding position' : r.motion === 'closing' ? `closing at ${(r.closingMs / KN).toFixed(1)} kn` : `opening at ${(-r.closingMs / KN).toFixed(1)} kn`;
+  const b = line.bias;
+  return (
+    <div className="line-readouts" data-testid="line-readouts">
+      <div className="line-cells">
+        <div>
+          <span className="cell-label">To the line</span>
+          <span className="line-val" data-testid="line-distance">{over ? `${Math.round(-r.distanceM)} m over` : `${Math.round(r.distanceM)} m`}</span>
+        </div>
+        <div>
+          <span className="cell-label">Time to it</span>
+          <span className="line-val">{r.timeToLineS !== undefined && r.timeToLineS < 600 ? `${Math.round(r.timeToLineS)} s` : '—'}</span>
+        </div>
+        <div>
+          <span className="cell-label">To burn</span>
+          <span className={`line-val ${r.burnS !== undefined && r.burnS < 0 ? 'late' : ''}`} data-testid="line-burn">
+            {r.burnS === undefined || r.timeToLineS === undefined || r.timeToLineS >= 600 ? '—' : r.burnS >= 0 ? `${Math.round(r.burnS)} s` : `${Math.round(-r.burnS)} s late`}
+          </span>
+        </div>
+      </div>
+      <div className="fine-inline">
+        {r.withinEnds ? '' : 'Beyond the ends (to the nearer end) · '}
+        {motion}
+      </div>
+      {b && (
+        <div className="fine-inline" data-testid="line-bias">
+          {b.favoured === undefined
+            ? 'Line square to the wind'
+            : `Favoured: ${line.ends[b.favoured]}, by ${b.lengths >= 0.95 ? `${Math.round(b.lengths)} boat length${Math.round(b.lengths) === 1 ? '' : 's'}` : `${Math.round(b.advantageM)} m`} (${Math.round(b.angleDeg)}°)`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A start drill: each start scored as it is made, then go again (the same start or a new wind). */
+function DrillCard({ drill, ctl }: { drill: NonNullable<RaceUi['drill']>; ctl: SimController }) {
+  const last = drill.last;
+  return (
+    <div className="drill-card" data-testid="drill" role="status">
+      <div className="race-row">
+        <strong>Start drill · start {drill.attempt}</strong>
+        {drill.bestLateS !== undefined && <span className="fine-inline">best this session: {drill.bestLateS.toFixed(1)} s late</span>}
+      </div>
+      {last ? (
+        <>
+          <p data-testid="drill-verdict">{last.verdict}</p>
+          <table className="drill-table">
+            <tbody>
+              <tr>
+                <th scope="row">Crossed</th>
+                <td>{last.ocs ? 'over at the gun (OCS)' : last.lateS === undefined ? 'not yet' : `${last.lateS.toFixed(1)} s after the gun`}</td>
+              </tr>
+              <tr>
+                <th scope="row">At the gun</th>
+                <td>
+                  {last.atGunM >= 0 ? `${Math.round(last.atGunM)} m behind the line` : `${Math.round(-last.atGunM)} m over`}, {last.atGunKn.toFixed(1)} kn
+                </td>
+              </tr>
+              {last.crossedAt !== undefined && (
+                <tr>
+                  <th scope="row">Where</th>
+                  <td>{Math.round(last.crossedAt * 100)}% along the line{last.favouredThird === undefined ? '' : last.favouredThird ? ', the favoured end' : ', away from the favoured end'}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="row left">
+            <button className="primary" onClick={() => ctl.drillAgain(false)} data-testid="drill-again">Same start again</button>
+            <button onClick={() => ctl.drillAgain(true)}>New wind</button>
+            <button onClick={() => ctl.endDrill()}>Race on</button>
+          </div>
+        </>
+      ) : (
+        <p className="fine">Scored once you have started, or half a minute after the gun.</p>
+      )}
+      {drill.history.length > 1 && (
+        <p className="fine" data-testid="drill-history">
+          Your starts: {drill.history.map((h) => (h.ocs ? 'OCS' : h.lateS === undefined ? '—' : `${h.lateS.toFixed(1)} s`)).join(' · ')}
+        </p>
+      )}
+    </div>
   );
 }

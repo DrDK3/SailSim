@@ -98,6 +98,8 @@ test.describe('first visit', () => {
 
 test('toolbar: the More menu (sections, toggles), Escape closes menus and panels, one side panel at a time', async ({ page }) => {
   const errors = await ready(page);
+  // The physics tools are in the More menu at the Expert level or with the developer tools on.
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
   // Few controls in view: the activity button (UI v2), playback, camera, Race, Library and Scenario, More and Help.
   await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(8);
   const view = page.getByRole('button', { name: 'More', exact: true });

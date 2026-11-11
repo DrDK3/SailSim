@@ -135,7 +135,7 @@ export function ExperienceHub({
                 ? 'A / ← push the tiller to port, so the bow turns to starboard, as when you helm a Squib.'
                 : 'A / ← turn the bow to port and D / → to starboard. The tiller picture in the dock shows what a real tiller would do.'}{' '}
               {level === 'learn' ? 'Lessons and the teaching overlay come first.' : level === 'expert' ? 'Every instrument is shown; the coach is off.' : 'The main instruments and the race coach.'}{' '}
-              You can change both in More → Graphics and sound.
+              You can change both in More → Settings.
             </p>
           </fieldset>
         )}

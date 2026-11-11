@@ -125,6 +125,7 @@ export function TutorialPanel({ ctl, ui, onRace }: { ctl: SimController; ui: UiS
             )
           )}
           <button onClick={() => ctl.startLesson(t.lesson.id)}>Repeat</button>
+          <button onClick={() => ctl.toggleDebrief(true)} data-testid="lesson-debrief">Your sail</button>
           <button onClick={() => setList(true)}>All lessons</button>
           <button onClick={() => ctl.endTutorial()}>Sail on freely</button>
         </div>

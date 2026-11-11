@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { FleetRow } from '../app/controller';
 
 function clock(s?: number): string {
@@ -17,13 +18,30 @@ const CODES: Record<string, string> = {
 };
 
 /** Results of the race: Appendix A low points for one race; provisional until the race is over. */
-export function ResultsPanel({ rows, final, onClose }: { rows: FleetRow[]; final: boolean; onClose: () => void }) {
+export function ResultsPanel({ rows, final, onClose, onDebrief, onProtest, onShare }: { rows: FleetRow[]; final: boolean; onClose: () => void; onDebrief?: () => void; onProtest?: () => void; onShare?: () => Promise<string | undefined> }) {
+  const [shared, setShared] = useState<string>();
   return (
     <section className="panel results" aria-label="Results" data-testid="results">
       <div className="race-head">
         <strong>Results{final ? '' : ' (provisional: race still running)'}</strong>
+        {onDebrief && (
+          <button onClick={onDebrief} data-testid="results-debrief">
+            Your sail
+          </button>
+        )}
+        {onProtest && (
+          <button onClick={onProtest} data-testid="results-protest">
+            Protest room
+          </button>
+        )}
+        {onShare && (
+          <button onClick={() => void onShare().then(setShared)} title="A link with this race in it: whoever opens it races you as a ghost (nothing is uploaded)" data-testid="results-share">
+            Challenge a friend
+          </button>
+        )}
         <button onClick={onClose} aria-label="Close results">×</button>
       </div>
+      {shared && <p className="fine" role="status" data-testid="results-shared">{shared}</p>}
       <table>
         <thead>
           <tr><th>Place</th><th>Boat</th><th>Result</th><th>Elapsed</th><th>Points</th><th>Penalties</th></tr>

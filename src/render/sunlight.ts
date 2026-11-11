@@ -52,6 +52,8 @@ export class SunLight {
   private readonly csm?: CSM;
   private readonly done = new WeakSet<THREE.Material>();
   private readonly bases = new WeakMap<Hook, Hook>();
+  /** The program key each of our hooks was made from (the material's own key before the cascades). */
+  private readonly keys = new WeakMap<Hook, string>();
   /** Shared by every set-up material's shader: updated once a frame. */
   private readonly uniforms = { CSM_cascades: { value: [] as THREE.Vector2[] }, cameraNear: { value: 0.1 }, shadowFar: { value: MAX_FAR } };
   private readonly direction = new THREE.Vector3(0, 1, 0);
@@ -154,7 +156,10 @@ export class SunLight {
     // A clone of a set-up material carries our hook: start again from the original shader changes.
     const current = m.onBeforeCompile;
     const base = this.bases.get(current) ?? current;
-    const key = `${base.toString()}|csm`;
+    // The material's own key (its shader additions' keys, chained in materialFx.ts) and not only the hook's source:
+    // two chained hooks have the same source text, and a shared key would give them the same program.
+    const own = this.keys.get(current) ?? m.customProgramCacheKey();
+    const key = `${own}|csm`;
     m.defines = { ...(m.defines ?? {}), USE_CSM: 1, CSM_CASCADES: this.csm!.cascades, CSM_FADE: '' };
     const uniforms = this.uniforms;
     const hook: Hook = function (this: THREE.Material, shader, renderer) {
@@ -164,6 +169,7 @@ export class SunLight {
       base.call(this, shader, renderer);
     };
     this.bases.set(hook, base);
+    this.keys.set(hook, own);
     m.onBeforeCompile = hook;
     m.customProgramCacheKey = () => key;
     m.needsUpdate = true;

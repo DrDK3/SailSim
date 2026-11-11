@@ -83,6 +83,23 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
     });
   };
 
+  /** A link with this run in it, copied (src/app/shareLink.ts): opened, it races the run as a ghost. */
+  const shareRun = async () => {
+    const r = await ctl.shareLink(replayTitle.trim() || 'a friend’s run');
+    if (!r.url) return setMessage(r.reason);
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(r.url);
+      copied = true;
+    } catch {
+      // No clipboard (permission, an older browser): the link is shown to copy by hand.
+    }
+    const size = `${Math.round(r.chars / 1000)} thousand characters`;
+    setMessage(
+      `${copied ? 'Link copied' : 'Copy this link'} (${size}).${r.long ? ' A long link: if your messaging app cuts it short, save the replay file and send that instead.' : ''}${copied ? '' : ` ${r.url}`}`,
+    );
+  };
+
   /** Race a ghost: the recording sailed again to learn its path, then the same scenario from the start, with it beside you. */
   const raceGhost = (json: unknown, what: string) => {
     ctl.leaveTo('Racing a ghost', () => {
@@ -179,6 +196,17 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
           Race a ghost from a replay file…
           <input type="file" accept=".json,application/json" aria-label="Race a ghost from a replay file" onChange={(e) => { const f = e.target.files?.[0]; if (f) void openGhost(f); e.target.value = ''; }} />
         </label>
+      </div>
+      <h4>Challenge a friend</h4>
+      <p className="fine">
+        A link with this run inside it: whoever opens it races your run as a ghost in the same scenario (today’s challenge included), in their own
+        browser. Nothing is uploaded or stored anywhere; the run is in the link itself, after the #. Racing others live and shared leaderboards would
+        need a server: not part of this simulator.
+      </p>
+      <div className="row left wrap">
+        <button onClick={() => void shareRun()} disabled={ui.snapshot.t < 10} data-testid="share-link">
+          Copy a link to race this run
+        </button>
       </div>
       {message && <p className="fine" role="status" data-testid="library-message">{message}</p>}
     </section>
