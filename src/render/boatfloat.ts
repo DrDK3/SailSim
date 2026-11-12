@@ -116,12 +116,12 @@ function smallBoat(i: number): THREE.Group {
     for (const z of [-0.3, 0.6]) kit.box(spec.beam - 0.35, 0.05, 0.25, VMAT.paint, 0xb08a5a, 0, h.deck(z) + 0.25, z);
   } else if (spec.kind === 'launch') {
     // A cover over the open boat, a little peaked, and the outboard tilted up on the transom.
-    kit.add(new THREE.CapsuleGeometry(spec.beam * 0.42, L * 0.55, 2, 8).scale(1, 0.32, 1).rotateX(Math.PI / 2), VMAT.canvas, cover, place(0, h.deck(0) + 0.12, 0.1));
+    kit.add(new THREE.CapsuleGeometry(spec.beam * 0.44, L * 0.5, 2, 8).rotateX(Math.PI / 2).scale(1, 0.3, 1), VMAT.canvas, cover, place(0, h.deck(0) + 0.1, 0.1));
     outboard(kit, 0, h.deck(L / 2), L / 2 - 0.1);
   } else {
     kit.box(spec.beam - 0.6, 0.6, L * 0.35, VMAT.gloss, 0xf2f1ec, 0, h.deck(-0.4) + 0.3, -0.4);
     kit.box(spec.beam - 0.7, 0.22, L * 0.25, VMAT.glass, undefined, 0, h.deck(-0.4) + 0.55, -0.6);
-    kit.add(new THREE.CapsuleGeometry(spec.beam * 0.35, L * 0.2, 2, 8).scale(1, 0.3, 1).rotateX(Math.PI / 2), VMAT.canvas, cover, place(0, h.deck(1) + 0.1, L * 0.28));
+    kit.add(new THREE.CapsuleGeometry(spec.beam * 0.38, L * 0.22, 2, 8).rotateX(Math.PI / 2).scale(1, 0.3, 1), VMAT.canvas, cover, place(0, h.deck(1) + 0.08, L * 0.28));
     outboard(kit, 0, h.deck(L / 2), L / 2 - 0.1);
   }
   const g = new THREE.Group();
