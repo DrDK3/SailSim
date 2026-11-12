@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VesselKind, VesselState } from '../sim/env/traffic';
+import { FERRY_RAMPS, type VesselKind, type VesselState } from '../sim/env/traffic';
 import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
 import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, type Hull } from './vessels';
@@ -183,6 +183,9 @@ function wake(beam: number): THREE.Mesh {
 
 /** The tug's cream-yellow upperworks (the owner's photographs). */
 const TUG_CREAM = 0xe4cd8e;
+/** The float's galvanised rails and the ramps' yellow edges (the owner's photograph, 12 Nov 2026). */
+const FLOAT_RAIL = 0xa3a8ab;
+const RAMP_YELLOW = 0xe9b81f;
 
 /**
  * Tug of the Lower Ferry (Hauley IV-VI, F1): a round-bilge workboat, heavily fendered, wheelhouse forward of
@@ -200,6 +203,8 @@ function tugModel(): THREE.Group {
   });
   // Rubber D-fender along the sheer, a thick bow fender, tyres down the sides.
   for (const s of [-1, 1]) fenderLine(kit, h.sheerLine(s, -0.1, 0.06, 1).map((p) => p.setY(p.y - 0.18)), 0.14);
+  // A yellow band along the bulwark's top (the owner's photograph, 12 Nov 2026).
+  for (const s of [-1, 1]) kit.tube(h.sheerLine(s, -0.08, 0.04, 1).map((p) => p.setY(p.y + 0.02)), 0.09, VMAT.paint, C.yellow);
   fenderLine(kit, [...h.sheerLine(-1, -0.15, 0, 0.12).reverse(), ...h.sheerLine(1, -0.15, 0, 0.12)].map((p) => p.setY(p.y - 0.35)), 0.3);
   for (const s of [-1, 1]) {
     for (const z of [-1.8, -0.2, 1.4, 3.0]) {
@@ -229,9 +234,10 @@ function tugModel(): THREE.Group {
 
 /**
  * Lower Ferry float: a spoon-ended steel pontoon, two car lanes between walkways, ramps at both ends with
- * orange lips, and "Do not board" boards on the gates at each end. She has no cabin of any kind: an open deck
- * with rails, lamps and lifebuoys, the tug's wheelhouse alongside the only shelter (the owner's photographs of
- * 4 and 5 Nov 2026). At each end a pair of posts carries the gear that lifts the ramp.
+ * yellow edges, galvanised pipe rails, and at each end a barrier with two white boards, DO NOT and BOARD in red.
+ * She has no cabin of any kind: an open deck with rails, lamps and lifebuoys, the tug's wheelhouse alongside the
+ * only shelter (the owner's photographs of 4 and 5 Nov 2026, and of 12 Nov 2026 with the foot passengers along her
+ * side). At each end a pair of posts carries the gear that lifts the ramp. The ramps are solid (FERRY_RAMPS).
  */
 function floatModel(length: number, beam: number, seed: number): THREE.Group {
   const g = new THREE.Group();
@@ -246,8 +252,11 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
   const walk = 1.3;
   for (const s of [-1, 1]) {
     kit.box(walk, 0.04, deckL, VMAT.paint, 0x9a9d9f, s * (beam / 2 - walk / 2 - 0.05), deckY + 0.02, 0);
-    rail(kit, [V(s * (beam / 2 - walk - 0.1), deckY, -deckL / 2 + 0.6), V(s * (beam / 2 - walk - 0.1), deckY, deckL / 2 - 0.6)], 1.05, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
-    rail(kit, [V(s * (beam / 2 - 0.12), deckY, -deckL / 2 + 0.3), V(s * (beam / 2 - 0.12), deckY, deckL / 2 - 0.3)], 1.1, { spacing: 2, colour: 0xe8e8e2, material: VMAT.paint, r: 0.03 });
+    // Galvanised pipe rails, grey, on stanchions about 1.5 m apart (the owner's photograph, 12 Nov 2026), and a
+    // steel kick strip along the deck's edge.
+    rail(kit, [V(s * (beam / 2 - walk - 0.1), deckY, -deckL / 2 + 0.6), V(s * (beam / 2 - walk - 0.1), deckY, deckL / 2 - 0.6)], 1.05, { spacing: 1.5, colour: FLOAT_RAIL, material: VMAT.paint, r: 0.045 });
+    rail(kit, [V(s * (beam / 2 - 0.12), deckY, -deckL / 2 + 0.3), V(s * (beam / 2 - 0.12), deckY, deckL / 2 - 0.3)], 1.1, { spacing: 1.5, colour: FLOAT_RAIL, material: VMAT.paint, r: 0.045 });
+    kit.box(0.08, 0.22, deckL, VMAT.paint, 0x3a3d40, s * (beam / 2 - 0.05), deckY + 0.11, 0);
   }
   for (const x of [-beam / 2 + walk + 0.3, 0, beam / 2 - walk - 0.3]) kit.box(0.12, 0.01, deckL - 3, VMAT.paint, x === 0 ? 0xf2f2ee : C.yellow, x, deckY + 0.045, 0);
   // Lamp posts at the corners, lifebuoys on the rails (no cabin: see above).
@@ -270,34 +279,56 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
     }
     kit.box(beam - 2 * walk - 0.1, 0.16, 0.16, VMAT.paint, 0x8d9296, 0, deckY + 3.0, e * (deckL / 2 - 0.5));
   }
-  // The gates' boards at each end of the walkways: white, lettered in red ("Do not board" when the ramp is up).
+  // At each end a barrier rail across the car deck between the ramp posts, and on it two white boards side by side,
+  // DO NOT and BOARD in red, facing out (the owner's photograph, 12 Nov 2026; the gates on the walkways too).
+  const signs: { x: number; z: number; e: number; text: string }[] = [];
   for (const e of [-1, 1]) {
+    const z = e * (deckL / 2 - 0.35);
+    const half = beam / 2 - walk - 0.15;
+    kit.tube([V(-half, deckY + 1.0, z), V(half, deckY + 1.0, z)], 0.04, VMAT.paint, FLOAT_RAIL);
+    kit.tube([V(-half, deckY + 0.55, z), V(half, deckY + 0.55, z)], 0.03, VMAT.paint, FLOAT_RAIL);
     for (const s of [-1, 1]) {
-      const x = s * (beam / 2 - walk / 2 - 0.05);
-      kit.box(walk - 0.2, 0.55, 0.04, VMAT.paint, 0xf4f4f0, x, deckY + 1.05, e * (deckL / 2 - 0.25));
-      kit.box(walk - 0.2, 0.12, 0.05, VMAT.paint, 0xc0282d, x, deckY + 1.17, e * (deckL / 2 - 0.25));
-      kit.box(walk - 0.5, 0.06, 0.05, VMAT.paint, 0xc0282d, x, deckY + 0.95, e * (deckL / 2 - 0.25));
+      kit.box(walk - 0.2, 0.55, 0.04, VMAT.paint, 0xf4f4f0, s * (beam / 2 - walk / 2 - 0.05), deckY + 1.05, e * (deckL / 2 - 0.25));
+      // The boards: the left one (seen from off the end) DO NOT, the right one BOARD.
+      const x = s * 0.85;
+      kit.box(1.5, 0.62, 0.04, VMAT.paint, 0xf4f4f0, x, deckY + 0.78, z + e * 0.05);
+      signs.push({ x, z: z + e * 0.075, e, text: (s * e < 0) === true ? 'DO NOT' : 'BOARD' });
     }
   }
   // Cars, two lanes of up to four (8 cars, F1); foot passengers and a deckhand in hi-vis.
   const n = 3 + (seed % 6);
   for (let i = 0; i < n; i++) car(kit, (i % 2 ? 1 : -1) * (beam / 2 - walk - 1.55), deckY + 0.04, -deckL / 2 + 4 + Math.floor(i / 2) * 5.4, seed * 7 + i);
-  for (let i = 0; i < 1 + (seed % 3); i++) addPerson(kit, (i % 2 ? 1 : -1) * (beam / 2 - 0.7), deckY + 0.04, -3 + i * 2.5, i % 2 ? Math.PI / 2 : -Math.PI / 2, seed + i);
+  // Foot passengers stand along the walkways, more of them on one side, as in the photograph (numbers E).
+  const walkers = 3 + (seed % 4);
+  for (let i = 0; i < walkers; i++) {
+    const s = i < walkers - 1 ? 1 : -1;
+    addPerson(kit, s * (beam / 2 - 0.55 - (i % 2) * 0.35), deckY + 0.04, s > 0 ? -4 + i * 1.3 : -7, s > 0 ? -Math.PI / 2 : Math.PI / 2, seed + i);
+  }
   g.add(kit.build('float'));
+  for (const sg of signs) {
+    const m = lettering(sg.text, 1.4, 0.5, '#c0282d', '800 230px Arial, Helvetica, sans-serif');
+    if (!m) continue;
+    m.position.set(sg.x, deckY + 0.78, sg.z);
+    m.rotation.y = sg.e > 0 ? 0 : Math.PI;
+    g.add(m);
+  }
   // Hinged ramps at both ends (pivot at the deck edge), animated from the state: steel plates with hazard edges.
+  // Their hinge and reach are the physics' (FERRY_RAMPS): the ramps are solid.
+  const R = FERRY_RAMPS['tug-float']!;
+  const plate = R.reach - 0.05;
   for (const end of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.name = end < 0 ? 'ramp-bow' : 'ramp-stern';
-    pivot.position.set(0, deckY, (end * deckL) / 2 + end * 0.2);
+    pivot.position.set(0, deckY, end * (length / 2 - R.hinge));
     const rk = new Kit();
     const w = beam - 2 * walk - 0.4;
-    rk.box(w, 0.16, 3.6, VMAT.paint, 0x7a7e82, 0, 0, end * 1.8);
-    rk.box(w, 0.18, 0.35, VMAT.paint, 0xe07a2a, 0, 0.01, end * 3.45);
+    rk.box(w, 0.16, plate, VMAT.paint, 0x7a7e82, 0, 0, (end * plate) / 2);
+    rk.box(w, 0.18, 0.35, VMAT.paint, RAMP_YELLOW, 0, 0.01, end * (plate - 0.15));
     for (const s of [-1, 1]) {
-      rk.box(0.14, 0.45, 3.6, VMAT.paint, 0xe07a2a, s * (w / 2 + 0.07), 0.15, end * 1.8);
+      rk.box(0.14, 0.45, plate, VMAT.paint, RAMP_YELLOW, s * (w / 2 + 0.07), 0.15, (end * plate) / 2);
       for (let k = 0; k < 6; k++) rk.box(0.15, 0.46, 0.22, VMAT.paint, C.black, s * (w / 2 + 0.07), 0.15, end * (0.3 + k * 0.6));
       // The lifting arm along each side of the ramp, from its hinge out to the lip.
-      rk.rod(V(s * (w / 2 + 0.07), 0.38, end * 0.1), V(s * (w / 2 + 0.07), 0.95, end * 3.4), 0.07, VMAT.paint, 0xd7d9db);
+      rk.rod(V(s * (w / 2 + 0.07), 0.38, end * 0.1), V(s * (w / 2 + 0.07), 0.95, end * (plate - 0.2)), 0.07, VMAT.paint, 0xd7d9db);
     }
     pivot.add(rk.build('ramp'));
     g.add(pivot);
@@ -401,11 +432,13 @@ function bridgeModel(length: number, beam: number): THREE.Group {
   for (const end of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.name = end < 0 ? 'ramp-bow' : 'ramp-stern';
-    pivot.position.set(0, deckY, (end * deckL) / 2 + end * 0.3);
+    // Hinge and reach as the physics has them (FERRY_RAMPS): the ramps are solid.
+    const R = FERRY_RAMPS['floating-bridge']!;
+    pivot.position.set(0, deckY, end * (length / 2 - R.hinge));
     const rk = new Kit();
     const w = 2 * inner - 0.4;
-    rk.box(w, 0.22, 4.6, VMAT.paint, 0x7a7e82, 0, 0, end * 2.3);
-    for (const sd of [-1, 1]) rk.box(0.2, 0.6, 4.6, VMAT.paint, NAVY, sd * (w / 2 + 0.1), 0.2, end * 2.3);
+    rk.box(w, 0.22, R.reach, VMAT.paint, 0x7a7e82, 0, 0, (end * R.reach) / 2);
+    for (const sd of [-1, 1]) rk.box(0.2, 0.6, R.reach, VMAT.paint, NAVY, sd * (w / 2 + 0.1), 0.2, (end * R.reach) / 2);
     pivot.add(rk.build('ramp'));
     g.add(pivot);
   }
