@@ -1,6 +1,6 @@
 # Outstanding issues and risks
 
-Updated: 12 Nov 2026 (the ferries' ramps solid, the float, the Boatfloat and the South Embankment, cars, loading at the slips; issues 169–175); 11 Nov 2026 (the flicker on BRNC, ambient occlusion, buildings from the photographs and public pictures; issues 161–168); 10 Nov 2026 (the red team's recommendations: hints, COLREGs lights and sound signals, give-way traffic, report a problem, continue, phones, ghosts, seamanship; issues 142–149); 5 Nov 2026 (the owner's photographs and requests: RDYC flicker and walkers, ferries, Noss, Sandquay, the dock); before that, 3 Nov 2026 (comprehensive review: decisions D1–D12 and Package 1)
+Updated: 12 Nov 2026 (the ferries' ramps solid, the float, the Boatfloat and the South Embankment, cars, loading at the slips; issues 169–174); 11 Nov 2026 (the flicker on BRNC, ambient occlusion, buildings from the photographs and public pictures; issues 161–168); 10 Nov 2026 (the red team's recommendations: hints, COLREGs lights and sound signals, give-way traffic, report a problem, continue, phones, ghosts, seamanship; issues 142–149); 5 Nov 2026 (the owner's photographs and requests: RDYC flicker and walkers, ferries, Noss, Sandquay, the dock); before that, 3 Nov 2026 (comprehensive review: decisions D1–D12 and Package 1)
 
 | # | Issue | Impact | Next step |
 |---|---|---|---|
@@ -178,5 +178,4 @@ Updated: 12 Nov 2026 (the ferries' ramps solid, the float, the Boatfloat and the
 | 172 | Loading at the slips is a picture: two sets take turns, lanes leave 4 s apart at up to 4 m/s, passengers walk at 1.3 m/s, out of sight 25 m up the slip; the first crossing of the morning sets off loaded without having loaded (she lay empty overnight). Cars do not queue on the slip roads beforehand | The ferries look worked; the timings are estimates | — |
 | 173 | The cars are four shapes; the street cars are two of them (hatchbacks moving, saloons parked); each car is about 410 triangles in the street (about 300 000 on high detail, twice the boxes') | A little more drawing work; not measured on a graphics card | Step 1's frame rates will show it |
 | 174 | The station's signs (it has had several restaurant names) are not drawn; the yacht club's board is drawn from the photograph | — | — |
-| 175 | A Squib could not before, and cannot now, tell a ferry's ramp from its hull in the contact banner beyond "(ramp)"; damage from a ramp strike uses the hull's contact height | — | — |
 
