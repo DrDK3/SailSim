@@ -935,6 +935,7 @@ export class DartScene {
   /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
   private buildFerries(f: DartFeatures): void {
     this.floating.add(this.traffic.group);
+    this.traffic.ground = (e, n) => this.groundAt(e, n);
     // The Higher Ferry's two cables, slip to slip, drawn with the ferry (src/render/traffic.ts).
     this.traffic.setCables(
       f.ferries.filter((x) => /Higher Ferry/.test(x.name) && x.route.length >= 2).map((fr) => ({ name: fr.name, a: fr.route[0]! as [number, number], b: fr.route[fr.route.length - 1]! as [number, number] })),

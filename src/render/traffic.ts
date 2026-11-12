@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { FERRY_RAMPS, type VesselKind, type VesselState } from '../sim/env/traffic';
+import { DeckLoad, type DeckLayout } from './deckLoad';
 import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
-import { Kit, VMAT, cabin, car, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, type Hull } from './vessels';
+import { Kit, VMAT, cabin, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, type Hull } from './vessels';
 import { updateLights } from './navLights';
 import { flagDroop, flagYaw } from './vane';
 import { Exhaust } from './railway';
@@ -281,37 +282,41 @@ function floatModel(length: number, beam: number, seed: number): THREE.Group {
   }
   // At each end a barrier rail across the car deck between the ramp posts, and on it two white boards side by side,
   // DO NOT and BOARD in red, facing out (the owner's photograph, 12 Nov 2026; the gates on the walkways too).
-  const signs: { x: number; z: number; e: number; text: string }[] = [];
+  // The barrier swings open while she loads (TrafficView shows it only while the ramp is up).
   for (const e of [-1, 1]) {
+    const bar = new THREE.Group();
+    bar.name = e < 0 ? 'barrier-bow' : 'barrier-stern';
+    const bk = new Kit();
     const z = e * (deckL / 2 - 0.35);
     const half = beam / 2 - walk - 0.15;
-    kit.tube([V(-half, deckY + 1.0, z), V(half, deckY + 1.0, z)], 0.04, VMAT.paint, FLOAT_RAIL);
-    kit.tube([V(-half, deckY + 0.55, z), V(half, deckY + 0.55, z)], 0.03, VMAT.paint, FLOAT_RAIL);
+    bk.tube([V(-half, deckY + 1.0, z), V(half, deckY + 1.0, z)], 0.04, VMAT.paint, FLOAT_RAIL);
+    bk.tube([V(-half, deckY + 0.55, z), V(half, deckY + 0.55, z)], 0.03, VMAT.paint, FLOAT_RAIL);
     for (const s of [-1, 1]) {
       kit.box(walk - 0.2, 0.55, 0.04, VMAT.paint, 0xf4f4f0, s * (beam / 2 - walk / 2 - 0.05), deckY + 1.05, e * (deckL / 2 - 0.25));
       // The boards: the left one (seen from off the end) DO NOT, the right one BOARD.
       const x = s * 0.85;
-      kit.box(1.5, 0.62, 0.04, VMAT.paint, 0xf4f4f0, x, deckY + 0.78, z + e * 0.05);
-      signs.push({ x, z: z + e * 0.075, e, text: (s * e < 0) === true ? 'DO NOT' : 'BOARD' });
+      bk.box(1.5, 0.62, 0.04, VMAT.paint, 0xf4f4f0, x, deckY + 0.78, z + e * 0.05);
+      const m = lettering((s * e < 0) === true ? 'DO NOT' : 'BOARD', 1.4, 0.5, '#c0282d', '800 230px Arial, Helvetica, sans-serif');
+      if (m) {
+        m.position.set(x, deckY + 0.78, z + e * 0.075);
+        m.rotation.y = e > 0 ? 0 : Math.PI;
+        bar.add(m);
+      }
     }
+    bar.add(bk.build('barrier'));
+    g.add(bar);
   }
-  // Cars, two lanes of up to four (8 cars, F1); foot passengers and a deckhand in hi-vis.
-  const n = 3 + (seed % 6);
-  for (let i = 0; i < n; i++) car(kit, (i % 2 ? 1 : -1) * (beam / 2 - walk - 1.55), deckY + 0.04, -deckL / 2 + 4 + Math.floor(i / 2) * 5.4, seed * 7 + i);
-  // Foot passengers stand along the walkways, more of them on one side, as in the photograph (numbers E).
-  const walkers = 3 + (seed % 4);
-  for (let i = 0; i < walkers; i++) {
-    const s = i < walkers - 1 ? 1 : -1;
-    addPerson(kit, s * (beam / 2 - 0.55 - (i % 2) * 0.35), deckY + 0.04, s > 0 ? -4 + i * 1.3 : -7, s > 0 ? -Math.PI / 2 : Math.PI / 2, seed + i);
-  }
+  // Cars, two lanes of four (8 cars, F1), and foot passengers along the walkways: they come and go at the slips
+  // (src/render/deckLoad.ts); the slots are even about her middle, as she turns end for end at each slip.
   g.add(kit.build('float'));
-  for (const sg of signs) {
-    const m = lettering(sg.text, 1.4, 0.5, '#c0282d', '800 230px Arial, Helvetica, sans-serif');
-    if (!m) continue;
-    m.position.set(sg.x, deckY + 0.78, sg.z);
-    m.rotation.y = sg.e > 0 ? 0 : Math.PI;
-    g.add(m);
-  }
+  const layout: DeckLayout = {
+    deckY: deckY + 0.04,
+    deckL,
+    lanes: [-1, 1].map((s) => ({ x: s * (beam / 2 - walk - 1.55), z: [-1.5, -0.5, 0.5, 1.5].map((k) => k * 5.4) })),
+    walks: [-1, 1, 1].map((s) => ({ x: s * (beam / 2 - 0.55), y: 0 })),
+  };
+  g.userData.deckLayout = layout;
+  void seed;
   // Hinged ramps at both ends (pivot at the deck edge), animated from the state: steel plates with hazard edges.
   // Their hinge and reach are the physics' (FERRY_RAMPS): the ramps are solid.
   const R = FERRY_RAMPS['tug-float']!;
@@ -420,15 +425,17 @@ function bridgeModel(length: number, beam: number): THREE.Group {
   mast(kit, 0, bridgeY + 2.55, 0, 2.2, { radar: true });
   // Cable sheaves at each end (she runs on two cables, F6): where the cables come up out of the water.
   for (const e of [-1, 1]) for (const x of bridgeSheaveX(beam)) kit.box(0.9, 0.9, 1.4, VMAT.paint, NAVY, x, deckY + 0.3, e * (deckL / 2 - 0.4));
-  // Cars: four lanes of up to nine (36 cars), a few spaces empty; people at the casing rails.
-  let k = 0;
+  // Cars: four lanes of up to nine (36 cars), and foot passengers along the deck by the casings: they come and go at
+  // the slips (src/render/deckLoad.ts).
   const pitch = Math.min(5.0, (deckL - 6) / 9);
-  for (let lane = 0; lane < 4; lane++) for (let i = 0; i < 9; i++) {
-    if ((lane * 7 + i * 3) % 6 === 5) continue;
-    car(kit, lane0 + 1.6 + lane * 3.2, deckY + 0.05, -deckL / 2 + 3 + pitch / 2 + i * pitch, k++ * 3 + lane, true);
-  }
-  for (let i = 0; i < 3; i++) addPerson(kit, (i % 2 ? 1 : -1) * (beam / 2 - cas / 2), deckY + casH, -6 + i * 5, i % 2 ? Math.PI / 2 : -Math.PI / 2, 20 + i);
   g.add(kit.build('higher-ferry'));
+  const layout: DeckLayout = {
+    deckY: deckY + 0.05,
+    deckL,
+    lanes: [0, 1, 2, 3].map((lane) => ({ x: lane0 + 1.6 + lane * 3.2, z: Array.from({ length: 9 }, (_, i) => -deckL / 2 + 3 + pitch / 2 + i * pitch) })),
+    walks: [-1, 1].map((s) => ({ x: s * (inner - 0.45), y: 0 })),
+  };
+  g.userData.deckLayout = layout;
   for (const end of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.name = end < 0 ? 'ramp-bow' : 'ramp-stern';
@@ -1056,6 +1063,8 @@ interface Entry {
   tug?: THREE.Group;
   label?: THREE.Sprite;
   ramps: THREE.Object3D[];
+  barriers: THREE.Object3D[];
+  load?: DeckLoad;
   ensigns: THREE.Object3D[];
   wakes: THREE.Mesh[];
   /** Each vessel's (and her tug's) group of navigation lights (src/render/navLights.ts). */
@@ -1163,12 +1172,14 @@ export class TrafficView {
       root.add(label);
     }
     const ramps: THREE.Object3D[] = [];
+    const barriers: THREE.Object3D[] = [];
     const ensigns: THREE.Object3D[] = [];
     const wakes: THREE.Mesh[] = [];
     const lights: THREE.Object3D[] = [];
     for (const g of [root, ...(tug ? [tug] : [])]) {
       g.traverse((o) => {
         if (o.name.startsWith('ramp-')) ramps.push(o);
+        if (o.name.startsWith('barrier-')) barriers.push(o);
         if (o.name === 'ensign') ensigns.push(o);
         if (o.name === 'wake') wakes.push(o as THREE.Mesh);
         if (o.name === 'lights') lights.push(o);
@@ -1177,8 +1188,12 @@ export class TrafficView {
         }
       });
     }
+    // The car ferries' loads, coming and going at the slips.
+    const layout = body.userData.deckLayout as DeckLayout | undefined;
+    const load = layout ? new DeckLoad(layout, seed) : undefined;
+    if (load) body.add(load.group);
     this.group.add(root);
-    return { root, body, tug, label, ramps, ensigns, wakes, lights, seen: 0 };
+    return { root, body, tug, label, ramps, barriers, load, ensigns, wakes, lights, seen: 0 };
   }
 
   /** Daylight 0 (night) … 1 (day): navigation lights come on at dusk. */
@@ -1188,6 +1203,9 @@ export class TrafficView {
 
   /** Letters by the sidelights (P port, S starboard) for players who cannot tell red from green. */
   lightLabels = false;
+
+  /** The ground (m ODN) at (e, n): the ferries' cars and passengers follow it up the slips. */
+  ground?: (e: number, n: number) => number;
 
   /** The labels, for decluttering with the place labels. */
   labels(): THREE.Sprite[] {
@@ -1220,6 +1238,22 @@ export class TrafficView {
         // Down onto the slip (tilted below the deck) when loading; raised for the crossing.
         const end = r.name === 'ramp-bow' ? -1 : 1;
         r.rotation.x = end * (0.32 * (s.ramp ?? 1) - 0.12);
+      }
+      for (const b of e.barriers) b.visible = (s.ramp ?? 1) > 0.5;
+      if (e.load) {
+        // Which end the slip is off (her heading points at it while she lies there), and which way she is going.
+        const ahead = Math.cos(s.heading - hdg) > 0;
+        const ground = this.ground;
+        const c = Math.cos(hdg);
+        const sn = Math.sin(hdg);
+        e.load.update(s.deck, s.phase === 'berthed', ahead ? -1 : 1, ahead ? -1 : 1, s.kind === 'tug-float', ground
+          ? (x, z) => {
+            // The model's frame to the chart's: turned by her heading (the model's -z is ahead).
+            const de = x * c - z * sn;
+            const dn = -x * sn - z * c;
+            return ground(s.e + de, s.n + dn) - waterLevel - bob;
+          }
+          : undefined);
       }
       if (wind) {
         const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, s.heading, s.sog);
