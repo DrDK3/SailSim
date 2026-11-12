@@ -425,7 +425,7 @@ function bridgeModel(length: number, beam: number): THREE.Group {
   const pitch = Math.min(5.0, (deckL - 6) / 9);
   for (let lane = 0; lane < 4; lane++) for (let i = 0; i < 9; i++) {
     if ((lane * 7 + i * 3) % 6 === 5) continue;
-    car(kit, lane0 + 1.6 + lane * 3.2, deckY + 0.05, -deckL / 2 + 3 + pitch / 2 + i * pitch, k++ * 3 + lane);
+    car(kit, lane0 + 1.6 + lane * 3.2, deckY + 0.05, -deckL / 2 + 3 + pitch / 2 + i * pitch, k++ * 3 + lane, true);
   }
   for (let i = 0; i < 3; i++) addPerson(kit, (i % 2 ? 1 : -1) * (beam / 2 - cas / 2), deckY + casH, -6 + i * 5, i % 2 ? Math.PI / 2 : -Math.PI / 2, 20 + i);
   g.add(kit.build('higher-ferry'));

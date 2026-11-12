@@ -115,8 +115,8 @@ function extrude(shape: THREE.Shape, width: number, L: number, bevel: number, cu
 const boxAt = (w: number, h: number, l: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, l).translate(x, y, z);
 
 /**
- * The parts of a car of this type, in its own frame. `light`: fewer curve and bevel steps and plainer wheels (about
- * 500 triangles instead of about 1 400), for the street cars drawn by the hundred.
+ * The parts of a car of this type, in its own frame. `light`: fewer curve and bevel steps and plainer wheels (under
+ * 400 triangles instead of about 1 400), for the street cars drawn by the hundred and the Higher Ferry's 36.
  */
 export function carParts(type: CarType, light = false): CarPart[] {
   const { length: L, width: W } = CAR_SIZE[type];
@@ -124,18 +124,19 @@ export function carParts(type: CarType, light = false): CarPart[] {
   const curves = light ? 2 : 5;
   const steps = light ? 1 : 2;
   parts.push({ geo: extrude(bodyShape(type), W, L, 0.08, curves, steps), role: 'body' });
+  // (The light version's glass has square edges: the body's bevel carries the rounding.)
   const cab = cabinLine(type, L);
   const z = (from: number) => from - L / 2;
   if (cab) {
     // The glass, set in from the sides; the roof over it in the body's colour; pillars between the windows.
-    parts.push({ geo: extrude(closedShape(cab), W - 0.3, L, 0.05, curves, steps), role: 'glass' });
+    parts.push({ geo: extrude(closedShape(cab), W - 0.3, L, light ? 0 : 0.05, curves, steps), role: 'glass' });
     const roofZ0 = cab[1]![0] + 0.05;
     const roofZ1 = cab[cab.length - 2]![0] - 0.05;
     const roofY = Math.min(...cab.slice(1, -1).map((p) => p[1]));
     const roofTop = Math.max(...cab.map((p) => p[1]));
     parts.push({ geo: boxAt(W - 0.26, 0.07 + roofTop - roofY, roofZ1 - roofZ0, 0, roofY + (roofTop - roofY + 0.07) / 2 + 0.01, z((roofZ0 + roofZ1) / 2)), role: 'body' });
     const belt = cab[0]![1];
-    for (const f of type === 1 ? [0.5] : [0.48]) {
+    for (const f of light ? [] : [0.48]) {
       const pz = cab[1]![0] + (cab[cab.length - 2]![0] - cab[1]![0]) * f;
       parts.push({ geo: boxAt(W - 0.24, roofY - belt, 0.12, 0, belt + (roofY - belt) / 2, z(pz)), role: 'body' });
     }
@@ -151,15 +152,15 @@ export function carParts(type: CarType, light = false): CarPart[] {
   parts.push({ geo: boxAt(W - 0.05, 0.2, 0.16, 0, 0.36, z(0.06)), role: 'trim' });
   parts.push({ geo: boxAt(W - 0.05, 0.2, 0.16, 0, 0.36, z(L - 0.06)), role: 'trim' });
   const front = topLine(type, L)[0]![1];
-  parts.push({ geo: boxAt(W * 0.42, 0.14, 0.05, 0, Math.min(front - 0.12, 0.62), z(0.01)), role: 'trim' });
+  if (!light) parts.push({ geo: boxAt(W * 0.42, 0.14, 0.05, 0, Math.min(front - 0.12, 0.62), z(0.01)), role: 'trim' });
   for (const sx of [-1, 1]) {
     parts.push({ geo: boxAt(0.3, 0.11, 0.06, sx * (W / 2 - 0.28), Math.min(front - 0.1, 0.66), z(0.03)), role: 'light' });
-    parts.push({ geo: boxAt(0.26, 0.14, 0.06, sx * (W / 2 - 0.22), type === 3 ? 0.95 : 0.78, z(L - 0.02)), role: 'tail' });
+    if (!light) parts.push({ geo: boxAt(0.26, 0.14, 0.06, sx * (W / 2 - 0.22), type === 3 ? 0.95 : 0.78, z(L - 0.02)), role: 'tail' });
   }
   // Wheels with hubcaps.
   for (const wz of wheelBase(type)) {
     for (const sx of [-1, 1]) {
-      parts.push({ geo: new THREE.CylinderGeometry(R, R, 0.22, light ? 8 : 12).rotateZ(Math.PI / 2).translate(sx * (W / 2 - 0.15), R, z(wz)), role: 'tyre' });
+      parts.push({ geo: new THREE.CylinderGeometry(R, R, 0.22, light ? 6 : 12).rotateZ(Math.PI / 2).translate(sx * (W / 2 - 0.15), R, z(wz)), role: 'tyre' });
       if (!light) parts.push({ geo: new THREE.CylinderGeometry(0.19, 0.19, 0.02, 10).rotateZ(Math.PI / 2).translate(sx * (W / 2 - 0.03), R, z(wz)), role: 'chrome' });
     }
   }

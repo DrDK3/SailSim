@@ -705,11 +705,11 @@ export function outboard(kit: Kit, x: number, y: number, z: number, colour = 0x1
 const CAR_COLOURS = [0xd9dadb, 0x1c1d1f, 0x8a8f96, 0x2a4f8a, 0x9b1c1c, 0xf2f2f2, 0x3b5d3b, 0x5a5f66, 0x6d2a2a, 0xb6b9bd];
 
 /** A car on a deck at (x, y, z) heading along -z (src/render/carShape.ts): hatchback, saloon, SUV or van. */
-export function car(kit: Kit, x: number, y: number, z: number, seed: number): void {
+export function car(kit: Kit, x: number, y: number, z: number, seed: number, light = false): void {
   const type = (seed % 4) as CarType;
   const colour = CAR_COLOURS[(seed * 7) % CAR_COLOURS.length]!;
   const m = new THREE.Matrix4().makeTranslation(x, y, z);
-  for (const p of carParts(type)) {
+  for (const p of carParts(type, light)) {
     if (p.role === 'body') kit.add(p.geo, VMAT.gloss, colour, m);
     else if (p.role === 'glass') kit.add(p.geo, VMAT.glass, undefined, m);
     else if (p.role === 'tyre') kit.add(p.geo, VMAT.rubber, undefined, m);
