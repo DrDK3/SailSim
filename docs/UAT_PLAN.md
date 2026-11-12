@@ -309,6 +309,18 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 22.10 | Settings → Sound → Spoken start countdown; start a race | The minutes, 30 and 20 seconds, then ten to one spoken, or "no voice on this device" in Settings (nothing is spoken then) | |
 | 22.11 | After a race, Results → Challenge a friend; open the copied link in another browser (or send it to someone) | The race starts again there with your run as a ghost; the address loses the long part after # | |
 
+## 23. The flicker on BRNC, finishing effects and buildings (11 Nov 2026) (20 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 23.1 | Ultra; drone view; move slowly round BRNC from the river, then from above | No surfaces flickering on BRNC or the College Chapel; edges of distant roofs steady | |
+| 23.2 | Settings → Display → Soft shadows where surfaces meet: on, then off; look at the town from the river and at the crew in the cockpit | On: soft darkening under eaves, between houses, round the crew; off: flatter. The water never turns dark or black | |
+| 23.3 | With it on, read the frame rate in Settings (Ultra, then Balanced with it ticked) | Note both rates; if Ultra is below about 30 frames a second, say so | |
+| 23.4 | Look at the town's houses from 50–100 m off | White sashes with glazing bars, sky in the glass, white or dark boards along the eaves and gables, some fronts hung with slate, pots on the chimneys | |
+| 23.5 | Pan slowly across Kingswear from the Dartmouth side, 300 m or more off | The windows do not shimmer or crawl | |
+| 23.6 | From the Boatfloat, look at the Royal Castle Hotel | White, four storeys, navy round the windows, ROYAL CASTLE HOTEL in gold, a castellated parapet with corner turrets, a navy band over the ground floor | |
+| 23.7 | From the river off the Embankment, look for St Saviour's | A tall grey embattled tower with pinnacles above the roofs, a clock on the side facing the river | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

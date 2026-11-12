@@ -1,5 +1,6 @@
 import { buildBayardsCoveFort } from './bayards';
 import { NOSS_HALL_AT, buildNossLettering } from './noss';
+import { ROYAL_CASTLE_AT, buildRoyalCastleLettering } from './royalCastle';
 import * as THREE from 'three';
 import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
@@ -492,9 +493,14 @@ export class DartScene {
     const w = new THREE.Vector3();
     const DEG = Math.PI / 180;
     const kit = new Kit();
+    // Where the data's outlines overlap (23 pairs: the College Chapel lies wholly inside BRNC's; arcades and annexes
+    // in Dartmouth), the hidden building or wall is left out. Drawn, two surfaces in one place take turns to show as
+    // the view moves (owner, 11 Nov 2026: "flickering on BRNC").
+    const cover = buildingCover(f.buildings);
     f.buildings.forEach((bData, idx) => {
       const ring = bData.r;
       if (ring.length < 3) return;
+      if (cover.inside(idx)) return;
       // A landmark may correct the data's heights where photographs show them wrong (src/render/landmarks.ts).
       const spec = landmarkFor(ring);
       const hSpec = spec?.heights;
@@ -525,7 +531,10 @@ export class DartScene {
       const wall = look ? lin(look.walls).map((c) => c * 0.72) : wallPalette[(idx * 7919) % wallPalette.length]!;
       const roof = look ? lin(look.roof) : roofPalette[(idx * 104729) % roofPalette.length]!;
       // Windows (the integer part is the style, src/render/landmarks.ts WIN; the fraction seeds which are lit).
-      const style = look ? look.win : b.c === 'garage' ? WIN.none : shop ? WIN.shopfront : WIN.sash;
+      // About one town house in eight has its front hung with slate above the ground floor (the photographs, E: the
+      // share); never a shop, a garage or a building of one storey.
+      const slateHung = !look && town && !shop && b.c !== 'garage' && b.t - b.b >= 6 && (idx * 2654435761) % 1000 < 125;
+      const style = look ? look.win : b.c === 'garage' ? WIN.none : shop ? WIN.shopfront : slateHung ? WIN.slateHung : WIN.sash;
       const winFlag = style === WIN.none ? 0 : style + ((idx * 37) % 97) / 100;
       // Roof overrides: a gable along the long axis (churches, chapels: low walls, steep roof, the data's top
       // kept for a tower), flat (castles, modern buildings), or slopes round a flat top (BRNC's ranges).
@@ -555,7 +564,8 @@ export class DartScene {
         }
       } else if (look?.shape === 'f') b = { ...b0, s: 'f' };
       if (look) {
-        const top = b.t;
+        // On a roof sloping up from the parapet ('p'), the parapet stands at the eaves.
+        const top = look.shape === 'p' ? b.t - (look.roofDrop ?? 3) : b.t;
         if (look.parapet === 'battlements' || look.parapet === 'corbelled-battlements') battlements(kit, ccwRing, top, look.walls, look.parapet === 'corbelled-battlements');
         if (spec?.extras) {
           for (const x of spec.extras(b0.b, b0.t, ccwRing)) buildExtra(kit, x);
@@ -583,6 +593,7 @@ export class DartScene {
       const emitWall = (p0: [number, number], p1: [number, number], top0: number, top1: number, windows: boolean) => {
         const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
         if (len < 1e-6) return;
+        if (cover.wallHidden(idx, p0, p1, Math.max(top0, top1))) return;
         const nx = (p1[1] - p0[1]) / len;
         const nz = (p1[0] - p0[0]) / len;
         const u0 = len < WINDOW_BAY_M ? (WINDOW_BAY_M - len) / 2 : -(len % WINDOW_BAY_M) / 2;
@@ -655,6 +666,11 @@ export class DartScene {
         }
         tri([c[0]![0], top, -c[0]![1]], [c[1]![0], top, -c[1]![1]], [c[2]![0], top, -c[2]![1]], lin(0x3a3633));
         tri([c[0]![0], top, -c[0]![1]], [c[2]![0], top, -c[2]![1]], [c[3]![0], top, -c[3]![1]], lin(0x3a3633));
+        // Clay pots along the stack (two, terracotta; the photographs show them on most stacks).
+        for (const f of [-0.45, 0.45]) {
+          const q: [number, number] = [p[0] + px * hd * f, p[1] + pn * hd * f];
+          kit.box(q[0], top, q[1], 0.22, 0.42, 0.22, 0, 0xa45a3c);
+        }
       };
 
       if (look?.shape === 'p') {
@@ -738,6 +754,15 @@ export class DartScene {
         // Hipped roof: every eave edge rises to its nearest point on the ridge.
         const rise = b.s ? Math.max(0.8, b.t - eaves) : Math.min(3.5, Math.max(1.0, 0.55 * ridge.halfWidth));
         const top = b.s ? eaves : b.t;
+        // A stack rising through the roof near one end of the ridge, on houses (not garages or big buildings).
+        if (!landmark && b.c !== 'garage' && Math.abs(area) / 2 <= 400 && rise >= 1) {
+          const ends = [ridge.at(pts[0]!), ridge.at(pts[Math.floor(pts.length / 2)]!)];
+          const [r0, r1] = ends as [[number, number], [number, number]];
+          const span = Math.hypot(r1[0] - r0[0], r1[1] - r0[1]);
+          const along: [number, number] = span > 0.5 ? [(r1[0] - r0[0]) / span, (r1[1] - r0[1]) / span] : [1, 0];
+          const at: [number, number] = span > 1.5 ? [r0[0] + along[0] * 0.8, r0[1] + along[1] * 0.8] : r0;
+          chimney(at, along, top + rise - 0.8, top + rise + 1.0);
+        }
         for (let i = 0; i < pts.length; i++) emitWall(pts[i]!, pts[(i + 1) % pts.length]!, top, top, !party(i));
         for (let i = 0; i < pts.length; i++) {
           const p0 = pts[i]!;
@@ -792,6 +817,15 @@ export class DartScene {
     // Noss: the lettering on the Philip & Son hall's river gable (src/render/noss.ts); named boats at their berths.
     const hall = f.buildings.find((b) => insideRing(b.r as [number, number][], NOSS_HALL_AT[0], NOSS_HALL_AT[1]));
     if (hall) this.fixed.add(buildNossLettering(hall.r as [number, number][], (hall.t ?? 10) - 3.2, hall.t ?? 10));
+    // The Royal Castle Hotel's name across its front (src/render/royalCastle.ts).
+    const castle = f.buildings.find((b) => insideRing(b.r as [number, number][], ROYAL_CASTLE_AT[0], ROYAL_CASTLE_AT[1]));
+    const castleSpec = castle && landmarkFor(castle.r);
+    if (castle && castleSpec?.heights) {
+      let a2 = 0;
+      for (let i = 0; i < castle.r.length; i++) a2 += castle.r[i]![0] * castle.r[(i + 1) % castle.r.length]![1] - castle.r[(i + 1) % castle.r.length]![0] * castle.r[i]![1];
+      const ring = (a2 >= 0 ? [...castle.r] : [...castle.r].reverse()) as [number, number][];
+      this.fixed.add(buildRoyalCastleLettering(ring, castleSpec.heights.base));
+    }
     for (const b of namedBerths()) this.floating.add(b);
   }
 
@@ -1122,6 +1156,8 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
         varying vec3 vBWorld;
         varying vec3 vBNormal;
         float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        // 1 inside [a, b], 0 outside, its edges smoothed over the pixel's footprint w (in the same units as x).
+        float aaBox(float x, float a, float b, float w) { return clamp(min(x - a, b - x) / w + 0.5, 0.0, 1.0); }
         float bNoise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
           return mix(mix(bHash(i), bHash(i + vec2(1.0, 0.0)), u.x), mix(bHash(i + vec2(0.0, 1.0)), bHash(i + vec2(1.0, 1.0)), u.x), u.y);
@@ -1145,32 +1181,68 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
         float winLit = 0.0;
         if (vWall.w > 0.5) {
           // Window style (src/render/landmarks.ts WIN): 1 sash, 2 tall (churches), 3 slits (castles),
-          // 4 brick with stone bands (BRNC), 5 glazed (modern), 6 shopfront on the ground floor.
+          // 4 brick with stone bands (BRNC), 5 glazed (modern), 6 shopfront on the ground floor, 7 sash windows on a
+          // front hung with slate above the ground floor, 8 sash windows in navy surrounds over wide windows under a
+          // navy fascia (the Royal Castle Hotel).
           float wstyle = floor(vWall.w);
-          float bay = floor(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
-          float storey = floor(vWall.y / ${STOREY_M.toFixed(1)});
-          float fu = fract(vWall.x / ${WINDOW_BAY_M.toFixed(1)});
-          float fv = fract(vWall.y / ${STOREY_M.toFixed(1)});
+          bool slateFront = wstyle > 6.5 && wstyle < 7.5;
+          bool navy = wstyle > 7.5;
+          bool shopStyle = (wstyle > 5.5 && wstyle < 6.5) || navy;
+          if (slateFront || navy) wstyle = 1.0;
+          float cu = vWall.x / ${WINDOW_BAY_M.toFixed(1)};
+          float cv = vWall.y / ${STOREY_M.toFixed(1)};
+          float bay = floor(cu);
+          float storey = floor(cv);
+          float fu = fract(cu);
+          float fv = fract(cv);
+          // The pattern's size on screen (one pixel's footprint, in bays and storeys): edges are smoothed over it, and
+          // where a window is only a few pixels across the pattern gives way to its average colour, so the windows of a
+          // distant town do not shimmer as the view moves (owner, 11 Nov 2026).
+          float wu = max(fwidth(cu), 1e-4);
+          float wv = max(fwidth(cv), 1e-4);
+          float far = smoothstep(0.1, 0.3, max(wu, wv));
           float seed = fract(vWall.w) * 61.0;
-          vec4 r = vec4(0.3, 0.7, 0.3, 0.8);
-          float fw = 0.03;
+          // Tall sash windows with thick white frames (the photographs): about 1.1 m wide and 1.9 m tall.
+          vec4 r = vec4(0.32, 0.68, 0.17, 0.85);
+          float fw = 0.045;
           if (wstyle > 1.5 && wstyle < 2.5) { r = vec4(0.4, 0.6, 0.12, 0.92); fw = 0.025; }
           else if (wstyle > 2.5 && wstyle < 3.5) { r = vec4(0.47, 0.53, 0.35, 0.72); fw = 0.0; }
+          else if (wstyle > 3.5 && wstyle < 4.5) { r = vec4(0.3, 0.7, 0.3, 0.8); fw = 0.03; }
           else if (wstyle > 4.5 && wstyle < 5.5) { r = vec4(0.06, 0.94, 0.12, 0.92); fw = 0.015; }
-          bool shopFloor = wstyle > 5.5 && storey < 0.5;
+          bool shopFloor = shopStyle && storey < 0.5;
           if (shopFloor) { r = vec4(0.08, 0.92, 0.08, 0.66); fw = 0.02; }
           // Whole windows only, starting at least 0.4 m above the ground along the wall (hillside walls).
           float sill = (storey + 0.3) * ${STOREY_M.toFixed(1)};
           float lowest = shopFloor ? 0.2 : 0.7;
-          float inWin = step(r.x, fu) * step(fu, r.y) * step(r.z, fv) * step(fv, r.w) * step(lowest, vWall.y) * step(vWall.y, vWall.z - 0.5) * step(vGround + (shopFloor ? 0.0 : 0.4), sill);
-          float frame = fw > 0.0 ? inWin * (1.0 - step(r.x + fw, fu) * step(fu, r.y - fw) * step(r.z + fw * 1.4, fv) * step(fv, r.w - fw * 1.4)) : 0.0;
+          float ok = step(lowest, vWall.y) * step(vWall.y, vWall.z - 0.5) * step(vGround + (shopFloor ? 0.0 : 0.4), sill);
+          float outerA = (r.y - r.x) * (r.w - r.z);
+          float innerA = fw > 0.0 ? max(r.y - r.x - 2.0 * fw, 0.0) * max(r.w - r.z - 2.8 * fw, 0.0) : outerA;
+          float outerP = aaBox(fu, r.x, r.y, wu) * aaBox(fv, r.z, r.w, wv);
+          float innerP = fw > 0.0 ? aaBox(fu, r.x + fw, r.y - fw, wu) * aaBox(fv, r.z + fw * 1.4, r.w - fw * 1.4, wv) : outerP;
+          float inWin = mix(outerP, outerA, far) * ok;
+          float glass = mix(innerP, innerA, far) * ok;
+          // Sashes: a glazing bar up the middle and the meeting rail across (the bars thin to their share far off).
+          if (wstyle < 1.5) {
+            float mu = (r.x + r.y) * 0.5;
+            float mv = r.z + (r.w - r.z) * 0.52;
+            float bars = max(aaBox(fu, mu - 0.009, mu + 0.009, wu), aaBox(fv, mv - 0.013, mv + 0.013, wv));
+            glass *= 1.0 - mix(bars, 0.1, far);
+          }
+          float frame = max(inWin - glass, 0.0);
           // A door on some ground-floor bays where the ground is level (painted: blue, green, red, black).
           float doorHash = fract(sin(dot(vec2(bay + seed * 3.1, seed), vec2(41.3, 289.1))) * 43758.5453);
-          float door = (wstyle < 1.5 || wstyle > 3.5 && wstyle < 4.5) ? step(doorHash, 0.16) * step(storey, 0.5) * step(abs(vGround), 0.35) * step(0.36, fu) * step(fu, 0.64) * step(fv, 0.72) * step(vWall.y, vWall.z - 0.5) : 0.0;
+          float door = (wstyle < 1.5 || wstyle > 3.5 && wstyle < 4.5) ? step(doorHash, 0.16) * step(storey, 0.5) * step(abs(vGround), 0.35) * mix(aaBox(fu, 0.36, 0.64, wu) * aaBox(fv, -1.0, 0.72, wv), 0.2, far) * step(vWall.y, vWall.z - 0.5) : 0.0;
           inWin *= 1.0 - door;
+          glass *= 1.0 - door;
           frame *= 1.0 - door;
           vec3 stoneCol = vec3(0.62, 0.6, 0.55);
           vec3 frameCol = wstyle > 3.5 && wstyle < 4.5 ? stoneCol : (wstyle > 4.5 && wstyle < 5.5 ? vec3(0.18, 0.19, 0.2) : vec3(0.92, 0.92, 0.9));
+          // A front hung with slate above the ground floor: grey slates in narrow courses.
+          if (slateFront && vWall.y > ${STOREY_M.toFixed(1)} - 0.1) {
+            float course = fract(vWall.y / 0.2);
+            float line = mix(smoothstep(0.0, 0.12 + fwidth(vWall.y / 0.2), course), 0.8, smoothstep(0.15, 0.5, fwidth(vWall.y / 0.2)));
+            diffuseColor.rgb = vec3(0.1, 0.11, 0.12) * (0.78 + 0.22 * line) * (0.9 + 0.2 * bHash(vec2(floor(vWall.x / 0.3), floor(vWall.y / 0.2))));
+          }
           // BRNC: stone string courses at each floor and a stone band at the eaves.
           if (wstyle > 3.5 && wstyle < 4.5) {
             float band = (1.0 - step(0.07, fv)) + step(vWall.z - 0.6, vWall.y);
@@ -1178,17 +1250,41 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
           }
           // Shopfront: a painted fascia board over the window, in one of a few colours.
           if (shopFloor) {
-            float fascia = step(0.72, fv) * step(fv, 0.9);
+            float fascia = aaBox(fv, 0.72, 0.9, wv);
             vec3 board = mix(vec3(0.12, 0.2, 0.32), vec3(0.45, 0.12, 0.12), step(0.5, fract(seed * 7.3)));
             board = mix(board, vec3(0.16, 0.28, 0.2), step(0.75, fract(seed * 3.7)));
+            if (navy) board = vec3(0.05, 0.08, 0.2);
             diffuseColor.rgb = mix(diffuseColor.rgb, board, fascia);
+          }
+          // Under the eaves the wall is in the roof's shade; along the top a board (fascia, and bargeboards up a
+          // gable's slope), white on most painted houses and dark on the rest (E).
+          float underEaves = vWall.z - vWall.y;
+          if (wstyle < 1.5 || wstyle > 4.5) {
+            diffuseColor.rgb *= 1.0 - 0.18 * (1.0 - smoothstep(0.25, 0.9, underEaves));
+            float boardW = max(fwidth(vWall.y), 1e-3);
+            float board = smoothstep(0.24 + boardW, 0.24 - boardW, underEaves);
+            diffuseColor.rgb = mix(diffuseColor.rgb, fract(seed * 5.1) < 0.65 ? vec3(0.86, 0.86, 0.84) : vec3(0.1, 0.1, 0.11), board);
           }
           vec3 doorCol = mix(vec3(0.09, 0.16, 0.3), vec3(0.32, 0.07, 0.07), step(0.5, fract(doorHash * 13.0)));
           doorCol = mix(doorCol, vec3(0.08, 0.2, 0.12), step(0.7, fract(doorHash * 29.0)));
+          // The glass: dark rooms behind it and the sky in it, more of the sky at a glancing view (Fresnel) and in
+          // the upper panes; set back in the wall, so the reveal shades its top (E: about 15 cm).
+          vec3 viewDir = normalize(cameraPosition - vBWorld);
+          float cosv = abs(dot(viewDir, normalize(vBNormal)));
+          float fres = 0.04 + 0.96 * pow(1.0 - cosv, 5.0);
+          vec3 skyIn = mix(vec3(0.3, 0.37, 0.45), vec3(0.55, 0.63, 0.72), clamp((fv - r.z) / max(r.w - r.z, 0.01), 0.0, 1.0));
+          vec3 glassCol = mix(vec3(0.03, 0.035, 0.042), skyIn * 0.85, 0.1 + 0.6 * fres);
+          glassCol *= 1.0 - 0.35 * aaBox(fv, r.w - fw * 1.4 - 0.05, r.w - fw * 1.4, wv) * (1.0 - far);
           diffuseColor.rgb = mix(diffuseColor.rgb, doorCol, door);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.085, 0.1), inWin - frame);
+          // Navy-painted surrounds about the upper windows (a band about 15 cm wide, E).
+          if (navy && !shopFloor) {
+            float sur = aaBox(fu, r.x - 0.05, r.y + 0.05, wu) * aaBox(fv, r.z - 0.055, r.w + 0.055, wv);
+            float surA = (r.y - r.x + 0.1) * (r.w - r.z + 0.11);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.08, 0.2), max(mix(sur, surA, far) * ok - inWin, 0.0));
+          }
           diffuseColor.rgb = mix(diffuseColor.rgb, frameCol, frame);
-          winLit = (inWin - frame) * step(shopFloor ? 0.2 : 0.6, fract(sin(dot(vec2(bay + seed, storey + seed * 1.7), vec2(12.9898, 78.233))) * 43758.5453));
+          diffuseColor.rgb = mix(diffuseColor.rgb, glassCol, glass);
+          winLit = glass * step(shopFloor ? 0.2 : 0.6, fract(sin(dot(vec2(bay + seed, storey + seed * 1.7), vec2(12.9898, 78.233))) * 43758.5453));
         }`,
       )
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * 1.6 * winLit * uNight;')
@@ -1498,3 +1594,75 @@ export function namedBerths(): THREE.Object3D[] {
   ];
 }
 
+
+/**
+ * Overlapping outlines in the building data (src/render/dart.ts buildBuildings): which buildings lie wholly inside a
+ * taller one, and which walls have a building at least as tall pressed against their outside face. Both would be
+ * hidden, and drawn they fight the surface in front of them for the same pixels. A 40 m grid keeps the search local.
+ */
+export function buildingCover(buildings: readonly { r: readonly (readonly [number, number])[]; t: number; b: number }[]): {
+  inside(i: number): boolean;
+  wallHidden(i: number, p0: readonly [number, number], p1: readonly [number, number], top: number): boolean;
+} {
+  const CELL = 40;
+  const grid = new Map<string, number[]>();
+  const boxes = buildings.map((b) => {
+    const es = b.r.map((p) => p[0]);
+    const ns = b.r.map((p) => p[1]);
+    return [Math.min(...es), Math.max(...es), Math.min(...ns), Math.max(...ns)] as const;
+  });
+  boxes.forEach(([e0, e1, n0, n1], i) => {
+    for (let x = Math.floor(e0 / CELL); x <= Math.floor(e1 / CELL); x++) {
+      for (let y = Math.floor(n0 / CELL); y <= Math.floor(n1 / CELL); y++) {
+        const k = `${x},${y}`;
+        const list = grid.get(k);
+        if (list) list.push(i);
+        else grid.set(k, [i]);
+      }
+    }
+  });
+  const near = (e: number, n: number) => grid.get(`${Math.floor(e / CELL)},${Math.floor(n / CELL)}`) ?? [];
+  const within = (j: number, e: number, n: number) => {
+    const [e0, e1, n0, n1] = boxes[j]!;
+    return e >= e0 && e <= e1 && n >= n0 && n <= n1 && insideRing(buildings[j]!.r as [number, number][], e, n);
+  };
+  const insideCache = new Map<number, boolean>();
+  return {
+    inside(i) {
+      const hit = insideCache.get(i);
+      if (hit !== undefined) return hit;
+      const b = buildings[i]!;
+      const ce = b.r.reduce((a, p) => a + p[0], 0) / b.r.length;
+      const cn = b.r.reduce((a, p) => a + p[1], 0) / b.r.length;
+      // Every corner, drawn 0.3 m in towards the middle, inside one other building that is at least as tall.
+      const pts = b.r.map(([e, n]) => {
+        const d = Math.hypot(ce - e, cn - n) || 1;
+        return [e + ((ce - e) / d) * 0.3, n + ((cn - n) / d) * 0.3] as const;
+      });
+      let res = false;
+      for (const j of near(ce, cn)) {
+        if (j === i || buildings[j]!.t < b.t - 0.2) continue;
+        if (pts.every(([e, n]) => within(j, e, n))) {
+          res = true;
+          break;
+        }
+      }
+      insideCache.set(i, res);
+      return res;
+    },
+    wallHidden(i, p0, p1, top) {
+      const de = p1[0] - p0[0];
+      const dn = p1[1] - p0[1];
+      const len = Math.hypot(de, dn);
+      if (len < 0.5) return false;
+      // Just outside the wall's middle (the ring is counter-clockwise, so outside is to the right).
+      const me = (p0[0] + p1[0]) / 2 + (dn / len) * 0.15;
+      const mn = (p0[1] + p1[1]) / 2 - (de / len) * 0.15;
+      for (const j of near(me, mn)) {
+        if (j === i || buildings[j]!.t < top - 0.2 || buildings[j]!.b > buildings[i]!.b + 0.5) continue;
+        if (within(j, me, mn)) return true;
+      }
+      return false;
+    },
+  };
+}

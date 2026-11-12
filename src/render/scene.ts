@@ -13,6 +13,7 @@ import type { CrewBuild } from './crew';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { Water, type SeaSample } from './water';
 import { PlanarReflection } from './reflection';
+import { PostPipeline } from './post';
 import { WakeTrail, HullFoam, BowSpray } from './boatWater';
 import { SUN_THROUGH, VIEWPORT } from './materialFx';
 import { DEFAULT_CAMERA_MOTION, loadGraphics, pixelRatioFor, saveGraphics, type GraphicsSettings } from './graphics';
@@ -42,6 +43,9 @@ export interface SceneEnvironment {
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
 }
+/** The camera's near plane (m): in every view but the helm's, and in the helm's (see setFov). */
+export const NEAR_M = 0.5;
+export const NEAR_HELM_M = 0.2;
 export const CAMERA_MODES: CameraMode[] = ['chase', 'scenic', 'helm', 'orbit', 'drone', 'top', 'line'];
 
 /**
@@ -185,6 +189,8 @@ export class SceneView {
   private readonly rain = new Rain();
   /** The scene mirrored in calm water (reflection.ts), as the graphics settings ask. */
   private readonly reflection = new PlanarReflection();
+  /** Finishing effects (post.ts), built when first switched on. */
+  private post?: PostPipeline;
   private readonly bufferSize = new THREE.Vector2();
   private baseFogDensity = FOG_DENSITY;
   private weather?: SceneWeather;
@@ -256,7 +262,7 @@ export class SceneView {
     this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
 
-    this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 25000);
+    this.camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, NEAR_M, 25000);
     this.camera.position.set(0, 6, 16);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enabled = false;
@@ -591,9 +597,15 @@ export class SceneView {
   }
 
   private setFov(fov: number): void {
-    if (this.camera.fov === fov) return;
+    // The near plane as far out as the view allows: the depth buffer's precision at a distance d goes as
+    // d² / near, so 0.5 m instead of 0.1 m makes distant surfaces (BRNC at a kilometre) five times easier to tell
+    // apart. The helm view needs the tiller and the coaming close to the eye (E: 0.2 m clears them).
+    const near = this.mode === 'helm' ? NEAR_HELM_M : NEAR_M;
+    if (this.camera.fov === fov && this.camera.near === near) return;
     this.camera.fov = fov;
+    this.camera.near = near;
     this.camera.updateProjectionMatrix();
+    this.sun?.resize();
   }
 
   /** Helm view: drag to turn the head, double-click to look ahead, the wheel zooms (binoculars). */
@@ -657,6 +669,7 @@ export class SceneView {
     this.renderer.setPixelRatio(pixelRatioFor(g, window.devicePixelRatio));
     const size = this.renderer.getSize(new THREE.Vector2());
     this.renderer.setSize(size.x, size.y, false);
+    this.post?.resize();
     this.water.setDetail(g.water);
     this.reflection.quality = g.water === 'high' ? g.reflections : 'off';
     this.water.setReflection(this.reflection.quality === 'off' ? null : this.reflection.target.texture, this.reflection.matrix);
@@ -675,6 +688,7 @@ export class SceneView {
   resize(w: number, h: number): void {
     this.spray.setViewport(h * this.renderer.getPixelRatio(), this.camera.fov);
     this.renderer.setSize(w, h);
+    this.post?.resize();
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.sun.resize();
@@ -775,7 +789,10 @@ export class SceneView {
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.drawReflection();
     VIEWPORT.uViewportH.value = this.renderer.getDrawingBufferSize(this.bufferSize).y;
-    this.renderer.render(this.scene, this.camera);
+    if (this.graphics.ambientOcclusion) {
+      this.post ??= new PostPipeline(this.renderer, this.scene, this.camera);
+      this.post.render(frameDt);
+    } else this.renderer.render(this.scene, this.camera);
   }
 
   /** The scene mirrored in calm water (reflection.ts), when the settings and the wind allow it. */
@@ -1075,6 +1092,7 @@ export class SceneView {
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.dispose();
     this.reflection.dispose();
+    this.post?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

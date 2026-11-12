@@ -74,7 +74,7 @@ export const VIEWPORT = { uViewportH: { value: 800 } };
 /**
  * Thin wires and spars (the stays and shrouds, and the mast, spreaders and boom seen from afar) drawn at least
  * `minPx` pixels wide, their coverage cut in proportion so they look no heavier (the "phone-wire AA" technique
- * of the humus.name graphics demos; docs/SOURCES.md L3). Finer than a pixel, a wire otherwise breaks into dashes that crawl as it moves, which
+ * of the humus.name graphics demos; docs/SOURCES.md Q3). Finer than a pixel, a wire otherwise breaks into dashes that crawl as it moves, which
  * multisampling alone cannot fix. For a cylinder whose axis is its local y (rod() and the spars in squibModel.ts);
  * the coverage needs multisampling (alpha to coverage), which the main view has.
  */

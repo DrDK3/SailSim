@@ -9,7 +9,7 @@ import * as THREE from 'three';
  * The mirror camera follows the method of three.js's Reflector (examples/jsm/objects/Reflector.js): the view
  * reflected in the plane, and the projection's near plane made oblique so it lies in the water, cutting off what
  * is below it (E. Lengyel, "Oblique View Frustum Depth Projection and Clipping", Journal of Game Development 1(2),
- * 2005; docs/SOURCES.md L1, L2). It costs a second drawing
+ * 2005; docs/SOURCES.md Q1, Q2). It costs a second drawing
  * of the scene at a fraction of the screen's resolution, so the graphics presets choose it: off for Performance,
  * a third of the resolution for Balanced, half for Ultra. Visual only.
  */
