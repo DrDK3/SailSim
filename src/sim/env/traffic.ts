@@ -22,14 +22,26 @@ import { blendPose, landingBerths, landingWeight, type LandingClaim, type Landin
 export type VesselKind = 'tug-float' | 'floating-bridge' | 'passenger-ferry' | 'launch' | 'river-cruiser' | 'paddle-steamer' | 'motor-cruiser' | 'yacht' | 'rib';
 export type VesselPhase = 'berthed' | 'clearing' | 'swinging' | 'underway' | 'holding';
 
-/** A box the fleet physics treats as solid (centre, heading, size). */
+/** A box the fleet physics treats as solid (centre, heading, size), and what it is (for the contact's label). */
 export interface VesselPart {
   n: number;
   e: number;
   heading: number;
   length: number;
   beam: number;
+  role?: 'hull' | 'tug' | 'ramp';
 }
+
+/**
+ * The car ferries' hinged ramps, as drawn (src/render/traffic.ts): each lies along the hull's axis from a hinge
+ * `hinge` m inside the hull's end, reaching `reach` m from it, `width` m across. Raised for a crossing they stand
+ * nearly level, well clear of the water, and overhang the hull by 2.5–3.4 m, so they are solid too (owner,
+ * 12 Nov 2026: a Squib's bow under the Lower Ferry's raised ramp looked to be inside the ferry). Sizes E.
+ */
+export const FERRY_RAMPS: Partial<Record<VesselKind, { hinge: number; reach: number; width: number }>> = {
+  'tug-float': { hinge: 1.05, reach: 3.65, width: 8.3 },
+  'floating-bridge': { hinge: 1.2, reach: 4.6, width: 14.8 },
+};
 
 export interface VesselState {
   id: string;
@@ -54,6 +66,12 @@ export interface VesselState {
   tug?: { n: number; e: number; heading: number };
   /** Ramps: 0 down on the slip … 1 raised for the crossing. */
   ramp?: number;
+  /**
+   * The car ferries' loads, for the picture only (src/render/traffic.ts): two sets of cars and foot passengers take
+   * turns. Under way she carries `set`; at a slip `set` is the one that came across (it goes ashore), the other comes
+   * aboard, `since` seconds after she arrived and `left` before she leaves (Infinity overnight: nobody aboard).
+   */
+  deck?: { set: 0 | 1; since?: number; left?: number };
   /** Solid outlines for contact (the float and its tug for the Lower Ferry). */
   parts: VesselPart[];
   /** Keeping out of a sailing boat's way (COLREGs Rule 18(a)), for as long as she has to: +1 off to starboard, −1 to port. */
@@ -198,6 +216,8 @@ export const HARBOUR_LIMIT = 6 * KN;
 const HARBOUR_SOUTH_N = -1750;
 
 const TUG = { length: 9.5, beam: 3.6 };
+/** The tug's outline for contact: her hull with the tyres down her sides and the fender round her bow (E). */
+const TUG_SOLID = { length: 10.1, beam: 4.5 };
 /**
  * The Lower Ferry at its slips (E): the float lies as far up the slip as the water allows - its spoon ends
  * draw less than its middle - with the tug afloat alongside and room for the tug to swing 12 m off. So it
@@ -1040,7 +1060,7 @@ export class RiverTraffic {
     if (!leg || !trip) {
       // Overnight at the slip it starts from (B), as it arrived there.
       const p = this.atSlip(sv, false, epochMs);
-      return this.berthed(base, p, spec, this.tugSide(sv, true), 0);
+      return this.berthed(base, p, spec, this.tugSide(sv, true), 0, Infinity, false, true);
     }
     const tt = (epochMs - trip.t0) / 1000;
     if (epochMs >= trip.t1) {
@@ -1049,13 +1069,13 @@ export class RiverTraffic {
         const q = along(trip.route, trip.route.length);
         return { n: q.n, e: q.e, dir: q.dir };
       })();
-      return this.berthed(base, p, spec, this.tugSide(sv, fromA), (epochMs - trip.t1) / 1000, (leg.until - epochMs) / 1000);
+      return this.berthed(base, p, spec, this.tugSide(sv, fromA), (epochMs - trip.t1) / 1000, (leg.until - epochMs) / 1000, !fromA);
     }
     const q = stateOnTrip(trip, epochMs);
     if (trip.mirror) q.crab = -q.crab;
     const p = tripPoint(trip.route, q.s, trip.pass);
     const heading = p.dir + q.crab;
-    const st: VesselState = { ...base, n: p.n, e: p.e, heading, moving: true, sog: q.v, phase: q.hold ? 'holding' : 'underway', ramp: 1, parts: [] };
+    const st: VesselState = { ...base, n: p.n, e: p.e, heading, moving: true, sog: q.v, phase: q.hold ? 'holding' : 'underway', ramp: 1, parts: [], deck: { set: fromA ? 1 : 0 } };
     if (spec.kind === 'tug-float') {
       const side = this.tugSide(sv, fromA);
       if (tt < 20) {
@@ -1083,9 +1103,11 @@ export class RiverTraffic {
   }
 
   /** Berthed at a slip: ramps down while loading, raised in the last seconds before leaving. */
-  private berthed(base: Omit<VesselState, 'n' | 'e' | 'heading' | 'moving' | 'sog' | 'phase' | 'parts'>, p: { n: number; e: number; dir: number }, spec: ServiceSpec, side: number, since: number, left = Infinity): VesselState {
+  private berthed(base: Omit<VesselState, 'n' | 'e' | 'heading' | 'moving' | 'sog' | 'phase' | 'parts'>, p: { n: number; e: number; dir: number }, spec: ServiceSpec, side: number, since: number, left = Infinity, atA = false, overnight = false): VesselState {
     const ramp = Math.max(1 - Math.min(1, since / 8), 1 - Math.min(1, left / 6));
-    const st: VesselState = { ...base, n: p.n, e: p.e, heading: p.dir, moving: false, sog: 0, phase: 'berthed', ramp, parts: [] };
+    // The set that came across goes ashore here (set 0 arrives at A, set 1 at B); overnight she lies empty.
+    const deck = { set: (atA ? 0 : 1) as 0 | 1, since: overnight ? Infinity : since, left: overnight ? Infinity : left };
+    const st: VesselState = { ...base, n: p.n, e: p.e, heading: p.dir, moving: false, sog: 0, phase: 'berthed', ramp, parts: [], deck };
     if (spec.kind === 'tug-float') st.tug = this.tugPose(st, side, 0);
     st.parts = this.partsOf(st);
     return st;
@@ -1107,8 +1129,19 @@ export class RiverTraffic {
   }
 
   private partsOf(st: VesselState): VesselPart[] {
-    const parts: VesselPart[] = [{ n: st.n, e: st.e, heading: st.heading, length: st.length, beam: st.beam }];
-    if (st.tug) parts.push({ ...st.tug, length: TUG.length, beam: TUG.beam });
+    const parts: VesselPart[] = [{ n: st.n, e: st.e, heading: st.heading, length: st.length, beam: st.beam, role: 'hull' }];
+    if (st.tug) parts.push({ ...st.tug, length: TUG_SOLID.length, beam: TUG_SOLID.beam, role: 'tug' });
+    const r = FERRY_RAMPS[st.kind];
+    if (r) {
+      // Each ramp from its hinge to its lip, whether down on the slip or raised (its length along the axis
+      // barely changes: it tilts about 7–12°).
+      const fn = Math.cos(st.heading);
+      const fe = Math.sin(st.heading);
+      for (const end of [-1, 1]) {
+        const off = end * (st.length / 2 - r.hinge + r.reach / 2);
+        parts.push({ n: st.n + fn * off, e: st.e + fe * off, heading: st.heading, length: r.reach, beam: r.width, role: 'ramp' });
+      }
+    }
     return parts;
   }
 

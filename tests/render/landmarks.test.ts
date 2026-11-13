@@ -142,7 +142,8 @@ describe('roads and street life', () => {
       checked++;
     }
     expect(checked).toBeGreaterThan(50);
-    expect(carGeometry().getAttribute('position').count / 3).toBeLessThan(400);
+    // Shaped cars (owner, 12 Nov 2026: "less blocky"): the street cars' light version stays under 450 triangles.
+    for (const t of [0, 1, 2, 3] as const) expect(carGeometry(t).getAttribute('position').count / 3).toBeLessThan(450);
     // A jointed person (thighs, shins, arms, body, head) stays a small model: under 400 triangles.
     expect(personPartsGeometry().getAttribute('position').count / 3).toBeLessThan(400);
   });

@@ -439,7 +439,7 @@ export class Fleet {
             const f = force(c, { n: v.n - va.n, e: v.e - va.e }, CONTACT.hardStiffness, CONTACT.hardDamping);
             apply(i, { n: -f.n, e: -f.e }, c.point, CONTACT_HEIGHT.boat);
             const key = `ferry-${fy.id}`;
-            touch(pairKey(oa.id, key), { kind: 'ferry', a: oa.id, b: key, label: pi > 0 ? `${fy.label} (tug)` : fy.label, speed: Math.max(0, -((v.n - va.n) * c.normal.n + (v.e - va.e) * c.normal.e)), point: c.point });
+            touch(pairKey(oa.id, key), { kind: 'ferry', a: oa.id, b: key, label: part.role === 'tug' || (!part.role && pi > 0) ? `${fy.label} (tug)` : part.role === 'ramp' ? `${fy.label} (ramp)` : fy.label, speed: Math.max(0, -((v.n - va.n) * c.normal.n + (v.e - va.e) * c.normal.e)), point: c.point });
           }
         });
       }

@@ -11,9 +11,11 @@ import * as THREE from 'three';
  * Window styles, carried in the integer part of the wall attribute's w (the building shader in src/render/dart.ts).
  * 7 is sash windows on a front hung with slate above the ground floor, as many Dartmouth and Kingswear houses are;
  * 8 is sash windows in navy-painted surrounds over a ground floor of wide windows under a navy fascia, as the Royal
- * Castle Hotel's front is (the owner's photographs; Geograph pictures, docs/SOURCES.md V1–V7).
+ * Castle Hotel's front is (the owner's photographs; Geograph pictures, docs/SOURCES.md V1–V7); 9 and 10 are
+ * half-timbered fronts above shops, dark timbers on white (York House) and white timbers on a coloured front (the
+ * pink terrace on the South Embankment), from the owner's photographs of 12 Nov 2026.
  */
-export const WIN = { none: 0, sash: 1, tall: 2, slit: 3, brickAndStone: 4, glazed: 5, shopfront: 6, slateHung: 7, navySash: 8 } as const;
+export const WIN = { none: 0, sash: 1, tall: 2, slit: 3, brickAndStone: 4, glazed: 5, shopfront: 6, slateHung: 7, navySash: 8, timberDark: 9, timberLight: 10 } as const;
 
 export type Extra =
   /** A square tower on plan (w by d m, faces along `bearingDeg`), from `fromM` to `toM` (m ODN), with a top. */
@@ -25,7 +27,13 @@ export type Extra =
   /** A first-floor balcony with a tented canopy on thin columns along the wall from a to b (outward to the right of a→b). */
   | { kind: 'veranda'; a: [number, number]; b: [number, number]; floorM: number; topM: number; depth: number; canopy: number }
   /** Balconies with glass fronts along a wall a→b at these floor levels (m ODN). */
-  | { kind: 'balconies'; a: [number, number]; b: [number, number]; floorsM: number[]; depth: number }
+  | { kind: 'balconies'; a: [number, number]; b: [number, number]; floorsM: number[]; depth: number; rail?: number }
+  /** Gables standing out of the roof along the wall a→b (`count` of them side by side, facing out), from the eaves (m ODN). */
+  | { kind: 'gables'; a: [number, number]; b: [number, number]; count: number; eavesM: number; rise: number; depth: number; wall: number; roof: number; board: number; timber?: number }
+  /** A canted (three-sided) bay on the wall a→b at `f` (0…1) along it, `width` wide, from `fromM` to `toM` (m ODN), topped flat or with a lead dome. */
+  | { kind: 'bay'; a: [number, number]; b: [number, number]; f: number; width: number; depth: number; fromM: number; toM: number; walls: number; frame: number; dome?: number }
+  /** A chimney stack (brick, E) with pots, from `fromM` to `toM` (m ODN). */
+  | { kind: 'stack'; at: [number, number]; w: number; d: number; bearingDeg: number; fromM: number; toM: number; colour: number }
   /** A paved terrace at `floorM` (m ODN) out from the wall a→b, with a rail along its edge and tables with parasols. */
   | { kind: 'terrace'; a: [number, number]; b: [number, number]; floorM: number; depth: number; tables: number }
   /** A clock face (radius m) centred at `at`, `y` (m ODN), facing the bearing `facingDeg`: dark dial, gilt ring and hands. */
@@ -260,6 +268,122 @@ export const LANDMARKS: LandmarkSpec[] = [
     },
     source: "The Royal Castle Hotel, the Quay, Dartmouth, facing the Boatfloat: a white front of four storeys, its sash windows in navy-painted surrounds, ROYAL CASTLE HOTEL in gold letters between the upper floors, a castellated parapet with turrets at the corners, a slate roof with dormers and a chimney behind it, wide windows under a navy fascia on the ground floor (picture by Mike White, 2008, Geograph 940043, CC BY-SA 2.0, docs/SOURCES.md V2; the owner's photographs of the Quay). The lettering is drawn by src/render/royalCastle.ts. Heights, the turrets' size and the letter size E.",
   },
+  // ---- The South Embankment and the Boatfloat, Dartmouth (the owner's photographs of 12 Nov 2026, docs/SOURCES.md
+  // V8–V12). Which footprints these are is judged from their order along the Embankment in the photographs (E).
+  {
+    id: 'york-house',
+    at: [-304, 348],
+    walls: 0xf1efe9,
+    roof: SLATE,
+    win: WIN.timberDark,
+    shape: 'g',
+    heights: { base: 2.6, eaves: 2.6 + 11.4, top: 2.6 + 11.4 + 3.4 },
+    extras: (base, top, ring) => {
+      const eaves = top - 3.4;
+      const [na, nb] = facingDir(ring, 0);
+      const [ea, eb] = facingDir(ring, 90);
+      const floors = [base + 2.85, base + 5.65];
+      return [
+        { kind: 'gables', a: na, b: nb, count: 3, eavesM: eaves - 0.1, rise: 3.2, depth: 3.7, wall: 0xf1efe9, roof: SLATE, board: 0x161616, timber: 0x161616 },
+        { kind: 'balconies', a: na, b: nb, floorsM: floors, depth: 0.9, rail: 0xf2f1ec },
+        { kind: 'balconies', a: ea, b: eb, floorsM: floors, depth: 0.9, rail: 0xf2f1ec },
+        { kind: 'stack', at: [-310.2, 347.4], w: 1.0, d: 1.6, bearingDeg: 90, fromM: top - 1.5, toM: top + 1.8, colour: 0x9a4d3c },
+        { kind: 'stack', at: [-299.2, 347.6], w: 1.0, d: 1.6, bearingDeg: 90, fromM: top - 1.5, toM: top + 1.8, colour: 0x9a4d3c },
+      ];
+    },
+    source: "York House, South Embankment, Dartmouth, facing the Boatfloat: a half-timbered Victorian building of four storeys (probably 1893, by E. H. Back, the borough surveyor), timber-framed show fronts, gables with diagonal bracing and bargeboards with finials (Historic England list entry 1197512 and the Wrenn report, as quoted in search results, docs/SOURCES.md V13). As the owner's photographs of 12 Nov 2026 show it: black timbers on white, three gables to the Boatfloat, white balconies on the upper floors, tall brick stacks, shops below. That this footprint is York House is judged from the photographs (E); heights, the gables' size and the timbers' spacing E.",
+  },
+  {
+    id: 'south-embankment-yellow',
+    at: [-304, 339],
+    walls: 0xe9cf6a,
+    roof: SLATE,
+    win: WIN.sash,
+    heights: { base: 2.5, eaves: 10.9, top: 13.9 },
+    extras: (base, top, ring) => {
+      const [ea, eb] = facingDir(ring, 90);
+      return [
+        { kind: 'gables', a: ea, b: eb, count: 1, eavesM: top - 3.1, rise: 3.0, depth: 8, wall: 0xe9cf6a, roof: SLATE, board: 0xf2f1ec },
+        { kind: 'balconies', a: ea, b: eb, floorsM: [base + 2.85, base + 5.65], depth: 0.9, rail: 0x1b1d20 },
+      ];
+    },
+    source: "On the South Embankment next to York House: a yellow front with black balconies across the first and second floors and a gable to the river (the owner's photographs of 12 Nov 2026). OSM names the footprint The Angel; which building it is, its heights and colours are judged from the photographs (E).",
+  },
+  ...([[-302, 331], [-302, 325], [-302, 318]] as [number, number][]).map(
+    (at, i): LandmarkSpec => ({
+      id: `south-embankment-pink-${i + 1}`,
+      at,
+      walls: 0xe9a9b4,
+      roof: SLATE,
+      win: WIN.timberLight,
+      heights: { base: 2.5, eaves: 12.0, top: 15.4 },
+      extras: (base, top, ring) => {
+        const [ea, eb] = facingDir(ring, 90);
+        return [
+          { kind: 'gables', a: ea, b: eb, count: 1, eavesM: top - 3.5, rise: 3.4, depth: 6, wall: 0xe9a9b4, roof: SLATE, board: 0xf4f3ee, timber: 0xf4f3ee },
+          { kind: 'balconies', a: ea, b: eb, floorsM: [base + 2.85, base + 5.65], depth: 0.9, rail: 0xf4f3ee },
+        ];
+      },
+      source: "The pink terrace on the South Embankment, between the yellow front and the Lower Ferry: white mock timbering on pink, three gables to the river with white bargeboards and finials, white balconies on the first and second floors, shops below (the owner's photographs of 12 Nov 2026). Taken as the three footprints OSM names the Yorkshire Building Society, The Seahorse and The Raleigh Court, one gable each (E); heights and colours E.",
+    }),
+  ),
+  {
+    id: 'dartmouth-yacht-club',
+    at: [-300, 145],
+    walls: 0xece0bd,
+    roof: SLATE,
+    win: WIN.sash,
+    heights: { base: 2.5, eaves: 8.9, top: 13.4 },
+    extras: (base, top, ring) => {
+      const [ea, eb] = facingDir(ring, 90);
+      return [
+        { kind: 'gables', a: ea, b: eb, count: 1, eavesM: 8.8, rise: 3.6, depth: 5, wall: 0xece0bd, roof: SLATE, board: 0xf2f1ec },
+        ...[0.27, 0.73].map((f): Extra => ({ kind: 'bay', a: ea, b: eb, f, width: 2.6, depth: 0.75, fromM: base + 2.9, toM: base + 5.4, walls: 0xece0bd, frame: 0xf2f1ec })),
+      ];
+    },
+    source: "Dartmouth Yacht Club on the South Embankment (OSM names the footprint): cream render, a gable to the Embankment with a round-headed window, two canted bays on the first floor, DARTMOUTH YACHT CLUB in gold on a navy board over the ground floor (the owner's photograph at night, 12 Nov 2026; the sign drawn by src/render/signs.ts). Heights and the bays' size E.",
+  },
+  ...([[-309, 241], [-310, 247], [-307, 254]] as [number, number][]).map(
+    (at, i): LandmarkSpec => ({
+      id: `cottage-hospital-${i + 1}`,
+      at,
+      walls: 0xa04c38,
+      roof: SLATE,
+      win: WIN.sash,
+      shape: 'g',
+      heights: { base: 2.5, eaves: 8.1, top: 11.4 },
+      extras: i === 1
+        ? (base, _top, ring) => {
+          const [ea, eb] = facingDir(ring, 90);
+          return [{ kind: 'bay', a: ea, b: eb, f: 0.5, width: 2.8, depth: 0.9, fromM: base + 2.8, toM: base + 5.4, walls: 0xe8e2d4, frame: 0xf2f1ec, dome: LEAD }];
+        }
+        : i === 2
+          ? (base, _top, ring) => {
+            const [ea, eb] = facingDir(ring, 90);
+            return [{ kind: 'balconies', a: ea, b: eb, floorsM: [base + 2.85], depth: 0.8, rail: 0x1b1d20 }];
+          }
+          : undefined,
+      source: "Dartmouth's old cottage hospital on the South Embankment (OSM: hospital): red brick with stone bands, gables to the river, a canted bay under a lead cap, a first-floor balcony with an iron railing, slate roofs (the owner's photographs of 12 Nov 2026). Its heights and details E. An architect's picture among the photographs shows the site redeveloped; it is not drawn, as it is not known to be built.",
+    }),
+  ),
+  {
+    id: 'cottage-hospital-annexe',
+    at: [-310, 232],
+    walls: 0xe6e2da,
+    roof: 0x5d6b77,
+    win: WIN.glazed,
+    shape: 'f',
+    source: "The later, flat-roofed building beside the old cottage hospital (the owner's aerial photograph, 12 Nov 2026): light panels and large windows, a flat roof. Colours E.",
+  },
+  {
+    id: 'dartmouth-station',
+    at: [-276, 371],
+    // Drawn by src/render/station.ts.
+    walls: 0xe8cf7a,
+    roof: 0x4a4f55,
+    win: WIN.glazed,
+    source: "The former Dartmouth station on the South Embankment by the Boatfloat: the Great Western Railway's booking office for the trains across the river at Kingswear, which never had a railway; Grade II, now a restaurant (Historic England 'Former Dartmouth Station', Wikipedia and CAMRA, via search, docs/SOURCES.md V14). As the owner's photographs of 12 Nov 2026 show it: one storey of pale yellow boarding with maroon trim and big windows, a hipped slate roof with a raised lantern along its ridge and iron cresting, a canopy along the front and a gabled canopy on posts at its end. Its size is the footprint's; heights and details E.",
+  },
   // ---- The top of the Square, Kingswear, facing the river up the Lower Ferry's slipway (the owner's photographs,
   // 5 Nov 2026, P8: which footprints these are is judged from where they stand in the photographs, E).
   {
@@ -370,6 +494,25 @@ export function facing(ring: readonly [number, number][], fromDeg: number, toDeg
     const az = ((Math.atan2(oe, on) * 180) / Math.PI + 360) % 360;
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (az >= fromDeg && az <= toDeg && len > bestLen) {
+      best = [a, b];
+      bestLen = len;
+    }
+  }
+  return best;
+}
+
+/** The longest edge whose outward normal is within `tolDeg` of the bearing `deg` (wrapping round north). */
+export function facingDir(ring: readonly [number, number][], deg: number, tolDeg = 45): [[number, number], [number, number]] {
+  let best: [[number, number], [number, number]] = [ring[0]!, ring[1]!];
+  let bestLen = -1;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]!;
+    const b = ring[(i + 1) % ring.length]!;
+    const [oe, on] = outward(a, b);
+    const az = (Math.atan2(oe, on) * 180) / Math.PI;
+    const off = Math.abs(((az - deg + 540) % 360) - 180);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (off <= tolDeg && len > bestLen) {
       best = [a, b];
       bestLen = len;
     }
@@ -508,6 +651,26 @@ export function insetRingAdaptive(ring: readonly (readonly [number, number])[], 
 }
 
 // ------------------------------------------------------------------ geometry
+
+/**
+ * A closed prism between two triangles (local space): the ends and the three sides. `kind` only names it. Used for
+ * gables (the wall triangle and its roof) and anything else shaped like a ridge.
+ */
+export function prism(front: [number, number, number][], back: [number, number, number][], kind: 'wall' | 'roof'): THREE.BufferGeometry {
+  void kind;
+  const v = (p: [number, number, number]) => p;
+  const tris: [number, number, number][][] = [
+    [v(front[0]!), v(front[1]!), v(front[2]!)],
+    [v(back[0]!), v(back[2]!), v(back[1]!)],
+  ];
+  for (let i = 0; i < 3; i++) {
+    const j = (i + 1) % 3;
+    tris.push([front[i]!, back[i]!, back[j]!], [front[i]!, back[j]!, front[j]!]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat(2), 3));
+  return g;
+}
 
 /** Accumulates coloured, flat-shaded geometry in Three.js space (x = e, y = up, z = -n). */
 export class Kit {
@@ -690,6 +853,13 @@ export function buildExtra(kit: Kit, x: Extra): void {
     kit.add(new THREE.SphereGeometry(0.16, 8, 6), new THREE.Matrix4().makeTranslation(x.at[0], x.fromM + x.height + 0.1, -x.at[1]), 0xe9e4d6);
     return;
   }
+  if (x.kind === 'stack') {
+    kit.box(x.at[0], x.fromM, x.at[1], x.w, x.toM - x.fromM, x.d, x.bearingDeg, x.colour);
+    kit.box(x.at[0], x.toM, x.at[1], x.w + 0.12, 0.14, x.d + 0.12, x.bearingDeg, 0x3a3633);
+    const t = (x.bearingDeg * Math.PI) / 180;
+    for (const f of [-0.3, 0, 0.3]) kit.box(x.at[0] + Math.sin(t) * x.d * f, x.toM + 0.14, x.at[1] + Math.cos(t) * x.d * f, 0.22, 0.45, 0.22, 0, 0xa45a3c);
+    return;
+  }
   const dx = x.b[0] - x.a[0];
   const dn = x.b[1] - x.a[1];
   const len = Math.hypot(dx, dn) || 1;
@@ -697,6 +867,69 @@ export function buildExtra(kit: Kit, x: Extra): void {
   // Outward: the right of a→b.
   const oe = dn / len;
   const on = -dx / len;
+  // Turn local +z (out of the wall) to face outward; local +x runs along the wall a→b.
+  const faceY = Math.atan2(oe, -on);
+  if (x.kind === 'gables') {
+    const w = len / x.count;
+    for (let k = 0; k < x.count; k++) {
+      const f = (k + 0.5) / x.count;
+      const pe = x.a[0] + dx * f;
+      const pn = x.a[1] + dn * f;
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(pe, x.eavesM, -pn), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, faceY, 0)), new THREE.Vector3(1, 1, 1));
+      const hw = w / 2 - 0.15;
+      // The gable's wall (a triangle a little proud of the front) and its two roof slopes running back into the roof.
+      kit.add(prism([[-hw, 0, 0.12], [hw, 0, 0.12], [0, x.rise, 0.12]], [[-hw, 0, -x.depth], [hw, 0, -x.depth], [0, x.rise, -x.depth]], 'wall'), m, x.wall);
+      kit.add(prism([[-hw - 0.25, -0.05, 0.4], [hw + 0.25, -0.05, 0.4], [0, x.rise + 0.12, 0.4]], [[-hw - 0.25, -0.05, -x.depth], [hw + 0.25, -0.05, -x.depth], [0, x.rise + 0.12, -x.depth]], 'roof'), m, x.roof);
+      // Bargeboards up both slopes, a finial at the apex.
+      const slope = Math.hypot(hw + 0.25, x.rise + 0.17);
+      const ang = Math.atan2(x.rise + 0.17, hw + 0.25);
+      for (const sd of [-1, 1]) {
+        const bm = new THREE.Matrix4().compose(new THREE.Vector3(sd * (hw + 0.25) / 2, x.rise / 2 - 0.02, 0.42), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -sd * ang)), new THREE.Vector3(1, 1, 1));
+        kit.add(new THREE.BoxGeometry(slope, 0.28, 0.06), m.clone().multiply(bm), x.board);
+      }
+      kit.add(new THREE.BoxGeometry(0.1, 0.9, 0.1), m.clone().multiply(new THREE.Matrix4().makeTranslation(0, x.rise + 0.5, 0.42)), x.board);
+      if (x.timber !== undefined) {
+        // The gable's framing: a king post, a collar and two braces.
+        kit.add(new THREE.BoxGeometry(0.16, x.rise * 0.9, 0.04), m.clone().multiply(new THREE.Matrix4().makeTranslation(0, x.rise * 0.45, 0.15)), x.timber);
+        kit.add(new THREE.BoxGeometry(hw * 1.1, 0.14, 0.04), m.clone().multiply(new THREE.Matrix4().makeTranslation(0, x.rise * 0.42, 0.15)), x.timber);
+        for (const sd of [-1, 1]) {
+          const bm = new THREE.Matrix4().compose(new THREE.Vector3(sd * hw * 0.3, x.rise * 0.2, 0.15), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, sd * 0.7)), new THREE.Vector3(1, 1, 1));
+          kit.add(new THREE.BoxGeometry(0.13, x.rise * 0.5, 0.04), m.clone().multiply(bm), x.timber);
+        }
+      }
+    }
+    return;
+  }
+  if (x.kind === 'bay') {
+    const pe = x.a[0] + dx * x.f;
+    const pn = x.a[1] + dn * x.f;
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(pe, x.fromM, -pn), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, faceY, 0)), new THREE.Vector3(1, 1, 1));
+    const h = x.toM - x.fromM;
+    const hw = x.width / 2;
+    const fw = hw - x.depth * 0.6;
+    // Three faces: the front and two splayed sides, each with a window (glass on a frame).
+    const faces: [[number, number], [number, number]][] = [[[-hw, 0], [-fw, x.depth]], [[-fw, x.depth], [fw, x.depth]], [[fw, x.depth], [hw, 0]]];
+    for (const [p0, p1] of faces) {
+      const l = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+      const a = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+      const c = new THREE.Matrix4().compose(new THREE.Vector3((p0[0] + p1[0]) / 2, h / 2, (p0[1] + p1[1]) / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0)), new THREE.Vector3(1, 1, 1));
+      kit.add(new THREE.BoxGeometry(l, h, 0.14), m.clone().multiply(c), x.walls);
+      const g = new THREE.Matrix4().compose(new THREE.Vector3((p0[0] + p1[0]) / 2, h * 0.55, (p0[1] + p1[1]) / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0)), new THREE.Vector3(1, 1, 1));
+      const out = new THREE.Matrix4().makeTranslation(0, 0, 0.08);
+      kit.add(new THREE.BoxGeometry(l * 0.78, h * 0.62, 0.03), m.clone().multiply(g).multiply(out), x.frame);
+      kit.add(new THREE.BoxGeometry(l * 0.66, h * 0.52, 0.04), m.clone().multiply(g).multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.1)), 0x1d2731);
+    }
+    const capShape = new THREE.Shape([new THREE.Vector2(-hw - 0.1, 0), new THREE.Vector2(-fw - 0.1, x.depth + 0.12), new THREE.Vector2(fw + 0.1, x.depth + 0.12), new THREE.Vector2(hw + 0.1, 0)]);
+    const cap = new THREE.ExtrudeGeometry(capShape, { depth: 0.18, bevelEnabled: false }).rotateX(Math.PI / 2);
+    kit.add(cap, m.clone().multiply(new THREE.Matrix4().makeTranslation(0, h + 0.18, 0)), x.frame);
+    if (x.dome !== undefined) {
+      // A lead cap rising to a point (an ogee dome, E), over the bay's middle.
+      const dome = new THREE.SphereGeometry(Math.min(hw, x.depth + 0.4), 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.3, 0.8);
+      kit.add(dome, m.clone().multiply(new THREE.Matrix4().makeTranslation(0, h + 0.18, x.depth * 0.45)), x.dome);
+      kit.add(new THREE.ConeGeometry(0.12, 0.8, 6), m.clone().multiply(new THREE.Matrix4().makeTranslation(0, h + 0.18 + Math.min(hw, x.depth + 0.4) * 1.3 + 0.3, x.depth * 0.45)), x.dome);
+    }
+    return;
+  }
   if (x.kind === 'veranda') {
     const ce = (x.a[0] + x.b[0]) / 2 + oe * (x.depth / 2);
     const cn = (x.a[1] + x.b[1]) / 2 + on * (x.depth / 2);
@@ -751,7 +984,25 @@ export function buildExtra(kit: Kit, x: Extra): void {
   for (const y of x.floorsM) {
     const ce = (x.a[0] + x.b[0]) / 2 + oe * (x.depth / 2);
     const cn = (x.a[1] + x.b[1]) / 2 + on * (x.depth / 2);
-    kit.box(ce, y, cn, x.depth, 0.2, len - 1, brg, 0xe9e9e6);
-    kit.box((x.a[0] + x.b[0]) / 2 + oe * x.depth, y + 0.2, (x.a[1] + x.b[1]) / 2 + on * x.depth, 0.04, 1.0, len - 1, brg, 0x8fb1bf);
+    kit.box(ce, y, cn, x.depth, 0.2, len - 1, brg, x.rail ?? 0xe9e9e6);
+    if (x.rail === undefined) {
+      kit.box((x.a[0] + x.b[0]) / 2 + oe * x.depth, y + 0.2, (x.a[1] + x.b[1]) / 2 + on * x.depth, 0.04, 1.0, len - 1, brg, 0x8fb1bf);
+      continue;
+    }
+    // An open railing: a top rail, a bottom rail and balusters, all in the rail's colour.
+    const fe = (x.a[0] + x.b[0]) / 2 + oe * (x.depth - 0.04);
+    const fn = (x.a[1] + x.b[1]) / 2 + on * (x.depth - 0.04);
+    kit.box(fe, y + 1.0, fn, 0.08, 0.08, len - 1, brg, x.rail);
+    kit.box(fe, y + 0.28, fn, 0.06, 0.06, len - 1, brg, x.rail);
+    const n = Math.max(4, Math.round((len - 1) / 0.16));
+    for (let k = 0; k <= n; k++) {
+      const f = 0.5 / len + ((len - 1) / len) * (k / n);
+      kit.box(x.a[0] + dx * f + oe * (x.depth - 0.04), y + 0.2, x.a[1] + dn * f + on * (x.depth - 0.04), 0.04, 0.82, 0.04, brg, x.rail);
+    }
+    for (const s of [0, 1]) {
+      const f = s ? (len - 0.5) / len : 0.5 / len;
+      kit.box(x.a[0] + dx * f + oe * (x.depth / 2), y + 0.2, x.a[1] + dn * f + on * (x.depth / 2), x.depth, 0.06, 0.06, brg, x.rail);
+      kit.box(x.a[0] + dx * f + oe * (x.depth / 2), y + 1.0, x.a[1] + dn * f + on * (x.depth / 2), x.depth, 0.06, 0.06, brg, x.rail);
+    }
   }
 }

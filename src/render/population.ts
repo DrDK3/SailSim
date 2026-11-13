@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CAR_TRIM, carParts, type CarType } from './carShape';
 import { ACT, gaitRate, peopleMesh, peopleTime, setMotion, statureScale } from './people';
 import { createRng } from '../sim/math/rng';
 
@@ -88,19 +89,12 @@ function merge(parts: { geo: THREE.BufferGeometry; colour: number }[]): THREE.Bu
 
 const box = (w: number, h: number, l: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, l).translate(x, y, z);
 
-/** A small car (about 4.2 m by 1.8 m), bow to -z; the body takes the instance colour, glass and tyres stay dark. */
-export function carGeometry(): THREE.BufferGeometry {
-  const wheel = (x: number, z: number) => new THREE.CylinderGeometry(0.32, 0.32, 0.22, 10).rotateZ(Math.PI / 2).translate(x, 0.32, z);
-  return merge([
-    { geo: box(1.76, 0.62, 4.2, 0, 0.62, 0), colour: 0xffffff },
-    { geo: box(1.56, 0.5, 2.2, 0, 1.18, 0.25), colour: 0xffffff },
-    { geo: box(1.6, 0.36, 2.0, 0, 1.17, 0.25), colour: 0x1a1f24 },
-    { geo: box(1.5, 0.3, 0.05, 0, 0.62, -2.11), colour: 0xeeeeea },
-    { geo: wheel(-0.82, -1.35), colour: 0x151515 },
-    { geo: wheel(0.82, -1.35), colour: 0x151515 },
-    { geo: wheel(-0.82, 1.35), colour: 0x151515 },
-    { geo: wheel(0.82, 1.35), colour: 0x151515 },
-  ]);
+/**
+ * A car, bow to -z (src/render/carShape.ts: a hatchback unless asked for another kind); the body takes the instance
+ * colour, the glass, tyres, bumpers and lights keep their own.
+ */
+export function carGeometry(type: CarType = 0): THREE.BufferGeometry {
+  return merge(carParts(type, true).map((p) => ({ geo: p.geo, colour: p.role === 'body' ? 0xffffff : CAR_TRIM[p.role] })));
 }
 
 // ------------------------------------------------------------------ cars and people
@@ -267,7 +261,8 @@ export class StreetLife {
     }
     const maxParked = low ? 200 : 600;
     while (parked.length > maxParked) parked.splice(Math.floor(this.rng.next() * parked.length), 1);
-    this.parkedMesh = new THREE.InstancedMesh(carGeo, carMat, Math.max(1, parked.length));
+    // Parked cars as saloons, for a mix with the hatchbacks on the move.
+    this.parkedMesh = new THREE.InstancedMesh(carGeometry(1), carMat, Math.max(1, parked.length));
     this.parkedMesh.name = 'parked-cars';
     parked.forEach((mm, i) => {
       this.parkedMesh.setMatrixAt(i, mm);

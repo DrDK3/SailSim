@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CAR_TRIM, carParts, type CarType } from './carShape';
 import { buildLights, colregsLights, type LightRole } from './navLights';
 import { sharedAll } from './dispose';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -701,40 +702,17 @@ export function outboard(kit: Kit, x: number, y: number, z: number, colour = 0x1
 
 // ------------------------------------------------------------------ cars and people
 
-const CAR_COLOURS = [0xd9dadb, 0x1c1d1f, 0x8a8f96, 0x2a4f8a, 0x9b1c1c, 0xf2f2f2, 0x3b5d3b, 0x5a5f66, 0x6d2a2a, 0xb6b9bd];
+export const CAR_COLOURS = [0xd9dadb, 0x1c1d1f, 0x8a8f96, 0x2a4f8a, 0x9b1c1c, 0xf2f2f2, 0x3b5d3b, 0x5a5f66, 0x6d2a2a, 0xb6b9bd];
 
-/** A car on a deck at (x, y, z) heading along -z: a body from its side profile, glasshouse, wheels, lights. */
-export function car(kit: Kit, x: number, y: number, z: number, seed: number): void {
-  const type = seed % 4; // hatchback, saloon, SUV, van
-  const len = [4.1, 4.7, 4.6, 5.0][type]!;
-  const w = [1.75, 1.8, 1.88, 1.95][type]!;
-  const roofH = [1.45, 1.42, 1.68, 1.95][type]!;
+/** A car on a deck at (x, y, z) heading along -z (src/render/carShape.ts): hatchback, saloon, SUV or van. */
+export function car(kit: Kit, x: number, y: number, z: number, seed: number, light = false): void {
+  const type = (seed % 4) as CarType;
   const colour = CAR_COLOURS[(seed * 7) % CAR_COLOURS.length]!;
-  // Side profile (z along the car from the front, y up): bonnet, screen, roof, back.
-  const L = len;
-  const prof: [number, number][] =
-    type === 3
-      ? [[0, 0.32], [0, 0.75], [0.25, 1.0], [0.75, roofH], [L, roofH], [L, 0.32]]
-      : type === 1
-        ? [[0, 0.32], [0, 0.72], [0.95, 0.85], [1.75, roofH], [3.4, roofH], [4.2, 0.98], [L, 0.92], [L, 0.32]]
-        : type === 2
-          ? [[0, 0.38], [0, 0.85], [0.9, 1.0], [1.55, roofH], [L - 0.15, roofH], [L, 1.1], [L, 0.38]]
-          : [[0, 0.32], [0, 0.72], [0.85, 0.85], [1.55, roofH], [L - 0.35, roofH], [L, 0.95], [L, 0.32]];
-  const shape = new THREE.Shape(prof.map(([pz, py]) => new THREE.Vector2(pz, py)));
-  const bodyG = new THREE.ExtrudeGeometry(shape, { depth: w - 0.12, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.05, bevelSegments: 2 });
-  // Extruded along +z in shape space: turn so the profile's z runs along the car (-z forward) and depth across.
-  // The profile's length runs aft from the front (-z), the extrusion across the car.
-  const m = new THREE.Matrix4().makeRotationY(-Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(x + (w - 0.12) / 2, y, z - L / 2));
-  kit.add(bodyG, VMAT.gloss, colour, m);
-  // Glasshouse: a darker band set into the upper body.
-  const gy = type === 3 ? 1.05 : 0.95;
-  kit.box(w + 0.01, (roofH - gy) * 0.75, (type === 3 ? 1.2 : L * 0.5), VMAT.glass, undefined, x, y + gy + (roofH - gy) * 0.4, z - L / 2 + (type === 3 ? 0.9 : L * 0.5));
-  // Wheels, lights.
-  for (const sx of [-1, 1]) {
-    for (const wz of [0.8, L - 0.85]) {
-      kit.add(new THREE.CylinderGeometry(0.33, 0.33, 0.24, 14), VMAT.rubber, undefined, place(x + sx * (w / 2 - 0.08), y + 0.33, z - L / 2 + wz, 0, 0, Math.PI / 2));
-    }
-    kit.box(0.28, 0.1, 0.05, VMAT.paint, 0xf5f2e6, x + sx * (w / 2 - 0.3), y + 0.7, z - L / 2 - 0.05);
-    kit.box(0.24, 0.12, 0.05, VMAT.paint, 0xa0141a, x + sx * (w / 2 - 0.3), y + 0.85, z + L / 2 + 0.05);
+  const m = new THREE.Matrix4().makeTranslation(x, y, z);
+  for (const p of carParts(type, light)) {
+    if (p.role === 'body') kit.add(p.geo, VMAT.gloss, colour, m);
+    else if (p.role === 'glass') kit.add(p.geo, VMAT.glass, undefined, m);
+    else if (p.role === 'tyre') kit.add(p.geo, VMAT.rubber, undefined, m);
+    else kit.add(p.geo, VMAT.paint, CAR_TRIM[p.role], m);
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { DEG, buildConditions } from '../../src/sim/index';
-import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type MarinaSpec, type VesselPart, type VesselState } from '../../src/sim/env/traffic';
+import { HARBOUR_LIMIT, RiverTraffic, buildRiverTraffic, ukOffsetHours, type MarinaSpec, type VesselPart, type VesselState, FERRY_RAMPS } from '../../src/sim/env/traffic';
 import type { PierFeature } from '../../src/sim/env/marinas';
 import type { FerryRoute } from '../../src/sim/env/ferries';
 import { loadDartGeo } from './helpers';
@@ -133,10 +133,18 @@ describe('the Lower Ferry (tug and float)', () => {
     expect(closest).toBeGreaterThan(30);
   });
 
-  it('the tug is solid too: two parts for the fleet physics', () => {
+  it('the tug and both ramps are solid too: four parts for the fleet physics', () => {
     const v = at('2026-07-15T10:00:00Z')[0]!;
-    expect(v.parts).toHaveLength(2);
-    expect(v.parts[1]!.length).toBeGreaterThan(8);
+    expect(v.parts.map((p) => p.role)).toEqual(['hull', 'tug', 'ramp', 'ramp']);
+    // The tug with her tyres; the ramps reaching past the hull's ends, as drawn (owner, 12 Nov 2026).
+    expect(v.parts[1]!.length).toBeGreaterThan(9.5);
+    expect(v.parts[1]!.beam).toBeGreaterThan(3.6);
+    const ramp = FERRY_RAMPS['tug-float']!;
+    for (const r of v.parts.slice(2)) {
+      const off = Math.hypot(r.n - v.n, r.e - v.e);
+      expect(off + r.length / 2).toBeCloseTo(v.length / 2 - ramp.hinge + ramp.reach, 6);
+      expect(off + r.length / 2).toBeGreaterThan(v.length / 2 + 2);
+    }
   });
 });
 

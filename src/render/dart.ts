@@ -1,6 +1,9 @@
 import { buildBayardsCoveFort } from './bayards';
 import { NOSS_HALL_AT, buildNossLettering } from './noss';
 import { ROYAL_CASTLE_AT, buildRoyalCastleLettering } from './royalCastle';
+import { buildFrontSign } from './signs';
+import { buildStation } from './station';
+import { Boatfloat, boatfloatWalls, missingBasinWalls } from './boatfloat';
 import * as THREE from 'three';
 import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
@@ -40,7 +43,7 @@ const LABEL_RANGE_M = 1600;
 /** OSM buildings that are moored ships (drawn as ships; their outlines are solid in the race, sim/env/structures). */
 const MOORED_SHIPS = new Set(['Hindostan']);
 /** Landmarks drawn by their own modules, not from the plain footprint. */
-const MODELLED = new Set(['rdyc', 'bayards-fort', 'royal-dart-hotel', 'royal-dart-wing']);
+const MODELLED = new Set(['rdyc', 'bayards-fort', 'royal-dart-hotel', 'royal-dart-wing', 'dartmouth-station']);
 
 export interface DartSceneInput {
   manifest: ManifestFull;
@@ -107,6 +110,7 @@ function townGround(input: DartSceneInput, e: number, n: number): number | undef
 export class DartScene {
   readonly fixed = new THREE.Group();
   readonly floating = new THREE.Group();
+  private boatfloat?: Boatfloat;
   readonly labels = new THREE.Group();
   /** Boats on the trot moorings (first) and in the marinas and on the pontoons (after). */
   private readonly boats?: BerthedFleet;
@@ -164,7 +168,19 @@ export class DartScene {
       this.maskDistance = readWaterMask(s, wm.image);
     }
     this.buildTerrain();
-    if (input.quays?.length) this.fixed.add(quayMesh(input.quays));
+    if (input.quays?.length) {
+      this.fixed.add(quayMesh(input.quays));
+      // The Boatfloat's railings, ladders, arch and small boats (src/render/boatfloat.ts).
+      const bfWalls = boatfloatWalls(input.quays);
+      if (bfWalls.length) {
+        // Its walls all round (where the quay rule left banks), drawn as the other quays are.
+        const extra = missingBasinWalls(bfWalls, (e, n) => this.groundAt(e, n));
+        if (extra.length) this.fixed.add(quayMesh(extra));
+        this.boatfloat = new Boatfloat([...bfWalls, ...extra], input.quays, (e, n) => this.groundAt(e, n));
+        this.fixed.add(this.boatfloat.fixed);
+        this.floating.add(this.boatfloat.floating);
+      }
+    }
     const f = input.features;
     if (f) {
       this.buildBuildings(f);
@@ -826,6 +842,25 @@ export class DartScene {
       const ring = (a2 >= 0 ? [...castle.r] : [...castle.r].reverse()) as [number, number][];
       this.fixed.add(buildRoyalCastleLettering(ring, castleSpec.heights.base));
     }
+    const ccwOf = (r: readonly (readonly [number, number])[]): [number, number][] => {
+      let a2 = 0;
+      for (let i = 0; i < r.length; i++) a2 += r[i]![0] * r[(i + 1) % r.length]![1] - r[(i + 1) % r.length]![0] * r[i]![1];
+      return (a2 >= 0 ? [...r] : [...r].reverse()) as [number, number][];
+    };
+    // Dartmouth Yacht Club's name over its ground floor, gold on navy (the owner's photograph, 12 Nov 2026).
+    const dyc = f.buildings.find((b) => landmarkFor(b.r)?.id === 'dartmouth-yacht-club');
+    if (dyc) {
+      const base = landmarkFor(dyc.r)?.heights?.base ?? dyc.b;
+      this.fixed.add(buildFrontSign('dyc-sign', ccwOf(dyc.r), { text: 'DARTMOUTH YACHT CLUB', y: base + 2.55, faceDeg: 90, width: 7.5, height: 0.6, fg: '#d9b45a', bg: '#18233a' }));
+    }
+    // The former Dartmouth station as itself (src/render/station.ts).
+    const station = f.buildings.find((b) => landmarkFor(b.r)?.id === 'dartmouth-station');
+    if (station) {
+      const r = ccwOf(station.r);
+      const ce = r.reduce((a, p) => a + p[0], 0) / r.length;
+      const cn = r.reduce((a, p) => a + p[1], 0) / r.length;
+      this.fixed.add(buildStation(r, this.groundAt(ce, cn)));
+    }
     for (const b of namedBerths()) this.floating.add(b);
   }
 
@@ -900,6 +935,7 @@ export class DartScene {
   /** Vessels are drawn by the traffic view; the Higher Ferry's guide cables are fixed, just under the surface. */
   private buildFerries(f: DartFeatures): void {
     this.floating.add(this.traffic.group);
+    this.traffic.ground = (e, n) => this.groundAt(e, n);
     // The Higher Ferry's two cables, slip to slip, drawn with the ferry (src/render/traffic.ts).
     this.traffic.setCables(
       f.ferries.filter((x) => /Higher Ferry/.test(x.name) && x.route.length >= 2).map((fr) => ({ name: fr.name, a: fr.route[0]! as [number, number], b: fr.route[fr.route.length - 1]! as [number, number] })),
@@ -1026,6 +1062,7 @@ export class DartScene {
   update(u: DartUpdate): void {
     this.fixed.position.y = -u.waterLevel;
     this.pontoons?.update(u.waterLevel);
+    this.boatfloat?.update(u.waterLevel);
     for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
@@ -1183,12 +1220,15 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
           // Window style (src/render/landmarks.ts WIN): 1 sash, 2 tall (churches), 3 slits (castles),
           // 4 brick with stone bands (BRNC), 5 glazed (modern), 6 shopfront on the ground floor, 7 sash windows on a
           // front hung with slate above the ground floor, 8 sash windows in navy surrounds over wide windows under a
-          // navy fascia (the Royal Castle Hotel).
+          // navy fascia (the Royal Castle Hotel), 9 and 10 half-timbered fronts over shops: dark timbers on white, or
+          // white timbers on a coloured front.
           float wstyle = floor(vWall.w);
           bool slateFront = wstyle > 6.5 && wstyle < 7.5;
-          bool navy = wstyle > 7.5;
-          bool shopStyle = (wstyle > 5.5 && wstyle < 6.5) || navy;
-          if (slateFront || navy) wstyle = 1.0;
+          bool navy = wstyle > 7.5 && wstyle < 8.5;
+          bool timbered = wstyle > 8.5;
+          vec3 timberCol = wstyle > 9.5 ? vec3(0.93, 0.92, 0.9) : vec3(0.07, 0.07, 0.08);
+          bool shopStyle = (wstyle > 5.5 && wstyle < 6.5) || navy || timbered;
+          if (slateFront || navy || timbered) wstyle = 1.0;
           float cu = vWall.x / ${WINDOW_BAY_M.toFixed(1)};
           float cv = vWall.y / ${STOREY_M.toFixed(1)};
           float bay = floor(cu);
@@ -1242,6 +1282,21 @@ function buildingMaterial(uniforms: { uNight: { value: number } }): THREE.MeshSt
             float course = fract(vWall.y / 0.2);
             float line = mix(smoothstep(0.0, 0.12 + fwidth(vWall.y / 0.2), course), 0.8, smoothstep(0.15, 0.5, fwidth(vWall.y / 0.2)));
             diffuseColor.rgb = vec3(0.1, 0.11, 0.12) * (0.78 + 0.22 * line) * (0.9 + 0.2 * bHash(vec2(floor(vWall.x / 0.3), floor(vWall.y / 0.2))));
+          }
+          // Half-timbering above the ground floor: posts about every 0.9 m, a rail at each floor and under the sills,
+          // and braces crossing every third panel; at a distance, the timbers' share of the colour.
+          if (timbered && vWall.y > ${STOREY_M.toFixed(1)} - 0.1) {
+            float su = vWall.x / 0.9;
+            float tu = fract(su);
+            float swu = max(fwidth(su), 1e-4);
+            float post = 1.0 - aaBox(tu, 0.08, 0.92, swu);
+            float rails = (1.0 - aaBox(fv, 0.04, 0.96, wv)) + aaBox(fv, 0.12, 0.16, wv);
+            float panel = floor(su);
+            float sv = fract(cv);
+            float d = mod(panel, 3.0) < 0.5 ? abs(tu - sv) : (mod(panel, 3.0) < 1.5 ? abs(tu - (1.0 - sv)) : 1.0);
+            float brace = 1.0 - smoothstep(0.05, 0.05 + 2.0 * swu, d * 0.9);
+            float timber = clamp(post + rails + brace, 0.0, 1.0);
+            diffuseColor.rgb = mix(diffuseColor.rgb, timberCol, mix(timber, 0.32, max(far, smoothstep(0.08, 0.2, swu))));
           }
           // BRNC: stone string courses at each floor and a stone band at the eaves.
           if (wstyle > 3.5 && wstyle < 4.5) {

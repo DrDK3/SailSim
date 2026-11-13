@@ -321,6 +321,18 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 23.6 | From the Boatfloat, look at the Royal Castle Hotel | White, four storeys, navy round the windows, ROYAL CASTLE HOTEL in gold, a castellated parapet with corner turrets, a navy band over the ground floor | |
 | 23.7 | From the river off the Embankment, look for St Saviour's | A tall grey embattled tower with pinnacles above the roofs, a clock on the side facing the river | |
 
+## 24. The Lower Ferry, the Boatfloat, the South Embankment, cars and loading (12 Nov 2026) (20 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 24.1 | Sail slowly into the Lower Ferry's end, and lie head to wind in her path as she crosses | You meet the ramp ("Contact with Lower Ferry (tug and float) (ramp)") and are pushed off; your boat never ends up under the ramp or inside the float | |
+| 24.2 | Look at the Lower Ferry close to | Grey pipe rails, yellow ramp edges, a barrier with DO NOT and BOARD at each end while she crosses, passengers along her side, the tug with tyres and a yellow band | |
+| 24.3 | Watch her come in to a slip (about two minutes) | Ramp down, the barrier gone; the cars drive off lane by lane up the slip and the passengers walk off; new cars and passengers come aboard; ramp up, and she leaves with them | |
+| 24.4 | The same at the Higher Ferry | Her cars drive off and new ones on, at each bank | |
+| 24.5 | Look at the cars in the streets and on the ferries | Shaped bodies with bonnets, windscreens, roofs and wheel arches, not boxes | |
+| 24.6 | Look at the Boatfloat from the Embankment and from the hotel | Stone walls all round, railings, ladders, small boats along the walls (on the mud at low water), the arch to the river | |
+| 24.7 | From the river, look along the South Embankment | The station (yellow, maroon, lantern roof); York House (black and white, gables, balconies); the yellow front; the pink terrace; the yacht club with its name; the red-brick cottage hospital | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
