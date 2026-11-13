@@ -474,6 +474,26 @@ export const LANDMARKS: LandmarkSpec[] = [
   ),
 ];
 
+/**
+ * Footprints in the building data that are not there, so they are not drawn (the walls the quay rule builds from them,
+ * src/sim/env/quays.ts, are kept: the Embankment's wall is there). Each by a point inside it (local e, n).
+ */
+export const NOT_BUILDINGS: { at: [number, number]; why: string }[] = [
+  {
+    at: [-272, 391],
+    why: "In the river off the Embankment, between the station and the Boatfloat's arch (base 0.5 m below datum): the owner, 13 Nov 2026, \"two houses by the boat float and pontoon that are in the river and shouldn't be there (pink and beige)\"; the owner's aerial photographs show no building there (docs/SOURCES.md V10).",
+  },
+  {
+    at: [-270, 408],
+    why: 'In the river off the Embankment, north of the Boatfloat\'s arch (base 0.6 m below datum): the same.',
+  },
+];
+
+/** Is this footprint one of NOT_BUILDINGS? */
+export function notABuilding(ring: readonly (readonly [number, number])[]): boolean {
+  return NOT_BUILDINGS.some((x) => insideRing(ring, x.at[0], x.at[1]));
+}
+
 /** Noss on Dart Marina's buildings: modern timber-clad marina buildings (E: the redevelopment's materials are not described in the sources found). */
 export const NOSS = { centre: [-230, 2100] as [number, number], radius: 110, look: { walls: 0x8a7a66, roof: 0x4a4f55, win: WIN.glazed, shape: 'f' } as Look };
 

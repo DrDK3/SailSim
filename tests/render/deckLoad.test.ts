@@ -81,6 +81,55 @@ describe('deck loads at the slips', () => {
     expect(people.length).toBe(load.count(0).people);
   });
 
+  it('they drive off over the ramp and up the slip, and on again, smoothly: no jumps up or down, tilted on the ramp (owner, 13 Nov 2026)', () => {
+    // A slip whose ground steps up sharply 6 m beyond the ramp (as a wall or a smoothed bank can in the data).
+    const steep = new DeckLoad(layout, 5, 1);
+    const ground = (_x: number, z: number) => (Math.abs(z) > 27 ? 3 : -0.5);
+    const frames: { p: THREE.Vector3; tilt: number }[][] = [];
+    const m = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    for (let t = 0; t <= 120; t += 0.1) {
+      steep.update({ set: 1, since: t, left: 130 - t }, true, -1, -1, true, ground);
+      const now: { p: THREE.Vector3; tilt: number }[] = [];
+      for (const o of steep.group.children) {
+        if (!(o instanceof THREE.InstancedMesh) || !o.name.startsWith('deck-cars-') || o.name.includes('trim')) continue;
+        for (let i = 0; i < o.count; i++) {
+          o.getMatrixAt(i, m);
+          m.decompose(pos, q, sc);
+          if (pos.y < -40) continue;
+          const nose = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+          now.push({ p: pos.clone(), tilt: Math.asin(Math.max(-1, Math.min(1, nose.y))) });
+        }
+      }
+      frames.push(now);
+    }
+    let worstDy = 0;
+    let tilted = 0;
+    for (let k = 1; k < frames.length; k++) {
+      for (const c of frames[k]!) {
+        // The same car a tenth of a second before: the nearest in plan within a metre (new arrivals have none).
+        let best: { p: THREE.Vector3 } | undefined;
+        let bd = 1;
+        for (const o of frames[k - 1]!) {
+          const d = Math.hypot(o.p.x - c.p.x, o.p.z - c.p.z);
+          if (d < bd) {
+            bd = d;
+            best = o;
+          }
+        }
+        if (best) worstDy = Math.max(worstDy, Math.abs(c.p.y - best.p.y));
+        if (Math.abs(c.p.z) > 15 && Math.abs(c.p.z) < 18.5 && Math.abs(c.tilt) > 0.05) tilted++;
+      }
+    }
+    // At 3.5 m/s a tenth of a second is 0.35 m along the way: never more than about 6 cm up or down in it.
+    expect(worstDy).toBeLessThan(0.07);
+    expect(tilted).toBeGreaterThan(0);
+    // And they leave the deck's end for the slip, not the deck's middle: some well beyond it, some coming aboard.
+    expect(frames.some((f) => f.some((c) => c.p.z < -40))).toBe(true);
+  });
+
   it('overnight she lies empty', () => {
     load.update({ set: 0, since: Infinity, left: Infinity }, true, -1, -1, true);
     expect(placed(load, 'deck-cars')).toHaveLength(0);
