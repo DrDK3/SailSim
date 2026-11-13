@@ -120,8 +120,8 @@ describe('gables and signs', () => {
 describe('footprints in the river that are not buildings', () => {
   const buildings = (JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as { buildings: { r: [number, number][]; b: number }[] }).buildings;
 
-  it('each names exactly one footprint, on the waterline by the Boatfloat (owner, 13 Nov 2026: "in the river and shouldn\'t be there")', () => {
-    expect(NOT_BUILDINGS).toHaveLength(2);
+  it('each names exactly one footprint, standing in the river (owner, 13 Nov 2026: "in the river and shouldn\'t be there"; "is not a kiosk, please remove")', () => {
+    expect(NOT_BUILDINGS).toHaveLength(3);
     for (const x of NOT_BUILDINGS) {
       const hits = buildings.filter((b) => insideRing(b.r, x.at[0], x.at[1]));
       expect(hits).toHaveLength(1);

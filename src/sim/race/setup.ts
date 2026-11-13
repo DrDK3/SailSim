@@ -17,6 +17,7 @@ import type { CommitteeOptions } from './committee';
 import { RaceSession, type EntrySpec } from './session';
 import { PierGrid, pierPieces, type PierInput } from './piers';
 import { structuresInWater } from '../env/structures';
+import { notABuilding } from '../env/notBuildings';
 import { mooringSwingDeg } from './anchored';
 import { markPosition, placeCommitteeBoats } from '../course/course';
 
@@ -180,7 +181,8 @@ export function startClearWater(geo: DartGeo, waterLevelOdn: number | undefined,
 /** The fixed and floating structures of the River Dart a race meets: piers and pontoons, and buildings in the water. */
 export function raceStructures(features: RaceFeatures | undefined, geo: DartGeo | undefined): PierInput[] {
   if (!features) return [];
-  const wet = geo && features.buildings ? structuresInWater(features.buildings, (n, e) => geo.bedElevation(n, e)) : [];
+  // Buildings standing in the water are solid, but not footprints that are not there (src/sim/env/notBuildings.ts).
+  const wet = geo && features.buildings ? structuresInWater(features.buildings.filter((b) => !notABuilding(b.r)), (n, e) => geo.bedElevation(n, e)) : [];
   return [...(features.piers ?? []), ...wet];
 }
 
