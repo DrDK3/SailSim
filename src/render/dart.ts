@@ -27,7 +27,7 @@ import { RoadNetwork } from './roads';
 import { buildRdycClub, buildRdycPines, buildRdycPontoonGear, rdycForeshore, rdycKeepOut, rdycPlatformAt, type RdycClub } from './rdyc';
 import { buildRoyalDart, passengerPierAsDrawn, type RoyalDart } from './royalDart';
 import { MASK_MARGIN_M } from './water';
-import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look } from './landmarks';
+import { Kit, NOSS, WIN, battlements, buildExtra, corniceBalustrade, insetRingAdaptive, landmarkFor, longAxisDeg, simplifyRing, type Look, notABuilding } from './landmarks';
 
 /**
  * The River Dart scene, built from public/geo (see docs/GEODATA.md). Vertical frame: the water surface stays
@@ -535,6 +535,8 @@ export class DartScene {
       if (spec && MODELLED.has(spec.id)) return;
       // The Hindostan is a moored ship that OSM maps as a building: drawn as a ship below (buildShips).
       if (MOORED_SHIPS.has(b.n ?? '')) return;
+      // Footprints in the river that are not buildings (src/render/landmarks.ts NOT_BUILDINGS).
+      if (notABuilding(ring)) return;
       const church = !spec && (b.c === 'church' || /\bchurch\b|^st\.? |^saint /i.test(b.n ?? ''));
       const chapel = !spec && !church && (b.c === 'chapel' || /chapel/i.test(b.n ?? ''));
       const ce0 = ring.reduce((a, p) => a + p[0], 0) / ring.length;

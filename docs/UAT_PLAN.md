@@ -327,11 +327,13 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 |---|---|---|---|
 | 24.1 | Sail slowly into the Lower Ferry's end, and lie head to wind in her path as she crosses | You meet the ramp ("Contact with Lower Ferry (tug and float) (ramp)") and are pushed off; your boat never ends up under the ramp or inside the float | |
 | 24.2 | Look at the Lower Ferry close to | Grey pipe rails, yellow ramp edges, a barrier with DO NOT and BOARD at each end while she crosses, passengers along her side, the tug with tyres and a yellow band | |
-| 24.3 | Watch her come in to a slip (about two minutes) | Ramp down, the barrier gone; the cars drive off lane by lane up the slip and the passengers walk off; new cars and passengers come aboard; ramp up, and she leaves with them | |
+| 24.3 | Watch her come in to a slip (about two minutes) | Ramp down, the barrier gone; the cars drive off lane by lane, down the ramp and up the slip, tilting with it, never jumping up or down; the passengers walk off; new cars come down the slip, over the ramp and stop in their places; ramp up, and she leaves with them | |
 | 24.4 | The same at the Higher Ferry | Her cars drive off and new ones on, at each bank | |
 | 24.5 | Look at the cars in the streets and on the ferries | Shaped bodies with bonnets, windscreens, roofs and wheel arches, not boxes | |
 | 24.6 | Look at the Boatfloat from the Embankment and from the hotel | Stone walls all round, railings, ladders, small boats along the walls (on the mud at low water), the arch to the river | |
 | 24.7 | From the river, look along the South Embankment | The station (yellow, maroon, lantern roof); York House (black and white, gables, balconies); the yellow front; the pink terrace; the yacht club with its name; the red-brick cottage hospital | |
+| 24.8 | From the river off the Town Jetty, look at the Embankment by the Boatfloat | No buildings standing in the river: the quay wall and the Boatfloat's arch | |
+| 24.9 | Sail to the Riverboat Pontoon in mid-river and look at it, then sail along its outer side | No house on or beside the pontoon; your boat meets only the pontoon itself | |
 
 ## Accepting the build
 

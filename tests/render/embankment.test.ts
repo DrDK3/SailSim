@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { BOATFLOAT_ARCH, BOATFLOAT_BOX, BOATFLOAT_EDGE, Boatfloat, boatfloatWalls, missingBasinWalls } from '../../src/render/boatfloat';
 import { buildStation, hipRoofGeometry } from '../../src/render/station';
 import { buildFrontSign } from '../../src/render/signs';
-import { Kit, LANDMARKS, buildExtra } from '../../src/render/landmarks';
+import { Kit, LANDMARKS, NOT_BUILDINGS, buildExtra, insideRing, notABuilding } from '../../src/render/landmarks';
+import { readFileSync } from 'node:fs';
 import type { QuayWall } from '../../src/sim/env/quays';
 
 /** A bowl: the basin's floor at 0 m ODN inside its edge, the quays at 3.2 m outside. */
@@ -113,5 +114,25 @@ describe('gables and signs', () => {
     expect(-p.position.z).toBeCloseTo(5, 6);
     const nrm = new THREE.Vector3(0, 0, 1).applyEuler(p.rotation);
     expect(nrm.x).toBeGreaterThan(0.99);
+  });
+});
+
+describe('footprints in the river that are not buildings', () => {
+  const buildings = (JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as { buildings: { r: [number, number][]; b: number }[] }).buildings;
+
+  it('each names exactly one footprint, standing in the river (owner, 13 Nov 2026: "in the river and shouldn\'t be there"; "is not a kiosk, please remove")', () => {
+    expect(NOT_BUILDINGS).toHaveLength(3);
+    for (const x of NOT_BUILDINGS) {
+      const hits = buildings.filter((b) => insideRing(b.r, x.at[0], x.at[1]));
+      expect(hits).toHaveLength(1);
+      // Their base below the datum: standing in the water.
+      expect(hits[0]!.b).toBeLessThan(0);
+      expect(notABuilding(hits[0]!.r)).toBe(true);
+    }
+    // No real building nearby is caught: the station and York House stay.
+    const station = buildings.find((b) => insideRing(b.r, -276, 371))!;
+    const york = buildings.find((b) => insideRing(b.r, -304, 348))!;
+    expect(notABuilding(station.r)).toBe(false);
+    expect(notABuilding(york.r)).toBe(false);
   });
 });

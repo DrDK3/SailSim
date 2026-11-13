@@ -474,6 +474,9 @@ export const LANDMARKS: LandmarkSpec[] = [
   ),
 ];
 
+/** Footprints in the building data that are not there (src/sim/env/notBuildings.ts): not drawn, not solid. */
+export { NOT_BUILDINGS, notABuilding } from '../sim/env/notBuildings';
+
 /** Noss on Dart Marina's buildings: modern timber-clad marina buildings (E: the redevelopment's materials are not described in the sources found). */
 export const NOSS = { centre: [-230, 2100] as [number, number], radius: 110, look: { walls: 0x8a7a66, roof: 0x4a4f55, win: WIN.glazed, shape: 'f' } as Look };
 

@@ -30,9 +30,40 @@ const PERSON_SEEDS = [3, 8];
 /** Seconds for the ramp to come down before anyone moves, between lanes, the walking speed (E). */
 const RAMP_S = 8;
 const LANE_GAP_S = 4;
-const WALK = 1.3;
-/** How far up the slip they go before they are out of sight, and how far the cars run in a lane's move (m, E). */
-const AWAY = 25;
+const WALK = 1.4;
+/** How far up the slip the cars go before they are out of sight (m), and how far the passengers walk (m) (E). */
+const AWAY = 45;
+const PEOPLE_AWAY = 30;
+/** The cars' speed on and off (m/s) and how hard they speed up and slow down (m/s²) (E). */
+const DRIVE = 3.5;
+const ACCEL = 0.9;
+/** The ramp's length from its hinge and its tilt down onto the slip (rad), as drawn (src/render/traffic.ts). */
+const RAMP_LEN = 3.5;
+const RAMP_DOWN = 0.12;
+/** The steepest a car climbs or descends the slip (rise per metre): the ground smoothed under it (E). */
+const SLIP_UP = 0.16;
+const SLIP_DOWN = 0.08;
+
+/** Distance driven `t` s after moving off from rest: speeding up, then at DRIVE. */
+function drivenOff(t: number): number {
+  if (t <= 0) return 0;
+  const tA = DRIVE / ACCEL;
+  return t < tA ? 0.5 * ACCEL * t * t : 0.5 * DRIVE * tA + DRIVE * (t - tA);
+}
+
+/** Distance covered `t` s into a run of `dist` m coming aboard at DRIVE and slowing to a stop at its end. */
+function drivenOn(t: number, dist: number): number {
+  if (t <= 0) return 0;
+  const dDec = (DRIVE * DRIVE) / (2 * ACCEL);
+  const t1 = Math.max(0, dist - dDec) / DRIVE;
+  if (t < t1) return DRIVE * t;
+  const tt = Math.min(DRIVE / ACCEL, t - t1);
+  return Math.min(dist, DRIVE * t1 + DRIVE * tt - 0.5 * ACCEL * tt * tt);
+}
+
+/** Seconds to drive `dist` m off from rest, and to drive `dist` m on and stop. */
+const offTime = (dist: number) => DRIVE / ACCEL + Math.max(0, dist - (DRIVE * DRIVE) / (2 * ACCEL)) / DRIVE;
+const onTime = (dist: number) => Math.max(0, dist - (DRIVE * DRIVE) / (2 * ACCEL)) / DRIVE + DRIVE / ACCEL;
 
 const hash = (a: number, b: number, c: number) => {
   let h = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
@@ -80,7 +111,6 @@ interface Person {
   index: number;
 }
 
-const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 export class DeckLoad {
   readonly group = new THREE.Group();
@@ -155,25 +185,33 @@ export class DeckLoad {
     const half = L.deckL / 2;
     const lanes = L.lanes.length;
     const dist = L.deckL + AWAY;
-    const run = dist / 4 + 3;
     const idq = new THREE.Quaternion();
     const hide = (im: THREE.InstancedMesh, i: number) => im.setMatrixAt(i, this.m.compose(this.v.set(0, -50, 0), idq, this.zero));
-    const yAt = (x: number, w: number, sh: number, floor: number) => {
-      if (w <= half) return L.deckY + floor;
-      const g = ground?.(x, sh * w);
-      if (g === undefined) return L.deckY + floor;
-      // Over the ramp (about 3.6 m) to the slip's height, then on it.
-      const f = Math.min(1, (w - half) / 3.6);
-      return L.deckY + floor + (g + 0.03 - L.deckY - floor) * f;
-    };
-    const turn = (towardsMinusZ: boolean) => new THREE.Quaternion().setFromAxisAngle(this.up, towardsMinusZ ? 0 : Math.PI);
-    const side = (x: number) => new THREE.Quaternion().setFromAxisAngle(this.up, x > 0 ? -Math.PI / 2 : Math.PI / 2);
     const set = deck?.set ?? 0;
     const since = berthed ? (deck?.since ?? Infinity) : Infinity;
     const left = berthed ? (deck?.left ?? Infinity) : Infinity;
+    // The way off at a slip (w: metres along the deck towards the slip; the deck ends at w = half): the deck, the
+    // ramp down onto the slip at its tilt, then up the slip on the ground smoothed and never steeper than SLIP_UP.
+    const profile = berthed && since !== Infinity ? this.wayOff(half, shore, ground) : undefined;
+    const yAt = (w: number) => {
+      if (!profile || w <= half) return L.deckY;
+      const k = (w - half) / 1;
+      const i0 = Math.min(profile.length - 2, Math.floor(k));
+      const f = Math.min(1, k - i0);
+      return profile[i0]! + (profile[i0 + 1]! - profile[i0]!) * f;
+    };
+    const turn = (towardsMinusZ: boolean) => new THREE.Quaternion().setFromAxisAngle(this.up, towardsMinusZ ? 0 : Math.PI);
+    const side = (x: number) => new THREE.Quaternion().setFromAxisAngle(this.up, x > 0 ? -Math.PI / 2 : Math.PI / 2);
+    const xAxis = new THREE.Vector3(1, 0, 0);
+    // A car on the slope: turned to face its way, then pitched to the slope under it (its nose is its -z).
+    const onSlope = (yaw: THREE.Quaternion, w: number, facingShore: boolean) => {
+      const rise = yAt(w + 0.8) - yAt(w - 0.8);
+      const pitch = Math.atan2(rise, 1.6) * (facingShore ? 1 : -1);
+      return yaw.clone().multiply(new THREE.Quaternion().setFromAxisAngle(xAxis, pitch));
+    };
     const offSet = set;
-    const unloadEnd = RAMP_S + LANE_GAP_S * (lanes - 1) + run;
-    const loadSpan = LANE_GAP_S * (lanes - 1) + run;
+    const unloadEnd = RAMP_S + LANE_GAP_S * (lanes - 1) + offTime(dist);
+    const loadSpan = LANE_GAP_S * (lanes - 1) + onTime(dist);
     const loadStart = Math.max(unloadEnd + 2, since + left - 7 - loadSpan);
     const departing = left < 6;
     // Under way: her set in its places facing her way; at a slip the set going ashore faces it, the one coming aboard away.
@@ -186,34 +224,36 @@ export class DeckLoad {
       let z = c.z;
       let q = ahead;
       let show: boolean;
-      let sh: 1 | -1 = shore;
-      if (!berthed) {
-        show = c.set === set;
-        sh = (-travel) as 1 | -1;
-      } else if (since === Infinity) show = false;
+      let y = L.deckY + 0.05;
+      if (!berthed) show = c.set === set;
+      else if (since === Infinity) show = false;
       else if (c.set === offSet) {
-        const tau = (since - RAMP_S - LANE_GAP_S * c.lane) / run;
-        const w = shore * z + dist * Math.max(0, Math.min(1, tau)) ** 2;
+        // Driving off, lane by lane: away from rest, over the ramp and up the slip.
+        const t = since - RAMP_S - LANE_GAP_S * c.lane;
+        const w = shore * z + drivenOff(t);
         z = shore * w;
-        q = toShore;
-        show = tau < 1 && w - half < AWAY;
+        y = yAt(w) + 0.05;
+        q = onSlope(toShore, w, true);
+        show = w - half < AWAY;
       } else {
         if (flips) {
           x = -x;
           z = -z;
         }
-        const tau = departing ? 1 : (since - loadStart - LANE_GAP_S * c.lane) / run;
-        const w = shore * z + dist * (1 - smooth(tau));
+        // Coming aboard after them: down the slip, over the ramp, slowing to a stop in its place.
+        const t = departing ? Infinity : since - loadStart - LANE_GAP_S * c.lane;
+        const w = shore * z + dist - drivenOn(t, dist);
         z = shore * w;
-        q = fromShore;
-        show = tau > 0 && w - half < AWAY;
+        y = yAt(w) + 0.05;
+        q = onSlope(fromShore, w, false);
+        show = t > 0 && w - half < AWAY;
       }
       if (!show) {
         hide(mesh.body, c.index);
         hide(mesh.rest, c.index);
         continue;
       }
-      this.m.compose(this.v.set(x, yAt(x, sh * z, sh, 0.05), z), q, this.one);
+      this.m.compose(this.v.set(x, y, z), q, this.one);
       mesh.body.setMatrixAt(c.index, this.m);
       mesh.rest.setMatrixAt(c.index, this.m);
     }
@@ -223,34 +263,35 @@ export class DeckLoad {
       let z = p.z;
       let q = side(x);
       let show: boolean;
-      let sh: 1 | -1 = shore;
-      if (!berthed) {
-        show = p.set === set;
-        sh = (-travel) as 1 | -1;
-      } else if (since === Infinity) show = false;
+      let y = L.deckY + p.y;
+      if (!berthed) show = p.set === set;
+      else if (since === Infinity) show = false;
       else if (p.set === offSet) {
         const t = since - RAMP_S - 1;
         const w = shore * z + Math.max(0, t) * WALK;
         z = shore * w;
         if (t > 0) q = toShore;
-        show = w - half < AWAY;
+        y = (w > half ? yAt(w) : L.deckY + p.y);
+        show = w - half < PEOPLE_AWAY;
       } else {
         if (flips) {
           x = -x;
           z = -z;
         }
+        // Walking aboard once the last of the others are off (they start up the slip as these come down).
         const w0 = shore * z;
-        const t = departing ? Infinity : since - loadStart - 3;
-        const w = Math.max(w0, half + AWAY - WALK * Math.max(0, t));
+        const t = departing ? Infinity : since - RAMP_S - 12;
+        const w = Math.max(w0, half + PEOPLE_AWAY - WALK * Math.max(0, t));
         z = shore * w;
         q = w > w0 + 0.01 ? fromShore : side(x);
+        y = w > half ? yAt(w) : L.deckY + p.y;
         show = t > 0;
       }
       if (!show) {
         hide(mesh, p.index);
         continue;
       }
-      this.m.compose(this.v.set(x, yAt(x, sh * z, sh, p.y), z), q, this.one);
+      this.m.compose(this.v.set(x, y, z), q, this.one);
       mesh.setMatrixAt(p.index, this.m);
     }
     for (const mm of this.carMeshes) {
@@ -258,5 +299,37 @@ export class DeckLoad {
       mm.rest.instanceMatrix.needsUpdate = true;
     }
     for (const im of this.personMeshes) im.instanceMatrix.needsUpdate = true;
+  }
+
+  /**
+   * The height of the way off (the model's frame) every metre from the deck's end at w = half: down the ramp at its
+   * tilt, then the slip's ground (along the middle of the ramp) smoothed over 7 m and followed no steeper than
+   * SLIP_UP up or SLIP_DOWN down, and never below the water (0 in the model's frame). Without a ground, level with
+   * the ramp's foot.
+   */
+  private wayOff(half: number, shore: 1 | -1, ground?: (x: number, z: number) => number | undefined): number[] {
+    const n = Math.ceil(AWAY + 4);
+    const tip = this.layout.deckY - RAMP_LEN * Math.sin(RAMP_DOWN);
+    const raw: (number | undefined)[] = [];
+    for (let k = 0; k <= n + 3; k++) raw.push(ground?.(0, shore * (half + k)));
+    const out: number[] = [];
+    for (let k = 0; k <= n; k++) {
+      if (k <= RAMP_LEN) {
+        out.push(this.layout.deckY + (tip - this.layout.deckY) * (k / RAMP_LEN));
+        continue;
+      }
+      let sum = 0;
+      let cnt = 0;
+      for (let j = Math.max(0, k - 3); j <= Math.min(raw.length - 1, k + 3); j++) {
+        const g = raw[j];
+        if (g === undefined) continue;
+        sum += g;
+        cnt++;
+      }
+      const prev = out[k - 1]!;
+      const target = cnt ? sum / cnt : prev;
+      out.push(Math.max(0.15, Math.min(prev + SLIP_UP, Math.max(prev - SLIP_DOWN, target))));
+    }
+    return out;
   }
 }
