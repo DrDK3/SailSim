@@ -1680,3 +1680,13 @@ The owner: "We still have collision errors (see screenshot). Plus, the building 
 | **Loading at the slips** | Two sets of cars and foot passengers take turns: once the ramp is down the set that came across drives off lane by lane over the ramp and up the slip (following the ground), and walks off; then the other set comes aboard to its places before the ramp lifts. Under way she carries her set; overnight she lies empty. The float turns end for end as she leaves, so the cars coming aboard take the mirrored places | `src/render/deckLoad.ts`, `src/render/traffic.ts`, `src/sim/env/traffic.ts` (`VesselState.deck`, the picture only) | `tests/render/deckLoad.test.ts` |
 
 **Not done:** the Town Jetty's white lattice gangway, the blue-roofed kiosks, the sheet piling along the South Embankment's wall; the buildings between the pink terrace and the Lower Ferry beyond those named above. Which footprints the buildings are is judged from the photographs (E). The determinism hash is unchanged (`11824f89f479d0f4`). **Checked in software rendering only.**
+
+### 21a. Follow-up (13 Nov 2026)
+
+The owner: "there are two houses by the boat float and pontoon that are in the river and shouldn't be there (pink and beige)", and "cars drop off the ferry, as if on a lift, they should drive off using the ferry ramp and drive away. cars coming on should also drive on smoothly using the ramp."
+
+| What | Built | Files | Checked by |
+|---|---|---|---|
+| **Two buildings in the river** | Two footprints on the river side of the Embankment's wall, either side of the Boatfloat's arch (bases below datum), are not drawn; the wall stays. One other footprint stands wholly in the river (on the Riverboat Pontoon): left as it is pending the owner's answer (OUTSTANDING 176) | `src/render/landmarks.ts` (`NOT_BUILDINGS`), `src/render/dart.ts` | `tests/render/embankment.test.ts`; renders from the owner's viewpoint before and after |
+| **Cars over the ramp** | A car was taken from the deck to the ground at the ramp's foot in one 3.6 m step and then followed the raw ground: it rose or fell like a lift. Now it drives a way off: the deck, down the ramp at its tilt, up the slip on the ground smoothed over 7 m and never steeper than about 1 in 6 up or 1 in 12 down, above the water, pitched to the slope; moving off from rest at up to 3.5 m/s and out of sight 45 m up the slip. Coming aboard the same way, slowing to a stop in its place. Passengers walk the same way | `src/render/deckLoad.ts` | `tests/render/deckLoad.test.ts` (a stepped slip: no car rises or drops more than 7 cm in a tenth of a second; cars tilt on the ramp); renders at the Kingswear slip at 16, 80 and 92 s into a stop |
+
