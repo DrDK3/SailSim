@@ -28,8 +28,8 @@ test('graphics and sound: presets apply and are kept, sound mutes with U, the ph
     const c = document.querySelector('canvas')!;
     return c.width / c.clientWidth;
   });
-  await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByRole('menuitemcheckbox', { name: /^Settings$/ }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: /^All settings/ }).click();
   const panel = page.getByTestId('settings-panel');
   await expect(panel).toBeVisible();
   // A software renderer starts on Performance.

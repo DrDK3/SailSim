@@ -96,13 +96,13 @@ test.describe('first visit', () => {
   });
 });
 
-test('toolbar: the More menu (sections, toggles), Escape closes menus and panels, one side panel at a time', async ({ page }) => {
+test('toolbar: the Settings menu (sections, toggles), Escape closes menus and panels, one side panel at a time', async ({ page }) => {
   const errors = await ready(page);
-  // The physics tools are in the More menu at the Expert level or with the developer tools on.
+  // The physics tools are in the Settings menu at the Expert level or with the developer tools on.
   await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
-  // Few controls in view: the activity button (UI v2), playback, camera, Race, Library and Scenario, More and Help.
-  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(8);
-  const view = page.getByRole('button', { name: 'More', exact: true });
+  // Few controls in view: Main menu and the activity button, playback, camera, Race, Library and Options, Settings and Help.
+  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(9);
+  const view = page.getByRole('button', { name: 'Settings', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });
   await expect(labels).toHaveAttribute('aria-checked', 'true');
@@ -110,23 +110,50 @@ test('toolbar: the More menu (sections, toggles), Escape closes menus and panels
   await expect(page.getByRole('menu')).toHaveCount(0); // choosing closes the menu
   expect(await page.evaluate(() => window.__squib!.controller.getState().showLabels)).toBe(false);
   await view.click();
-  await expect(page.getByRole('menu', { name: 'More' })).toBeVisible();
-  await expect(page.getByRole('menu', { name: 'More' })).toContainText('Physics tools');
+  await expect(page.getByRole('menu', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('menu', { name: 'Settings' })).toContainText('Physics tools');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   await expect(page.getByRole('region', { name: /polar/i })).toBeVisible();
 
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Library' })).toBeVisible();
-  await page.getByRole('button', { name: 'Scenario', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Scenario settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Options' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Library' })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('region', { name: 'Scenario settings' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Options' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: /polar/i })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Main menu: the first toolbar button (or Home) brings back the main menu, the sail waits, and goes on when it closes', async ({ page }) => {
+  test.setTimeout(120_000 * CI_SLOW);
+  const errors = await ready(page);
+  const paused = () => page.evaluate(() => window.__squib!.controller.getState().paused);
+  const hub = page.getByRole('dialog', { name: 'Squib sailing simulator' });
+  if (await paused()) await page.getByTestId('pause').click();
+  expect(await paused()).toBe(false);
+  await page.getByRole('button', { name: 'Main menu', exact: true }).click();
+  await expect(hub).toBeVisible();
+  for (const door of ['Learn to sail', 'Free sailing', 'Race against AI', 'Scenarios']) await expect(hub.getByRole('button', { name: door })).toBeVisible();
+  expect(await paused()).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(hub).toBeHidden();
+  expect(await paused()).toBe(false);
+  // The Home key does the same; a sail already paused stays paused when the menu closes.
+  await page.keyboard.press('Home');
+  await expect(hub).toBeVisible();
+  await hub.getByRole('button', { name: 'Close' }).click();
+  await expect(hub).toBeHidden();
+  await page.getByTestId('pause').click();
+  expect(await paused()).toBe(true);
+  await page.getByRole('button', { name: 'Main menu', exact: true }).click();
+  await hub.getByRole('button', { name: 'Close' }).click();
+  expect(await paused()).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -151,11 +178,11 @@ test('the sailing controls can be put away and brought back (remembered); the ke
   expect(await page.evaluate(() => window.__squib!.controller.sim.input.helm)).not.toBe(0);
   await page.getByRole('button', { name: 'Show sailing controls' }).click();
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toBeVisible();
-  // And from the More menu.
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  // And from the Settings menu.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Sailing controls' }).click();
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Sailing controls' }).click();
   await expect(page.getByRole('region', { name: 'Sailing controls' })).toBeVisible();
   expect(errors).toEqual([]);

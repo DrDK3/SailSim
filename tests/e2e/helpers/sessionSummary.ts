@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * The session's one-line summary ("River Dart (depths and stream provisional) · wind 15 kn …"), read from More →
+ * The session's one-line summary ("River Dart (depths and stream provisional) · wind 15 kn …"), read from Settings →
  * Layers and sources, where it moved from the line along the bottom of the screen (owner, 6 Nov 2026). The panel
  * loads on first use, slowly in software rendering; if the summary does not appear, the failure says what is open.
  */

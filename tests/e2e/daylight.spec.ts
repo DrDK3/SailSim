@@ -37,9 +37,9 @@ test('dark in real time: the card offers a daylight view; the picture lights up,
   expect(r.light.dark).toBe(true);
   expect(r.light.daylightView).toBe(true);
   expect(r.light.clock).toBe('19:30');
-  // The More menu turns it off again. (Dispatched clicks: with the page's clock fixed, Playwright cannot time the
+  // The Settings menu turns it off again. (Dispatched clicks: with the page's clock fixed, Playwright cannot time the
   // animation frames it uses to see that an element is still.)
-  await page.getByRole('button', { name: 'More', exact: true }).dispatchEvent('click');
+  await page.getByRole('button', { name: 'Settings', exact: true }).dispatchEvent('click');
   const item = page.getByRole('menuitemcheckbox', { name: /Daylight view when dark/ });
   await expect(item).toHaveAttribute('aria-checked', 'true');
   await item.dispatchEvent('click');
