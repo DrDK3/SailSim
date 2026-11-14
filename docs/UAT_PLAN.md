@@ -335,6 +335,19 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 24.8 | From the river off the Town Jetty, look at the Embankment by the Boatfloat | No buildings standing in the river: the quay wall and the Boatfloat's arch | |
 | 24.9 | Sail to the Riverboat Pontoon in mid-river and look at it, then sail along its outer side | No house on or beside the pontoon; your boat meets only the pontoon itself | |
 
+## 25. The main menu, Options and Settings, the ship buoys and Mosaique (14 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 25.1 | While sailing, click **Main menu** (the house, first on the toolbar) | The main menu opens at once (Learn to sail, Free sailing, Race against AI, Scenarios); the boat stops | |
+| 25.2 | Close it (× or Escape) | Back on the water, sailing on from where you were | |
+| 25.3 | Press the Home key | The main menu opens the same way | |
+| 25.4 | Look along the toolbar | **Options** (was Scenario) opens the boat, wind, tide, place, course and fleet panel; **Settings ▾** (was More) holds lessons, what is shown, sound and "All settings…" | |
+| 25.5 | Sail mid-river opposite the Town Jetty and turn on place labels (L) | Five large yellow buoys, MS1 to MS5 from south to north, the anchorage and its moored boats to their east | |
+| 25.6 | Look at Mosaique on MS1 and MS2, all round | A blue-hulled 50 m superyacht moored bow and stern to the two buoys; the club's large burgee at her masthead; the club's defaced red ensign (crown and arrow in the fly) flying from a staff off her stern by day; her tender alongside; recognisable from your photographs | |
+| 25.7 | Sail gently into her side, and into a buoy | You meet them ("Contact with the superyacht Mosaique", "… ship buoy MS…") and do not pass through | |
+| 25.8 | Look at the yacht club's flagstaff | The same ensign, the arrow pointing to the hoist | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
