@@ -52,9 +52,9 @@ test('the production build runs under a sub-path: assets, River Dart data, physi
 test('the polar worker loads from the sub-path', async ({ page }) => {
   test.setTimeout(150_000 * CI_SLOW);
   const { errors } = await open(page);
-  // The physics tools are in the More menu at the Expert level or with the developer tools on.
+  // The physics tools are in the Settings menu at the Expert level or with the developer tools on.
   await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   const polar = page.getByRole('region', { name: 'Model polar' });
   await expect(polar.getByRole('status')).toContainText('Computing', { timeout: 10_000 });
@@ -120,8 +120,8 @@ type LiveUi = { weatherSources: { kind: string; label: string; freshness?: { sta
 const liveUi = (page: Page) => page.evaluate(() => window.__squib!.controller.getState() as unknown as LiveUi);
 
 async function openScenario(page: Page) {
-  await page.getByRole('button', { name: 'Scenario' }).click();
-  return page.getByRole('region', { name: 'Scenario settings' });
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  return page.getByRole('region', { name: 'Options' });
 }
 
 test('live data: a current forecast is offered as live; choosing it follows the forecast and its sky', async ({ page, baseURL }) => {

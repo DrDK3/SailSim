@@ -172,7 +172,7 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         </label>
         <label className="check">
           <input type="checkbox" checked={ui.prefs.devTools} onChange={(e) => ctl.setPrefs({ devTools: e.target.checked })} data-testid="pref-dev" />
-          Physics and developer tools in the More menu (validation dashboard, polar sweep, physics panel, force arrows; on at the Expert level)
+          Physics and developer tools in the Settings menu (validation dashboard, polar sweep, physics panel, force arrows; on at the Expert level)
         </label>
         <h4 className="settings-group">Sound</h4>
         <div className="settings-grid">

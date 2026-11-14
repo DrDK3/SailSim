@@ -3,7 +3,7 @@ import { useModal } from './useModal';
 
 const KEYS: [string, string][] = [
   ['A / ←', 'Steer (hold): the bow to port; with tiller steering, the tiller to port, so the bow goes to starboard'],
-  ['D / →', 'Steer the other way (hold). Bow or tiller steering: More → Settings → Controls'],
+  ['D / →', 'Steer the other way (hold). Bow or tiller steering: Settings → All settings → Controls'],
   ['Shift (held)', 'Hold the helm where it is (no self-centring)'],
   ['Space', 'Centre the helm'],
   ['W / ↑', 'Trim (pull in) the mainsheet'],
@@ -13,10 +13,11 @@ const KEYS: [string, string][] = [
   ['K', 'Toggle auto crew weight'],
   ['X', 'Release both sheets (sails luff; head to wind as well to stop)'],
   ['Z / Shift+Z', 'Flatten the sails (depower) / power them up again, a quarter at a time'],
+  ['Home', 'Main menu: learn, sail freely, race or choose a scenario (the sail waits while it is open)'],
   ['P', 'Pause / resume'],
   ['R', 'Reset to the scenario start'],
   ['C', 'Cycle camera: chase (the wheel zooms), scenic, helm (drag to look around), orbit, drone, top'],
-  ['U', 'Sound on or off (levels: More → Settings → Sound)'],
+  ['U', 'Sound on or off (levels: Settings → All settings → Sound)'],
   ['B', 'Drone view: fly back to the boat'],
   ['F', 'Show physics force arrows'],
   ['G', 'Show the physics debug panel'],
@@ -47,7 +48,7 @@ export function Help({ onClose, onTutorial, build }: { onClose: () => void; onTu
         </table>
         <h3>Your Squib</h3>
         <p>
-          In Scenario → Boat, choose a Rondar (the modern standard: its cockpit drains itself), a classic Hunter or Parker
+          In Options → Boat, choose a Rondar (the modern standard: its cockpit drains itself), a classic Hunter or Parker
           hull (water that comes over the rail stays until your crew bails it, so keep the rail out of the water), or the
           new Hyde B3 / Batt sails. The burgee at the masthead shows the apparent wind. With wind against tide, as in the
           harbour entrance on the ebb, expect short, steep waves; More instruments shows the waves.

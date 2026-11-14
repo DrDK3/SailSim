@@ -18,6 +18,7 @@ import { RaceSession, type EntrySpec } from './session';
 import { PierGrid, pierPieces, type PierInput } from './piers';
 import { structuresInWater } from '../env/structures';
 import { notABuilding } from '../env/notBuildings';
+import { shipBuoyStructures } from '../env/shipBuoys';
 import { mooringSwingDeg } from './anchored';
 import { markPosition, placeCommitteeBoats } from '../course/course';
 
@@ -183,7 +184,9 @@ export function raceStructures(features: RaceFeatures | undefined, geo: DartGeo 
   if (!features) return [];
   // Buildings standing in the water are solid, but not footprints that are not there (src/sim/env/notBuildings.ts).
   const wet = geo && features.buildings ? structuresInWater(features.buildings.filter((b) => !notABuilding(b.r)), (n, e) => geo.bedElevation(n, e)) : [];
-  return [...(features.piers ?? []), ...wet];
+  // The main-stream ship buoys and the superyacht moored on them (src/sim/env/shipBuoys.ts), on the river data only.
+  const buoys = geo ? shipBuoyStructures() : [];
+  return [...(features.piers ?? []), ...wet, ...buoys];
 }
 
 export interface CreatedRace {

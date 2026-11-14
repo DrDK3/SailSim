@@ -54,7 +54,7 @@ test('keyboard helm and sheet controls change the boat', async ({ page }) => {
   expect(input.mainSheet).toBeGreaterThan(sheetBefore);
 });
 
-test('on-screen buttons, pause, help and scenario panel work', async ({ page }) => {
+test('on-screen buttons, pause, help and Options panel work', async ({ page }) => {
   // Opens Layers and sources to read the session summary: slow in software rendering.
   test.slow();
   await open(page);
@@ -75,7 +75,7 @@ test('on-screen buttons, pause, help and scenario panel work', async ({ page }) 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Help' })).toBeHidden();
 
-  await page.getByRole('button', { name: 'Scenario' }).click();
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
   const tws = page.locator('.scenario .field', { hasText: 'True wind speed' }).locator('input[type="number"]');
   await tws.fill('15');
   await page.getByRole('button', { name: 'Apply and restart' }).click();
@@ -140,12 +140,12 @@ test('validation dashboard: eight live charts, table view, CSV export', async ({
   expect(errors).toEqual([]);
 });
 
-test('scenario panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
+test('Options panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
   // Opens Layers and sources to read the session summary: slow in software rendering.
   test.slow();
   const errors = await open(page);
-  await page.getByRole('button', { name: 'Scenario' }).click();
-  const panel = page.getByRole('region', { name: 'Scenario settings' });
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Options' });
   const source = panel.locator('.field', { hasText: 'Source' }).locator('select');
   // Two bundled replays (22 Oct 07:15 and 23 Oct 14:00 UTC); no live forecast is published here.
   await expect(source.locator('option', { hasText: 'Replay' })).toHaveCount(2);
@@ -168,9 +168,9 @@ test('scenario panel: replay weather, manual tide and tidal stream appear, label
 test('polar panel sweeps the model in a worker and matches the Node model', async ({ page }) => {
   test.setTimeout(150_000 * CI_SLOW);
   const errors = await open(page);
-  // The physics tools are in the More menu at the Expert level or with the developer tools on.
+  // The physics tools are in the Settings menu at the Expert level or with the developer tools on.
   await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   const polar = page.getByRole('region', { name: 'Model polar' });
   await expect(polar).toContainText('not measured Squib performance');
@@ -208,7 +208,7 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   // Depth at the keel is shown, from the provisional depths mid-river.
   await expect(page.locator('.cell', { hasText: 'Depth' })).toContainText('m');
   // Every provisional layer is labelled in the Layers panel.
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Layers and sources/ }).click();
   const list = page.getByTestId('provisional-list');
   for (const label of ['Water depth below the low-water line', 'Individual moorings and moored boats', 'Ferries', 'Tidal stream pattern', 'Navigation marks', 'Chart datum offset', 'Official RDYC courses and marks']) {
@@ -217,8 +217,8 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   await expect(page.getByRole('dialog', { name: 'Map layers and sources' })).toContainText('Contains modified Copernicus Sentinel data 2025');
   await page.keyboard.press('Escape');
   // The channel-following stream is labelled provisional where it is chosen.
-  await page.getByRole('button', { name: 'Scenario' }).click();
-  const panel = page.getByRole('region', { name: 'Scenario settings' });
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Options' });
   await panel.locator('.field', { hasText: /^Tide/ }).locator('select').selectOption('manual');
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('dart');
   await expect(panel).toContainText('Illustrative only: the pattern follows the channel');
@@ -278,11 +278,11 @@ test('Phase 3: without the River Dart data the app falls back to open water and 
   await expect.poll(async () => (await snap(page)).t, { timeout: 20_000 }).toBeGreaterThan(t0);
 });
 
-test('Phase 4: a practice course from the race set-up (the Scenario panel points there): countdown, start signal, and a start when the boat crosses', async ({ page }) => {
+test('Phase 4: a practice course from the race set-up (the Options panel points there): countdown, start signal, and a start when the boat crosses', async ({ page }) => {
   const errors = await open(page);
-  // One race set-up (review U4): the Scenario panel no longer has its own course and fleet options.
-  await page.getByRole('button', { name: 'Scenario' }).click();
-  const scenario = page.getByRole('region', { name: 'Scenario settings' });
+  // One race set-up (review U4): the Options panel no longer has its own course and fleet options.
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  const scenario = page.getByRole('region', { name: 'Options' });
   await expect(scenario.getByTestId('scenario-course')).toContainText('set in Race');
   await scenario.getByRole('button', { name: 'Race set-up…' }).click();
   const panel = page.getByRole('region', { name: 'Race set-up' });
@@ -324,7 +324,7 @@ test('Phase 4: a practice course from the race set-up (the Scenario panel points
 
 test('Phase 4: course editor: add a mark, live check, import, export', async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: 'Course editor' }).click();
   const ed = page.getByRole('dialog', { name: 'Course editor' });
   await expect(ed).toBeVisible();

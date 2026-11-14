@@ -26,7 +26,7 @@ test('the debrief after a sail: the track map, the tack and its cost', async ({ 
     c.press('helmRight', false);
     window.__squib!.advance(40);
   });
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Your sail/ }).click();
   const panel = page.getByTestId('debrief');
   await expect(panel).toBeVisible({ timeout: 30_000 * CI_SLOW });

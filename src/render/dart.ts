@@ -14,6 +14,8 @@ import { FIXED_BOATS, berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
 import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
+import { ShipBuoysView } from './mosaique';
+import { MOSAIQUE, SHIP_BUOYS, mooredBerth } from '../sim/env/shipBuoys';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
@@ -130,6 +132,8 @@ export class DartScene {
   private readonly street?: StreetLife;
   private pontoons?: Pontoons;
   private readonly ensigns: ClubEnsign[] = [];
+  /** The main-stream ship buoys and the superyacht on them (src/render/mosaique.ts). */
+  private shipBuoys?: ShipBuoysView;
   /** The yacht club (src/render/rdyc.ts). */
   private club?: RdycClub;
   /** The Royal Dart and its north wing (src/render/royalDart.ts). */
@@ -203,6 +207,7 @@ export class DartScene {
       }
       this.buildMarks(f);
       this.buildLabels(f);
+      this.buildShipBuoys();
     }
     if (input.roads && this.roadNet) {
       const net = this.roadNet;
@@ -875,6 +880,7 @@ export class DartScene {
   setDaylight(day: number): void {
     this.traffic.setDaylight(day);
     this.street?.setDaylight(day);
+    this.shipBuoys?.setDaylight(day);
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
     this.club?.setNight(x * x * (3 - 2 * x));
@@ -1048,6 +1054,23 @@ export class DartScene {
     }
   }
 
+  /** MS1–MS5 and Mosaique on MS1–MS2, with their labels (positions: src/sim/env/shipBuoys.ts, estimates). */
+  private buildShipBuoys(): void {
+    this.shipBuoys = new ShipBuoysView();
+    this.floating.add(this.shipBuoys.group);
+    for (const b of SHIP_BUOYS) {
+      const lab = makeLabel(`${b.id} ship buoy`, '#ffe9a8');
+      lab.position.set(b.e, 4, -b.n);
+      lab.userData.priority = 1;
+      this.labels.add(lab);
+    }
+    const berth = mooredBerth();
+    const lab = makeLabel(`${MOSAIQUE.name} (superyacht)`, '#ffffff');
+    lab.position.set(berth.e, 23, -berth.n);
+    lab.userData.priority = 1;
+    this.labels.add(lab);
+  }
+
   private buildLabels(f: DartFeatures): void {
     for (const l of f.landmarks) {
       const s = makeLabel(l.name, '#ffffff');
@@ -1066,6 +1089,7 @@ export class DartScene {
     this.pontoons?.update(u.waterLevel);
     this.boatfloat?.update(u.waterLevel);
     for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
+    this.shipBuoys?.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time, u.camera);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;

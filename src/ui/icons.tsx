@@ -42,6 +42,14 @@ export const IconScenarios = () => (
   </Svg>
 );
 
+/** A house: the main menu (the experience hub). */
+export const IconHome = () => (
+  <Svg>
+    <path d="M3.5 11.5 12 4l8.5 7.5" />
+    <path d="M6 10v9.5h4.5V15h3v4.5H18V10" />
+  </Svg>
+);
+
 /** A play triangle in a circle: a replay. */
 export const IconReplay = () => (
   <Svg>
