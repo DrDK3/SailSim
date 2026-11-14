@@ -40,7 +40,7 @@ test('quick race: choose the competitors, start, read the coach’s briefing, tu
   await expect(coach).toContainText('sequence: be on the line at full speed');
   await coach.getByRole('button', { name: 'Off' }).click();
   await expect(coach).toHaveCount(0);
-  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('menuitemcheckbox', { name: /Race coach/ }).click();
   await expect(page.getByTestId('coach')).toBeVisible();
   expect(errors).toEqual([]);

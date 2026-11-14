@@ -20,10 +20,10 @@ async function ready(page: Page): Promise<string[]> {
 type SceneObj = { name: string; type?: string; visible: boolean; rotation: { y: number }; material?: { map?: unknown }; parent?: SceneObj; traverse: (f: (o: SceneObj) => void) => void };
 type View = { scene: SceneObj; boat: { type: string; group: SceneObj } };
 
-test('the Scenario panel offers the three Squib types; choosing one rebuilds the boat with its physics', async ({ page }) => {
+test('the Options panel offers the three Squib types; choosing one rebuilds the boat with its physics', async ({ page }) => {
   test.setTimeout(120_000 * CI_SLOW);
   const errors = await ready(page);
-  await page.getByRole('button', { name: 'Scenario', exact: true }).click();
+  await page.getByRole('button', { name: 'Options', exact: true }).click();
   const select = page.getByTestId('boat-type');
   await expect(select.locator('option')).toHaveText([
     'Rondar Squib (the modern standard)',

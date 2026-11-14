@@ -17,7 +17,7 @@ import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
 import { hasStoredLevel } from '../app/level';
 import { Confirm } from './Confirm';
 import { activityOf } from './activity';
-import { ActivityIcon } from './icons';
+import { ActivityIcon, IconHome } from './icons';
 import type { CameraMode } from '../render/scene';
 
 /** Panels opened on demand load their code when first opened (docs/PERFORMANCE.md). */
@@ -106,12 +106,38 @@ export function App({ ctl }: { ctl: SimController }) {
       setLibraryOpen(false);
     }
   };
+  // The main menu (owner, 14 Nov 2026: "a main menu option that allows the player to return to the top menu
+  // quickly"): the hub, from the toolbar's first button or the Home key. The sail waits while it is open and goes
+  // on as it was when it closes (a new activity starts itself).
+  const hubPaused = useRef(false);
+  const openHub = () => {
+    setToolsOpen(false);
+    hubPaused.current = !ctl.getState().paused;
+    if (hubPaused.current) ctl.togglePause();
+    setHubOpen(true);
+  };
   const closeHub = (then?: () => void) => {
     markWelcomed();
     setHubOpen(false);
     setHubFirst(false);
     then?.();
+    if (hubPaused.current && ctl.getState().paused) ctl.togglePause();
+    hubPaused.current = false;
   };
+  const homeKey = useRef({ open: hubOpen, openHub });
+  homeKey.current = { open: hubOpen, openHub };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Home' || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Home belongs to a text field, a list or a slider when one has the focus, and to an open menu or dialog.
+      const t = e.target as HTMLElement | null;
+      if (t?.tagName && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || t.closest('[role="menu"], [role="dialog"]'))) return;
+      e.preventDefault();
+      if (!homeKey.current.open) homeKey.current.openHub();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const activity = activityOf(ui);
   const startTutorial = () => ctl.leaveTo('Starting a lesson', () => ctl.startTutorial());
 
@@ -226,15 +252,16 @@ export function App({ ctl }: { ctl: SimController }) {
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
         <div className="tb-items">
-          {/* What you are doing, and the way to the other experiences. */}
+          {/* Back to the main menu at once; what you are doing, and the way to the other experiences. */}
           <div className="tb-group">
+            <button className="tb-home" onClick={openHub} aria-haspopup="dialog" aria-label="Main menu" title="Main menu: learn, sail freely, race or choose a scenario (Home)" data-testid="main-menu">
+              <IconHome />
+              <span className="tb-label">Main menu</span>
+            </button>
             <button
               className="activity-chip"
               data-kind={activity.kind}
-              onClick={() => {
-                setToolsOpen(false);
-                setHubOpen(true);
-              }}
+              onClick={openHub}
               aria-haspopup="dialog"
               aria-label={`Activity: ${activity.label}${activity.detail ? `, ${activity.detail}` : ''}. Choose another`}
               title={`${activity.label}${activity.detail ? ` · ${activity.detail}` : ''}: learn to sail, sail freely, race against AI or choose a scenario`}
@@ -281,13 +308,13 @@ export function App({ ctl }: { ctl: SimController }) {
           <div className="tb-group">
             <button aria-pressed={raceOpen} onClick={() => openRace(!raceOpen)} title="Race: today\u2019s challenge, or choose the course, the fleet, the start and the conditions">Race</button>
             <button className="tb-secondary" aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
-            <button className="tb-secondary" aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Set up wind, tide, place, course and fleet">Scenario</button>
+            <button className="tb-secondary" aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Options: the boat, wind, tide, place, course and fleet">Options</button>
           </div>
           {/* Everything else, one click further away. */}
           <div className="tb-group">
             <Menu
-              label="More"
-              title="Lessons, course editor, what is shown, and physics tools"
+              label="Settings"
+              title="Settings: lessons, course editor, what is shown, sound, all settings, and physics tools"
               items={[
                 { section: 'Learn and plan', label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
                 { label: 'Teaching overlay', checked: ui.teaching, onSelect: () => ctl.toggleTeaching() },
@@ -300,7 +327,7 @@ export function App({ ctl }: { ctl: SimController }) {
                 { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
-                { section: 'Settings', label: 'Settings', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
+                { section: 'Settings', label: 'All settings…', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
                 { label: ui.audio.muted ? 'Sound off' : 'Sound on', keys: 'U', checked: !ui.audio.muted, onSelect: () => ctl.toggleMute() },
                 // The engineering tools (calibration and checking the physics): Expert level, or Settings → Help and accessibility.
                 ...(ui.prefs.devTools || ui.level === 'expert'

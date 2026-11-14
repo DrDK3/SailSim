@@ -623,6 +623,8 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
 
 /* UI v2 slice 1: the activity button (start of the toolbar) and the experience hub. */
 .ui-icon { flex-shrink: 0; }
+.tb-home { gap: var(--s2); font-weight: 600; }
+.tb-home .ui-icon { width: 20px; height: 20px; color: var(--accent); }
 .activity-chip { gap: var(--s2); padding: 4px 12px 4px 8px; border-radius: var(--r-pill); background: var(--surface-control); font-weight: 600; max-width: 300px; }
 .activity-chip .ui-icon { width: 20px; height: 20px; color: var(--accent); }
 .activity-chip[data-kind='free'] .ui-icon { color: var(--good); }

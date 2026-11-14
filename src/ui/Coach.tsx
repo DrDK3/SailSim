@@ -23,7 +23,7 @@ export function CoachCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       <div className="row coach-head">
         <h3>{d ? 'Debrief' : 'Coach'}</h3>
         <button className="link" onClick={() => setOpen(!expanded)} aria-expanded={expanded}>{expanded ? 'Hide' : d ? 'Show the debrief' : 'Show the briefing'}</button>
-        <button className="link" onClick={() => ctl.toggleCoach(false)} title="Turn the coach off (More → Race coach turns it back on)">Off</button>
+        <button className="link" onClick={() => ctl.toggleCoach(false)} title="Turn the coach off (Settings → Race coach turns it back on)">Off</button>
       </div>
       {expanded && !d && (
         <>

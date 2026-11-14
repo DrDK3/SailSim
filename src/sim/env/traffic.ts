@@ -1,4 +1,5 @@
 import type { NE } from '../boat/forces';
+import { shipBuoyAvoidPoints } from './shipBuoys';
 import { createRng } from '../math/rng';
 import type { FerryRoute } from './ferries';
 import { fairwayRoute, type FairwayInput } from './fairway';
@@ -1398,7 +1399,8 @@ export function buildRiverTraffic(o: {
     waterLevel: o.waterLevel,
     berths,
     piers: o.piers,
-    fairway: o.geo ? { bedElevation: (n, e) => o.geo!.bedElevation(n, e), inDomain: (n, e) => o.geo!.inDomain(n, e), waterLevelOdn: ROUTE_LEVEL_ODN, avoid: o.moorings, minDepth: 1.5 } : undefined,
+    // Routes keep off the moorings, and off the ship buoys and the yacht on them (src/sim/env/shipBuoys.ts).
+    fairway: o.geo ? { bedElevation: (n, e) => o.geo!.bedElevation(n, e), inDomain: (n, e) => o.geo!.inDomain(n, e), waterLevelOdn: ROUTE_LEVEL_ODN, avoid: [...(o.moorings ?? []), ...shipBuoyAvoidPoints()], minDepth: 1.5 } : undefined,
     marinas,
   });
 }

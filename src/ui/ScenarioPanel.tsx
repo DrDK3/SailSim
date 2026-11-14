@@ -113,8 +113,8 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
   };
 
   return (
-    <section className="panel scenario" aria-label="Scenario settings">
-      <h3>Scenario</h3>
+    <section className="panel scenario" aria-label="Options">
+      <h3>Options</h3>
       <BoatChoice value={draft.boat ?? DEFAULT_SQUIB_TYPE} onChange={(boat) => setDraft({ ...draft, boat })} />
       <label className="field select-field">
         <span>Helm</span>

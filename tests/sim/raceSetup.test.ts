@@ -20,7 +20,7 @@ beforeEach(() => {
 });
 
 describe('race set-up', () => {
-  it('offers what the Scenario panel used to: any library course, laps, leg length and the preparatory flag', () => {
+  it('offers what the Scenario (now Options) panel used to: any library course, laps, leg length and the preparatory flag', () => {
     const lib = quickRaceScenario({ ...DEFAULT_QUICK_RACE, venue: 'library', libraryId: 'sim-river-range', laps: 3, prepFlag: 'U' }, DEFAULT_SCENARIO);
     expect(lib.scenario.course).toEqual({ source: 'library', id: 'sim-river-range', laps: 3 });
     expect(lib.scenario.fleet?.prepFlag).toBe('U');

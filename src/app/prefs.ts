@@ -11,7 +11,7 @@ export interface Prefs {
   batterySaver: boolean;
   /** Daylight view: when the real sun is low or down, light the picture as at midday (src/app/daylightView.ts). */
   daylightView: boolean;
-  /** The physics and developer tools in the More menu (also shown at the Expert level). */
+  /** The physics and developer tools in the Settings menu (also shown at the Expert level). */
   devTools: boolean;
   /** The start countdown spoken by the device's own voice (src/app/countdown.ts, src/render/speech.ts). */
   spokenCountdown: boolean;
