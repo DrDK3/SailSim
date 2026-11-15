@@ -77,6 +77,8 @@ export interface ContactEvent {
   point: Vec;
   /** A pier or pontoon that floats on fenders (it gives). */
   floating?: boolean;
+  /** A rope (a moored ship's mooring line): it stops her but does her no harm. */
+  soft?: boolean;
 }
 
 /** Height (m above the waterline) at which contact forces act, for the heel they cause: topsides, fenders, piles (E). */
@@ -412,7 +414,7 @@ export class Fleet {
           const kc = pc.floating ? PIER_CONTACT.floating : PIER_CONTACT.fixed;
           const f = force(c, { n: -va.n, e: -va.e }, kc.stiffness, kc.damping);
           apply(i, { n: -f.n, e: -f.e }, c.point, pc.floating ? CONTACT_HEIGHT.pontoon : CONTACT_HEIGHT.jetty);
-          touch(pairKey(oa.id, `pier-${pc.pier}`), { kind: 'pier', a: oa.id, b: `pier-${pc.pier}`, label: pc.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point, floating: pc.floating });
+          touch(pairKey(oa.id, `pier-${pc.pier}`), { kind: 'pier', a: oa.id, b: `pier-${pc.pier}`, label: pc.label, speed: Math.max(0, va.n * c.normal.n + va.e * c.normal.e), point: c.point, floating: pc.floating, ...(pc.soft ? { soft: true } : {}) });
         }
       }
     }
@@ -469,7 +471,8 @@ export class Fleet {
   private damageFrom(ev: ContactEvent): void {
     const A = this.boat(ev.a);
     if (!A) return;
-    const soft = ev.kind === 'mark' && this.marks.find((m) => m.id === ev.b)?.stiffness === CONTACT.softStiffness;
+    // Inflatable marks and ropes give: meeting them does no damage.
+    const soft = (ev.kind === 'mark' && this.marks.find((m) => m.id === ev.b)?.stiffness === CONTACT.softStiffness) || (ev.kind === 'pier' && ev.soft);
     if (soft) return;
     const B = ev.kind === 'boat' ? this.boat(ev.b) : undefined;
     const mass = B ? (A.sim.params.mass * B.sim.params.mass) / (A.sim.params.mass + B.sim.params.mass) : A.sim.params.mass;

@@ -11,7 +11,7 @@ import { Fleet } from '../../src/sim/race/fleet';
 import { polygonContact } from '../../src/sim/race/hull';
 import { raceStructures } from '../../src/sim/race/setup';
 import { buildRiverTraffic } from '../../src/sim/env/traffic';
-import { MOSAIQUE, MOSAIQUE_TENDER, SHIP_BUOYS, SHIP_BUOY_SIZE, mooredBerth, shipBuoyAvoidPoints, shipBuoyStructures, tenderOutline, yachtOutline } from '../../src/sim/env/shipBuoys';
+import { MOORING_FAIRLEADS, MOSAIQUE, MOSAIQUE_TENDER, SHIP_BUOYS, SHIP_BUOY_SIZE, mooredBerth, mooringLines, shipBuoyAvoidPoints, shipBuoyStructures, tenderOutline, yachtOutline } from '../../src/sim/env/shipBuoys';
 import { pointInPolygon } from '../../src/sim/course/geometry';
 import { loadDartApp } from './helpers';
 
@@ -131,6 +131,64 @@ describe('meeting them', () => {
     const r = sailInto(b, 90, Array.from({ length: 10 }, (_, i) => [b.e + (SHIP_BUOY_SIZE.diameter / 2) * Math.cos((i / 10) * Math.PI * 2), b.n + (SHIP_BUOY_SIZE.diameter / 2) * Math.sin((i / 10) * Math.PI * 2)] as [number, number]));
     expect(r.events.some((e) => e.label.includes('ship buoy MS4'))).toBe(true);
     expect(r.deepest).toBeLessThan(0.6);
+  });
+});
+
+describe('her mooring lines', () => {
+  it('are solid: two from her bow to MS2, two from her transom to MS1, ropes that give', () => {
+    const lines = shipBuoyStructures().filter((s) => s.name === "Mosaique's mooring line");
+    expect(lines).toHaveLength(4);
+    expect(MOORING_FAIRLEADS.map((f) => f.to)).toEqual(['MS2', 'MS2', 'MS1', 'MS1']);
+    for (const l of lines) {
+      expect(l.soft).toBe(true);
+      expect(l.line).toHaveLength(2);
+      const end = l.line![1]!;
+      expect(SHIP_BUOYS.some((b) => b.e === end[0] && b.n === end[1])).toBe(true);
+    }
+    const solid = raceStructures(app.features as never, app.geo);
+    expect(solid.filter((s) => s.name === "Mosaique's mooring line")).toHaveLength(4);
+  });
+
+  it('a Squib sailed square into a stern line meets it, does not cross it, and takes no harm', () => {
+    // The port stern line, from her transom's port corner to MS1; aim at its middle from its outer (west) side.
+    const l = mooringLines()[2]!;
+    const [ae, an] = l.from;
+    const [be, bn] = l.to;
+    const len = Math.hypot(be - ae, bn - an);
+    const ue = (be - ae) / len;
+    const un = (bn - an) / len;
+    // The normal away from the yacht's centre line (the side the other stern line is not on).
+    const other = mooringLines()[3]!;
+    let ne = un;
+    let nn = -ue;
+    const mid = { e: (ae + be) / 2, n: (an + bn) / 2 };
+    const otherMid = { e: (other.from[0] + other.to[0]) / 2, n: (other.from[1] + other.to[1]) / 2 };
+    if ((otherMid.e - mid.e) * ne + (otherMid.n - mid.n) * nn > 0) {
+      ne = -ne;
+      nn = -nn;
+    }
+    const headingDeg = (Math.atan2(-ne, -nn) * 180) / Math.PI;
+    const h = (headingDeg * Math.PI) / 180;
+    const env = { ...uniformEnvironment({ twsKn: 10, twdDeg: (headingDeg + 90 + 360) % 360 }), startEpochMs: Date.parse('2026-07-15T13:00:00Z'), waterLevel: () => 2 };
+    const sim = new Simulation({ params: squibParams(), env, seabed: app.geo, ownsEnvironment: false, initial: { n: mid.n - Math.cos(h) * 25, e: mid.e - Math.sin(h) * 25, headingDeg, speedKn: 4 }, input: { autoMain: true, autoJib: true, autoCrew: true } });
+    const fleet = new Fleet(env);
+    const b = fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xffffff, kind: 'human', sim });
+    fleet.setObstacles({ piers: raceStructures(app.features as never, app.geo) });
+    // Signed distance of a point from the line, + on the side she comes from.
+    const side = (p: { e: number; n: number }) => (p.e - ae) * ne + (p.n - an) * nn;
+    let deepest = Infinity;
+    for (let s = 0; s < 1500; s++) {
+      fleet.stepOnce();
+      const pts = (fleet as unknown as { body: (x: unknown) => { pts: { n: number; e: number }[] } }).body(b).pts;
+      deepest = Math.min(deepest, ...pts.map(side));
+    }
+    expect(fleet.events.some((e) => e.label === "Mosaique's mooring line")).toBe(true);
+    // No part of her hull reached the rope (its solid strip reaches half a metre either side of it).
+    expect(deepest).toBeGreaterThan(0);
+    expect(side(sim.state)).toBeGreaterThan(0);
+    // A rope gives: no hole, no scar.
+    expect(sim.damage.breaches).toHaveLength(0);
+    expect(sim.damage.scars).toHaveLength(0);
   });
 });
 
