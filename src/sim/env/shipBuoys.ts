@@ -130,21 +130,62 @@ export function buoyOutline(b: ShipBuoy, sides = 10): [number, number][] {
   });
 }
 
-/** The buoys and the yacht as solid outlines for the boats (src/sim/race/setup.ts raceStructures). */
-export function shipBuoyStructures(): { name: string; floating: true; poly: [number, number][] }[] {
+/**
+ * Her mooring lines (owner, 15 Nov 2026: "the squib should not be able to go through the super yacht mooring lines"):
+ * two from the fairleads either side of her stem to the buoy ahead, two from the fairleads at her transom's corners to
+ * the buoy astern. Where each leaves her (along from her centre, + forward; across, + starboard) and which buoy it
+ * goes to; src/render/mosaique.ts draws them from the same points.
+ */
+export const MOORING_FAIRLEADS: readonly { along: number; across: number; to: string }[] = [
+  { along: MOSAIQUE.loa / 2 - 0.6, across: -0.5, to: MOSAIQUE.between[1] },
+  { along: MOSAIQUE.loa / 2 - 0.6, across: 0.5, to: MOSAIQUE.between[1] },
+  { along: -(MOSAIQUE.loa / 2 + 0.03), across: -3.45, to: MOSAIQUE.between[0] },
+  { along: -(MOSAIQUE.loa / 2 + 0.03), across: 3.45, to: MOSAIQUE.between[0] },
+];
+
+/** Each mooring line's ends in plan (local e, n): her fairlead and the buoy's ring (its centre). */
+export function mooringLines(): { from: [number, number]; to: [number, number] }[] {
+  const { e, n, heading } = mooredBerth();
+  return MOORING_FAIRLEADS.map((f) => {
+    const b = SHIP_BUOYS.find((x) => x.id === f.to)!;
+    return { from: toLocal([[f.along, f.across]], e, n, heading)[0]!, to: [b.e, b.n] as [number, number] };
+  });
+}
+
+/** A solid thing on the water for the boats: an outline, or a line with a width; a rope gives (`soft`). */
+export interface ShipBuoyStructure {
+  name: string;
+  floating: true;
+  poly?: [number, number][];
+  line?: [number, number][];
+  width?: number;
+  soft?: true;
+}
+
+/**
+ * The buoys, the yacht, her tender and her mooring lines, solid for the boats (src/sim/race/setup.ts raceStructures).
+ * A line is a rope above the water a Squib cannot pass under or through: solid along its length (its strip is a
+ * metre wide, the narrowest the pier pieces make), and soft (it stops her without harm).
+ */
+export function shipBuoyStructures(): ShipBuoyStructure[] {
   return [
     ...SHIP_BUOYS.map((b) => ({ name: `ship buoy ${b.id}`, floating: true as const, poly: buoyOutline(b) })),
     { name: `the superyacht ${MOSAIQUE.name}`, floating: true as const, poly: yachtOutline() },
     { name: `${MOSAIQUE.name}'s tender`, floating: true as const, poly: tenderOutline() },
+    ...mooringLines().map((l) => ({ name: `${MOSAIQUE.name}'s mooring line`, floating: true as const, line: [l.from, l.to], width: 0.6, soft: true as const })),
   ];
 }
 
-/** Points for river traffic's routes to keep clear of (src/sim/env/traffic.ts fairway avoid). */
+/** Points for river traffic's routes to keep clear of (src/sim/env/traffic.ts fairway avoid): buoys, yacht, lines. */
 export function shipBuoyAvoidPoints(): { n: number; e: number }[] {
   const out = SHIP_BUOYS.map((b) => ({ n: b.n, e: b.e }));
   const { e, n, heading } = mooredBerth();
   for (let a = -MOSAIQUE.loa / 2 - MOSAIQUE_TENDER.platform; a <= MOSAIQUE.loa / 2 + 1e-6; a += 6) out.push({ e: e + a * Math.sin(heading), n: n + a * Math.cos(heading) });
   const [te, tn] = toLocal([[MOSAIQUE_TENDER.along, MOSAIQUE_TENDER.across]], e, n, heading)[0]!;
   out.push({ e: te, n: tn });
+  for (const l of mooringLines()) {
+    const len = Math.hypot(l.to[0] - l.from[0], l.to[1] - l.from[1]);
+    for (let d = 6; d < len; d += 6) out.push({ e: l.from[0] + ((l.to[0] - l.from[0]) * d) / len, n: l.from[1] + ((l.to[1] - l.from[1]) * d) / len });
+  }
   return out;
 }

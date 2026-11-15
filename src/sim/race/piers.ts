@@ -18,6 +18,8 @@ export interface PierInput {
   poly?: [number, number][];
   /** A floating pontoon's gangway from the shore: solid too (a boat cannot pass under it near the wall). */
   gangway?: { shore: [number, number]; pontoon: [number, number] };
+  /** A rope (a moored ship's mooring line): it stops a boat but gives, and meeting it does her no harm. */
+  soft?: boolean;
 }
 
 /** A gangway's width (m, E). */
@@ -28,6 +30,8 @@ export interface PierPiece {
   pier: number;
   label: string;
   floating: boolean;
+  /** A rope: no damage from meeting it (PierInput.soft). */
+  soft?: boolean;
   /** Convex, clockwise seen from above (as hull.ts expects). */
   pts: Vec[];
   n: number;
@@ -85,11 +89,11 @@ export function triangulate(ring: Vec[]): Vec[][] {
   return out;
 }
 
-function piece(pier: number, label: string, floating: boolean, pts: Vec[]): PierPiece {
+function piece(pier: number, label: string, floating: boolean, pts: Vec[], soft = false): PierPiece {
   const n = pts.reduce((a, p) => a + p.n, 0) / pts.length;
   const e = pts.reduce((a, p) => a + p.e, 0) / pts.length;
   const radius = Math.max(...pts.map((p) => Math.hypot(p.n - n, p.e - e)));
-  return { pier, label, floating, pts, n, e, radius };
+  return soft ? { pier, label, floating, soft, pts, n, e, radius } : { pier, label, floating, pts, n, e, radius };
 }
 
 /** Convex pieces for every pier in the data. */
@@ -121,7 +125,7 @@ export function pierPieces(piers: readonly PierInput[]): PierPiece[] {
         const [e0, n0] = p.line[k - 1]!;
         const [e1, n1] = p.line[k]!;
         const rect = rectangle(e0, n0, e1, n1, h, h);
-        if (rect) out.push(piece(i, label, p.floating, rect));
+        if (rect) out.push(piece(i, label, p.floating, rect, p.soft));
       }
     } else if (p.poly && p.poly.length >= 3) {
       for (const t of triangulate(p.poly.map(([e, n]) => ({ e, n })))) out.push(piece(i, label, p.floating, t));

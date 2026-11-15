@@ -1,7 +1,8 @@
 /**
  * The superyacht Mosaique on the ship buoys (owner, 14 Nov 2026: "Super Yacht Mosaique ... flying a large RDYC burgee,
  * moored"; "please improve the detail of Mosaique; this is important"; "fly the ensign off the stern"; the ensign the
- * club's defaced red ensign). Built without a browser here: the shapes, where they are, and the flags' behaviour.
+ * club's defaced red ensign; 15 Nov: "remove the club burgee from the top of the mast ... it should only be on the
+ * stern"). Built without a browser here: the shapes, where they are, and the ensign's behaviour.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -71,35 +72,38 @@ describe('Mosaique and the ship buoys', () => {
     expect(bad).toBe(0);
   });
 
-  it('flies the ensign from a staff off her stern, and the large burgee at her masthead', () => {
+  it('flies the club’s ensign from a staff off her stern, and nothing at her masthead', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
-    const burgee = view.yacht.getObjectByName('mosaique-burgee')!;
-    // The ensign's staff head is aft of the transom (her frame: aft is +z), on the centre line.
+    // The ensign's staff head is aft of the transom (her frame: aft is +z), on the centre line, low (not aloft).
     expect(ensign.position.z).toBeGreaterThan(MOSAIQUE.loa / 2 + 0.8);
     expect(Math.abs(ensign.position.x)).toBeLessThan(0.01);
-    expect(burgee.position.y).toBeGreaterThan(MOSAIQUE_DRAWN.masthead);
-    expect(MOSAIQUE_DRAWN.burgee.fly).toBeGreaterThanOrEqual(2);
+    expect(ensign.position.y).toBeLessThan(8);
     expect(MOSAIQUE_DRAWN.ensign.fly / MOSAIQUE_DRAWN.ensign.hoist).toBeCloseTo(2, 6);
+    // No burgee: the ensign is her only flag.
+    expect(view.group.getObjectByName('mosaique-burgee')).toBeUndefined();
+    const flags: string[] = [];
+    view.group.traverse((o) => {
+      if (o.name.endsWith('-cloth')) flags.push(o.name);
+    });
+    expect(flags).toEqual(['mosaique-ensign-cloth']);
   });
 
-  it('the ensign is flown at colours (08:00 to sunset in summer) and lowered at night; the burgee stays up', () => {
+  it('the ensign is flown at colours (08:00 to sunset in summer) and lowered at night', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
-    const burgee = view.yacht.getObjectByName('mosaique-burgee')!;
     view.update(Date.parse('2026-07-15T11:00:00Z'), Math.PI / 2, 6, 10);
     expect(ensign.visible).toBe(true);
     view.update(Date.parse('2026-07-15T02:00:00Z'), Math.PI / 2, 6, 10);
     expect(ensign.visible).toBe(false);
-    expect(burgee.visible).toBe(true);
   });
 
-  it('the flags stream away from the wind', () => {
-    const burgee = view.yacht.getObjectByName('mosaique-burgee')!;
+  it('the ensign streams away from the wind', () => {
+    const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
     for (const fromDeg of [0, 90, 200, 290]) {
       const from = (fromDeg * Math.PI) / 180;
       view.update(Date.parse('2026-07-15T11:00:00Z'), from, 7, 3);
       view.group.updateMatrixWorld(true);
       // The fly's direction in the world (+x of the pivot), against where the wind blows to (e, n) = -(sin, cos).
-      const fly = new THREE.Vector3(1, 0, 0).transformDirection(burgee.matrixWorld);
+      const fly = new THREE.Vector3(1, 0, 0).transformDirection(ensign.matrixWorld);
       const toE = -Math.sin(from);
       const toN = -Math.cos(from);
       expect(fly.x * toE + -fly.z * toN).toBeGreaterThan(0.9);

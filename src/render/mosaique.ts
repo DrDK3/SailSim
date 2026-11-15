@@ -1,19 +1,18 @@
 import * as THREE from 'three';
 import { Kit, VMAT, cabin, hull, lifebuoy, outboard, place, rail, type Hull, type HullSpec } from './vessels';
-import { burgeeCanvas } from './burgee';
 import { rdycEnsignTexture } from './clubEnsign';
 import { bakedPerson } from './crew';
 import { coloursFlying } from './colours';
 import { flagDroop, flagYaw } from './vane';
 import { buildLights, colregsLights, updateLights } from './navLights';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
-import { MOSAIQUE, MOSAIQUE_TENDER, SHIP_BUOYS, SHIP_BUOY_SIZE, mooredBerth, type ShipBuoy } from '../sim/env/shipBuoys';
+import { MOORING_FAIRLEADS, MOSAIQUE, MOSAIQUE_TENDER, SHIP_BUOYS, SHIP_BUOY_SIZE, mooredBerth, type ShipBuoy } from '../sim/env/shipBuoys';
 
 /**
- * The main-stream ship buoys MS1–MS5 and the superyacht Mosaique moored fore and aft on MS1 and MS2, flying a large
- * Royal Dart Yacht Club burgee at her masthead and the club's defaced red ensign from a staff off her stern (owner,
- * 14 Nov 2026, with photographs of her; the ensign from the owner's drawing). Where the buoys are, and which pair she
- * lies on, is src/sim/env/shipBuoys.ts (estimates).
+ * The main-stream ship buoys MS1–MS5 and the superyacht Mosaique moored fore and aft on MS1 and MS2, flying the Royal
+ * Dart Yacht Club's defaced red ensign from a staff off her stern (owner, 14 Nov 2026, with photographs of her; the
+ * ensign from the owner's drawing; 15 Nov: no burgee at her masthead, the club's flag only at her stern). Where the
+ * buoys are, and which pair she lies on, is src/sim/env/shipBuoys.ts (estimates); her mooring lines are solid there.
  *
  * Drawn from the owner's photographs (a Proteksan Turquoise 50 m of 2002): a blue displacement hull with a raked stem,
  * a white capping rail and a stainless rubbing strake, a row of oblong hull windows and round ports forward, anchors
@@ -44,10 +43,9 @@ export const MOSAIQUE_DRAWN = {
   mainHouse: 2.7,
   upperHouse: 2.5,
   roof: 0.22,
-  /** Height of the masthead (the burgee's truck) above the water. */
+  /** Height of the signal mast's truck above the water. */
   masthead: 18.8,
   ensign: { fly: 2.4, hoist: 1.2 },
-  burgee: { fly: 2.4, hoist: 1.45 },
 };
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -203,11 +201,8 @@ function tenderModel(): THREE.Group {
 interface YachtParts {
   group: THREE.Group;
   ensignAt: THREE.Vector3;
-  burgeeAt: THREE.Vector3;
-  bow: THREE.Vector3;
-  stern: THREE.Vector3;
-  /** Fairleads at the transom's corners (the stern lines), and the cleats the tender's lines lead to. */
-  sternFairleads: THREE.Vector3[];
+  /** Her mooring lines' fairleads in her frame (MOORING_FAIRLEADS, at their heights), and the tender's cleats. */
+  fairleads: THREE.Vector3[];
   tenderCleats: THREE.Vector3[];
   mastZ: number;
 }
@@ -434,7 +429,7 @@ function yachtModel(): YachtParts {
 
   // ---- The radar mast: raked legs, a crossbar with the two big radomes side by side, an open-array radar ahead of
   // them, horns, whips, a searchlight and satellite domes on the deckhouse roof; the signal mast above, its yard and
-  // masthead light; the burgee at its truck.
+  // masthead light and its truck.
   const mastZ = -1.2;
   const legTop = sRoof + 2.6;
   for (const side of [-1, 1]) kit.rod(v(side * 1.9, sRoof, mastZ + 1.4), v(side * 1.4, legTop, mastZ), 0.2, VMAT.gloss, WHITE, 12);
@@ -480,9 +475,10 @@ function yachtModel(): YachtParts {
   kit.rod(staffBase, staffTop, 0.045, VMAT.gloss, 0x7a4b26, 10);
   kit.add(new THREE.SphereGeometry(0.075, 10, 8), VMAT.gloss, 0xd6a73a, place(staffTop.x, staffTop.y + 0.06, staffTop.z));
 
-  // ---- Fairleads for the stern lines at the transom's corners; the tender's fenders and the cleats for its lines.
-  const sternFairleads = [-1, 1].map((side) => v(side * 3.45, h.sheer(sternZ) - 0.12, sternZ + 0.03));
-  for (const f of sternFairleads) kit.box(0.5, 0.2, 0.14, VMAT.steel, undefined, f.x, f.y, f.z);
+  // ---- Fairleads for the mooring lines (either side of the stem, and at the transom's corners: the same points the
+  // physics uses, src/sim/env/shipBuoys.ts); the tender's fenders and the cleats for its lines.
+  const fairleads = MOORING_FAIRLEADS.map((f) => v(f.across, f.along > 0 ? h.sheer(-f.along) - 0.1 : h.sheer(sternZ) - 0.12, -f.along));
+  for (const f of fairleads) kit.box(0.5, 0.2, 0.14, VMAT.steel, undefined, f.x, f.y, f.z);
   const tz = -MOSAIQUE_TENDER.along;
   const tenderCleats = [tz - 3.4, tz + 3.0].map((z) => v(h.deckHalf(z) - 0.2, h.sheer(z) + 0.02, z));
   for (const c of tenderCleats) kit.box(0.1, 0.08, 0.36, VMAT.steel, undefined, c.x, c.y, c.z);
@@ -510,7 +506,7 @@ function yachtModel(): YachtParts {
     plate.position.set(0, (h.sheer(sternZ) + 2.3) / 2 + 0.05, sternZ + 0.07);
     group.add(plate);
   }
-  return { group, ensignAt: staffTop, burgeeAt: v(0, truck, mastZ), bow: v(0, h.sheer(-L / 2 + 1), -L / 2 + 0.6), stern: v(0, h.deck(sternZ) + 0.6, sternZ - 0.4), sternFairleads, tenderCleats, mastZ };
+  return { group, ensignAt: staffTop, fairleads, tenderCleats, mastZ };
 }
 
 /** The buoys, the yacht on them, her tender, her mooring lines and her flags (add `group` to the floating group). */
@@ -518,7 +514,6 @@ export class ShipBuoysView {
   readonly group = new THREE.Group();
   readonly yacht: THREE.Group;
   private readonly ensign: WavingFlag;
-  private readonly burgee: WavingFlag;
   private readonly lights: THREE.Group;
   private readonly heading: number;
   private day = 1;
@@ -533,35 +528,27 @@ export class ShipBuoysView {
     this.yacht.position.set(berth.e, 0, -berth.n);
     this.yacht.rotation.y = -berth.heading;
     this.group.add(this.yacht);
-    // Her tender astern on its painter, bow towards her (the yacht's frame: aft is +z).
+    // Her tender alongside her starboard quarter (the yacht's frame: aft is +z).
     const tender = tenderModel();
     tender.position.set(MOSAIQUE_TENDER.across, 0, -MOSAIQUE_TENDER.along);
     this.yacht.add(tender);
-    // Her lines: the bow to the buoy ahead, the stern to the one astern; the tender's painter.
+    // Her mooring lines from her fairleads to the buoys' rings; the tender's lines.
     const toWorld = (p: THREE.Vector3) => p.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -berth.heading).add(new THREE.Vector3(berth.e, 0, -berth.n));
     const ring = (id: string) => {
       const b = SHIP_BUOYS.find((x) => x.id === id)!;
       return new THREE.Vector3(b.e, SHIP_BUOY_SIZE.freeboard + 0.42, -b.n);
     };
     const lines = new Kit();
-    for (const dx of [-0.5, 0.5]) {
-      hangingLine(lines, toWorld(m.bow.clone().add(new THREE.Vector3(dx, 0, 0))), ring(MOSAIQUE.between[1]), 2.2);
-    }
-    for (const f of m.sternFairleads) hangingLine(lines, toWorld(f), ring(MOSAIQUE.between[0]), 2.2);
+    MOORING_FAIRLEADS.forEach((f, i) => hangingLine(lines, toWorld(m.fairleads[i]!), ring(f.to), 2.2));
     // The tender's bow and stern lines up to her cleats.
     const t = MOSAIQUE_TENDER;
     const ends = [v(t.across - 0.3, 0.95, -t.along - t.length / 2 + 0.5), v(t.across - 0.6, 0.95, -t.along + t.length / 2 - 0.4)];
     ends.forEach((e, i) => hangingLine(lines, toWorld(m.tenderCleats[i]!), toWorld(e), 0.25, 0.018));
     this.group.add(lines.build('mosaique-lines'));
-    // Flags: the club's ensign off the stern, its burgee (large) at the masthead.
+    // The club's ensign off the stern: her only flag.
     this.ensign = new WavingFlag('mosaique-ensign', MOSAIQUE_DRAWN.ensign.fly, MOSAIQUE_DRAWN.ensign.hoist, rdycEnsignTexture(), 0xd0101e);
     this.ensign.pivot.position.copy(m.ensignAt);
     this.yacht.add(this.ensign.pivot);
-    const bt = typeof document === 'undefined' ? null : new THREE.CanvasTexture(burgeeCanvas());
-    if (bt) bt.colorSpace = THREE.SRGBColorSpace;
-    this.burgee = new WavingFlag('mosaique-burgee', MOSAIQUE_DRAWN.burgee.fly, MOSAIQUE_DRAWN.burgee.hoist, bt, 0xc8102e, bt ? 0.5 : 0);
-    this.burgee.pivot.position.copy(m.burgeeAt).add(new THREE.Vector3(0, MOSAIQUE_DRAWN.burgee.hoist / 2, 0));
-    this.yacht.add(this.burgee.pivot);
     // At anchor (moored) by night: an all-round white light (COLREGs Rule 30).
     this.lights = buildLights(colregsLights('anchored', { length: MOSAIQUE.loa, beam: MOSAIQUE.beam, mastY: MOSAIQUE_DRAWN.masthead - 2.2, mastZ: m.mastZ }));
     this.yacht.add(this.lights);
@@ -571,13 +558,11 @@ export class ShipBuoysView {
     this.day = day;
   }
 
-  /** The flags in the wind (from `windFromDir` rad, `windSpeed` m/s); the ensign at colours; the light at night. */
+  /** The ensign in the wind (from `windFromDir` rad, `windSpeed` m/s), flown at colours; the light at night. */
   update(epochMs: number, windFromDir: number, windSpeed: number, time: number, camera?: THREE.Camera): void {
     const { yaw, aws } = flagYaw(windFromDir, windSpeed, this.heading, 0);
     this.ensign.pivot.visible = coloursFlying(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
     if (this.ensign.pivot.visible) this.ensign.update(yaw + 0.05 * Math.sin(time * 1.3), aws, time);
-    // The burgee at the truck feels a little more wind (E).
-    this.burgee.update(yaw + 0.04 * Math.sin(time * 1.7 + 1), aws * 1.15, time + 0.4);
     if (camera) {
       this.yacht.updateMatrixWorld();
       updateLights(this.lights, camera, this.day < 0.35);

@@ -344,8 +344,8 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 25.3 | Press the Home key | The main menu opens the same way | |
 | 25.4 | Look along the toolbar | **Options** (was Scenario) opens the boat, wind, tide, place, course and fleet panel; **Settings ▾** (was More) holds lessons, what is shown, sound and "All settings…" | |
 | 25.5 | Sail mid-river opposite the Town Jetty and turn on place labels (L) | Five large yellow buoys, MS1 to MS5 from south to north, the anchorage and its moored boats to their east | |
-| 25.6 | Look at Mosaique on MS1 and MS2, all round | A blue-hulled 50 m superyacht moored bow and stern to the two buoys; the club's large burgee at her masthead; the club's defaced red ensign (crown and arrow in the fly) flying from a staff off her stern by day; her tender alongside; recognisable from your photographs | |
-| 25.7 | Sail gently into her side, and into a buoy | You meet them ("Contact with the superyacht Mosaique", "… ship buoy MS…") and do not pass through | |
+| 25.6 | Look at Mosaique on MS1 and MS2, all round | A blue-hulled 50 m superyacht moored bow and stern to the two buoys; nothing flying at her masthead; the club's defaced red ensign (crown and arrow in the fly) flying from a staff off her stern by day; her tender alongside; recognisable from your photographs | |
+| 25.7 | Sail gently into her side, into a buoy, and into one of her mooring lines between her and a buoy | You meet them ("Contact with the superyacht Mosaique", "… ship buoy MS…", "… Mosaique's mooring line") and do not pass through; the mooring line stops you without damage | |
 | 25.8 | Look at the yacht club's flagstaff | The same ensign, the arrow pointing to the hoist | |
 
 ## Accepting the build
