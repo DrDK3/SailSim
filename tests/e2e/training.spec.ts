@@ -141,3 +141,86 @@ test('beginner exercise: an instructor link opens it; warm-up, attempts with gra
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('squib.exercises.records.v1') ?? '[]').length)).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('tactical exercise: prediction, heading history, removable shift readout, review with decision, outcome and the model demonstrations', async ({ page }) => {
+  test.setTimeout(300_000 * CI_SLOW);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/?nowelcome&quality=low&exercise=wind-shift');
+  const panel = page.getByTestId('exercise');
+  await expect(panel).toBeVisible({ timeout: 90_000 * CI_SLOW });
+  await expect(page.getByTestId('exercise-title')).toHaveText('Before you start: a prediction (optional)');
+  await page.getByTestId('predict-tack').click();
+  await expect(page.getByTestId('exercise-title')).toHaveText('Beat to the windward mark');
+  // A learner inside the page: close-hauled at TWA 42°, a tack on each header, then the laylines and the mark.
+  const mark = { n: -3500 + Math.cos((225 * Math.PI) / 180) * 600, e: 1200 + Math.sin((225 * Math.PI) / 180) * 600 };
+  await page.evaluate((mk) => {
+    const sq = window.__squib!;
+    const c = sq.controller;
+    const DEG = Math.PI / 180;
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+    const returnAt = 60 + 20 + 90;
+    let want = 1;
+    let returned = false;
+    let lastTack = -Infinity;
+    (window as unknown as { __sail: (untilT: number) => void }).__sail = (untilT: number) => {
+      for (let i = 0; i < 7000; i++) {
+        if (c.getState().exercise!.state.stage !== 'attempt' || c.sim.time >= untilT) break;
+        const sn = c.sim.snapshot(false);
+        const t = c.sim.time;
+        const side = sn.mainSide === 1 ? 1 : -1;
+        const toMark = Math.atan2(mk.e - sn.e, mk.n - sn.n);
+        const rel = wrap(toMark - sn.twd);
+        const lim = 48 * DEG;
+        const fetchThis = side === 1 ? rel <= -lim : rel >= lim;
+        const fetchOther = side === 1 ? rel >= lim : rel <= -lim;
+        if (want === side) {
+          if (side === 1 && t > 68 && t < returnAt && lastTack < 0 && !fetchThis) want = -1;
+          else if (!returned && side === -1 && t >= returnAt + 8 && !fetchThis) {
+            returned = true;
+            want = 1;
+          } else if (fetchOther && t - lastTack > 12) want = -side;
+          if (want !== side) lastTack = t;
+        }
+        const up = Math.sign(sn.twa) > 0 ? 'helmRight' : 'helmLeft';
+        const down = up === 'helmRight' ? 'helmLeft' : 'helmRight';
+        if (want !== side) {
+          c.press(up, true);
+          c.press(down, false);
+        } else if (fetchThis && t - lastTack > 6) {
+          const err = (wrap(toMark + side * 3 * DEG - sn.heading) * 180) / Math.PI;
+          c.press('helmRight', err > 3);
+          c.press('helmLeft', err < -3);
+        } else {
+          const err = (Math.abs(sn.twa) * 180) / Math.PI - 42;
+          c.press(up, err > 3);
+          c.press(down, err < -3);
+        }
+        sq.advance(0.1);
+      }
+      ['helmRight', 'helmLeft'].forEach((k) => c.press(k, false));
+    };
+  }, mark);
+  const sail = (untilT: number) => page.evaluate((u) => (window as unknown as { __sail: (u: number) => void }).__sail(u), untilT);
+  // Into the shift: the heading history is drawn; with the overlay the readout names the shift.
+  await sail(68);
+  await expect(page.getByTestId('heading-history')).toBeVisible();
+  await expect(page.getByTestId('exercise-readout')).toContainText(/\d+° left of the start/);
+  // Removing the overlay removes the readout of the shift, and nothing else breaks.
+  await page.getByTestId('exercise-overlay').uncheck();
+  await expect(page.getByTestId('exercise-readout')).not.toContainText('left of the start');
+  await expect(page.getByTestId('heading-history')).toBeVisible();
+  await page.getByTestId('exercise-overlay').check();
+  await sail(700);
+  await expect(page.getByTestId('exercise-title')).toHaveText('Attempt 1: how it went');
+  const review = page.getByTestId('exercise-review');
+  await expect(review).toContainText('Decision: you tacked');
+  await expect(review).toContainText('In this model');
+  await expect(review).toContainText('Outcome: you reached the mark');
+  await expect(review).toContainText('You predicted');
+  const chart = page.getByTestId('exercise-chart');
+  await expect(chart.locator('.chart-legend li')).toHaveCount(3);
+  await expect(chart).toContainText('Model demonstration: tack on each header');
+  await expect(chart).toContainText('Model demonstration: hold to the layline');
+  expect(errors).toEqual([]);
+});

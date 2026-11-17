@@ -27,6 +27,8 @@ export interface ExerciseSample extends TutorialSample {
   jibSheet: number;
   /** The teaching overlay is shown in the 3D view. */
   overlay: boolean;
+  /** Where the true wind comes from at the boat (°T). */
+  twdDeg?: number;
 }
 
 /** Help for one problem, at the three live levels. */
@@ -106,6 +108,24 @@ export interface AttemptRecord {
   help: { 1: number; 2: number; 3: number; requested: number };
   skipped: string[];
   review: ReviewItem[];
+  /** The learner's prediction before the attempts, if the exercise asks for one. */
+  prediction?: string;
+}
+
+/** A small map for the review: the learner's track and the model demonstrations' (local metres, [n, e]). */
+export interface ReviewChart {
+  mark: [number, number];
+  start: [number, number];
+  windFromDeg: number;
+  tracks: { id: string; label: string; points: [number, number][]; timeS?: number }[];
+  note: string;
+}
+
+/** What an exercise shows besides its card: the heading history, the review's map, the prediction's choices. */
+export interface ExerciseExtras {
+  headingHistory?: number[];
+  chart?: ReviewChart;
+  predictions?: { id: string; label: string }[];
 }
 
 export interface PhaseMemory {
@@ -163,6 +183,10 @@ export interface ExerciseDef {
   /** The post-attempt explanation (help level 4). */
   review: (rec: AttemptRecord) => ReviewItem[];
   result: (attempts: AttemptRecord[]) => ExerciseResult;
+  /** Extra things to show for an attempt (1-based) at a stage. */
+  extras?: (attempt: number, stage: ExerciseStage) => ExerciseExtras;
+  /** An attempt (1-based) is started again: forget what the exercise kept for it. */
+  resetAttempt?: (n: number) => void;
 }
 
 export type ExerciseStage = 'intro' | 'attempt' | 'review' | 'result';
@@ -189,6 +213,8 @@ export interface ExerciseState {
   review?: ReviewItem[];
   result?: ExerciseResult;
   records: AttemptRecord[];
+  extras?: ExerciseExtras;
+  prediction?: string;
 }
 
 const NO_ASSISTS = (): Assists => ({ autoMain: false, autoJib: false, autoCrew: false, overlay: false, liveHelp: false });
@@ -216,6 +242,8 @@ export class Exercise {
   readonly records: AttemptRecord[] = [];
   readonly log: HelpEvent[] = [];
   private result?: ExerciseResult;
+  /** The learner's prediction (optional; asked before the first attempt by some exercises). */
+  prediction?: string;
   /** The boat should be set up afresh for this plan (the controller restarts it, then clears this). */
   pendingSetup?: { plan: AttemptPlan; intro: boolean };
 
@@ -329,6 +357,13 @@ export class Exercise {
     this.advance();
   }
 
+  /** Record the learner's prediction and go on to the first attempt. */
+  predict(choice: string): void {
+    if (this.stage !== 'intro') return;
+    this.prediction = choice;
+    this.advance();
+  }
+
   /** Start the current attempt again (Reset, or after getting stuck). Help and assists seen so far still count. */
   restartAttempt(): void {
     if (this.stage === 'result') return;
@@ -338,6 +373,7 @@ export class Exercise {
       return;
     }
     const old = this.records[this.attemptIndex]!;
+    this.def.resetAttempt?.(old.n);
     const rec = newRecord(old.n, old.plan);
     rec.restarts = old.restarts + 1;
     rec.assists = { ...old.assists };
@@ -383,6 +419,7 @@ export class Exercise {
     const rec = this.record!;
     rec.outcome = rec.skipped.length ? 'incomplete' : 'complete';
     rec.independent = isIndependent(rec.assists);
+    if (this.prediction !== undefined) rec.prediction = this.prediction;
     rec.review = this.def.review(rec);
     for (const item of rec.review) {
       const text = [item.observation, item.cause, item.action].filter(Boolean).join(' ');
@@ -443,6 +480,8 @@ export class Exercise {
       review: this.stage === 'review' ? rec?.review : undefined,
       result: this.result,
       records: this.records,
+      extras: this.def.extras?.(this.attemptIndex + 1, this.stage),
+      prediction: this.prediction,
     };
   }
 }

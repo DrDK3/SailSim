@@ -32,12 +32,17 @@
   "windShift": {
     "windKn": { "value": 10, "unit": "kn", "tag": "E", "source": "as the basic lessons" },
     "windFromDeg": { "value": 225, "unit": "deg", "tag": "E", "source": "as the basic lessons" },
-    "markDistM": { "value": 400, "unit": "m", "tag": "E", "source": "a short beat: about 4-5 minutes in 10 kn in the model" },
-    "shiftAtS": { "value": 60, "unit": "s", "tag": "E", "source": "after one minute on the first tack" },
-    "shiftDeg": { "value": 15, "unit": "deg", "tag": "E", "source": "a clear, persistent shift (training slice brief section 8)" },
+    "markDistM": { "value": 600, "unit": "m", "tag": "E", "source": "a short beat: about 5.5 minutes in 10 kn in the model; at 400 m the shift's return came too late to matter (docs/TRAINING_SLICE_REPORT.md section 6)" },
+    "shiftAtS": { "value": 60, "unit": "s", "tag": "E", "source": "after one minute on starboard" },
+    "shiftDeg": { "value": -15, "unit": "deg", "tag": "E", "source": "backing 15 degrees: a header on starboard (training slice brief section 8)" },
     "shiftRampS": { "value": 20, "unit": "s", "tag": "E", "source": "the shift arrives over this time, not as a step" },
-    "decisionWindowS": { "value": 30, "unit": "s", "tag": "E", "source": "a tack within this time of the shift counts as responding to it" },
+    "shiftHoldS": { "value": 90, "unit": "s", "tag": "E", "source": "the shift lasts this long, then turns back over the same ramp: a temporary shift. A persistent shift gave no decision to teach in this model (both choices within 3 s)" },
+    "decisionWindowS": { "value": 30, "unit": "s", "tag": "E", "source": "a tack within this time of the shift beginning counts as responding to it" },
     "roundingRadiusM": { "value": 25, "unit": "m", "tag": "E", "source": "within this distance of the mark counts as reaching it" },
-    "timeLimitS": { "value": 600, "unit": "s", "tag": "E", "source": "the attempt ends here" }
+    "timeLimitS": { "value": 600, "unit": "s", "tag": "E", "source": "the attempt ends here" },
+    "attempts": { "value": 2, "unit": "-", "tag": "E", "source": "one with the shift overlay and help, one on your own" },
+    "helpAttentionS": { "value": 10, "unit": "s", "tag": "E", "source": "as the beginner exercise" },
+    "helpExplainS": { "value": 20, "unit": "s", "tag": "E", "source": "as the beginner exercise" },
+    "helpSuggestS": { "value": 30, "unit": "s", "tag": "E", "source": "as the beginner exercise" }
   }
 }

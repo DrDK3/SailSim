@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import type { ExerciseId } from '../app/exercises/index';
-import type { AttemptRecord } from '../app/exercises/engine';
+import type { AttemptRecord, ReviewChart } from '../app/exercises/engine';
 
 /**
  * An exercise's card (training slice §7–§8): the phase and its goal, the help on show with its level in words
@@ -78,6 +78,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
         <p data-testid="result-next">
           <strong>Next:</strong> {r.nextAction.replace(/^Next( time)?: /, '')}
         </p>
+        {s.extras?.chart && <TrackChart chart={s.extras.chart} />}
         <AttemptTable records={s.records} />
         {r.notes.map((n) => (
           <p key={n} className="fine">
@@ -115,6 +116,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </li>
           ))}
         </ul>
+        {s.extras?.chart && <TrackChart chart={s.extras.chart} />}
         <p className="fine">{assistLine(s.records[s.attempt - 1])}</p>
         <div className="row left wrap">
           <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
@@ -147,6 +149,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           {s.readout}
         </p>
       )}
+      {s.extras?.headingHistory && s.extras.headingHistory.length > 1 && <HeadingHistory values={s.extras.headingHistory} />}
       {s.help && (
         <div className={`exercise-help level-${s.help.level}`} role="status" data-testid="exercise-help" data-level={s.help.level}>
           <span className="help-level">
@@ -155,7 +158,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           <span>{s.help.text}</span>
         </div>
       )}
-      <div className={`tutorial-goal ${s.done ? 'met' : ''}`} role="status" data-testid="exercise-goal">
+      {!(s.stage === 'intro' && s.extras?.predictions) && <div className={`tutorial-goal ${s.done ? 'met' : ''}`} role="status" data-testid="exercise-goal">
         {s.done ? (
           '✓ Done: moving on…'
         ) : ph.durationS ? (
@@ -171,14 +174,25 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
         ) : (
           'Waiting for you…'
         )}
-      </div>
+      </div>}
       {s.stage === 'attempt' && (
         <p className="fine" data-testid="exercise-assists">
           {s.independentSoFar ? 'On your own so far (no auto-trim, overlay or help).' : `Assisted: ${assistWords(s.assists).join(', ')}.`}
         </p>
       )}
       <div className="row left wrap">
-        {s.stage === 'intro' ? (
+        {s.stage === 'intro' && s.extras?.predictions ? (
+          <>
+            {s.extras.predictions.map((p) => (
+              <button key={p.id} onClick={() => ctl.exercisePredict(p.id)} data-testid={`predict-${p.id}`}>
+                {p.label}
+              </button>
+            ))}
+            <button className="link" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
+              Skip and start
+            </button>
+          </>
+        ) : s.stage === 'intro' ? (
           <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
             Start
           </button>
@@ -246,6 +260,82 @@ function AttemptTable({ records }: { records: AttemptRecord[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** The heading over the last minutes (one point a second): a header shows as a step. Text gives the range too. */
+function HeadingHistory({ values }: { values: number[] }) {
+  // Unwrap through north so a turn past 360° does not jump.
+  const un: number[] = [];
+  for (const v of values) {
+    const prev = un[un.length - 1];
+    un.push(prev === undefined ? v : prev + ((((v - prev) % 360) + 540) % 360) - 180);
+  }
+  const lo = Math.min(...un);
+  const hi = Math.max(...un);
+  const span = Math.max(20, hi - lo);
+  const mid = (hi + lo) / 2;
+  const W = 240;
+  const H = 44;
+  const pts = un.map((v, i) => `${((i / Math.max(1, un.length - 1)) * W).toFixed(1)},${(H / 2 - ((v - mid) / span) * (H - 6)).toFixed(1)}`).join(' ');
+  const now = ((Math.round(values[values.length - 1]!) % 360) + 360) % 360;
+  return (
+    <figure className="heading-history" data-testid="heading-history">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label={`Heading history over the last ${values.length} s: now ${now}°, lowest ${Math.round(lo)}°, highest ${Math.round(hi)}°`}>
+        <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+      <figcaption className="fine">Heading, last {values.length} s: now {now}° (range {Math.round(hi - lo)}°)</figcaption>
+    </figure>
+  );
+}
+
+const TRACK_STYLE: Record<string, { dash?: string; cls: string }> = {
+  you: { cls: 'track-you' },
+  tack: { dash: '6 4', cls: 'track-model-a' },
+  hold: { dash: '2 4', cls: 'track-model-b' },
+};
+
+/** The review's map: your track and the model demonstrations', north up, labelled in words (and dash patterns). */
+function TrackChart({ chart }: { chart: ReviewChart }) {
+  const all = [chart.mark, chart.start, ...chart.tracks.flatMap((t) => t.points)];
+  const ns = all.map((p) => p[0]);
+  const es = all.map((p) => p[1]);
+  const pad = 30;
+  const nMin = Math.min(...ns) - pad;
+  const nMax = Math.max(...ns) + pad;
+  const eMin = Math.min(...es) - pad;
+  const eMax = Math.max(...es) + pad;
+  const W = 260;
+  const scale = W / Math.max(eMax - eMin, nMax - nMin);
+  const H = Math.round((nMax - nMin) * scale);
+  const xy = (p: [number, number]) => `${((p[1] - eMin) * scale).toFixed(1)},${((nMax - p[0]) * scale).toFixed(1)}`;
+  const [mx, my] = xy(chart.mark).split(',').map(Number);
+  const [sx, sy] = xy(chart.start).split(',').map(Number);
+  return (
+    <figure className="track-chart" data-testid="exercise-chart">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Map of the beat: ${chart.tracks.map((t) => `${t.label}${t.timeS !== undefined ? ` ${Math.round(t.timeS)} s` : ''}`).join('; ')}`}>
+        {chart.tracks.map((t) => (
+          <polyline key={t.id} className={TRACK_STYLE[t.id]?.cls} points={t.points.map(xy).join(' ')} fill="none" strokeWidth={t.id === 'you' ? 2.5 : 1.8} strokeDasharray={TRACK_STYLE[t.id]?.dash} />
+        ))}
+        <circle cx={mx} cy={my} r={5} className="chart-mark" />
+        <text x={mx! + 7} y={my! + 4} className="chart-label">Mark</text>
+        <text x={sx! + 6} y={sy! + 4} className="chart-label">Start</text>
+      </svg>
+      <figcaption>
+        <ul className="chart-legend">
+          {chart.tracks.map((t) => (
+            <li key={t.id}>
+              <svg width="26" height="8" aria-hidden="true">
+                <line x1="0" y1="4" x2="26" y2="4" className={TRACK_STYLE[t.id]?.cls} strokeWidth="2.5" strokeDasharray={TRACK_STYLE[t.id]?.dash} />
+              </svg>{' '}
+              {t.label}
+              {t.timeS !== undefined ? `: ${Math.round(t.timeS)} s` : ': mark not reached'}
+            </li>
+          ))}
+        </ul>
+        <span className="fine">{chart.note} North is up.</span>
+      </figcaption>
+    </figure>
   );
 }
 

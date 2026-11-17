@@ -23,6 +23,7 @@
     "ai:trials": "tsx tools/ai-trials.ts",
     "envelope": "tsx tools/envelope.ts",
     "exploits": "tsx tools/exploit-search.ts",
+    "shift-sensitivity": "tsx tools/shift-sensitivity.ts",
     "check:secrets": "tsx tools/check-secrets.ts dist"
   },
   "dependencies": {

@@ -406,6 +406,16 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
 .exercise-group .lesson-result { margin: 2px 0; }
 .exercise-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; font-variant-numeric: tabular-nums; }
 .exercise-table th, .exercise-table td { text-align: left; padding: 2px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.heading-history { margin: 6px 0 0; color: var(--accent); }
+.heading-history figcaption { color: inherit; opacity: 0.85; }
+.track-chart { margin: 6px 0; }
+.track-chart svg { background: rgba(0, 0, 0, 0.18); border-radius: 6px; }
+.track-you { stroke: #ffffff; }
+.track-model-a { stroke: #7fd1ff; }
+.track-model-b { stroke: #ffc46b; }
+.chart-mark { fill: #ffe066; }
+.chart-label { fill: #ffffff; font-size: 10px; }
+.chart-legend { list-style: none; padding: 0; margin: 4px 0; font-size: 12px; line-height: 1.5; }
 .lesson-group { margin: 10px 0 2px; font-size: 13px; }
 .lesson-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
 .lesson-list li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; }

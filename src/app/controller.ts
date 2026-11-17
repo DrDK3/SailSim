@@ -971,13 +971,16 @@ export class SimController {
     } finally {
       this.exerciseRestarting = false;
     }
+    // The exercise's mark (drawn as the lesson buoy, whatever the overlay).
+    this.lessonTarget = x.spec.mark;
     this.paused = false;
     this.lastFrame = performance.now();
     this.applyTeaching();
   }
 
   private exerciseSample() {
-    return { ...this.lessonSample(), mainSheet: this.sim.currentSheet('main'), jibSheet: this.sim.currentSheet('jib'), overlay: !!this.exercise?.overlay };
+    const twd = (this.sim.snapshot(false).twd * 180) / Math.PI;
+    return { ...this.lessonSample(), mainSheet: this.sim.currentSheet('main'), jibSheet: this.sim.currentSheet('jib'), overlay: !!this.exercise?.overlay, twdDeg: ((twd % 360) + 360) % 360 };
   }
 
   /** Every 0.1 s of simulated time: the engine checks the phase, raises help, and may ask for a new set-up. */
@@ -1011,6 +1014,13 @@ export class SimController {
     this.publish(true);
   }
 
+  /** The learner's prediction before the first attempt (or skip it with exerciseNext). */
+  exercisePredict(choice: string): void {
+    this.exercise?.engine.predict(choice);
+    this.afterExerciseChange();
+    this.publish(true);
+  }
+
   /** The learner asks for help (one level more, logged as asked for). */
   exerciseHelp(): void {
     this.exercise?.engine.askHelp();
@@ -1036,6 +1046,7 @@ export class SimController {
   endExercise(publish = true): void {
     if (!this.exercise) return;
     this.exercise = undefined;
+    if (!this.lesson) this.lessonTarget = undefined;
     this.applyTeaching();
     if (publish) this.publish(true);
   }
