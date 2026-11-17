@@ -13,18 +13,19 @@ import { SimController } from '../../src/app/controller';
 import { OTHER_ENGINE_TOLERANCE_S, identicalTiming, plausibility, verifySubmission, type Submission } from '../../src/app/clubVerify';
 import { weeklyCourse, rotation } from '../../src/app/weekly';
 import { AiSkipper, aiSkill } from '../../src/sim/ai/skipper';
-import { submissionBody } from '../../src/app/clubTable';
+import { submissionRequest } from '../../src/app/clubTable';
 import type { Recording } from '../../src/app/replay';
 
 const TOKEN = 'a'.repeat(64);
 
 describe('the endpoint', () => {
   const env = () => ({ STORE: memoryStore(), ADMIN_TOKEN: 'secret-admin', ALLOWED_ORIGIN: '*' });
-  // The replay as the app sends it: compressed and base64-encoded (not opened by the endpoint).
-  const replay = Buffer.from('a compressed replay would be here').toString('base64');
-  const body = (o: Record<string, unknown> = {}) => ({ replay, name: 'Blue Heron 42', build: 'production-abc', engine: 'chromium', token: TOKEN, ...o });
-  const post = (e: ReturnType<typeof env>, path: string, b: unknown, headers: Record<string, string> = {}, now = Date.parse('2026-11-17T10:00:00Z')) =>
-    handle(new Request(`http://x${path}`, { method: 'POST', body: typeof b === 'string' ? b : JSON.stringify(b), headers: { 'content-type': 'application/json', ...headers } }), e, now);
+  // The replay as the app sends it: compressed bytes (the endpoint never opens them).
+  const replay = new TextEncoder().encode('compressed replay bytes would be here');
+  const heads = (o: Record<string, string> = {}) => ({ 'x-squib-name': 'Blue Heron 42', 'x-squib-build': 'production-abc', 'x-squib-engine': 'chromium', 'x-squib-token': TOKEN, ...o });
+  const submit = (e: ReturnType<typeof env>, h: Record<string, string> = heads(), body: BodyInit = replay, extra: Record<string, string> = {}, now = Date.parse('2026-11-17T10:00:00Z')) =>
+    handle(new Request('http://x/submit', { method: 'POST', body, headers: { 'content-type': 'application/octet-stream', ...h, ...extra } }), e, now);
+  const post = (e: ReturnType<typeof env>, path: string, b: unknown) => handle(new Request(`http://x${path}`, { method: 'POST', body: JSON.stringify(b), headers: { 'content-type': 'application/json' } }), e);
 
   it('uses the same word lists as the app', () => {
     expect(A2).toEqual([...ADJECTIVES]);
@@ -33,51 +34,54 @@ describe('the endpoint', () => {
 
   it('accepts a well-formed run as pending, storing the token’s hash and no address', async () => {
     const e = env();
-    const r = await post(e, '/submit', body(), { 'x-forwarded-for': '203.0.113.9', 'cf-connecting-ip': '203.0.113.9' });
+    const r = await submit(e, heads(), replay, { 'x-forwarded-for': '203.0.113.9', 'cf-connecting-ip': '203.0.113.9', 'user-agent': 'Mozilla/5.0 test' });
     expect(r.status).toBe(202);
     const stored = [...e.STORE.map.entries()];
     const pending = stored.find(([k]) => k.startsWith('pending:'))!;
-    const v = JSON.parse(pending[1]);
-    expect(Object.keys(v).sort()).toEqual(['build', 'engine', 'id', 'name', 'receivedAt', 'replay', 'tokenHash']);
-    expect(JSON.stringify(stored)).not.toContain('203.0.113.9');
-    expect(JSON.stringify(stored)).not.toContain(TOKEN);
+    const v = JSON.parse(pending[1] as string);
+    expect(Object.keys(v).sort()).toEqual(['build', 'engine', 'id', 'name', 'receivedAt', 'tokenHash']);
+    expect(stored.some(([k]) => k === `blob:${v.id}`)).toBe(true);
+    const text = JSON.stringify(stored.filter(([k]) => !k.startsWith('blob:')));
+    expect(text).not.toContain('203.0.113.9');
+    expect(text).not.toContain('Mozilla');
+    expect(text).not.toContain(TOKEN);
     expect(v.receivedAt).toBe('2026-11-17T10:00Z');
   });
 
-  it('refuses anything else: extra fields, free-text names, bad tokens, non-replays, too large', async () => {
+  it('refuses free-text names, bad tokens, bad engines, empty or too-large replays', async () => {
     const e = env();
-    expect((await post(e, '/submit', body({ email: 'a@b.c' }))).status).toBe(400);
-    expect(await (await post(e, '/submit', body({ name: 'Sam Smith 1' }))).json()).toEqual({ error: 'name-not-on-word-list' });
-    expect((await post(e, '/submit', body({ token: 'short' }))).status).toBe(400);
-    expect(await (await post(e, '/submit', body({ replay: { schema: 'squib-replay/1' } }))).json()).toEqual({ error: 'not-an-encoded-replay' });
-    expect((await post(e, '/submit', 'not json')).status).toBe(400);
-    const big = 'A'.repeat(LIMITS.maxBytes + 4);
-    expect((await post(e, '/submit', body({ replay: big }))).status).toBe(413);
+    expect(await (await submit(e, heads({ 'x-squib-name': 'Sam Smith 1' }))).json()).toEqual({ error: 'name-not-on-word-list' });
+    expect((await submit(e, heads({ 'x-squib-token': 'short' }))).status).toBe(400);
+    expect((await submit(e, heads({ 'x-squib-engine': 'Mozilla/5.0' }))).status).toBe(400);
+    expect((await submit(e, heads(), new Uint8Array(3))).status).toBe(400);
+    expect((await submit(e, heads(), new Uint8Array(LIMITS.maxBytes + 1))).status).toBe(413);
     expect([...e.STORE.map.keys()].some((k) => k.startsWith('pending:'))).toBe(false);
   });
 
   it('rate limits: pending runs per name, and everyone together per window', async () => {
     const e = env();
-    for (let i = 0; i < LIMITS.pendingPerName; i++) expect((await post(e, '/submit', body({ token: String(i).padStart(64, '0') }))).status).toBe(202);
-    expect(await (await post(e, '/submit', body({ token: 'f'.repeat(64) }))).json()).toEqual({ error: 'too-many-pending-for-this-name' });
+    for (let i = 0; i < LIMITS.pendingPerName; i++) expect((await submit(e, heads({ 'x-squib-token': String(i).padStart(64, '0') }))).status).toBe(202);
+    expect(await (await submit(e, heads({ 'x-squib-token': 'f'.repeat(64) }))).json()).toEqual({ error: 'too-many-pending-for-this-name' });
     const e2 = env();
-    const names = ADJECTIVES.slice(0, LIMITS.perWindow + 1);
     let last = 0;
-    for (const [i, a] of names.entries()) last = (await post(e2, '/submit', body({ name: `${a} Seal ${i + 1}`, token: i.toString(16).padStart(64, '0') }))).status;
+    for (const [i, a] of ADJECTIVES.slice(0, LIMITS.perWindow + 1).entries()) last = (await submit(e2, heads({ 'x-squib-name': `${a} Seal ${i + 1}`, 'x-squib-token': i.toString(16).padStart(64, '0') }))).status;
     expect(last).toBe(429);
   });
 
-  it('removal and verdicts by token; admin routes need the admin token', async () => {
+  it('removal and verdicts by token; admin routes (and the replay bytes) need the admin token', async () => {
     const e = env();
-    await post(e, '/submit', body());
-    const status = await handle(new Request(`http://x/status?token=${TOKEN}`), e);
-    expect(await status.json()).toEqual({ status: 'pending' });
+    await submit(e);
+    expect(await (await handle(new Request(`http://x/status?token=${TOKEN}`), e)).json()).toEqual({ status: 'pending' });
     expect((await post(e, '/remove', { token: TOKEN })).status).toBe(202);
     expect([...e.STORE.map.keys()].some((k) => k.startsWith('removal:'))).toBe(true);
     expect((await handle(new Request('http://x/admin/list?prefix=pending:'), e)).status).toBe(401);
     expect((await handle(new Request('http://x/admin/list?prefix=pending:', { headers: { authorization: 'Bearer wrong' } }), e)).status).toBe(401);
     const ok = await handle(new Request('http://x/admin/list?prefix=pending:', { headers: { authorization: 'Bearer secret-admin' } }), e);
-    expect((await ok.json()).length).toBe(1);
+    const list = (await ok.json()) as { value: { id: string } }[];
+    expect(list.length).toBe(1);
+    expect((await handle(new Request(`http://x/admin/blob?id=${list[0]!.value.id}`), e)).status).toBe(401);
+    const blob = await handle(new Request(`http://x/admin/blob?id=${list[0]!.value.id}`, { headers: { authorization: 'Bearer secret-admin' } }), e);
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(replay);
   });
 });
 
@@ -113,17 +117,14 @@ describe('the verifier', () => {
   const BUILD = rec.build;
   const sub = (o: Partial<Submission> = {}, r: Recording = rec): Submission => ({ id: 'x', receivedAt: at.toISOString(), name: 'Blue Heron 42', build: BUILD, engine: 'chromium', tokenHash: 'h', replay: JSON.parse(JSON.stringify(r)), ...o });
 
-  it('the submission body is exactly the replay (compressed), the name, the build, the engine family and the token', async () => {
-    const b = await submissionBody(rec, 'Blue Heron 42', BUILD, TOKEN, 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0');
-    expect(Object.keys(b).sort()).toEqual(['build', 'engine', 'name', 'replay', 'token']);
-    expect(b.engine).toBe('chromium');
-    const back = JSON.parse(inflateRawSync(Buffer.from(b.replay, 'base64')).toString('utf8'));
-    expect(back.endStep).toBe(rec.endStep);
-    // The endpoint takes it as it is.
+  it('what is sent is exactly the compressed replay and four headers (name, build, engine family, token)', async () => {
+    const q = await submissionRequest(rec, 'Blue Heron 42', BUILD, TOKEN, 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0');
+    expect(Object.keys(q.headers).sort()).toEqual(['content-type', 'x-squib-build', 'x-squib-engine', 'x-squib-name', 'x-squib-token']);
+    expect(q.headers['x-squib-engine']).toBe('chromium');
+    expect(JSON.parse(inflateRawSync(q.body).toString('utf8')).endStep).toBe(rec.endStep);
     const e = { STORE: memoryStore(), ADMIN_TOKEN: 'a', ALLOWED_ORIGIN: '*' };
-    const r = await handle(new Request('http://x/submit', { method: 'POST', body: JSON.stringify(b) }), e, at.getTime());
+    const r = await handle(new Request('http://x/submit', { method: 'POST', body: q.body as BodyInit, headers: q.headers }), e, at.getTime());
     expect(r.status).toBe(202);
-    console.log(`submission: ${(JSON.stringify(b).length / 1024).toFixed(0)} kB for ${(rec.endStep / 100).toFixed(0)} s sailed with the AI on the helm`);
   });
 
   it('accepts a genuine run, with the re-sailed time, as assisted (auto-trim was on)', () => {

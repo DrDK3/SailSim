@@ -90,8 +90,10 @@ test('challenge a friend: the link round-trips into another browser as a challen
   const ctx = await browser.newContext({ baseURL: 'http://localhost:4173', storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'squib.welcomed.v1', value: '1' }] }] } });
   const friend = await ctx.newPage();
   await friend.goto(`/?nowelcome&quality=low#${url!.split('#')[1]}`);
+  // The link is read once the River Dart has loaded (the run was sailed with it).
+  await friend.waitForFunction(() => window.__squib?.controller.getState().dart.status !== 'loading', null, { timeout: 180_000 * CI_SLOW });
   const card = friend.getByTestId('challenge-card');
-  await expect(card).toBeVisible({ timeout: 120_000 * CI_SLOW });
+  await expect(card).toBeVisible({ timeout: 60_000 * CI_SLOW });
   await expect(card).toContainText(`${name} challenges you`);
   await expect(card).toContainText('5:12.4');
   await expect(card).toContainText('does not react');

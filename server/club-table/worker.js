@@ -5,19 +5,22 @@
  * get/put/delete/list, which is how the local mock (mock.mjs) and the tests run it.
  *
  * What it does, and nothing more:
- *  - POST /submit   {replay, name, build, engine, token}: checks the size, the shape, the word-list name and (when
- *                    configured) the Turnstile bot check; rate limits; stores the run as pending. Stores the SHA-256 of
- *                    the deletion token, never the token. Stores no IP address or other identifier.
- *                    `replay` is the replay's JSON compressed (deflate-raw) and base64-encoded: a 10-minute run sailed
- *                    with the keys is about 75 kB compressed (670 kB as JSON), one steered with a stick or the AI about
- *                    800 kB (measured, docs/JUNIORS_REPORT.md §4). The endpoint does not open it (the free plan's CPU
- *                    time per request is small): the verifier checks the replay itself.
+ *  - POST /submit   the replay as the body (its JSON compressed with deflate-raw), and the word-list name, the build,
+ *                    the engine family and the deletion token in the headers x-squib-name, x-squib-build,
+ *                    x-squib-engine, x-squib-token. Nothing else is read. Checks the size, the headers' shapes, the
+ *                    word-list name and (when configured) the Turnstile bot check; rate limits; stores the run as
+ *                    pending. Stores the SHA-256 of the deletion token, never the token, and no IP address or other
+ *                    identifier. Measured sizes (docs/JUNIORS_REPORT.md §4.3): a 10-minute run sailed with the keys is
+ *                    about 75 kB compressed, one steered every step (a stick, or the AI) about 820 kB; a 55-minute RDYC
+ *                    course steered every step about 4 MB. The endpoint never opens the replay (the free plan allows
+ *                    about 10 ms of CPU a request): the verifier checks it.
  *  - POST /remove   {token}: asks for the entry made with this token to be removed (the next verifier run does it).
  *  - GET  /status?token=…: the verifier's verdict for the run made with this token (accepted, or the reason not).
  *  - Admin (Authorization: Bearer ADMIN_TOKEN, held only in GitHub secrets for the scheduled verifier):
- *      GET /admin/list?prefix=…, PUT /admin/put {key, value}, POST /admin/delete {key}.
+ *      GET /admin/list?prefix=…, GET /admin/blob?id=… (a pending run's replay bytes), PUT /admin/put {key, value},
+ *      POST /admin/delete {key}.
  *
- * Keys: pending:<id>, status:<tokenHash>, removal:<tokenHash>, accepted:<week>:<tokenHash>, rate:<window>.
+ * Keys: pending:<id> (metadata), blob:<id> (the compressed replay), status:<tokenHash>, removal:<tokenHash>, accepted:<week>:<tokenHash>, rate:<window>.
  * What the provider itself logs (request metadata, IP addresses in its own logs) is described in
  * docs/club-table/DATA_PROTECTION.md; this code adds nothing to it.
  */
@@ -28,8 +31,8 @@ export const CREATURES = ['Anchovy', 'Avocet', 'Barnacle', 'Cockle', 'Cormorant'
 
 /** Limits (E: sized for a club's juniors and the measured replay sizes above). */
 export const LIMITS = {
-  /** Largest request body (bytes): about 1.6 MB of compressed replay after base64. */
-  maxBytes: 2_200_000,
+  /** Largest replay (compressed bytes). KV takes values up to 25 MiB. */
+  maxBytes: 8 * 1024 * 1024,
   /** Submissions accepted for storage in any 10-minute window (all players together). */
   perWindow: 30,
   windowS: 600,
@@ -50,17 +53,12 @@ async function sha256Hex(s) {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** The shape of a submission: a replay (squib-replay/1), a word-list name, a build id, an engine family, a token. */
-export function checkSubmission(b) {
-  if (!b || typeof b !== 'object') return 'not-json-object';
-  const keys = Object.keys(b).sort().join(',');
-  if (keys !== 'build,engine,name,replay,token') return 'unexpected-fields';
-  if (!isSafeName(b.name)) return 'name-not-on-word-list';
-  if (typeof b.build !== 'string' || !/^[\w.-]{1,80}$/.test(b.build)) return 'bad-build';
-  if (!['chromium', 'gecko', 'webkit', 'other'].includes(b.engine)) return 'bad-engine';
-  if (typeof b.token !== 'string' || !/^[0-9a-f]{64}$/.test(b.token)) return 'bad-token';
-  // The replay, compressed and base64-encoded (checked by the verifier when it is opened).
-  if (typeof b.replay !== 'string' || b.replay.length < 16 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b.replay)) return 'not-an-encoded-replay';
+/** The submission's headers: a word-list name, a build id, an engine family, a deletion token. */
+export function checkSubmission(h) {
+  if (!isSafeName(h.name)) return 'name-not-on-word-list';
+  if (typeof h.build !== 'string' || !/^[\w.-]{1,80}$/.test(h.build)) return 'bad-build';
+  if (!['chromium', 'gecko', 'webkit', 'other'].includes(h.engine)) return 'bad-engine';
+  if (typeof h.token !== 'string' || !/^[0-9a-f]{64}$/.test(h.token)) return 'bad-token';
   return undefined;
 }
 
@@ -78,7 +76,7 @@ async function turnstileOk(env, token) {
 /** The request handler: `env.STORE` is the store ({get, put, delete, list}); `env.ADMIN_TOKEN`, `env.ALLOWED_ORIGIN`. */
 export async function handle(request, env, now = Date.now()) {
   const url = new URL(request.url);
-  const cors = { 'access-control-allow-origin': env.ALLOWED_ORIGIN ?? '*', 'access-control-allow-headers': 'content-type, cf-turnstile-response', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+  const cors = { 'access-control-allow-origin': env.ALLOWED_ORIGIN ?? '*', 'access-control-allow-headers': 'content-type, cf-turnstile-response, x-squib-name, x-squib-build, x-squib-engine, x-squib-token', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   const store = env.STORE;
   const path = url.pathname.replace(/\/+$/, '');
@@ -91,6 +89,10 @@ export async function handle(request, env, now = Date.now()) {
       const out = [];
       for (const k of keys) out.push({ key: k, value: JSON.parse((await store.get(k)) ?? 'null') });
       return json(200, out, {});
+    }
+    if (request.method === 'GET' && path === '/admin/blob') {
+      const blob = await store.get(`blob:${url.searchParams.get('id') ?? ''}`, 'arrayBuffer');
+      return blob ? new Response(blob, { status: 200, headers: { 'content-type': 'application/octet-stream' } }) : json(404, { error: 'no-such-blob' }, {});
     }
     const body = await request.json().catch(() => undefined);
     if (request.method === 'PUT' && path === '/admin/put' && body && typeof body.key === 'string') {
@@ -107,16 +109,13 @@ export async function handle(request, env, now = Date.now()) {
   if (request.method === 'POST' && path === '/submit') {
     const len = Number(request.headers.get('content-length') ?? 0);
     if (len > LIMITS.maxBytes) return json(413, { error: 'too-large' }, cors);
-    const text = await request.text();
-    if (text.length > LIMITS.maxBytes) return json(413, { error: 'too-large' }, cors);
-    let body;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      return json(400, { error: 'not-json' }, cors);
-    }
-    const bad = checkSubmission(body);
+    const h = { name: request.headers.get('x-squib-name'), build: request.headers.get('x-squib-build'), engine: request.headers.get('x-squib-engine'), token: request.headers.get('x-squib-token') };
+    const bad = checkSubmission(h);
     if (bad) return json(400, { error: bad }, cors);
+    const bytes = await request.arrayBuffer();
+    if (bytes.byteLength > LIMITS.maxBytes) return json(413, { error: 'too-large' }, cors);
+    if (bytes.byteLength < 16) return json(400, { error: 'no-replay' }, cors);
+    const body = h;
     if (!(await turnstileOk(env, request.headers.get('cf-turnstile-response')))) return json(403, { error: 'bot-check-failed' }, cors);
     // Rate limits: everyone together per window, and pending runs per name.
     const win = `rate:${Math.floor(now / 1000 / LIMITS.windowS)}`;
@@ -128,7 +127,8 @@ export async function handle(request, env, now = Date.now()) {
     if (mine >= LIMITS.pendingPerName) return json(429, { error: 'too-many-pending-for-this-name' }, cors);
     const tokenHash = await sha256Hex(body.token);
     const id = `${Math.floor(now / 1000).toString(36)}-${tokenHash.slice(0, 12)}`;
-    await store.put(`pending:${id}`, JSON.stringify({ id, receivedAt: new Date(now).toISOString().slice(0, 16) + 'Z', name: body.name, build: body.build, engine: body.engine, tokenHash, replay: body.replay }), { expirationTtl: 14 * 86400 });
+    await store.put(`blob:${id}`, bytes, { expirationTtl: 14 * 86400 });
+    await store.put(`pending:${id}`, JSON.stringify({ id, receivedAt: new Date(now).toISOString().slice(0, 16) + 'Z', name: body.name, build: body.build, engine: body.engine, tokenHash }), { expirationTtl: 14 * 86400 });
     await store.put(`status:${tokenHash}`, JSON.stringify({ status: 'pending' }), { expirationTtl: 120 * 86400 });
     await store.put(win, String(used + 1), { expirationTtl: LIMITS.windowS * 2 });
     return json(202, { ok: true, status: 'pending' }, cors);
@@ -155,7 +155,7 @@ export async function handle(request, env, now = Date.now()) {
 /** A Cloudflare KV namespace as the store. */
 export function kvStore(kv) {
   return {
-    get: (k) => kv.get(k),
+    get: (k, type) => (type ? kv.get(k, type) : kv.get(k)),
     put: (k, v, o) => kv.put(k, v, o),
     delete: (k) => kv.delete(k),
     list: async (prefix) => {

@@ -82,8 +82,8 @@ async function del(key: string): Promise<void> {
 interface Accepted extends TableEntry {
   status: 'accepted' | 'other-engine';
   flags: string[];
-  /** Kept only while the run might be one of the week's top three ghosts. */
-  replay?: Recording;
+  /** The replay, compressed (deflate-raw, base64): kept only while the run might be one of the week's top three ghosts. */
+  replayZ?: string;
 }
 
 const site = resolve(flag('site') ?? 'out/site');
@@ -92,24 +92,29 @@ const now = new Date();
 
 try {
   // 1. Pending submissions: verify, record the verdict, delete the replay.
-  const pending = await list<Submission>('pending:');
+  const pending = await list<Omit<Submission, 'replay'>>('pending:');
   const verdicts: { sub: Submission; v: Verdict }[] = [];
-  for (const { key, value: raw } of pending) {
-    // The replay arrives compressed and base64-encoded (the endpoint does not open it): opened here, at most 64 MB.
-    let sub: Submission = raw;
+  for (const { key, value: meta } of pending) {
+    // The replay is stored apart, compressed (the endpoint never opens it): opened here, at most 64 MB.
+    let sub: Submission;
+    let zipped: string | undefined;
     try {
-      sub = { ...raw, replay: typeof raw.replay === 'string' ? JSON.parse(inflateRawSync(Buffer.from(raw.replay, 'base64'), { maxOutputLength: 64 << 20 }).toString('utf8')) : raw.replay };
+      const r = await fetch(`${base}/admin/blob?id=${encodeURIComponent(meta.id)}`, { headers: auth });
+      const bytes = Buffer.from(await r.arrayBuffer());
+      zipped = bytes.toString('base64');
+      sub = { ...meta, replay: r.ok ? JSON.parse(inflateRawSync(bytes, { maxOutputLength: 64 << 20 }).toString('utf8')) : null };
     } catch {
-      sub = { ...raw, replay: null };
+      sub = { ...meta, replay: null };
     }
     const v = verify(sub);
     verdicts.push({ sub, v });
     await put(`status:${sub.tokenHash}`, { status: v.status, reason: v.reason, week: v.week, timeS: v.timeS, at: now.toISOString().slice(0, 16) + 'Z' });
     if ((v.status === 'accepted' || v.status === 'other-engine') && v.week && v.timeS !== undefined) {
-      const rec: Accepted = { name: sub.name, timeS: v.timeS, category: v.category!, date: sub.receivedAt.slice(0, 10), status: v.status, flags: v.flags, replay: v.status === 'accepted' ? parseRecording(sub.replay) : undefined };
+      const rec: Accepted = { name: sub.name, timeS: v.timeS, category: v.category!, date: sub.receivedAt.slice(0, 10), status: v.status, flags: v.flags, replayZ: v.status === 'accepted' ? zipped : undefined };
       await put(`accepted:${v.week}:${sub.tokenHash}`, rec);
     }
     await del(key);
+    await del(`blob:${meta.id}`);
     console.log(`${sub.id} ${sub.name} (${sub.engine}): ${v.status}${v.reason ? ` (${v.reason})` : ''}${v.timeS !== undefined ? ` ${v.timeS} s` : ''}${v.flags.length ? ` flags ${v.flags.join(',')}` : ''}`);
   }
   // 2. Removals: the entry made with that token goes, and the verdict says so.
@@ -142,21 +147,22 @@ try {
     renameSync(tmp, path);
   };
   for (const [wk, rows] of byWeek) {
-    const same = identicalTiming(rows.filter((r) => r.value.replay).map((r) => ({ id: r.key, rec: r.value.replay! })));
+    const unzip = (z: string): Recording => parseRecording(JSON.parse(inflateRawSync(Buffer.from(z, 'base64'), { maxOutputLength: 64 << 20 }).toString('utf8')));
+    const same = identicalTiming(rows.filter((r) => r.value.replayZ).map((r) => ({ id: r.key, rec: unzip(r.value.replayZ!) })));
     const isFlagged = (r: { key: string; value: Accepted }) => r.value.flags.length > 0 || same.has(r.key);
     const entry = (r: { value: Accepted }): TableEntry => ({ name: r.value.name, timeS: r.value.timeS, category: r.value.category, date: r.value.date });
     const ranked = rows.filter((r) => r.value.status === 'accepted' && !isFlagged(r)).sort((a, b) => a.value.timeS - b.value.timeS);
     const ghosts: ClubTableFile['ghosts'] = [];
     ranked.slice(0, 3).forEach((r, i) => {
-      if (!r.value.replay) return;
+      if (!r.value.replayZ) return;
       const file = `ghosts/${wk}-${i + 1}.json`;
-      write(join(out, file), { ...r.value.replay, title: `${r.value.name}: club table, ${wk}`, claimed: undefined });
+      write(join(out, file), { ...unzip(r.value.replayZ), title: `${r.value.name}: club table, ${wk}`, claimed: undefined });
       ghosts.push({ rank: i + 1, name: r.value.name, file });
     });
     for (let i = ghosts.length + 1; i <= 3; i++) rmSync(join(out, `ghosts/${wk}-${i}.json`), { force: true });
     // Only the top three keep their replays; the rest are deleted now.
     for (const r of rows.slice()) {
-      if (r.value.replay && !ranked.slice(0, 3).includes(r)) await put(r.key, { ...r.value, replay: undefined });
+      if (r.value.replayZ && !ranked.slice(0, 3).includes(r)) await put(r.key, { ...r.value, replayZ: undefined });
     }
     const table: ClubTableFile = {
       schema: CLUB_TABLE_SCHEMA, week: wk, generated: now.toISOString(),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { BUILD_ID } from '../app/controller';
-import { REASONS, clubTableUrl, loadMine, newToken, parseTable, saveMine, submissionBody, turnstileSiteKey, type ClubTableFile, type MySubmission } from '../app/clubTable';
+import { REASONS, clubTableUrl, loadMine, newToken, parseTable, saveMine, submissionRequest, turnstileSiteKey, type ClubTableFile, type MySubmission } from '../app/clubTable';
 import { clockS } from './Social';
 
 /**
@@ -100,10 +100,11 @@ export function ClubSubmit({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     try {
       const token = newToken();
       const rec = { ...ctl.saveRecording(`${ui.social.name}: ${f.label}`), claimed: { finishS: f.timeS, independent: f.assist.independent } };
-      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      const req = await submissionRequest(rec, ui.social.name, BUILD_ID, token);
+      const headers: Record<string, string> = { ...req.headers };
       const bot = await turnstileToken();
       if (bot) headers['cf-turnstile-response'] = bot;
-      const r = await fetch(`${url}/submit`, { method: 'POST', headers, body: JSON.stringify(await submissionBody(rec, ui.social.name, BUILD_ID, token)) });
+      const r = await fetch(`${url}/submit`, { method: 'POST', headers, body: req.body as BodyInit });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) return setState(`Not sent: ${j.error ?? r.status}.`);
       saveMine([...loadMine(), { week: f.key.slice(7), timeS: f.timeS, token, status: 'waiting to be checked' }]);

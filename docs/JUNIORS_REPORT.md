@@ -256,11 +256,15 @@ Replays log the input on every step it changes. A key held, or a stick, changes 
 |---|---|---|---|---|
 | Keyboard sailor (a press every 2–6 s), 600 s | 12,188 (20 a second) | 670 kB | 74 kB | about 104,000 characters |
 | AI on the helm (like a stick), practice week, 700 s | 67,874 | 4.2 MB | 824 kB | too long for a link |
-| AI on the helm, RDYC C1, 3,270 s | 325,623 | 20.9 MB | — | too long |
+| AI on the helm, RDYC C1, 3,270 s | 325,623 | 20.4–20.9 MB | 3.94 MB | too long |
 
 So:
 
-- the app sends the replay **compressed**, and the endpoint takes up to 2.2 MB;
+- the app sends the replay **compressed**, as the request body; the four other fields go in headers, so the endpoint
+  never parses or opens the replay (the free plan allows about 10 ms of CPU a request), and it takes up to 8 MB
+  (KV values may be 25 MiB);
+- this week's course (2026-W47) is RDYC C1: the end-to-end test's first run, sent as JSON with a 2.2 MB limit, was
+  refused as too large, which led to this design;
 - challenge links over 150,000 characters are not offered (the replay file does the same job);
 - re-sailing took 2.6 s (practice) and 19 s (C1) in Node, bit for bit.
 

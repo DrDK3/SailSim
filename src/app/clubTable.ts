@@ -54,19 +54,22 @@ export function newToken(): string {
   return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-/** The replay as sent: its JSON compressed (deflate-raw) and base64-encoded (a few tens of kB for a 10-minute run). */
-export async function encodeReplay(rec: Recording): Promise<string> {
+/** The replay as sent: its JSON compressed (deflate-raw): tens of kB for a 10-minute run sailed with the keys. */
+export async function compressReplay(rec: Recording): Promise<Uint8Array> {
   const json = new TextEncoder().encode(JSON.stringify(rec));
   const stream = new Blob([json as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
-  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** Exactly what is sent: nothing else is added anywhere. */
-export async function submissionBody(rec: Recording, name: string, build: string, token: string, ua = typeof navigator === 'undefined' ? '' : navigator.userAgent) {
-  return { replay: await encodeReplay(rec), name, build, engine: engineOf(ua), token };
+/**
+ * Exactly what is sent, and nothing else: the compressed replay as the body; the word-list name, the build, the engine
+ * family and the deletion token as four headers.
+ */
+export async function submissionRequest(rec: Recording, name: string, build: string, token: string, ua = typeof navigator === 'undefined' ? '' : navigator.userAgent) {
+  return {
+    headers: { 'content-type': 'application/octet-stream', 'x-squib-name': name, 'x-squib-build': build, 'x-squib-engine': engineOf(ua), 'x-squib-token': token },
+    body: await compressReplay(rec),
+  };
 }
 
 /** The runs submitted from this device: week, time, token (to remove or to ask the verdict). Kept in this browser only. */
