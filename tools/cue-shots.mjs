@@ -75,7 +75,7 @@ for (const p of presets) {
       for (const o of hidden) o.visible = true;
       c.frame((t += 16));
       if (!c.paused) c.togglePause();
-      c.frame((t += 16));
+      c.frame(t + 16);
       const q = c.view.cues;
       return { luffMain: +q.main.luff.toFixed(2), luffJib: +q.jib.luff.toFixed(2), gust: +q.wind.gust.toFixed(2), stw: +q.stw.toFixed(2), spray: Math.round(q.sprayRate), manoeuvre: q.manoeuvre, puffsDrawn: c.view.water.drawnPuffs().length };
     }, [tws, twd, gusts, seed, heading, secs, act]);
