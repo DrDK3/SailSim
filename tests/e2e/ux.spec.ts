@@ -100,8 +100,8 @@ test('toolbar: the Settings menu (sections, toggles), Escape closes menus and pa
   const errors = await ready(page);
   // The physics tools are in the Settings menu at the Expert level or with the developer tools on.
   await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
-  // Few controls in view: Main menu and the activity button, playback, camera, Race, Library and Options, Settings and Help.
-  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(9);
+  // Few controls in view: the activity button (the way to the main menu), playback, camera, Race, Library and Options, Settings and Help.
+  await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(8);
   const view = page.getByRole('button', { name: 'Settings', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });
@@ -130,14 +130,14 @@ test('toolbar: the Settings menu (sections, toggles), Escape closes menus and pa
   expect(errors).toEqual([]);
 });
 
-test('Main menu: the first toolbar button (or Home) brings back the main menu, the sail waits, and goes on when it closes', async ({ page }) => {
+test('Main menu: the activity button (or Home) brings back the main menu, the sail waits, and goes on when it closes', async ({ page }) => {
   test.setTimeout(120_000 * CI_SLOW);
   const errors = await ready(page);
   const paused = () => page.evaluate(() => window.__squib!.controller.getState().paused);
   const hub = page.getByRole('dialog', { name: 'Squib sailing simulator' });
   if (await paused()) await page.getByTestId('pause').click();
   expect(await paused()).toBe(false);
-  await page.getByRole('button', { name: 'Main menu', exact: true }).click();
+  await page.getByTestId('activity').click();
   await expect(hub).toBeVisible();
   for (const door of ['Learn to sail', 'Free sailing', 'Race against AI', 'Scenarios']) await expect(hub.getByRole('button', { name: door })).toBeVisible();
   expect(await paused()).toBe(true);
@@ -151,7 +151,7 @@ test('Main menu: the first toolbar button (or Home) brings back the main menu, t
   await expect(hub).toBeHidden();
   await page.getByTestId('pause').click();
   expect(await paused()).toBe(true);
-  await page.getByRole('button', { name: 'Main menu', exact: true }).click();
+  await page.getByTestId('activity').click();
   await hub.getByRole('button', { name: 'Close' }).click();
   expect(await paused()).toBe(true);
   expect(errors).toEqual([]);

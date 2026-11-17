@@ -22,7 +22,7 @@ import { TeachingOverlay } from './teaching';
 import type { OverlayPart } from '../app/lessons';
 import type { DartScene, DartUpdate } from './dart';
 import { CourseScene } from './course';
-import { FleetView, type FleetPose } from './fleet';
+import { FleetView, type FleetBoatLook, type FleetPose } from './fleet';
 import type { ResolvedCourse } from '../sim/course/course';
 import type { Course } from '../sim/course/types';
 import type { SkyState } from '../sim/env/sky';
@@ -532,7 +532,7 @@ export class SceneView {
   }
 
   /** The other boats to draw (id, sail-number label, hull colour); an empty list removes them. */
-  setFleet(list: { id: string; label: string; colour: number; ghost?: boolean }[]): void {
+  setFleet(list: FleetBoatLook[]): void {
     this.fleet.setBoats(list);
   }
 

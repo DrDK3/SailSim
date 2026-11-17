@@ -175,9 +175,28 @@ function materialFor(colour: LightColour): THREE.SpriteMaterial {
   return m;
 }
 
-/** The letter for a sidelight, for players who cannot tell red from green (P port, S starboard). */
+/** One light's glow as a sprite (a fixed size on the screen), for lights drawn outside a vessel (a shore light). */
+export function glowSprite(colour: LightColour): THREE.Sprite {
+  const s = new THREE.Sprite(materialFor(colour));
+  s.scale.setScalar(SPRITE_SCALE);
+  return s;
+}
+
+/** A letter beside a light (R, G), for players who cannot tell red from green; undefined without a document. */
+export function letterSprite(letter: 'R' | 'G'): THREE.Sprite | undefined {
+  const m = labelMaterial(letter);
+  if (!m) return undefined;
+  const s = new THREE.Sprite(m);
+  s.scale.setScalar(SPRITE_SCALE * 1.6);
+  return s;
+}
+
+/**
+ * The letter for a sidelight, for players who cannot tell red from green (P port, S starboard); and for a sector
+ * light's colour (R red, G green).
+ */
 const LABEL_MATERIALS = new Map<string, THREE.SpriteMaterial>();
-function labelMaterial(letter: 'P' | 'S'): THREE.SpriteMaterial | undefined {
+function labelMaterial(letter: 'P' | 'S' | 'R' | 'G'): THREE.SpriteMaterial | undefined {
   if (typeof document === 'undefined') return undefined;
   let m = LABEL_MATERIALS.get(letter);
   if (!m) {

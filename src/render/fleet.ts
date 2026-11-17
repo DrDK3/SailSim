@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { clubBurgeeTexture } from './clubBurgees';
+import { raceClub } from '../sim/race/class1866';
 import { disposeObject } from './dispose';
 import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
@@ -77,6 +79,15 @@ function poseOf(e: Entry): THREE.Object3D {
   return POSE;
 }
 
+/** A boat of the fleet as drawn: id, label, hull colour, her club (src/sim/race/class1866.ts); a ghost is see-through. */
+export interface FleetBoatLook {
+  id: string;
+  label: string;
+  colour: number;
+  ghost?: boolean;
+  club?: string;
+}
+
 /**
  * The other boats of the fleet (AI Squibs): one procedural Squib each, tinted with the boat's colour, with a
  * sail-number label. Pure view: reads poses, never touches the simulation.
@@ -102,7 +113,7 @@ export class FleetView {
   }
 
   /** (Re)build the boats shown: id, label and hull colour; a ghost (ghost racing) is drawn see-through, without wake. */
-  setBoats(list: { id: string; label: string; colour: number; ghost?: boolean }[]): void {
+  setBoats(list: FleetBoatLook[]): void {
     for (const [id, e] of this.boats) {
       if (!list.some((b) => b.id === id)) {
         this.group.remove(e.root);
@@ -121,8 +132,15 @@ export class FleetView {
       root.name = `fleet-boat-${b.id}`;
       // Helms and crews of both builds across the fleet (picked from the boat's id; illustrative).
       const h = [...b.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11);
-      const model = new SquibModel(this.params, { helm: h % 3 === 0 ? 'female' : 'male', crew: h % 5 < 2 ? 'female' : 'male' });
-      model.setHullColour(b.colour);
+      // A Class of 1866 boat (src/sim/race/class1866.ts): her club's paint, its letters on her transom and its burgee.
+      const club = raceClub(b.club);
+      const model = new SquibModel(this.params, {
+        helm: h % 3 === 0 ? 'female' : 'male',
+        crew: h % 5 < 2 ? 'female' : 'male',
+        ...(club ? { transom: club.short, paint: club.paint, burgee: clubBurgeeTexture(club.id) } : {}),
+      });
+      if (club) model.setHullPaint(club.paint);
+      else model.setHullColour(b.colour);
       if (b.ghost) makeGhost(model.group);
       root.add(model.group);
       const label = makeLabel(b.label, b.ghost ? '#cfe8ff' : '#ffe9a8');

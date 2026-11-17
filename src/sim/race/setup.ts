@@ -19,7 +19,11 @@ import { PierGrid, pierPieces, type PierInput } from './piers';
 import { structuresInWater } from '../env/structures';
 import { notABuilding } from '../env/notBuildings';
 import { shipBuoyStructures } from '../env/shipBuoys';
+import { isletStructures } from '../env/islets';
+import { shoreLightStructures } from '../env/shoreLights';
+import { coastRockStructures, coastRocks } from '../env/coastRocks';
 import { mooringSwingDeg } from './anchored';
+import { class1866Entry } from './class1866';
 import { markPosition, placeCommitteeBoats } from '../course/course';
 
 /** The parts of the River Dart features the race needs (moored boats, mooring areas, ferries). */
@@ -58,17 +62,9 @@ export interface RaceSetup {
   traffic?: RiverTraffic;
 }
 
-/** Hull colours for AI boats (distinct, readable on water). */
-const COLOURS = [0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0x16a085, 0xd35400, 0x34495e, 0xe84393, 0x7f8c8d, 0x2c3e50, 0xa04000, 0x1abc9c, 0x9b59b6, 0x3498db, 0xb7950b, 0x6c3483, 0x117864, 0x922b21];
-
 /** Starting-line length for a practice course with this many boats: 2.5 boat lengths per boat, at least 100 m (E). */
 export function practiceLineLength(boats: number): number {
   return Math.max(100, Math.round(2.5 * boats * 5.79));
-}
-
-/** Sail numbers for AI boats: invented, labelled "AI" (no real boats or owners). */
-export function aiName(i: number): { name: string; sailNumber: string } {
-  return { name: `AI ${i + 1}`, sailNumber: `AI${String(i + 1).padStart(2, '0')}` };
 }
 
 /** Whether a starting boat may be put at a point: water deep enough, clear of moorings (and the like). */
@@ -186,7 +182,11 @@ export function raceStructures(features: RaceFeatures | undefined, geo: DartGeo 
   const wet = geo && features.buildings ? structuresInWater(features.buildings.filter((b) => !notABuilding(b.r)), (n, e) => geo.bedElevation(n, e)) : [];
   // The main-stream ship buoys and the superyacht moored on them (src/sim/env/shipBuoys.ts), on the river data only.
   const buoys = geo ? shipBuoyStructures() : [];
-  return [...(features.piers ?? []), ...wet, ...buoys];
+  // The islets off the mouth (the Mew Stone, the Blackstones, …): rock the terrain leaves under the water (src/sim/env/islets.ts).
+  const islets = geo ? [...isletStructures(), ...shoreLightStructures()] : [];
+  // The rocky coast's faces south of the towns (src/sim/env/coastRocks.ts): solid at the foot of the cliffs.
+  const coast = geo ? coastRockStructures(coastRocks(geo, (n, e) => geo.bedElevation(n, e), features)) : [];
+  return [...(features.piers ?? []), ...wet, ...buoys, ...islets, ...coast];
 }
 
 export interface CreatedRace {
@@ -233,7 +233,8 @@ export function createRace(s: RaceSetup): CreatedRace {
     entries.push({ id: 'you', name: s.human.name ?? 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', initial: typeof init === 'function' ? init(v.resolved) : init ?? pos[k]! });
     k++;
   }
-  for (let i = 0; i < s.aiCount; i++) entries.push({ id: `ai-${i + 1}`, ...aiName(i), colour: COLOURS[i % COLOURS.length]!, kind: 'ai', initial: pos[k++]!, level: s.level });
+  // The AI fleet: the Class of 1866 (src/sim/race/class1866.ts), the four clubs in turn.
+  for (let i = 0; i < s.aiCount; i++) entries.push({ id: `ai-${i + 1}`, ...class1866Entry(i), kind: 'ai', initial: pos[k++]!, level: s.level });
   const session = new RaceSession({
     env,
     params,

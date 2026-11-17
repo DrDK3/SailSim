@@ -33,6 +33,8 @@ export interface FleetBoat {
   kind: 'human' | 'ai';
   sim: Simulation;
   outline: Outline;
+  /** An AI boat's club (src/sim/race/class1866.ts): its burgee and paint in the picture. */
+  club?: string;
 }
 
 export interface CircleObstacle {

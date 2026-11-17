@@ -339,7 +339,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
-| 25.1 | While sailing, click **Main menu** (the house, first on the toolbar) | The main menu opens at once (Learn to sail, Free sailing, Race against AI, Scenarios); the boat stops | |
+| 25.1 | While sailing, click the activity button (first on the toolbar; there is no house button now, 16 Nov) | The main menu opens at once (Learn to sail, Free sailing, Race against AI, Scenarios); the boat stops | |
 | 25.2 | Close it (× or Escape) | Back on the water, sailing on from where you were | |
 | 25.3 | Press the Home key | The main menu opens the same way | |
 | 25.4 | Look along the toolbar | **Options** (was Scenario) opens the boat, wind, tide, place, course and fleet panel; **Settings ▾** (was More) holds lessons, what is shown, sound and "All settings…" | |
@@ -347,6 +347,38 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 25.6 | Look at Mosaique on MS1 and MS2, all round | A blue-hulled 50 m superyacht moored bow and stern to the two buoys; nothing flying at her masthead; the club's defaced red ensign (crown and arrow in the fly) flying from a staff off her stern by day; her tender alongside; recognisable from your photographs | |
 | 25.7 | Sail gently into her side, into a buoy, and into one of her mooring lines between her and a buoy | You meet them ("Contact with the superyacht Mosaique", "… ship buoy MS…", "… Mosaique's mooring line") and do not pass through; the mooring line stops you without damage | |
 | 25.8 | Look at the yacht club's flagstaff | The same ensign, the arrow pointing to the hoist | |
+
+## 26. The mouth of the Dart and Start Bay (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 26.1 | Sail out of the mouth past Castle Ledge and look east, with place labels (L) on | The Mew Stone, a rocky islet off Inner Froward Point, with Shag Stone and Shooter Rock beside it; Eastern Black Rock further east; the Western Blackstone off Blackstone Point under the western cliffs | |
+| 26.2 | Look up at the hill above Froward Point | The Daymark: a tall pale stone tower on arched legs on the skyline, labelled | |
+| 26.3 | Sail gently into the Mew Stone | You meet it ("Contact with the Mew Stone") and do not pass through | |
+| 26.4 | Check the buoys against the chart | Homestone and Checkstone (red cans), Castle Ledge (green cone), the Mewstone and West Rock south cardinals, the two yellow 6-knot buoys, RDYC 1–4 in Start Bay | |
+| 26.5 | Compare the rocks' heights with what you know | The heights are estimates: tell us any that look wrong | |
+
+## 27. The western cliffs and rocks, the Kingswear light, the minimap, the sea (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 27.1 | Sail out past Dartmouth Castle and look along the west shore to Compass Cove and Blackstone Point | Grey slate faces at the water, higher where the ground is steep, with a dark weedy band and a black band at high water, boulders at their foot; the beach at Compass Cove left clear | |
+| 27.2 | Sail on south and look at the cliffs under Little Dartmouth and along Start Bay | Cliffs rising from the water to the heath on top; no trees standing on the rock or on the open heath | |
+| 27.3 | Sail gently into the rocks under a cliff | You meet them ("Contact with the rocks") and do not sail into the cliff | |
+| 27.4 | Find the Kingswear light on the eastern shore just inside the entrance, NNW of Kingswear Castle; at night (or with the time set to night) sail across the entrance from east to west, outside it | A small white round tower with a dark lantern on a large rock at the water's edge, labelled. At night, on and off every 1.5 s: green while it bears 318°–325° from you (east of the line in), white 325°–331° (on the line, about 328°), red 331°–340° (west of it), nothing beyond. With the colour-blind letters on, G or R beside it. The minimap shows the three sectors | |
+| 27.5 | Open the minimap and zoom from 600 m out to 6.8 km | A sharp chart: deeper water darker, drying ground and foreshore, hill-shaded land, roads and buildings in the towns, the islets; the Kingswear light's white sector; the ship buoys and Mosaique; place names that do not overlap | |
+| 27.6 | Look out over Start Bay from the mouth, then up the river | The open sea keeps its colour and texture out to the horizon (no milky band), as the river does | |
+| 27.7 | Compare the cliffs' heights and the light's tower with what you know | The cliffs' heights and the rocks are estimates: tell us any that look wrong | |
+
+## 28. Bayard's Cove light; the Class of 1866 (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 28.1 | At night (or with the time set to night) come in past the Kingswear light and turn up the harbour towards Bayard's Cove | Bayard's Cove light on the Dartmouth shore by the fort, flashing every 2 s: white on the lead (about 293°), green to the north of it, red to the south; nothing outside. Its position and limits are estimates: tell us where it really stands and its charted sectors | |
+| 28.2 | Open the minimap near the entrance | The sectors of both lights, the Kingswear light's and Bayard's Cove's | |
+| 28.3 | Start a race with four or more AI boats | The fleet is the Class of 1866: Royal Ulster (navy hull), KDY (red hull), Boston (white hull, blue stripe), Atlantic (white hull, red stripe), labelled "RUYC · AI01" and so on; the results list them as RUYC 1, KDY 1, BYC 1, AYC 1 | |
+| 28.4 | Look at an AI boat's masthead (or zoom in on her) | Her club's burgee: Royal Ulster's blue with the red hand on a white shield under a crown; KDY's white with three red stars under a crown; Boston's white with a blue and red cross and a white star; Atlantic's white with a red "A". Your own boat flies the Royal Dart's | |
+| 28.5 | Compare the hull colours with the clubs' colours as you know them | Which colour goes on the topsides, stripe and boot top is our choice: tell us if a club would look different | |
 
 ## Accepting the build
 

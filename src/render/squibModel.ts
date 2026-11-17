@@ -78,10 +78,21 @@ export function sailFill(awa: number, angle: number): number {
   return Math.tanh(6 * Math.sin(awa - angle));
 }
 
+/** A hull's paint (sRGB hex strings): topsides, sheer stripe and boot top (the antifouling is the same on all). */
+export interface HullPaint {
+  topsides: string;
+  stripe: string;
+  boot: string;
+}
+
 export interface SquibModelOptions {
   type?: SquibTypeId;
   /** Text on the transom. */
   transom?: string;
+  /** The hull's paint (default the club Squib's: white, a navy stripe and boot top), on the hull and the transom. */
+  paint?: HullPaint;
+  /** The burgee's picture (default the Royal Dart Yacht Club's: src/render/burgee.ts). */
+  burgee?: THREE.Texture | null;
   /** The helm's and the crew's build (visual only). */
   helm?: CrewBuild;
   crew?: CrewBuild;
@@ -172,7 +183,10 @@ addHullPaint(MAT.hull);
  * the mesh's rows and drew a saw-tooth along the waterline and the sheer (owner review, 5 Nov 2026). The material's
  * colour still tints it (the fleet's hulls).
  */
-function addHullPaint(m: THREE.MeshStandardMaterial): void {
+function addHullPaint(m: THREE.MeshStandardMaterial, paint?: HullPaint): void {
+  const topsides = paint?.topsides ?? TOPSIDES;
+  const stripe = paint?.stripe ?? SHEER_STRIPE;
+  const bootTop = paint?.boot ?? BOOT_TOP;
   const v = (hex: string) => {
     const c = linear(hex);
     return `vec3(${c.r.toFixed(5)}, ${c.g.toFixed(5)}, ${c.b.toFixed(5)})`;
@@ -194,13 +208,13 @@ float boot0 = smoothstep(${BOOT[0].toFixed(3)} - pw, ${BOOT[0].toFixed(3)} + pw,
 float boot1 = smoothstep(${BOOT[1].toFixed(3)} - pw, ${BOOT[1].toFixed(3)} + pw, vHullY);
 float st0 = smoothstep(vSheer - ${STRIPE_DROP[0].toFixed(3)} - pw, vSheer - ${STRIPE_DROP[0].toFixed(3)} + pw, vHullY);
 float st1 = smoothstep(vSheer - ${STRIPE_DROP[1].toFixed(3)} - pw, vSheer - ${STRIPE_DROP[1].toFixed(3)} + pw, vHullY);
-vec3 paint = mix(${v(ANTIFOULING)}, ${v(BOOT_TOP)}, boot0);
-paint = mix(paint, ${v(TOPSIDES)}, boot1);
-paint = mix(paint, ${v(SHEER_STRIPE)}, st0 * (1.0 - st1));
+vec3 paint = mix(${v(ANTIFOULING)}, ${v(bootTop)}, boot0);
+paint = mix(paint, ${v(topsides)}, boot1);
+paint = mix(paint, ${v(stripe)}, st0 * (1.0 - st1));
 diffuseColor.rgb = diffuse * paint;`,
       );
   };
-  m.customProgramCacheKey = () => `${baseKey}|hullpaint`;
+  m.customProgramCacheKey = () => `${baseKey}|hullpaint|${topsides}${stripe}${bootTop}`;
   m.needsUpdate = true;
 }
 /** The non-slip pattern's bump strength on the deck and the cockpit sole, seen close (src/render/squibTextures.ts). */
@@ -311,7 +325,7 @@ export class SquibModel {
   private readonly jibGeo: THREE.BufferGeometry;
   private readonly sheets: { geo: THREE.BufferGeometry; pts: number }[] = [];
   private readonly telltales: THREE.Mesh[] = [];
-  private readonly burgee = new Burgee();
+  private readonly burgee: Burgee;
   private readonly water: THREE.Mesh;
   private readonly p: BoatParams;
   private readonly mastTopY: number;
@@ -350,9 +364,11 @@ export class SquibModel {
     this.soleY = this.classic ? sheerAt(0.7) - 0.36 : sheerAt(0.7) - 0.22;
     this.group.name = 'squib';
 
-    const key = `${this.type}:${opts.transom ?? 'RDYC'}:${p.loa}:${p.beam}:${p.draft}:${p.mastLength}:${p.main.foot}`;
+    this.burgee = new Burgee(opts.burgee);
+    const paintKey = opts.paint ? `${opts.paint.topsides}${opts.paint.stripe}${opts.paint.boot}` : '';
+    const key = `${this.type}:${opts.transom ?? 'RDYC'}:${paintKey}:${p.loa}:${p.beam}:${p.draft}:${p.mastLength}:${p.main.foot}`;
     let parts = staticCache.get(key);
-    if (!parts) staticCache.set(key, (parts = this.buildStatic(opts.transom ?? 'RDYC')));
+    if (!parts) staticCache.set(key, (parts = this.buildStatic(opts.transom ?? 'RDYC', opts.paint)));
     this.group.add(parts.group.clone());
     this.mastTopY = parts.mastTopY;
 
@@ -455,10 +471,10 @@ export class SquibModel {
     return out.set(x, y, BOW_Z + t * this.p.loa);
   }
 
-  private buildStatic(transomText: string): StaticParts {
+  private buildStatic(transomText: string, paint?: HullPaint): StaticParts {
     const g = new THREE.Group();
     const mastTopY = sheerAt(0.4) + this.p.mastLength;
-    g.add(this.buildHull(), this.buildTransom(transomText), this.buildDeck(), this.buildCockpit(), this.buildKeel());
+    g.add(this.buildHull(), this.buildTransom(transomText, paint), this.buildDeck(), this.buildCockpit(), this.buildKeel());
     for (const m of this.buildFittings()) g.add(m);
     // The spars and standing rigging apart (merged on their own): they come down when the boat is dismasted.
     const rig = new THREE.Group();
@@ -524,7 +540,7 @@ export class SquibModel {
    * The flat transom, textured with the hull's bands and the lettering: the whole stern section closed from
    * the keel up each side to the sheer and across under the cambered deck edge, as a fan about its centre.
    */
-  private buildTransom(text: string): THREE.Mesh {
+  private buildTransom(text: string, paint?: HullPaint): THREE.Mesh {
     const M = SECTION;
     const { b, d, h } = this.hullStation(1);
     const pos: number[] = [];
@@ -565,7 +581,7 @@ export class SquibModel {
     const map =
       typeof document === 'undefined'
         ? null
-        : transomTexture({ top, bottom, stripe: [h - STRIPE_DROP[0], h - STRIPE_DROP[1]], boot: BOOT, colours: { topsides: TOPSIDES, stripe: SHEER_STRIPE, boot: BOOT_TOP, bottom: ANTIFOULING } }, text);
+        : transomTexture({ top, bottom, stripe: [h - STRIPE_DROP[0], h - STRIPE_DROP[1]], boot: BOOT, colours: { topsides: paint?.topsides ?? TOPSIDES, stripe: paint?.stripe ?? SHEER_STRIPE, boot: paint?.boot ?? BOOT_TOP, bottom: ANTIFOULING } }, text);
     const material = new THREE.MeshPhysicalMaterial({ map, roughness: 0.4, clearcoat: 0.35, clearcoatRoughness: 0.4, side: THREE.DoubleSide });
     material.userData.role = 'transom';
     const mesh = new THREE.Mesh(geo, material);
@@ -1034,6 +1050,19 @@ export class SquibModel {
     }
     this.damageView.update(d, dt);
     this.floodY = DamageView.floodLevel(d, this.soleY);
+  }
+
+  /** Paint the hull in a club's colours (topsides, stripe, boot top), untinted. */
+  setHullPaint(paint: HullPaint): void {
+    this.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.name === 'hull') {
+        const m = (o.material as THREE.MeshPhysicalMaterial).clone();
+        addWetBand(m);
+        addHullPaint(m, paint);
+        m.color.setHex(0xffffff);
+        o.material = m;
+      }
+    });
   }
 
   setHullColour(hex: number): void {

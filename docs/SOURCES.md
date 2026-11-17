@@ -333,3 +333,34 @@ The owner's photographs of Mosaique (supplied in the conversation; not committed
 
 **Not established:** the buoys' positions (placed from M1–M3: src/sim/env/shipBuoys.ts); which pair Mosaique lies on and which way her bow points; her heights, deck layout and colours beyond what the photographs show; whether her hull is the darker blue of the older photographs or the lighter blue of the later ones (a mid blue is drawn).
 
+## The mouth of the Dart and Start Bay (16–17 Nov 2026)
+
+The owner's chart pictures (a chart app's view of the river and Start Bay; Admiralty chart 2253) and photographs (supplied in the conversation; not committed: stock pictures with watermarks among them).
+
+| ID | Source | URL | Date | Access | What it gives |
+|---|---|---|---|---|---|
+| D1 | Historic England, list entry 1108546, "The Tower" (the Daymark), Kingswear; britishlistedbuildings 101108546 | https://historicengland.org.uk/listing/the-list/list-entry/1108546 | listed 1949 | Search excerpts only | Grade II; National Grid Reference SX 90334 50283 (converted with pyproj: 50.34223 N, 3.54252 W) |
+| D2 | Wikipedia, "Kingswear Daymark"; Explore Devon; Greyarrows forum | https://en.wikipedia.org/wiki/Kingswear_Daymark | n.d. | Search excerpts only | A 24 m (80 ft) octagonal limestone day beacon, 1864, hollow on tall arched legs, built by the Dartmouth Harbour Commissioners as a guide to the entrance, in a field above Froward Point |
+| V17 | The owner's chart pictures: the river and Start Bay with its buoys and marks; Admiralty chart 2253 (thumbnail) | — | 16 Nov 2026 | Owner's files | The marks' places and the islets off the mouth, against which the sim's were checked |
+| V18 | The owner's photographs of the mouth: the Daymark and the Mew Stone from the west; Dartmouth Castle and St Petrox from the air; the view out of the mouth; the cliffs and rocks on the west side looking to the Daymark; the estuary from high above | — | 16–17 Nov 2026 | Owner's files | The islets standing out of the water, the Daymark on the skyline, the castles, the cliffs |
+
+**Not established:** the islets' heights (OUTSTANDING 182); the Kingswear light's position (185). The islets' outlines are OpenStreetMap's (G1); the LIDAR (G2) has no survey there.
+
+## The rocky coast, the Kingswear light and the minimap (17 Nov 2026)
+
+| ID | Source | URL | Date | Access | What it gives |
+|---|---|---|---|---|---|
+| KL1 | The owner's information on the Kingswear light, citing Dart Harbour's notices LNTM 03/24 and LNTM 01/26 ("Kingswear lighthouse unreliable") | https://www.dartharbour.org/news-and-notices/port-notices/2024/02/29/lntm-03-24-kingswear-lighthouse-unreliable/ ; https://www.dartharbour.org/news-and-notices/port-notices/2026/01/04/lntm-01-26-kingswear-lighthouse-unreliable | 17 Nov 2026 (notices 2024, 2026) | Owner's message; LNTM 01/26 read here on 17 Nov 2026 ("Light position: 50 20.81'N 003 34.09'W"; "RWG Iso 3s 9m"; repaired and the notice cancelled 5 Feb 2026) | Chart position 50°20.81'N 003°34.09'W; a compact 4 m round cylindrical tower with a conical lantern on a large rock on the shoreline, just NNW of Kingswear Castle (it replaced an 11 m tower demolished in 1980); focal height 9 m above mean high water; a rectangular window facing south-west; white sector 325°–331°; Iso WRG 3s |
+| KL2 | The owner's charted sectors for the Kingswear light, citing the Admiralty List of Lights (A0236) | — | 17 Nov 2026 | Owner's message; the List of Lights was not read here | True bearings from seaward: green 318°–325°, white 325°–331°, and 331°–340° (its colour cut off in the message: red, the third colour of Iso WRG) |
+| G1 (used again) | Overture Maps release 2026-10-21.0, "land" theme (OpenStreetMap natural=beach, heath, bare_rock, cliff) | as G1 | 2026 | Cached extract | The beaches, the heath on the cliff tops, the bare and tidal rock and the cliff lines south of the towns (`src/sim/env/coastData.ts`, ODbL 1.0, © OpenStreetMap contributors) |
+
+| BC1 | eoceanic, "Dartmouth Harbour" (pilotage) | https://eoceanic.com/sailing/harbours/534/ | n.d. | Read here (17 Nov 2026) | "the white sector of the Bayard's Cove light, Fl.WRG.2s5m6M, on the Dartmouth side, that tracks along the starboard side of the channel. Bayard's Cove light leads circa 293° T to abeam of Royal Dart Yacht Club"; a fixed white sectored light north of Kettle Point, 102°–107° T, for leaving |
+| BC2 | Dart Harbour, *Harbour Guide 2019*, p.35 (as hosted for the Classic Channel Regatta) | https://www.classic-channel-regatta.eu/wp-content/uploads/2019/06/Dartmouth.-Habour_guide_2019.pdf | 2019 | Read here (17 Nov 2026) | "Bayards Cove sectored light FL WRG 2s on a bearing of 293º"; it opens at the right-hand edge of Dartmouth Castle when the castle's flagstaff lines up with the aerials; photographs of the head mark |
+| BC3 | Wikidata Q812103, Bayard's Cove Fort (via search excerpt) | https://www.wikidata.org/wiki/Q812103 | n.d. | Search excerpt | 50°20'52.440"N 3°34'38.676"W: used for the light's position (E) |
+| C66-1 | Royal Ulster Yacht Club, Rules; Flags of the World "Royal Ulster Yacht Club"; Wikipedia | https://www.ruyc.uk/about/rules/ ; https://www.crwflags.com/fotw/flags/gb~yruyc.html ; https://en.wikipedia.org/wiki/Royal_Ulster_Yacht_Club | n.d. | Search excerpts | Burgee blue with a red hand of Ulster on a white shield under a crown (Admiralty warrant 19 Feb 1870); founded 1866 as the Ulster Yacht Club |
+| C66-2 | Flags of the World, "Royal Danish Yacht Club" | https://fotw.info/flags/dk-yacht.html | 2021–25 | Search excerpts | Founded 3 July 1866 as Dansk Forening for Lystsejlads; burgee white with three red five-pointed stars (2:1) under a royal crown in its colours (Lloyd's Register of Yachts 1902–03), the pattern basically unchanged, the ensemble now in the middle |
+| C66-3 | Flags of the World, "Boston Yacht Club" | https://www.crwflags.com/fotw/flags/us~ycmbo.html | 2024 | Search excerpts | Founded 1866; burgee since 1904 white with a blue (horizontal arm) and red (vertical arms, over it) cross charged with a white star, as on the club's website |
+| C66-4 | Wikipedia, "Atlantic Yacht Club"; Wikimedia Commons, "Burgee of Atlantic YC.svg" | https://en.wikipedia.org/wiki/Atlantic_Yacht_Club ; https://upload.wikimedia.org/wikipedia/commons/ (the file) | n.d. | Search excerpt; the drawing read here | Organised in 1866; the burgee drawn white with a red "A" (no written description found) |
+
+The character Iso WRG 3s agrees with the Dart Harbour guide (K6). **Not established:** Bayard's Cove light's position; the cliffs' heights (OUTSTANDING 187–191). The red sector's colour is inferred from the character (KL2).
+

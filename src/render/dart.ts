@@ -16,6 +16,14 @@ import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
 import { ShipBuoysView } from './mosaique';
 import { MOSAIQUE, SHIP_BUOYS, mooredBerth } from '../sim/env/shipBuoys';
+import { buildIslets } from './islets';
+import { DAYMARK, buildDaymark } from './daymark';
+import { BayardsLightView, KingswearLightView } from './kingswearLight';
+import { buildCoastRocks } from './coastRocks';
+import { coastRockCover, coastRocks, openCoast } from '../sim/env/coastRocks';
+import { BAYARDS_COVE_LIGHT, kingswearLightLocal, kingswearRockTop, lightLocal } from '../sim/env/shoreLights';
+import { isletOutlines } from '../sim/env/islets';
+import { DART_PROJECTION } from '../sim/geo/projection';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
@@ -134,6 +142,17 @@ export class DartScene {
   private readonly ensigns: ClubEnsign[] = [];
   /** The main-stream ship buoys and the superyacht on them (src/render/mosaique.ts). */
   private shipBuoys?: ShipBuoysView;
+  /** The Kingswear light (src/render/kingswearLight.ts), and the daylight (0 night … 1 day) its light follows. */
+  private kingswearLight?: KingswearLightView;
+  /** Bayard's Cove light (src/render/kingswearLight.ts). */
+  private bayardsLight?: BayardsLightView;
+  private daylight = 1;
+  /** Letters by lights for players who cannot tell red from green. */
+  private lightLetters = false;
+  /** The terrain's material (the satellite picture with its detail), for the cliff tops to share. */
+  private terrainMaterial?: THREE.Material;
+  /** Where the rocky coast's faces and tops lie, and the open coast: no trees there (src/sim/env/coastRocks.ts). */
+  private coastBare?: (e: number, n: number) => boolean;
   /** The yacht club (src/render/rdyc.ts). */
   private club?: RdycClub;
   /** The Royal Dart and its north wing (src/render/royalDart.ts). */
@@ -208,6 +227,7 @@ export class DartScene {
       this.buildMarks(f);
       this.buildLabels(f);
       this.buildShipBuoys();
+      this.buildMouth();
     }
     if (input.roads && this.roadNet) {
       const net = this.roadNet;
@@ -243,6 +263,7 @@ export class DartScene {
         buildings: f?.buildings.map((b) => b.r),
         onRoad: roads ? (e, n) => roads.surfaceAt(e, n) !== undefined || rdycPlatformAt(e, n) !== undefined : (e, n) => rdycPlatformAt(e, n) !== undefined,
         towns: TOWNS,
+        bare: this.coastBare,
       });
       this.fixed.add(this.woodland.group);
     }
@@ -358,6 +379,7 @@ export class DartScene {
       // The satellite colours already contain sunlight: scale the albedo down so the scene's lights don't double it.
       material = new THREE.MeshStandardMaterial({ map: tex, color: 0x8a8a8a, roughness: 1, metalness: 0, envMapIntensity: 0.25 });
       terrainDetail(material as THREE.MeshStandardMaterial, this.waterMask);
+      this.terrainMaterial = material;
     } else {
       material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     }
@@ -875,12 +897,14 @@ export class DartScene {
   /** Letters by the vessels' sidelights for players who cannot tell red from green (src/render/navLights.ts). */
   setLightLabels(on: boolean): void {
     this.traffic.lightLabels = on;
+    this.lightLetters = on;
   }
 
   setDaylight(day: number): void {
     this.traffic.setDaylight(day);
     this.street?.setDaylight(day);
     this.shipBuoys?.setDaylight(day);
+    this.daylight = day;
     const x = Math.min(1, Math.max(0, (0.55 - day) / 0.4));
     this.buildingUniforms.uNight.value = x * x * (3 - 2 * x);
     this.club?.setNight(x * x * (3 - 2 * x));
@@ -1054,6 +1078,69 @@ export class DartScene {
     }
   }
 
+  /**
+   * The mouth of the Dart (owner, 16–17 Nov 2026): the islets and rocks off it (the Mew Stone, Shag Stone, Shooter
+   * Rock, Eastern Black Rock, the Western Blackstone, the Dancing Beggars: src/sim/env/islets.ts) and the Daymark on
+   * the hill above Froward Point, with labels for the larger ones.
+   */
+  private buildMouth(): void {
+    // The rocky coast south of the towns: cliffs and ledges along the shore, boulders at their foot.
+    const geo = this.input.geo;
+    const rocks = coastRocks(geo, (n, e) => geo.bedElevation(n, e), this.features);
+    const dr = this.input.manifest.drape;
+    this.fixed.add(
+      buildCoastRocks(rocks, {
+        ground: (e, n) => this.groundAt(e, n),
+        topMaterial: this.terrainMaterial,
+        uvAt: (e, n) => [(e - dr.e0) / (dr.nx * dr.cell), (n - dr.n0) / (dr.ny * dr.cell)],
+      }),
+    );
+    const onRock = coastRockCover(rocks);
+    const open = openCoast();
+    this.coastBare = (e, n) => onRock(e, n) || open(e, n);
+    const outlines = isletOutlines();
+    this.fixed.add(buildIslets(outlines));
+    const labelled = new Set(['Mew Stone', 'Eastern Black Rock', 'Western Blackstone', 'Shag Stone']);
+    const done = new Set<string>();
+    for (const o of outlines) {
+      if (!labelled.has(o.name) || done.has(o.name)) continue;
+      done.add(o.name);
+      const ce = o.ring.reduce((a, p) => a + p[0], 0) / o.ring.length;
+      const cn = o.ring.reduce((a, p) => a + p[1], 0) / o.ring.length;
+      const lab = makeLabel(o.name, '#ffffff');
+      lab.position.set(ce, o.height + 8, -cn);
+      lab.userData.fixedToLand = true;
+      lab.userData.priority = 1;
+      this.labels.add(lab);
+    }
+    const d = DART_PROJECTION.toLocal(DAYMARK.lat, DAYMARK.lon);
+    const g = this.groundAt(d.e, d.n);
+    this.fixed.add(buildDaymark(d.e, d.n, g));
+    // The Kingswear light on its rock at the water's edge inside the entrance.
+    this.kingswearLight = new KingswearLightView();
+    this.fixed.add(this.kingswearLight.group);
+    const kl = kingswearLightLocal();
+    const klab = makeLabel('Kingswear light (Iso WRG 3s)', '#bff5c8');
+    klab.position.set(kl.e, kingswearRockTop() + 9, -kl.n);
+    klab.userData.fixedToLand = true;
+    klab.userData.priority = 0;
+    this.labels.add(klab);
+    // Bayard's Cove light on the Dartmouth shore (its place and sectors estimated: src/sim/env/shoreLights.ts).
+    const bc = lightLocal(BAYARDS_COVE_LIGHT);
+    this.bayardsLight = new BayardsLightView(this.groundAt(bc.e, bc.n));
+    this.fixed.add(this.bayardsLight.group);
+    const blab = makeLabel("Bayard's Cove light (Fl WRG 2s)", '#bff5c8');
+    blab.position.set(bc.e, this.groundAt(bc.e, bc.n) + 9, -bc.n);
+    blab.userData.fixedToLand = true;
+    blab.userData.priority = 0;
+    this.labels.add(blab);
+    const lab = makeLabel('The Daymark', '#ffffff');
+    lab.position.set(d.e, g + DAYMARK.height + 8, -d.n);
+    lab.userData.fixedToLand = true;
+    lab.userData.priority = 1;
+    this.labels.add(lab);
+  }
+
   /** MS1–MS5 and Mosaique on MS1–MS2, with their labels (positions: src/sim/env/shipBuoys.ts, estimates). */
   private buildShipBuoys(): void {
     this.shipBuoys = new ShipBuoysView();
@@ -1090,6 +1177,8 @@ export class DartScene {
     this.boatfloat?.update(u.waterLevel);
     for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
     this.shipBuoys?.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time, u.camera);
+    this.kingswearLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
+    this.bayardsLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;

@@ -35,6 +35,8 @@ export interface EntrySpec {
   kind: 'human' | 'ai';
   initial: InitialConditions;
   level?: AiLevel;
+  /** The AI boat's club (src/sim/race/class1866.ts). */
+  club?: string;
 }
 
 export interface RaceSessionOptions {
@@ -129,7 +131,7 @@ export class RaceSession implements AiWorld {
         // An AI boat's helm changes every step; its race is reproduced from the seed, not an input log.
         logInputs: e.kind !== 'ai',
       });
-      const boat = this.fleet.add({ id: e.id, name: e.name, sailNumber: e.sailNumber, colour: e.colour, kind: e.kind, sim });
+      const boat = this.fleet.add({ id: e.id, name: e.name, sailNumber: e.sailNumber, colour: e.colour, kind: e.kind, sim, club: e.club });
       if (e.kind === 'ai') {
         const sk = new AiSkipper(boat, this, aiSkill(e.level ?? 'good', this.seed, aiIndex, aiCount), aiIndex * 3);
         aiIndex++;
