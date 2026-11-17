@@ -4,6 +4,8 @@ import { rdycEnsignTexture } from './clubEnsign';
 import { bakedPerson } from './crew';
 import { coloursFlying } from './colours';
 import { flagDroop, flagYaw } from './vane';
+import { Burgee, BURGEE_FLY } from './burgee';
+import { flagFlutter, flagSwing, type FlagWind } from './flagMotion';
 import { buildLights, colregsLights, updateLights } from './navLights';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
 import { MOORING_FAIRLEADS, MOSAIQUE, MOSAIQUE_TENDER, SHIP_BUOYS, SHIP_BUOY_SIZE, mooredBerth, type ShipBuoy } from '../sim/env/shipBuoys';
@@ -46,6 +48,12 @@ export const MOSAIQUE_DRAWN = {
   /** Height of the signal mast's truck above the water. */
   masthead: 18.8,
   ensign: { fly: 2.4, hoist: 1.2 },
+  /**
+   * The club's burgee on its own staff at the port quarter (owner, 15 Nov 2026: "it should only be on the stern";
+   * 17 Nov: "The RDYC burgee is missing from the superyacht's stern"): the Squibs' burgee drawing (burgee.ts) at
+   * 1.5 m on the fly, its staff 2.6 m (E, "a large RDYC burgee").
+   */
+  burgee: { fly: 1.5, staff: 2.6 },
 };
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -73,8 +81,10 @@ class WavingFlag {
     this.pivot.rotation.y = yaw;
     const droop = flagDroop(aws);
     const pos = this.geo.getAttribute('position') as THREE.BufferAttribute;
-    const freq = 0.9 + 0.25 * aws;
-    const amp = 0.18 * (0.4 + Math.min(1, aws / 8));
+    // Flutter from the wind's speed: none in a calm, less with reduced motion (flagMotion.ts).
+    const fl = flagFlutter(aws);
+    const freq = fl.freq;
+    const amp = 0.2 * fl.amp;
     for (let i = 0; i < pos.count; i++) {
       const x = this.rest[i * 3]!;
       const y = this.rest[i * 3 + 1]!;
@@ -201,6 +211,8 @@ function tenderModel(): THREE.Group {
 interface YachtParts {
   group: THREE.Group;
   ensignAt: THREE.Vector3;
+  /** The foot of the burgee's staff at the port quarter, in her frame. */
+  burgeeAt: THREE.Vector3;
   /** Her mooring lines' fairleads in her frame (MOORING_FAIRLEADS, at their heights), and the tender's cleats. */
   fairleads: THREE.Vector3[];
   tenderCleats: THREE.Vector3[];
@@ -475,6 +487,12 @@ function yachtModel(): YachtParts {
   kit.rod(staffBase, staffTop, 0.045, VMAT.gloss, 0x7a4b26, 10);
   kit.add(new THREE.SphereGeometry(0.075, 10, 8), VMAT.gloss, 0xd6a73a, place(staffTop.x, staffTop.y + 0.06, staffTop.z));
 
+  // ---- The burgee's staff at the port quarter, on the transom's top inside the bulwark (the staff and flag are the
+  // Burgee's own, scaled: ShipBuoysView); a steel socket for it.
+  const bz = sternZ - 0.7;
+  const burgeeAt = v(-(h.deckHalf(bz) - 0.35), h.sheer(bz) + 0.02, bz);
+  kit.add(new THREE.CylinderGeometry(0.06, 0.07, 0.25, 10), VMAT.steel, undefined, place(burgeeAt.x, burgeeAt.y + 0.08, burgeeAt.z));
+
   // ---- Fairleads for the mooring lines (either side of the stem, and at the transom's corners: the same points the
   // physics uses, src/sim/env/shipBuoys.ts); the tender's fenders and the cleats for its lines.
   const fairleads = MOORING_FAIRLEADS.map((f) => v(f.across, f.along > 0 ? h.sheer(-f.along) - 0.1 : h.sheer(sternZ) - 0.12, -f.along));
@@ -506,7 +524,7 @@ function yachtModel(): YachtParts {
     plate.position.set(0, (h.sheer(sternZ) + 2.3) / 2 + 0.05, sternZ + 0.07);
     group.add(plate);
   }
-  return { group, ensignAt: staffTop, fairleads, tenderCleats, mastZ };
+  return { group, ensignAt: staffTop, burgeeAt, fairleads, tenderCleats, mastZ };
 }
 
 /** The buoys, the yacht on them, her tender, her mooring lines and her flags (add `group` to the floating group). */
@@ -514,6 +532,8 @@ export class ShipBuoysView {
   readonly group = new THREE.Group();
   readonly yacht: THREE.Group;
   private readonly ensign: WavingFlag;
+  /** The club's burgee on its staff at the port quarter. */
+  readonly burgee: Burgee;
   private readonly lights: THREE.Group;
   private readonly heading: number;
   private day = 1;
@@ -545,7 +565,13 @@ export class ShipBuoysView {
     const ends = [v(t.across - 0.3, 0.95, -t.along - t.length / 2 + 0.5), v(t.across - 0.6, 0.95, -t.along + t.length / 2 - 0.4)];
     ends.forEach((e, i) => hangingLine(lines, toWorld(m.tenderCleats[i]!), toWorld(e), 0.25, 0.018));
     this.group.add(lines.build('mosaique-lines'));
-    // The club's ensign off the stern: her only flag.
+    // The club's ensign off the stern, and its burgee on a staff at the port quarter: her flags, both aft (none at
+    // her masthead: owner, 15 Nov 2026).
+    this.burgee = new Burgee();
+    this.burgee.group.name = 'mosaique-burgee';
+    this.burgee.group.scale.setScalar(MOSAIQUE_DRAWN.burgee.fly / BURGEE_FLY);
+    this.burgee.group.position.copy(m.burgeeAt);
+    this.yacht.add(this.burgee.group);
     this.ensign = new WavingFlag('mosaique-ensign', MOSAIQUE_DRAWN.ensign.fly, MOSAIQUE_DRAWN.ensign.hoist, rdycEnsignTexture(), 0xd0101e);
     this.ensign.pivot.position.copy(m.ensignAt);
     this.yacht.add(this.ensign.pivot);
@@ -558,11 +584,29 @@ export class ShipBuoysView {
     this.day = day;
   }
 
-  /** The ensign in the wind (from `windFromDir` rad, `windSpeed` m/s), flown at colours; the light at night. */
-  update(epochMs: number, windFromDir: number, windSpeed: number, time: number, camera?: THREE.Camera): void {
-    const { yaw, aws } = flagYaw(windFromDir, windSpeed, this.heading, 0);
-    this.ensign.pivot.visible = coloursFlying(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
-    if (this.ensign.pivot.visible) this.ensign.update(yaw + 0.05 * Math.sin(time * 1.3), aws, time);
+  /** Where her flags fly (local n, e): her stern, where the wind is read for them. */
+  get flagsAt(): { n: number; e: number } {
+    const b = mooredBerth();
+    const back = MOSAIQUE.loa / 2;
+    return { n: b.n - Math.cos(b.heading) * back, e: b.e - Math.sin(b.heading) * back };
+  }
+
+  /**
+   * Her flags in the true wind at her stern (`wind`: where it comes from, rad, and its speed, m/s; she is moored, so
+   * no way of her own), flown at colours; the light at night.
+   */
+  update(epochMs: number, wind: FlagWind, time: number, camera?: THREE.Camera): void {
+    const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, this.heading, 0);
+    const up = coloursFlying(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+    this.ensign.pivot.visible = up;
+    this.burgee.group.visible = up;
+    if (up) {
+      this.ensign.update(yaw + flagSwing(aws, time, 0, 0.05), aws, time);
+      // The burgee reads the wind in her frame: from ahead is 0, from starboard > 0.
+      const awa = Math.atan2(Math.sin(wind.fromDir - this.heading), Math.cos(wind.fromDir - this.heading));
+      // It is scaled up from a Squib's: its flutter in its own time (the scale slows it, as a larger flag's is).
+      this.burgee.update(awa, aws, time / Math.sqrt(MOSAIQUE_DRAWN.burgee.fly / BURGEE_FLY));
+    }
     if (camera) {
       this.yacht.updateMatrixWorld();
       updateLights(this.lights, camera, this.day < 0.35);

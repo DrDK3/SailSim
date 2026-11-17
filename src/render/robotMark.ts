@@ -142,10 +142,18 @@ export function robotMark(colour: number, sponsor: Sponsor, flag?: number): THRE
   light.name = 'robot-mark-light';
   g.add(light);
   if (flag !== undefined) {
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.38), new THREE.MeshStandardMaterial({ color: flag, side: THREE.DoubleSide }));
-    f.position.set(0.28, top + M.mast - 0.22, 0);
+    // The flag hangs from a pivot on the mast (named 'robot-mark-flag-pivot'), its fly along the pivot's +x, so
+    // turning the pivot flies it with the wind (src/render/course.ts); built flying aft.
+    const geo = new THREE.PlaneGeometry(0.55, 0.38);
+    geo.translate(0.275, -0.19, 0);
+    const f = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: flag, side: THREE.DoubleSide }));
     f.name = 'robot-mark-flag';
-    g.add(f);
+    const pivot = new THREE.Group();
+    pivot.name = 'robot-mark-flag-pivot';
+    pivot.position.set(0, top + M.mast - 0.03, 0);
+    pivot.rotation.y = -Math.PI / 2;
+    pivot.add(f);
+    g.add(pivot);
   }
   return g;
 }
