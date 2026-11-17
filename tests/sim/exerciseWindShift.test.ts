@@ -8,8 +8,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SimController, START_LOCATIONS } from '../../src/app/controller';
 import { sailState } from '../../src/app/sailStatus';
-import { DEFAULT_THRESHOLDS } from '../../src/app/exercises/config';
+import { DEFAULT_THRESHOLDS, saveThresholds } from '../../src/app/exercises/config';
 import { PRACTICE_AREA, windShiftSetup } from '../../src/app/exercises/windShift';
+import { compareDemos } from '../../src/app/exercises/counterfactual';
 import { shiftSensitivity } from '../../src/app/exercises/sensitivity';
 
 const R2D = 180 / Math.PI;
@@ -35,9 +36,9 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
  * Sail one attempt to the mark. 'tack': tack on each header (8 s after it begins), then the laylines; 'hold': only the
  * laylines. Close-hauled at TWA 42°, straight at the mark once it can be fetched; sheets in hand trimmed by status.
  */
-function sailBeat(c: SimController, strategy: 'tack' | 'hold', stopAt?: (c: SimController) => boolean) {
+function sailBeat(c: SimController, strategy: 'tack' | 'hold', stopAt?: (c: SimController) => boolean, tackAt?: number[]) {
   const returnAt = T.shiftAtS + T.shiftRampS + T.shiftHoldS;
-  const events = [T.shiftAtS + 8, returnAt + 8];
+  const events = tackAt ?? [T.shiftAtS + 8, returnAt + 8];
   let next = 0;
   let want = 1;
   let lastTack = -Infinity;
@@ -156,8 +157,11 @@ describe('a learner who holds on', () => {
     const s = st(c);
     expect(s.stage).toBe('review');
     expect(s.records[0]!.values.decisionTackS).toBeUndefined();
+    // Its tack at the layline (as the "hold" demonstration's) is how holding on ends, not a late decision.
+    expect(s.records[0]!.values.tacks).toBeGreaterThan(0);
+    expect(s.records[0]!.values.lateTackS).toBeUndefined();
     const decision = s.review!.find((i) => i.id === 'decision')!;
-    expect(decision.observation).toMatch(/you held starboard for 30 s or more/);
+    expect(decision.observation).toContain(`you held starboard for ${T.decisionWindowS} s or more`);
     expect(decision.action).toMatch(/consider tacking onto the lifted tack/);
     expect(s.review!.some((i) => i.id === 'prediction')).toBe(false);
   }, 60_000);
@@ -166,7 +170,8 @@ describe('a learner who holds on', () => {
     const c = new SimController();
     c.startExercise('wind-shift');
     c.exerciseNext();
-    sailBeat(c, 'hold', (cc) => cc.sim.time > T.shiftAtS + T.shiftRampS / 2 + 12);
+    // Level 1 comes helpAttentionS (8 s, E) after the shift begins; level 2 at helpExplainS (16 s).
+    sailBeat(c, 'hold', (cc) => cc.sim.time > T.shiftAtS + T.helpAttentionS + 2);
     expect(st(c).help).toMatchObject({ level: 1, id: 'headed' });
     expect(st(c).help!.text).toMatch(/heading history/);
     expect(st(c).extras!.headingHistory!.length).toBeGreaterThan(60);
@@ -182,6 +187,106 @@ describe('a learner who holds on', () => {
     c.advance(5);
     expect(st(c).extras!.headingHistory!.length).toBeLessThan(10);
   });
+});
+
+describe('fixes from the independent review', () => {
+  const returnAt = T.shiftAtS + T.shiftRampS + T.shiftHoldS;
+
+  it('the "headed" help ends with the shift: holding on starboard after it turns back is not "headed"', () => {
+    const c = new SimController();
+    c.startExercise('wind-shift');
+    c.exerciseNext();
+    // Close-hauled on starboard throughout, never tacking (past the layline, too).
+    const starboard = (untilS: number) => {
+      while (c.sim.time < untilS && st(c).stage === 'attempt') {
+        const err = Math.abs(c.sim.snapshot(false).twa) * R2D - 42;
+        c.press('helmRight', err > 3);
+        c.press('helmLeft', err < -3);
+        c.advance(0.1);
+      }
+      release(c);
+    };
+    starboard(T.shiftAtS + 30);
+    expect(st(c).help?.id).toBe('headed');
+    starboard(returnAt + T.shiftRampS + 5);
+    expect(st(c).stage).toBe('attempt');
+    expect(c.sim.snapshot(false).mainSide).toBe(1);
+    expect(st(c).help).toBeUndefined();
+  }, 60_000);
+
+  it('a tack begun after the help\'s suggestion (Try), inside the window, counts as tacking on the header', () => {
+    const c = new SimController();
+    c.startExercise('wind-shift');
+    c.exerciseNext();
+    sailBeat(c, 'hold', (cc) => st(cc).help?.level === 3);
+    expect(st(c).help).toMatchObject({ level: 3, id: 'headed' });
+    const tTry = c.sim.time;
+    expect(tTry - T.shiftAtS).toBeLessThan(T.decisionWindowS);
+    sailBeat(c, 'tack', undefined, [tTry, returnAt + 8]);
+    const s = st(c);
+    expect(s.stage).toBe('review');
+    expect(s.records[0]!.values.decisionTackS).toBeGreaterThanOrEqual(tTry - T.shiftAtS - 1);
+    expect(s.records[0]!.values.decisionTackS).toBeLessThan(T.decisionWindowS);
+    expect(s.review!.find((i) => i.id === 'decision')!.observation).toMatch(/you tacked \d+ s after the wind began to shift/);
+  }, 60_000);
+
+  it('a tack well after the window, short of the layline, is reported as late (and judged against neither demonstration)', () => {
+    const c = new SimController();
+    c.startExercise('wind-shift');
+    c.exerciseNext();
+    sailBeat(c, 'tack', undefined, [T.shiftAtS + T.decisionWindowS + 10, returnAt + 8]);
+    const s = st(c);
+    expect(s.stage).toBe('review');
+    expect(s.records[0]!.values.decisionTackS).toBeUndefined();
+    expect(s.records[0]!.values.lateTackS).toBeGreaterThan(T.decisionWindowS);
+    expect(s.review!.find((i) => i.id === 'decision')!.observation).toMatch(new RegExp(`later than the ${T.decisionWindowS} s this exercise counts`));
+    expect(s.review!.find((i) => i.id === 'outcome')!.cause ?? '').not.toMatch(/demonstration of the same decision/);
+  }, 60_000);
+
+  it('a beat skipped before the shift has no decision to judge, and the attempt is incomplete', () => {
+    const c = new SimController();
+    c.startExercise('wind-shift');
+    c.exerciseNext();
+    c.advance(20);
+    c.exerciseNext(); // skip the beat
+    const s = st(c);
+    expect(s.stage).toBe('review');
+    expect(s.records[0]!.outcome).toBe('incomplete');
+    expect(s.review!.find((i) => i.id === 'decision')!.observation).toMatch(/skipped before the wind shifted: there is no decision to judge/);
+    expect(s.review!.find((i) => i.id === 'outcome')!.observation).toMatch(/skipped before the mark/);
+    expect(s.review!.some((i) => /held starboard|you tacked/.test(i.observation))).toBe(false);
+  });
+
+  it('a beat that runs out of time is incomplete; with neither demonstration at the mark the review says so', () => {
+    // An instructor's (short) time limit: neither model demonstration reaches the mark within it.
+    expect(saveThresholds({ windShift: { timeLimitS: 100 } })).toBe(true);
+    const c = new SimController();
+    c.startExercise('wind-shift');
+    c.exerciseNext();
+    c.advance(105);
+    const s = st(c);
+    expect(s.stage).toBe('review');
+    expect(s.records[0]!.issues).toContain('timeout');
+    expect(s.records[0]!.outcome).toBe('incomplete');
+    expect(s.review!.find((i) => i.id === 'timeout')!.observation).toMatch(/not reached within 100 s/);
+    expect(s.review!.find((i) => i.id === 'decision')!.cause).toBe('In this model neither demonstration reached the mark within 100 s, so the decision cannot be compared.');
+  });
+
+  it('with only one demonstration at the mark, the comparison names it and claims no margin', () => {
+    const full = compareDemos(setup, windShiftSetup(T).events);
+    const mid = Math.round((full.tack.timeS! + full.hold.timeS!) / 2);
+    const one = compareDemos({ ...setup, timeLimitS: mid }, windShiftSetup(T).events);
+    expect(one.tack.timeS).toBeDefined();
+    expect(one.hold.timeS).toBeUndefined();
+    expect(one).toMatchObject({ better: 'tack-on-header' });
+    expect(one.marginS).toBeUndefined();
+    expect(saveThresholds({ windShift: { timeLimitS: mid } })).toBe(true);
+    const c = new SimController();
+    c.startExercise('wind-shift');
+    c.exerciseNext();
+    c.advance(mid + 2);
+    expect(st(c).review!.find((i) => i.id === 'decision')!.cause).toMatch(new RegExp(`only the "tack on the header" demonstration reached the mark within ${mid} s \\(model demonstrations: tack on the header \\d+ s, hold did not reach the mark\\)`));
+  }, 60_000);
 });
 
 describe('pointing sensitivity (test harness only)', () => {

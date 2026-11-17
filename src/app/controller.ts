@@ -476,6 +476,18 @@ export class SimController {
    * passes the recorded one; by default the previous run's input carries over with the helm centred).
    */
   restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean } = {}): boolean {
+    // The exercise's own scenario, restarted from outside the exercise while an attempt (or the warm-up) runs: the
+    // attempt starts again through the exercise, so its measurements start again with the boat. In a review or the
+    // result the exercise is not measuring, so the boat simply restarts.
+    if (this.exercise && !this.exerciseRestarting && !opts.keepReplay && JSON.stringify(scenario) === this.exercise.scenarioKey) {
+      const stage = this.exercise.engine.state.stage;
+      if (stage === 'attempt' || stage === 'intro') {
+        this.exerciseRestartAttempt();
+        return true;
+      }
+    }
+    // A replay (or a ghost) is a recording, not an attempt: it ends the exercise.
+    if (opts.keepReplay) this.endExercise(false);
     let built: BuiltConditions;
     const geo = this.dartData?.geo;
     try {
@@ -662,7 +674,7 @@ export class SimController {
     else this.sim.stepOnce();
     if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
     if (this.tutorial && this.sim.step % 10 === 0) this.updateTutorial();
-    else if (this.exercise && this.sim.step % 10 === 0) this.updateExercise();
+    else if (this.exercise && !this.replay && this.sim.step % 10 === 0) this.updateExercise();
     else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
@@ -818,9 +830,12 @@ export class SimController {
    * would otherwise throw the race away (error prevention). Otherwise reset at once.
    */
   requestReset(): void {
-    // In an exercise, Reset starts the attempt again (from its own start).
-    if (this.exercise && !this.exercise.engine.finished) {
-      this.exerciseRestartAttempt();
+    // In an exercise, Reset starts the attempt (or the warm-up) again from its own start. In a review or the result
+    // it only restarts the boat: the attempt reviewed is kept.
+    if (this.exercise) {
+      const stage = this.exercise.engine.state.stage;
+      if (stage === 'attempt' || stage === 'intro') this.exerciseRestartAttempt();
+      else this.restart();
       return;
     }
     if (this.raceAtStake()) {
@@ -951,6 +966,9 @@ export class SimController {
     const thresholds = loadThresholds();
     const spec = buildExercise(id, thresholds, this.steeringMode);
     this.exercise = { info, engine: new Exercise(spec.def), spec, scenarioKey: '', changed: thresholdsChanged(thresholds), overlay: true, lastKey: '' };
+    // A free-sailing hint (and its "show me") does not carry into the exercise: the exercise has its own help.
+    this.hints.dismiss();
+    this.showMe = undefined;
     this.applyExerciseSetup();
     this.publish(true);
   }
@@ -1039,6 +1057,7 @@ export class SimController {
   setExerciseOverlay(on: boolean): void {
     if (!this.exercise) return;
     this.exercise.overlay = on;
+    if (on) this.exercise.engine.noteAssists({ overlay: true });
     this.applyTeaching();
     this.publish(true);
   }
@@ -2362,6 +2381,8 @@ export class SimController {
   setInput(change: Partial<ControlInput>): void {
     if (this.replay) return; // playing back: the recording drives the boat
     this.sim.setInput(this.handOver(change));
+    // Auto-trim or auto-crew switched on in an exercise counts for the attempt at once (even while paused).
+    this.exercise?.engine.noteAssists({ autoMain: change.autoMain, autoJib: change.autoJib, autoCrew: change.autoCrew });
     this.publish(true);
   }
 
@@ -2709,7 +2730,7 @@ export class SimController {
       runningSlow: this.paused ? undefined : this.runningSlow,
       autoLowerGraphics: this.autoLowerGraphics,
       prefs: { ...this.prefs },
-      hint: this.hints.current,
+      hint: this.exercise ? undefined : this.hints.current,
       milestones: { ...this.milestones },
       resume: this.resumePoint
         ? {

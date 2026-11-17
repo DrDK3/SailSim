@@ -139,7 +139,7 @@ export interface PhaseDef {
   title: string;
   body: (plan: AttemptPlan) => string;
   targets?: TutorialTarget[];
-  goal?: (s: ExerciseSample, m: PhaseMemory, plan: AttemptPlan) => boolean;
+  goal?: (s: ExerciseSample, m: PhaseMemory, plan: AttemptPlan, rec?: AttemptRecord) => boolean;
   holdS?: number;
   /** The phase ends by itself after this long (the warm-up). */
   durationS?: number;
@@ -151,7 +151,7 @@ export interface PhaseDef {
   /** Help for the problem at hand (called while stuck). */
   help?: (s: ExerciseSample, m: PhaseMemory, plan: AttemptPlan) => HelpLadder;
   onDone?: (s: ExerciseSample, m: PhaseMemory, rec: AttemptRecord) => void;
-  readout?: (s: ExerciseSample, m: PhaseMemory) => string | undefined;
+  readout?: (s: ExerciseSample, m: PhaseMemory, rec?: AttemptRecord) => string | undefined;
 }
 
 export interface GroupSummary {
@@ -223,6 +223,12 @@ function newRecord(n: number, plan: AttemptPlan): AttemptRecord {
   return { n, plan, assists: NO_ASSISTS(), independent: false, outcome: 'running', restarts: 0, values: {}, issues: [], help: { 1: 0, 2: 0, 3: 0, requested: 0 }, skipped: [], review: [] };
 }
 
+/** Findings that make an attempt incomplete even though its last phase ended (the time ran out). */
+export const INCOMPLETE_ISSUES = ['timeout'];
+
+/** Seconds help the learner asked for stays on show, stuck or not. */
+export const ASKED_HELP_S = 10;
+
 /** Seconds a met goal is shown as done before the next phase. */
 export const ADVANCE_AFTER_S = 1.5;
 
@@ -238,6 +244,10 @@ export class Exercise {
   private askedLevel = 0;
   private shownLevel = 0;
   private ladder?: HelpLadder;
+  /** The problem the help on show was last logged for (a new problem at the same level is logged too). */
+  private loggedId?: string;
+  /** Help the learner asked for stays on show until this time (s), stuck or not. */
+  private askedUntil?: number;
   private last?: ExerciseSample;
   readonly records: AttemptRecord[] = [];
   readonly log: HelpEvent[] = [];
@@ -297,13 +307,14 @@ export class Exercise {
       return;
     }
     if (!ph.goal) return;
-    const met = ph.goal(s, m, this.plan);
+    const met = ph.goal(s, m, this.plan, rec);
     if (met) {
+      // The goal holds: no help on show (it comes back if the learner is stuck again).
+      this.ladder = undefined;
       this.heldS += dt;
       if (this.heldS + 1e-9 >= (ph.holdS ?? 0)) {
         this.doneAt = s.t;
         if (rec) ph.onDone?.(s, m, rec);
-        this.ladder = undefined;
       }
       return;
     }
@@ -315,8 +326,22 @@ export class Exercise {
       const [a, b, c] = this.def.helpTimes;
       this.autoLevel = this.stuckS >= c ? 3 : this.stuckS >= b ? 2 : this.stuckS >= a ? 1 : 0;
     }
-    if (stuck || this.shownLevel > 0) this.ladder = ph.help(s, m, this.plan);
+    // Help is about the problem at hand: only while the learner is stuck (it hides otherwise, keeping its level).
+    this.ladder = stuck || (this.askedUntil !== undefined && s.t < this.askedUntil) ? ph.help(s, m, this.plan) : undefined;
     this.raiseHelp(false);
+  }
+
+  /**
+   * Assistance switched on outside the samples (while paused, from a panel): it counts for the attempt at once.
+   * Only "on" is recorded; switching off never makes an attempt independent again.
+   */
+  noteAssists(a: Partial<Pick<Assists, 'autoMain' | 'autoJib' | 'autoCrew' | 'overlay'>>): void {
+    const rec = this.record;
+    if (!rec || this.stage !== 'attempt') return;
+    rec.assists.autoMain ||= !!a.autoMain;
+    rec.assists.autoJib ||= !!a.autoJib;
+    rec.assists.autoCrew ||= !!a.autoCrew;
+    rec.assists.overlay ||= !!a.overlay;
   }
 
   /** The learner asks for (more) help: one level up, to level 3. */
@@ -326,6 +351,7 @@ export class Exercise {
     if (this.shownLevel >= 3) return;
     this.askedLevel = this.shownLevel + 1;
     const s = this.last;
+    this.askedUntil = (s?.t ?? 0) + ASKED_HELP_S;
     if (s && this.mem) this.ladder = ph.help(s, this.mem, this.plan);
     this.raiseHelp(true);
   }
@@ -333,16 +359,27 @@ export class Exercise {
   private raiseHelp(requested: boolean): void {
     const want = Math.max(this.autoLevel, this.askedLevel);
     const rec = this.record;
-    if (!rec || !this.ladder || want <= this.shownLevel) return;
+    if (!rec || !this.ladder) return;
+    const textOf = (level: 1 | 2 | 3) => (level === 1 ? this.ladder!.attention : level === 2 ? this.ladder!.explain : this.ladder!.suggest);
+    if (want <= this.shownLevel) {
+      // The same level, about a different problem: that is new help on show, so it is logged (and counted) too.
+      if (this.shownLevel > 0 && this.ladder.id !== this.loggedId) {
+        const level = this.shownLevel as 1 | 2 | 3;
+        this.log.push({ attempt: rec.n, phase: this.phase!.id, level, id: this.ladder.id, t: this.last?.t ?? 0, requested: false, text: textOf(level) });
+        rec.help[level]++;
+        this.loggedId = this.ladder.id;
+      }
+      return;
+    }
     for (let l = this.shownLevel + 1; l <= want; l++) {
       const level = l as 1 | 2 | 3;
-      const text = level === 1 ? this.ladder.attention : level === 2 ? this.ladder.explain : this.ladder.suggest;
-      this.log.push({ attempt: rec.n, phase: this.phase!.id, level, id: this.ladder.id, t: this.last?.t ?? 0, requested: requested && l === want, text });
+      this.log.push({ attempt: rec.n, phase: this.phase!.id, level, id: this.ladder.id, t: this.last?.t ?? 0, requested: requested && l === want, text: textOf(level) });
       rec.help[level]++;
     }
     if (requested) rec.help.requested++;
     rec.assists.liveHelp = true;
     this.shownLevel = want;
+    this.loggedId = this.ladder.id;
   }
 
   /** Next: end the warm-up early, skip a phase (the attempt then counts as incomplete), or go on after a review. */
@@ -394,6 +431,8 @@ export class Exercise {
     this.askedLevel = 0;
     this.shownLevel = 0;
     this.ladder = undefined;
+    this.loggedId = undefined;
+    this.askedUntil = undefined;
   }
 
   private advance(): void {
@@ -417,7 +456,7 @@ export class Exercise {
 
   private finishAttempt(): void {
     const rec = this.record!;
-    rec.outcome = rec.skipped.length ? 'incomplete' : 'complete';
+    rec.outcome = rec.skipped.length || rec.issues.some((i) => INCOMPLETE_ISSUES.includes(i)) ? 'incomplete' : 'complete';
     rec.independent = isIndependent(rec.assists);
     if (this.prediction !== undefined) rec.prediction = this.prediction;
     rec.review = this.def.review(rec);
@@ -470,7 +509,7 @@ export class Exercise {
       },
       done,
       progress,
-      readout: ph?.readout && s && this.mem ? ph.readout(s, this.mem) : undefined,
+      readout: ph?.readout && s && this.mem ? ph.readout(s, this.mem, rec) : undefined,
       help: showHelp
         ? { level: lvl, name: HELP_LEVEL_NAMES[lvl], text: lvl === 1 ? this.ladder!.attention : lvl === 2 ? this.ladder!.explain : this.ladder!.suggest, id: this.ladder!.id, targets: this.ladder!.targets, requested: this.askedLevel >= lvl }
         : undefined,

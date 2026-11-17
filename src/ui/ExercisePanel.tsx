@@ -66,8 +66,8 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           <>
             <h4>What we saw</h4>
             <ul className="lesson-result" data-testid="result-observations">
-              {r.observations.map((o) => (
-                <li key={o.id}>
+              {r.observations.map((o, i) => (
+                <li key={`${o.id}-${i}`}>
                   {o.observation}
                   {o.cause && <span className="fine-inline"> {o.cause}</span>}
                 </li>
@@ -108,8 +108,8 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           Attempt {s.attempt}: how it went
         </h3>
         <ul className="lesson-result" data-testid="exercise-review">
-          {(s.review ?? []).map((i) => (
-            <li key={i.id}>
+          {(s.review ?? []).map((i, n) => (
+            <li key={`${i.id}-${n}`}>
               <strong>{i.observation}</strong>
               {i.cause && <> {i.cause}</>}
               {i.action && <> {i.action}</>}

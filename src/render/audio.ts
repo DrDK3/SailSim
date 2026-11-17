@@ -150,6 +150,8 @@ export class SoundScape {
       try {
         this.build();
       } catch (e) {
+        // A context made before the failure is closed, so a half-built one does not hold the audio device.
+        (this.ctx as AudioContext | undefined)?.close().catch(() => undefined);
         this.ctx = undefined;
         this.failed = (e as Error).message || 'Web Audio unavailable';
         return;

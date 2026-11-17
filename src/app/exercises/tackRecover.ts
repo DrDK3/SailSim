@@ -84,6 +84,11 @@ function closeHauledHelp(t: TackRecoverThresholds, keys: { starboard: string; po
         suggest: `Turn the bow towards the wind (${towards}) until the TWA reads about 45°.`,
       };
     }
+    // Within the band (or above it), a sheet in the learner's hands that is not drawing is the sheet's doing.
+    if (s.twaDeg >= t.closeHauledMinTwaDeg) {
+      const trim = trimHelp(s);
+      if (trim) return trim;
+    }
     if (s.twaDeg < t.closeHauledMinTwaDeg || s.main === 'luffing' || s.jib === 'luffing') {
       return {
         id: 'too-high',
@@ -93,8 +98,6 @@ function closeHauledHelp(t: TackRecoverThresholds, keys: { starboard: string; po
         suggest: `Bear away a little: turn the bow away from the wind (${away}) until the TWA reads about 45° and the sails draw.`,
       };
     }
-    const trim = trimHelp(s);
-    if (trim) return trim;
     return {
       id: 'slow',
       targets: ['speed', 'twa'],
@@ -107,8 +110,6 @@ function closeHauledHelp(t: TackRecoverThresholds, keys: { starboard: string; po
 
 export function tackRecoverExercise(t: TackRecoverThresholds, steering: SteeringMode = 'bow'): ExerciseDef {
   const keys = bowKeys(steering);
-  /** The speed going into this attempt's tack: the recovery target is a share of it. */
-  let lastTackIn: number | undefined;
   const inBand = (s: ExerciseSample) => s.twaDeg >= t.closeHauledMinTwaDeg && s.twaDeg <= t.closeHauledMaxTwaDeg;
   const sailsDrawing = (s: ExerciseSample) => drawingish(s.main) && drawingish(s.jib);
   const sheetsNote = (plan: AttemptPlan) =>
@@ -184,21 +185,45 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
     body: (plan) => `Tack: turn the bow through the wind, steadily, until the sails fill on the other side.${sheetsNote(plan)}`,
     targets: ['helm', 'compass'],
     observe: (s, m, rec) => {
+      // The side the tack starts from (a gybe resets it: the tack still has to be done from the new side).
+      m.v.fromSide ??= m.start.mainSide;
+      if (s.mainSide !== m.v.lastSide && m.v.lastSide !== undefined && s.twaDeg > 90) {
+        // The sails crossed with the wind abaft the beam: a gybe, not a tack.
+        m.flags.add('gybed');
+        if (!rec.issues.includes('gybed')) rec.issues.push('gybed');
+        m.v.fromSide = s.mainSide;
+        delete m.v.turnAt;
+        delete m.v.minKn;
+      }
+      m.v.lastSide = s.mainSide;
       if (m.v.turnAt === undefined) {
-        if (s.twaDeg < t.tackStartTwaDeg && s.mainSide === m.start.mainSide) Object.assign(m.v, { turnAt: s.t, inKn: m.v.lastKn ?? s.stwKn, minKn: s.stwKn });
+        if (s.twaDeg < t.tackStartTwaDeg && s.mainSide === m.v.fromSide) Object.assign(m.v, { turnAt: s.t, inKn: m.v.lastKn ?? s.stwKn, minKn: s.stwKn });
         else m.v.lastKn = s.stwKn;
+      } else if (s.mainSide === m.v.fromSide && s.twaDeg >= t.closeHauledMinTwaDeg) {
+        // Back in the close-hauled band on the old side: the turn was given up (help comes again if it stays so).
+        delete m.v.turnAt;
+        delete m.v.minKn;
       } else m.v.minKn = Math.min(m.v.minKn!, s.stwKn);
       // In irons: stopped with the bow near the wind.
       if (s.stwKn < t.ironsKn && s.twaDeg < 30) m.v.ironsS = (m.v.ironsS ?? 0) + 0.1;
       else m.v.ironsS = 0;
       if ((m.v.ironsS ?? 0) >= t.ironsS && !rec.issues.includes('irons')) rec.issues.push('irons');
     },
-    goal: (s, m) => s.mainSide !== m.start.mainSide && s.twaDeg >= t.tackStartTwaDeg && s.twaDeg < 90 && s.stwKn > t.tackDoneMinKn,
+    // Through the wind (the bow passed close to it on the old side) and onto the other tack, sailing.
+    goal: (s, m) => m.v.turnAt !== undefined && m.v.fromSide !== undefined && s.mainSide !== m.v.fromSide && s.twaDeg >= t.tackStartTwaDeg && s.twaDeg < 90 && s.stwKn > t.tackDoneMinKn,
     // Turning normally is not being stuck; not starting, or stopping head to wind, is.
-    stuck: (s, m) => (m.v.turnAt === undefined && s.t - m.start.t > 6) || (m.v.ironsS ?? 0) > 2,
+    stuck: (s, m) => (m.v.turnAt === undefined && s.t - m.start.t > 6) || (m.v.ironsS ?? 0) > 2 || (m.flags.has('gybed') && m.v.turnAt === undefined),
     help: (_s, m) => {
-      const side = m.start.mainSide === 1 ? 1 : -1;
+      const side = (m.v.fromSide ?? m.start.mainSide) === 1 ? 1 : -1;
       const towards = side === 1 ? keys.starboard : keys.port;
+      if (m.flags.has('gybed') && m.v.turnAt === undefined)
+        return {
+          id: 'gybed',
+          targets: ['helm', 'twa'],
+          attention: 'Look at the TWA: the wind came round behind you.',
+          explain: 'That was a gybe: the stern went through the wind. A tack turns the bow through the wind instead.',
+          suggest: `Head up to close-hauled (${towards}), then keep turning the same way through the wind to tack.`,
+        };
       if ((m.v.ironsS ?? 0) > 2)
         return {
           id: 'irons',
@@ -238,7 +263,8 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
         if (!auto && st && !drawingish(st)) m.v[`${sail}OffS`] = (m.v[`${sail}OffS`] ?? 0) + 0.1;
       }
     },
-    goal: (s) => inBand(s) && sailsDrawing(s) && s.stwKn >= t.recoverFrac * (lastTackIn ?? s.stwKn),
+    // The recovery target is a share of the speed going into this attempt's tack (none if the tack was skipped).
+    goal: (s, _m, _plan, rec) => inBand(s) && sailsDrawing(s) && s.stwKn >= t.recoverFrac * (rec?.values.tackInKn ?? 0),
     holdS: t.recoverHoldS,
     help: closeHauledHelp(t, keys),
     onDone: (s, m, rec) => {
@@ -249,19 +275,7 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
       rec.values.jibOffS = m.v.jibOffS ?? 0;
       if (rec.values.recoverS > t.slowRecoverS) rec.issues.push('slow-recover');
     },
-    readout: (s) => `TWA ${f0(s.twaDeg)}° · ${f1(s.stwKn)} kn (target ${f1(t.recoverFrac * (lastTackIn ?? 0))} kn)`,
-  };
-
-  // The recovery target needs the speed going into this attempt's tack: kept from the tack phase's record.
-  const tackDone = tack.onDone!;
-  tack.onDone = (s, m, rec) => {
-    tackDone(s, m, rec);
-    lastTackIn = rec.values.tackInKn;
-  };
-  const closeDone = closeHauled.onDone!;
-  closeHauled.onDone = (s, m, rec) => {
-    lastTackIn = undefined;
-    closeDone(s, m, rec);
+    readout: (s, _m, rec) => `TWA ${f0(s.twaDeg)}° · ${f1(s.stwKn)} kn${rec?.values.tackInKn !== undefined ? ` (target ${f1(t.recoverFrac * rec.values.tackInKn)} kn)` : ''}`,
   };
 
   return {
@@ -283,6 +297,8 @@ export function tackRecoverReview(rec: AttemptRecord, t: TackRecoverThresholds):
   const v = rec.values;
   const out: ReviewItem[] = [];
   for (const p of rec.skipped) out.push({ id: `skipped-${p}`, observation: `The ${p.replace('-', ' ')} step was skipped.` });
+  if (rec.issues.includes('gybed'))
+    out.push({ id: 'gybed', observation: 'The boat gybed (the stern went through the wind) before the tack.', cause: 'Likely cause: turning away from the wind instead of towards it.', action: 'Next time: turn the bow towards the wind to tack.' });
   if (rec.issues.includes('irons'))
     out.push({ id: 'irons', observation: `The boat stopped with the bow into the wind for ${t.ironsS} s or more (in irons).`, cause: 'Likely cause: the turn slowed or stopped before the bow crossed the wind.', action: 'Next time: build speed first, then turn steadily through the wind without stopping.' });
   const inKn = v.tackInKn;
@@ -306,7 +322,7 @@ export function tackRecoverReview(rec: AttemptRecord, t: TackRecoverThresholds):
 }
 
 /** The order in which a next action is chosen: the most basic problem first. */
-const PRIORITY = ['irons', 'big-loss', 'slow-tack', 'overshoot', 'trim-main', 'trim-jib', 'slow-recover'];
+const PRIORITY = ['gybed', 'irons', 'big-loss', 'slow-tack', 'overshoot', 'trim-main', 'trim-jib', 'slow-recover'];
 
 function summarise(records: AttemptRecord[], label: string): ExerciseResult['assisted'] {
   const done = records.filter((r) => r.outcome === 'complete');

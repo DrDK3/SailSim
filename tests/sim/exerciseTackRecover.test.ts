@@ -356,3 +356,128 @@ describe('instructor tools', () => {
     expect(d.sim.stateHash()).toBe(hash);
   });
 });
+
+describe('fixes from the independent review', () => {
+  /** Into attempt n (1-based), skipping the phases before it. */
+  const toAttempt = (c: SimController, n: number) => {
+    c.exerciseNext(); // the warm-up
+    for (let a = 1; a < n; a++) {
+      for (let i = 0; i < 4; i++) c.exerciseNext();
+      c.exerciseNext();
+    }
+    expect(st(c).attempt).toBe(n);
+  };
+  /** Steer to a TWA on the current tack for a time. */
+  const holdTwa = (c: SimController, twa: number, s: number, also?: () => void) => {
+    for (let i = 0; i < s * 10; i++) {
+      const sn = c.sim.snapshot(false);
+      const err = Math.abs(sn.twa) * R2D - twa;
+      const side = Math.sign(sn.twa) || 1;
+      c.press(side > 0 ? 'helmRight' : 'helmLeft', err > 3);
+      c.press(side > 0 ? 'helmLeft' : 'helmRight', err < -3);
+      also?.();
+      c.advance(0.1);
+    }
+    release(c);
+  };
+
+  it('close-hauled with the main sheet in hand let out: the help is about the main, not the course', () => {
+    const c = new SimController();
+    c.startExercise('tack-recover');
+    toAttempt(c, 3);
+    expect(st(c).plan.start).toMatchObject({ autoMain: false, autoJib: true });
+    expect(st(c).phase!.id).toBe('close-hauled');
+    // In the band (TWA 45°) with the main sheet run right out: the main luffs.
+    holdTwa(c, 45, 12, () => c.press('mainOut', true));
+    const sn = c.sim.snapshot(false);
+    expect(sailState(sn.forces.main, sn.boomMain)).toBe('luffing');
+    expect(st(c).help).toMatchObject({ level: 1, id: 'trim-main' });
+    holdTwa(c, 45, 10);
+    expect(st(c).help!.text).toMatch(/main is luffing/);
+  });
+
+  it('a gybe does not pass the tack phase: it is noted, and help says what a tack is', () => {
+    const c = new SimController();
+    c.startExercise('tack-recover');
+    learner(c, { stopAt: (cc) => st(cc).phase?.id === 'tack' });
+    const from = c.sim.snapshot(false).mainSide;
+    // Bear away until the boat gybes onto the other side, then sail close-hauled there.
+    for (let i = 0; i < 900 && c.sim.snapshot(false).mainSide === from; i++) {
+      const away = (Math.sign(c.sim.snapshot(false).twa) || 1) > 0 ? 'helmLeft' : 'helmRight';
+      c.press(away, true);
+      c.advance(0.1);
+    }
+    release(c);
+    expect(c.sim.snapshot(false).mainSide).not.toBe(from);
+    holdTwa(c, 45, 30);
+    expect(st(c).phase!.id).toBe('tack');
+    expect(st(c).records[0]!.issues).toContain('gybed');
+    expect(st(c).help?.id).toBe('gybed');
+    // A real tack from the new side then passes it.
+    const side = c.sim.snapshot(false).mainSide;
+    for (let i = 0; i < 300 && c.sim.snapshot(false).mainSide === side; i++) {
+      c.press((Math.sign(c.sim.snapshot(false).twa) || 1) > 0 ? 'helmRight' : 'helmLeft', true);
+      c.advance(0.1);
+    }
+    release(c);
+    holdTwa(c, 45, 15);
+    expect(st(c).phase!.id).not.toBe('tack');
+    learner(c, { stopAt: (cc) => st(cc).stage === 'review' });
+    expect(st(c).review!.map((i) => i.id)).toContain('gybed');
+  });
+
+  it('assistance switched on while paused counts for the attempt, even when switched off before a sample', () => {
+    const c = new SimController();
+    c.startExercise('tack-recover');
+    toAttempt(c, 4);
+    c.togglePause();
+    c.setExerciseOverlay(true);
+    c.setExerciseOverlay(false);
+    c.setInput({ autoJib: true });
+    c.setInput({ autoJib: false });
+    c.togglePause();
+    const a = st(c).records[3]!.assists;
+    expect(a.overlay).toBe(true);
+    expect(a.autoJib).toBe(true);
+    expect(isIndependent(a)).toBe(false);
+  });
+
+  it('restarting the exercise\'s own scenario from elsewhere restarts the attempt; a replay ends the exercise', () => {
+    const c = new SimController();
+    c.startExercise('tack-recover');
+    c.exerciseNext();
+    c.advance(5);
+    expect(c.restart(structuredClone(c.scenario))).toBe(true);
+    expect(ex(c)).toBeDefined();
+    expect(st(c).records[0]!.restarts).toBe(1);
+    expect(st(c).phase!.id).toBe('close-hauled');
+    expect(c.sim.time).toBe(0);
+    c.advance(3);
+    const rec = c.saveRecording('attempt 1');
+    expect(c.startReplay(rec)).toBe(true);
+    expect(c.getState().exercise).toBeUndefined();
+  });
+
+  it('Reset during a review restarts the boat but keeps the attempt reviewed', () => {
+    const c = new SimController();
+    c.startExercise('tack-recover');
+    learner(c, { stopAt: (cc) => st(cc).stage === 'review' });
+    const before = st(c).records[0]!;
+    expect(before.outcome).toBe('complete');
+    c.requestReset();
+    expect(st(c).stage).toBe('review');
+    expect(st(c).records[0]).toEqual(before);
+    c.exerciseNext();
+    expect(st(c).attempt).toBe(2);
+  });
+
+  it('a free-sailing hint does not stay up over an exercise', () => {
+    const c = new SimController();
+    const inner = c as unknown as { hints: { current?: unknown }; publish(force: boolean): void };
+    inner.hints.current = { id: 'luffing', at: 0, text: 'x' };
+    inner.publish(true);
+    expect(c.getState().hint).toBeDefined();
+    c.startExercise('tack-recover');
+    expect(c.getState().hint).toBeUndefined();
+  });
+});

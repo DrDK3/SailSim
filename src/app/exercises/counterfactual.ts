@@ -45,6 +45,14 @@ export interface DemoResult {
 const bearing = (a: { n: number; e: number }, b: { n: number; e: number }) => Math.atan2(b.e - a.e, b.n - a.n);
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
+/** The true wind angle the demonstrations point at, close-hauled, unless a set-up says otherwise (E). */
+export const DEFAULT_POINT_TWA_DEG = 42;
+
+/** Where the mark lies from the wind's eye, in degrees (> 0: to the right, looking upwind). */
+export function markFromWindDeg(here: { n: number; e: number }, mark: { n: number; e: number }, windFromDeg: number): number {
+  return (wrap(bearing(here, mark) - (windFromDeg * Math.PI) / 180) * 180) / Math.PI;
+}
+
 /** A change of wind direction the "tack on the header" rule responds to: when it begins (s) and its size (° > 0 veers). */
 export interface ShiftEvent {
   t: number;
@@ -65,7 +73,7 @@ const headsTack = (side: 1 | -1, deg: number) => (side === 1 ? deg < 0 : deg > 0
 export function sailDemo(setup: BeatSetup, policy: DemoPolicy, events: ShiftEvent[]): DemoResult {
   const { env } = buildConditions(setup.conditions);
   const sim = new Simulation({ params: setup.params ?? squibParams(), env, initial: setup.start, input: { autoMain: true, autoJib: true, autoCrew: true } });
-  const point = (setup.pointTwaDeg ?? 42) * DEG;
+  const point = (setup.pointTwaDeg ?? DEFAULT_POINT_TWA_DEG) * DEG;
   // The course over the ground is lower than the heading by the leeway: fetch only with this margin (E).
   const fetchMargin = 6 * DEG;
   const reactS = setup.reactS ?? 8;
@@ -124,7 +132,7 @@ export interface Comparison {
   hold: DemoResult;
   /** The rule that reached the mark sooner in this model (undefined if neither did, or within 1 s). */
   better?: DemoPolicy;
-  /** Seconds the better rule gained (positive). */
+  /** Seconds the better rule gained (positive); undefined when only one reached the mark. */
   marginS?: number;
 }
 
@@ -132,10 +140,11 @@ export function compareDemos(setup: BeatSetup, events: ShiftEvent[]): Comparison
   const tack = sailDemo(setup, 'tack-on-header', events);
   const hold = sailDemo(setup, 'hold', events);
   if (tack.timeS === undefined && hold.timeS === undefined) return { tack, hold };
-  const a = tack.timeS ?? Infinity;
-  const b = hold.timeS ?? Infinity;
-  if (Math.abs(a - b) < 1) return { tack, hold, marginS: Math.abs(a - b) };
-  return { tack, hold, better: a < b ? 'tack-on-header' : 'hold', marginS: Math.abs(a - b) };
+  // Only one reached the mark: it is the better one, by no measurable margin.
+  if (tack.timeS === undefined || hold.timeS === undefined) return { tack, hold, better: tack.timeS !== undefined ? 'tack-on-header' : 'hold' };
+  const d = Math.abs(tack.timeS - hold.timeS);
+  if (d < 1) return { tack, hold, marginS: d };
+  return { tack, hold, better: tack.timeS < hold.timeS ? 'tack-on-header' : 'hold', marginS: d };
 }
 
 /** A start on starboard tack, close-hauled-ish, at a location, for the exercise and the harness. */
