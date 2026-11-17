@@ -129,7 +129,7 @@ try {
     }
     await del(key);
     await del(`blob:${meta.id}`);
-    console.log(`${sub.id} ${sub.name} (${sub.engine}): ${v.status}${v.reason ? ` (${v.reason})` : ''}${v.timeS !== undefined ? ` ${v.timeS} s` : ''}${v.flags.length ? ` flags ${v.flags.join(',')}` : ''}`);
+    console.log(`${sub.id} ${sub.name} (${sub.engine}): ${v.status}${v.reason ? ` (${v.reason})` : ''}${v.timeS !== undefined ? ` ${v.timeS} s re-sailed` : ''}${v.claimedS !== undefined ? `, ${v.claimedS} s claimed` : ''}${v.exact !== undefined ? (v.exact ? ', bit-exact' : ', not bit-exact') : ''}${v.flags.length ? ` flags ${v.flags.join(',')}` : ''}`);
   }
   // 2. Removals: the entry made with that token goes, and the verdict says so.
   for (const { key } of await list('removal:')) {

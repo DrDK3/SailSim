@@ -7,11 +7,12 @@
  *  1. built by this build (else the Action tries a kept older verifier, else "unverifiable: build-not-kept");
  *  2. the name is a word-list name;
  *  3. the run is the weekly course of its week: same conditions, course, boat, start, sequence, and sailed alone;
- *  4. re-sailing it: the checkpoints match bit for bit and the finish time matches the claim (same browser engine as
- *     the verifier: Chromium, V8);
- *     on another browser engine, where bit-exact replay is not guaranteed (issue 17): accepted with the re-sailed time
- *     if the course was completed and the re-sailed finish is within OTHER_ENGINE_TOLERANCE_S of the claim; otherwise
- *     listed separately as "recorded on another browser engine, not verified" (never silently dropped);
+ *  4. re-sailing it: if the checkpoints match bit for bit, the finish must match the claim to 0.05 s. They usually do
+ *     not for a run recorded in a browser: Node's V8 and a browser's differ in the last bit of Math.sin/cos/pow
+ *     (criterion 11; measured in the end-to-end test for a 52-minute course, docs/JUNIORS_REPORT.md §4.4). Then the
+ *     run is accepted, with the re-sailed time, if it finished within OTHER_ENGINE_TOLERANCE_S of the claim. Beyond
+ *     that, a Chromium run is rejected (time not as claimed); a Firefox, Safari or other run is listed separately as
+ *     "recorded on another browser engine, not verified" (never silently dropped);
  *  5. the assist category: a run claimed as independent must have no auto-trim in its input log (the overlay and live
  *     help are not in a replay: they are as the app reported them);
  *  6. plausibility flags (not reasons to reject): input timing that looks scripted. A low-stakes club table, not an
@@ -51,6 +52,8 @@ export interface Verdict {
   category?: 'independent' | 'assisted';
   /** Bit-exact replay (all checkpoints matched). */
   exact?: boolean;
+  /** The finish time the run claimed (s), for the record. */
+  claimedS?: number;
   /** Plausibility flags: listed separately in the table, not rejected. */
   flags: string[];
 }
@@ -144,16 +147,23 @@ export function verifySubmission(sub: Submission, dart: DartData | undefined, bu
   flags.push(...plausibility(rec));
   const category = rec.claimed.independent ? 'independent' : 'assisted';
   const base = { week: w.week.key, category, flags } as const;
-  if (sub.engine === 'chromium') {
-    if (!exact) return { ...base, status: 'rejected', reason: 'did-not-replay-exactly', exact, timeS };
-    if (timeS === undefined) return { ...base, status: 'rejected', reason: 'did-not-finish', exact };
-    if (Math.abs(timeS - rec.claimed.finishS) > SAME_ENGINE_TOLERANCE_S) return { ...base, status: 'rejected', reason: 'time-not-as-claimed', exact, timeS };
-    return { ...base, status: 'accepted', exact, timeS };
+  const claimed = rec.claimed.finishS;
+  const off = timeS === undefined ? undefined : Math.abs(timeS - claimed);
+  const withClaim = { ...base, exact, timeS, claimedS: claimed };
+  // Bit for bit (the recording's own engine and the verifier's agree to the last bit): the claim must match exactly.
+  if (exact) {
+    if (timeS === undefined) return { ...withClaim, status: 'rejected', reason: 'did-not-finish' };
+    if (off! > SAME_ENGINE_TOLERANCE_S) return { ...withClaim, status: 'rejected', reason: 'time-not-as-claimed' };
+    return { ...withClaim, status: 'accepted' };
   }
-  // Another browser engine.
-  if (exact && timeS !== undefined && Math.abs(timeS - rec.claimed.finishS) <= SAME_ENGINE_TOLERANCE_S) return { ...base, status: 'accepted', exact, timeS };
-  if (timeS !== undefined && Math.abs(timeS - rec.claimed.finishS) <= OTHER_ENGINE_TOLERANCE_S) return { ...base, status: 'accepted', reason: 'other-engine-within-tolerance', exact, timeS };
-  return { ...base, status: 'other-engine', reason: timeS === undefined ? 'other-engine-did-not-finish-when-re-sailed' : 'other-engine-time-differs', exact, timeS };
+  // Not bit for bit. Every browser differs from Node in the last bit of Math.sin/cos/pow (criterion 11: about 1e-13 for
+  // Chromium), so a run recorded in any browser can drift when re-sailed. The re-sailed time is what is published, so
+  // a run is accepted when it finished and its claim is within the tolerance.
+  if (off !== undefined && off <= OTHER_ENGINE_TOLERANCE_S) return { ...withClaim, status: 'accepted', reason: 'recomputed-within-tolerance' };
+  // Chromium's drift is measured (docs/JUNIORS_REPORT.md §4.4): beyond the tolerance its claim is taken to be wrong.
+  if (sub.engine === 'chromium') return { ...withClaim, status: 'rejected', reason: timeS === undefined ? 'did-not-finish' : 'time-not-as-claimed' };
+  // Firefox, Safari and others: not measured here. Listed apart, never dropped.
+  return { ...withClaim, status: 'other-engine', reason: timeS === undefined ? 'other-engine-did-not-finish-when-re-sailed' : 'other-engine-time-differs' };
 }
 
 /** Runs this week whose input timing is identical to another's (the same script twice): flagged. */

@@ -121,10 +121,9 @@ export const REASONS: Record<string, string> = {
   'course-changed': 'the course was not the week’s',
   'assists-not-as-claimed': 'it was marked as sailed on your own but auto-trim was used',
   'replay-would-not-start': 'the run could not be sailed again',
-  'did-not-replay-exactly': 'sailing it again did not give the same run',
+  'recomputed-within-tolerance': 'checked by sailing it again (the time shown is the checker’s)',
   'did-not-finish': 'sailing it again did not reach the finish',
   'time-not-as-claimed': 'sailing it again gave a different time',
-  'other-engine-within-tolerance': 'recorded on another browser engine; accepted with the time from sailing it again',
   'other-engine-time-differs': 'recorded on another browser engine and not verified (listed separately)',
   'other-engine-did-not-finish-when-re-sailed': 'recorded on another browser engine and not verified (listed separately)',
 };

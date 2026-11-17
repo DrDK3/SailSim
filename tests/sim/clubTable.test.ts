@@ -143,13 +143,14 @@ describe('the verifier', () => {
     expect(alt((r) => (r.claimed!.independent = true))).toBe('assists-not-as-claimed');
     expect(alt((r) => ((r.scenario.conditions.weather as { twsKn: number }).twsKn += 2))).toBe('conditions-changed');
     expect(alt((r) => (r.scenario.boat = 'classic'))).toBe('boat-changed');
-    expect(alt((r) => (r.inputs[Math.floor(r.inputs.length / 2)]![1] += 0.2))).toMatch(/did-not-replay-exactly|time-not-as-claimed/);
+    // Changed inputs: the run is re-sailed as it now is; its claim no longer matches unless the change made no difference.
+    expect(alt((r) => (r.inputs[Math.floor(r.inputs.length / 2)]![1] += 0.2))).toMatch(/time-not-as-claimed|recomputed-within-tolerance/);
     expect(verifySubmission(sub({ name: 'Sam Smith 3' }), undefined, BUILD).reason).toBe('name-not-on-word-list');
     expect(verifySubmission(sub({ build: 'production-older' }), undefined, BUILD)).toMatchObject({ status: 'unverifiable', reason: 'built-by-another-version' });
     expect(verifySubmission(sub({ receivedAt: new Date(at.getTime() + 8 * 86400e3).toISOString() }), undefined, BUILD).reason).toBe('not-this-weeks-course');
   }, 300_000);
 
-  it('another browser engine: bit-exact is accepted; a small difference within the tolerance is accepted with the re-sailed time; more is listed apart', () => {
+  it('not bit for bit (any browser against Node): within the tolerance accepted with the re-sailed time; beyond it, Chromium rejected, other engines listed apart', () => {
     expect(verifySubmission(sub({ engine: 'gecko' }), undefined, BUILD)).toMatchObject({ status: 'accepted', exact: true });
     // A run whose last input differs slightly (as a different engine's arithmetic might): it diverges, finishes close.
     const near = structuredClone(rec);
@@ -158,12 +159,13 @@ describe('the verifier', () => {
     const v = verifySubmission(sub({ engine: 'webkit' }, near), undefined, BUILD);
     expect(v.exact).toBe(false);
     expect(Math.abs(v.timeS! - timeS)).toBeLessThanOrEqual(OTHER_ENGINE_TOLERANCE_S);
-    expect(v).toMatchObject({ status: 'accepted', reason: 'other-engine-within-tolerance' });
-    // The same change from Chromium (the verifier's own engine) is rejected: it should have matched exactly.
-    expect(verifySubmission(sub({ engine: 'chromium' }, near), undefined, BUILD).status).toBe('rejected');
-    // Claimed time far from the re-sailed one: listed apart, never dropped silently.
+    expect(v).toMatchObject({ status: 'accepted', reason: 'recomputed-within-tolerance' });
+    // From Chromium too (Node's V8 differs from Chromium's in the last bit): accepted, with the re-sailed time.
+    expect(verifySubmission(sub({ engine: 'chromium' }, near), undefined, BUILD)).toMatchObject({ status: 'accepted', reason: 'recomputed-within-tolerance', timeS: v.timeS });
+    // Claimed time far from the re-sailed one: Chromium (its drift measured) rejected; other engines listed apart.
     const far = structuredClone(near);
     far.claimed!.finishS += 30;
+    expect(verifySubmission(sub({ engine: 'chromium' }, far), undefined, BUILD)).toMatchObject({ status: 'rejected', reason: 'time-not-as-claimed' });
     expect(verifySubmission(sub({ engine: 'webkit' }, far), undefined, BUILD)).toMatchObject({ status: 'other-engine', reason: 'other-engine-time-differs' });
   }, 300_000);
 
