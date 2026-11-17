@@ -98,6 +98,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 button[aria-pressed='true'] { background: color-mix(in srgb, var(--accent) 28%, transparent); border-color: var(--accent); }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
 button.hold:active { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+/* The visible face of a button whose name comes from hidden text: laid out as the button's own content was. */
+.hold-face { display: inline-flex; align-items: center; gap: inherit; }
 select { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-border); border-radius: 7px; padding: 5px 8px; }
 option { background: var(--navy-900); }
 
@@ -416,6 +418,8 @@ button.link { background: none; border: none; padding: 2px 0; color: var(--accen
 .chart-mark { fill: #ffe066; }
 .chart-label { fill: #ffffff; font-size: 10px; }
 .chart-legend { list-style: none; padding: 0; margin: 4px 0; font-size: 12px; line-height: 1.5; }
+.instructor-tools { margin-top: 8px; }
+.instructor-tools summary { cursor: pointer; font-weight: 600; }
 .lesson-group { margin: 10px 0 2px; font-size: 13px; }
 .lesson-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
 .lesson-list li { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; }

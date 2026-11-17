@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 /**
  * The training slice (docs/TRAINING_SLICE_REPORT.md): the instruments and the settings agree, and the two exercises
@@ -223,4 +224,80 @@ test('tactical exercise: prediction, heading history, removable shift readout, r
   await expect(chart).toContainText('Model demonstration: tack on each header');
   await expect(chart).toContainText('Model demonstration: hold to the layline');
   expect(errors).toEqual([]);
+});
+
+test('the console modules (main, jib, helm, boat) do not move during a tack, with auto-trim and with the sheets in hand', async ({ page }) => {
+  test.setTimeout(240_000 * CI_SLOW);
+  await ready(page);
+  const dock = page.getByRole('region', { name: 'Sailing controls' });
+  const modules = ['Main sheet', 'Jib sheet', 'Helm', 'Crew and sails'].map((name) => dock.getByRole('group', { name }));
+  const boxes = async () => Promise.all(modules.map(async (m) => {
+    const b = (await m.boundingBox())!;
+    return [b.x, b.y, b.width, b.height].map((v) => Math.round(v * 2) / 2);
+  }));
+  for (const auto of [true, false]) {
+    await page.evaluate((a) => {
+      const c = window.__squib!.controller;
+      if (!c.getState().paused) c.togglePause();
+      c.setInput({ autoMain: a, autoJib: a });
+      window.__squib!.advance(5);
+    }, auto);
+    const before = await boxes();
+    // Through a tack in steps: every state the status can show on the way (drawing, luffing, stalled, by the lee).
+    for (let i = 0; i < 12; i++) {
+      await page.evaluate(() => {
+        const c = window.__squib!.controller;
+        c.press('helmRight', true);
+        window.__squib!.advance(0.8);
+      });
+      expect(await boxes(), `auto ${auto}, step ${i}`).toEqual(before);
+    }
+    await page.evaluate(() => {
+      const c = window.__squib!.controller;
+      c.press('helmRight', false);
+      window.__squib!.advance(5);
+    });
+    expect(await boxes(), `auto ${auto}, after`).toEqual(before);
+  }
+});
+
+test('accessibility (axe-core, WCAG 2 A/AA rules): the exercise card in each state, and the dock', async ({ page }) => {
+  test.setTimeout(300_000 * CI_SLOW);
+  await page.goto('/?nowelcome&quality=low&exercise=tack-recover');
+  const panel = page.getByTestId('exercise');
+  await expect(panel).toBeVisible({ timeout: 90_000 * CI_SLOW });
+  const scan = async (what: string, selector: string) => {
+    const r = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(r.violations.map((v) => `${what}: ${v.id} (${v.nodes.length}) ${v.help}`)).toEqual([]);
+  };
+  await scan('warm-up', '[data-testid=exercise]');
+  await panel.getByRole('button', { name: 'Start' }).click();
+  // Help at level 3 on show.
+  await page.evaluate(() => {
+    const sq = window.__squib!;
+    const c = sq.controller;
+    for (let i = 0; i < 320; i++) {
+      const sn = c.sim.snapshot(false);
+      const err = (Math.abs(sn.twa) * 180) / Math.PI - 80;
+      const side = Math.sign(sn.twa) || 1;
+      c.press(side > 0 ? 'helmRight' : 'helmLeft', err > 3);
+      c.press(side > 0 ? 'helmLeft' : 'helmRight', err < -3);
+      sq.advance(0.1);
+    }
+    c.press('helmRight', false);
+    c.press('helmLeft', false);
+  });
+  await expect(page.getByTestId('exercise-help')).toHaveAttribute('data-level', '3');
+  await scan('attempt with help', '[data-testid=exercise]');
+  await scan('dock', 'section[aria-label="Sailing controls"]');
+  for (let i = 0; i < 4; i++) await panel.getByRole('button', { name: 'Skip step' }).click();
+  await expect(page.getByTestId('exercise-review')).toBeVisible();
+  await scan('review', '[data-testid=exercise]');
+  for (let a = 2; a <= 4; a++) {
+    await page.getByTestId('exercise-next').click();
+    for (let i = 0; i < 4; i++) await panel.getByRole('button', { name: 'Skip step' }).click();
+  }
+  await page.getByTestId('exercise-next').click();
+  await expect(page.getByTestId('exercise-attempts')).toBeVisible();
+  await scan('result', '[data-testid=exercise]');
 });

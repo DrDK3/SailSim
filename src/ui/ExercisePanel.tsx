@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import type { ExerciseId } from '../app/exercises/index';
 import type { AttemptRecord, ReviewChart } from '../app/exercises/engine';
@@ -123,6 +123,13 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             {s.attempt < s.attempts ? `Attempt ${s.attempt + 1}` : 'See the result'}
           </button>
           <button onClick={() => ctl.exerciseRestartAttempt()}>Try this attempt again</button>
+          <button
+            onClick={() => downloadText(JSON.stringify(ctl.saveRecording(`${x.info.title}: attempt ${s.attempt}`)), `squib-exercise-attempt-${s.attempt}.replay.json`)}
+            title="This attempt as a replay file (from its start): open it in Library to watch it or race it as a ghost"
+            data-testid="exercise-save-replay"
+          >
+            Save this attempt (replay)
+          </button>
         </div>
       </section>
     );
@@ -348,9 +355,10 @@ function downloadText(text: string, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** The exercises on offer, for the lesson list (training slice). */
-export function ExerciseList({ ui, onStart }: { ui: UiState; onStart: (id: ExerciseId) => void }) {
+/** The exercises on offer, for the lesson list (training slice), and an instructor's tools. */
+export function ExerciseList({ ui, onStart, ctl }: { ui: UiState; onStart: (id: ExerciseId) => void; ctl?: SimController }) {
   return (
+    <>
     <ol className="lesson-list" data-testid="exercise-list">
       {ui.exercises.map((e, i) => (
         <li key={e.id}>
@@ -369,5 +377,52 @@ export function ExerciseList({ ui, onStart }: { ui: UiState; onStart: (id: Exerc
         </li>
       ))}
     </ol>
+    {ctl && <InstructorTools ctl={ctl} />}
+    </>
+  );
+}
+
+/**
+ * For an instructor: the thresholds as a file (to change and load back, for this browser only), the learner's
+ * records as a file, and a link that opens an exercise directly. Nothing is uploaded anywhere.
+ */
+function InstructorTools({ ctl }: { ctl: SimController }) {
+  const [msg, setMsg] = useState<string>();
+  const load = (onText: (t: string) => void) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = () => void input.files?.[0]?.text().then(onText);
+    input.click();
+  };
+  return (
+    <details className="instructor-tools" data-testid="instructor-tools">
+      <summary>For instructors</summary>
+      <p className="fine">
+        Thresholds are provisional (E). Change them for this browser with a thresholds file; results then say so. Records and links stay on this device unless you send them.
+      </p>
+      <div className="row left wrap">
+        <button onClick={() => downloadText(ctl.exportThresholds(), 'squib-exercise-thresholds.json')}>Save thresholds (file)</button>
+        <button onClick={() => load((t) => setMsg(ctl.importThresholds(t)))}>Load thresholds (file)</button>
+        <button onClick={() => setMsg(ctl.resetExerciseThresholds())}>Shipped thresholds</button>
+        <button onClick={() => downloadText(ctl.exportExerciseRecords(), 'squib-exercise-records.json')}>Save learner records (file)</button>
+        <button
+          onClick={() =>
+            load((t) => {
+              const r = ctl.importExerciseRecords(t);
+              setMsg(r.error ?? `${r.added} run${r.added === 1 ? '' : 's'} added${r.skipped ? `, ${r.skipped} already here or not valid` : ''}.`);
+            })
+          }
+        >
+          Load learner records (file)
+        </button>
+      </div>
+      <p className="fine">Link to open an exercise directly: add <code>?exercise=tack-recover</code> or <code>?exercise=wind-shift</code> to the address.</p>
+      {msg && (
+        <p className="fine" role="status">
+          {msg}
+        </p>
+      )}
+    </details>
   );
 }

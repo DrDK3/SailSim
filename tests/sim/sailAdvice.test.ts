@@ -172,5 +172,6 @@ describe('advice actionability (property, seeded sweep)', () => {
     expect(checked).toBe(240);
     // The sweep reaches the cases that matter (else it proves little).
     for (const want of ['drawing/none', 'luffing/trim', 'stalled/ease', 'stalled/none']) expect([...seen], want).toContain(want);
-  });
+    // 120 simulated sails: about 3 s alone, longer on a loaded machine.
+  }, 60_000);
 });

@@ -7,7 +7,7 @@ import { ExerciseList } from './ExercisePanel';
  * The lessons, with what is done in this browser and a Start button for each: the six basics, then seamanship
  * (open to everyone, suggested once the basics are done).
  */
-export function LessonList({ ui, onStart, onExercise }: { ui: UiState; onStart: (id: UiState['lessons'][number]['id']) => void; onExercise?: (id: UiState['exercises'][number]['id']) => void }) {
+export function LessonList({ ui, onStart, onExercise, ctl }: { ui: UiState; onStart: (id: UiState['lessons'][number]['id']) => void; onExercise?: (id: UiState['exercises'][number]['id']) => void; ctl?: SimController }) {
   // Progress kept in this browser: the first lesson not yet done is the one to take next (every lesson stays open).
   const next = ui.lessons.find((l) => !l.done)?.id;
   const basicsDone = ui.lessons.filter((l) => l.group === 'basics').every((l) => l.done);
@@ -19,7 +19,7 @@ export function LessonList({ ui, onStart, onExercise }: { ui: UiState; onStart: 
       {onExercise && ui.exercises.length > 0 && (
         <>
           <h4 className="lesson-group">Exercises<span className="fine-inline"> · repeated attempts with less help each time (draft)</span></h4>
-          <ExerciseList ui={ui} onStart={onExercise} />
+          <ExerciseList ui={ui} onStart={onExercise} ctl={ctl} />
         </>
       )}
     </>
@@ -93,6 +93,7 @@ export function TutorialPanel({ ctl, ui, onRace }: { ctl: SimController; ui: UiS
             setList(false);
             ctl.startExercise(id);
           }}
+          ctl={ctl}
         />
         <div className="row left">
           <button onClick={() => setList(false)}>Back to the lesson</button>

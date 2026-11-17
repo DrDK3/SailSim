@@ -178,3 +178,51 @@ export function speedColour(f: number): string {
   const i = Math.max(0, Math.min(SPEED_RAMP.length - 1, Math.floor(f * SPEED_RAMP.length)));
   return SPEED_RAMP[i]!;
 }
+
+/** One thing the debrief noticed: the observation (measured), kept apart from its likely cause. */
+export interface DebriefNote {
+  id: string;
+  observation: string;
+  cause?: string;
+  action: string;
+}
+
+/**
+ * Debrief thresholds (E): the simulator's choices, provisional until an instructor has reviewed them. A tack or gybe
+ * costing more than this (s at the speed before) is worth a note; a start this late after the gun too.
+ */
+export const DEBRIEF_LIMITS = { tackLossS: 5, gybeLossS: 6, lateStartS: 10 } as const;
+
+/**
+ * A few observations (at most three), each kept apart from its likely cause, and one next action: rules only, from
+ * the summary's own numbers (no generated text). Most basic first: the start, then tacks, then gybes.
+ */
+export function debriefNotes(s: SailSummary): { notes: DebriefNote[]; next: string } {
+  const notes: DebriefNote[] = [];
+  const f1 = (v: number) => v.toFixed(1);
+  if (s.start?.ocs)
+    notes.push({ id: 'ocs', observation: 'Over the line at the gun (an individual recall).', cause: 'Likely cause: too close to the line with too much speed in the last seconds.', action: 'Next time: hold back a boat length in the last 20 s and time your run; the start drill practises it.' });
+  else if (s.start?.lateS !== undefined && s.start.lateS > DEBRIEF_LIMITS.lateStartS)
+    notes.push({
+      id: 'late-start',
+      observation: `You crossed the line ${f1(s.start.lateS)} s after the gun${s.start.distToLineAtGunM !== undefined ? ` (${Math.round(s.start.distToLineAtGunM)} m from it at the gun)` : ''}.`,
+      cause: 'Likely cause: too far from the line, or too slow, at the gun.',
+      action: 'Next time: be on the line at full speed at the gun; the start drill practises it.',
+    });
+  if (s.tacks.meanLossS !== undefined && s.tacks.meanLossS > DEBRIEF_LIMITS.tackLossS)
+    notes.push({
+      id: 'tacks',
+      observation: `Your ${s.tacks.count} tack${s.tacks.count === 1 ? '' : 's'} cost ${f1(s.tacks.meanLossS)} s each on average (worst ${f1(s.tacks.worstLossS ?? s.tacks.meanLossS)} s).`,
+      cause: 'Likely cause: speed lost in the turn (too slow a turn, or turning too far past close-hauled).',
+      action: 'Next time: one steady turn, then build speed before heading up; the exercise "Trim, tack and recover" practises it.',
+    });
+  if (s.gybes.meanLossS !== undefined && s.gybes.meanLossS > DEBRIEF_LIMITS.gybeLossS)
+    notes.push({
+      id: 'gybes',
+      observation: `Your ${s.gybes.count} gybe${s.gybes.count === 1 ? '' : 's'} cost ${f1(s.gybes.meanLossS)} s each on average.`,
+      cause: 'Likely cause: a sharp turn with the main far out, or a slow recovery after it.',
+      action: 'Next time: turn gently through the gybe and settle on the new course before trimming.',
+    });
+  const shown = notes.slice(0, 3);
+  return { notes: shown, next: shown[0]?.action ?? (s.tacks.count + s.gybes.count > 0 ? 'Nothing stood out: try the wind-shift exercise, or a race.' : 'Sail a few tacks and gybes: the debrief costs each one.') };
+}

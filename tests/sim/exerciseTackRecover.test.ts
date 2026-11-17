@@ -326,3 +326,33 @@ describe('the activity chip', () => {
     expect(activityOf(c.getState()).detail).toBe('Trim, tack and recover · attempt 1 of 4');
   });
 });
+
+describe('instructor tools', () => {
+  it('thresholds go out as a file and come back in; a file with nothing changed changes nothing; reset restores', () => {
+    const c = new SimController();
+    const file = JSON.parse(c.exportThresholds());
+    expect(file.tackRecover.holdS).toBe(DEFAULT_THRESHOLDS.tackRecover.holdS);
+    expect(c.importThresholds(JSON.stringify(file))).toMatch(/nothing was changed/);
+    file.tackRecover.holdS = 8;
+    expect(c.importThresholds(JSON.stringify(file))).toMatch(/Thresholds loaded/);
+    expect(loadThresholds().tackRecover.holdS).toBe(8);
+    expect(c.importThresholds('nope')).toBe('Not a JSON file.');
+    c.resetExerciseThresholds();
+    expect(loadThresholds()).toEqual(DEFAULT_THRESHOLDS);
+  });
+
+  it('an attempt can be saved as a replay that plays back to the same state', () => {
+    const c = new SimController();
+    c.startExercise('tack-recover');
+    c.exerciseNext();
+    learner(c, { stopAt: (cc) => st(cc).stage === 'review' });
+    const rec = c.saveRecording('attempt 1');
+    expect(rec.endStep).toBe(c.sim.step);
+    const hash = c.sim.stateHash();
+    const d = new SimController();
+    expect(d.startReplay(rec)).toBe(true);
+    d.advance(rec.endStep / 100 + 0.5);
+    expect(d.getState().replay?.state).not.toBe('diverged');
+    expect(d.sim.stateHash()).toBe(hash);
+  });
+});

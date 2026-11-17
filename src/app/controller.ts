@@ -49,7 +49,7 @@ import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecor
 import { Tutorial, type TutorialState } from './tutorial';
 import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
-import { CONTENT_STATUS, loadThresholds, thresholdsChanged, type ContentStatus } from './exercises/config';
+import { CONTENT_STATUS, loadThresholds, mergeThresholds, resetThresholds, saveThresholds, thresholdsChanged, type ContentStatus } from './exercises/config';
 import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
 import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
@@ -1065,6 +1065,30 @@ export class SimController {
   /** The exercise records kept in this browser, as a file's text (nothing personal: attempts, help and build). */
   exportExerciseRecords(): string {
     return exportRuns();
+  }
+
+  /** The exercise thresholds in use (shipped, or an instructor's for this browser), as a file's text. */
+  exportThresholds(): string {
+    return JSON.stringify({ schema: 'squib-exercise-thresholds-override/1', note: 'Values only; every one provisional (E). Units and sources: data/exercises/thresholds.json.', ...loadThresholds() }, null, 1);
+  }
+
+  /** Load an instructor's thresholds file for this browser (unknown keys and bad values are ignored). */
+  importThresholds(text: string): string {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return 'Not a JSON file.';
+    }
+    const t = mergeThresholds(raw);
+    if (!thresholdsChanged(t)) return 'The file holds no changed thresholds: nothing was changed.';
+    if (!saveThresholds(t)) return 'This browser does not allow saving settings.';
+    return 'Thresholds loaded for this browser: exercises started from now use them, and their results say so.';
+  }
+
+  resetExerciseThresholds(): string {
+    resetThresholds();
+    return 'Back to the shipped thresholds.';
   }
 
   importExerciseRecords(text: string): ReturnType<typeof importRuns> {
