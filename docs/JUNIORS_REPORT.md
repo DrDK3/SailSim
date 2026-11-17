@@ -221,7 +221,72 @@ maxima are single frames (garbage collection, AI replanning) and vary between ru
 All screenshots are SwiftShader renders at 1280 × 720. They show what the software renderer draws, and no claim is
 made about a graphics card's picture.
 
-SHOT_SHEETS
+**Preset sheets** (the eight fixed views of `tools/gfx-bench.mjs`, left to right, top to bottom: chase-river, helm-river,
+sail-close, wake-stern, chase-sea, golden-river, backlit-sails, drone-harbour; 1280 × 720 renders reduced for the page).
+Balanced has the first four views and Ultra none: their benchmarks were stopped to free the machine for the tests (§2.4).
+
+**Smooth, before (no haze, no spray)** (chase-river, helm-river, sail-close, wake-stern, chase-sea, golden-river, backlit-sails, drone-harbour):
+
+![Smooth, before (no haze, no spray)](img/juniors/sheet-smooth-before.jpg)
+
+**Smooth, after (haze and spray)** (chase-river, helm-river, sail-close, wake-stern, chase-sea, golden-river, backlit-sails, drone-harbour):
+
+![Smooth, after (haze and spray)](img/juniors/sheet-smooth-after.jpg)
+
+**Balanced** (chase-river, helm-river, sail-close, wake-stern):
+
+![Balanced](img/juniors/sheet-balanced.jpg)
+
+
+**Cue screenshots at fixed seeds** (chase camera; Start Bay; 1280 × 720 reduced). The table gives the cue state at the
+captured frame, read from the app.
+
+**Cues at Smooth** (left to right, top to bottom: puff approaching, luffing sail, flogging sail, tack in progress, spray fresh wind):
+
+![cues performance](img/juniors/cues-performance.jpg)
+
+**Cues at Balanced** (left to right, top to bottom: puff approaching, luffing sail, flogging sail, tack in progress, spray fresh wind):
+
+![cues balanced](img/juniors/cues-balanced.jpg)
+
+**Cues at Ultra** (left to right, top to bottom: puff approaching, luffing sail, flogging sail, tack in progress, spray fresh wind):
+
+![cues ultra](img/juniors/cues-ultra.jpg)
+
+| Preset | Shot | Main luff | Jib luff | Gust at boat | Speed (m/s) | Spray (/s) | Manoeuvre | Puffs drawn |
+|---|---|---|---|---|---|---|---|---|
+| Smooth | puff-approaching | 0.49 | 1 | 0.3 | 2.76 | 0 | none | 16 |
+| Smooth | luffing-sail | 0 | 0 | 0 | 1.48 | 0 | none | 0 |
+| Smooth | flogging-sail | 0 | 0 | 0 | 0.37 | 0 | none | 0 |
+| Smooth | tack-in-progress | 0 | 0 | 0 | 1.8 | 0 | tack | 0 |
+| Smooth | spray-fresh-wind | 0.59 | 1 | 0 | 2.85 | 0 | none | 16 |
+| Balanced | puff-approaching | 0.49 | 1 | 0.3 | 2.76 | 0 | none | 16 |
+| Balanced | luffing-sail | 0 | 0 | 0 | 1.48 | 0 | none | 0 |
+| Balanced | flogging-sail | 0 | 0 | 0 | 0.37 | 0 | none | 0 |
+| Balanced | tack-in-progress | 0 | 0 | 0 | 1.8 | 0 | tack | 0 |
+| Balanced | spray-fresh-wind | 0.59 | 1 | 0 | 2.85 | 0 | none | 16 |
+| Ultra | puff-approaching | 0.49 | 1 | 0.3 | 2.76 | 0 | none | 16 |
+| Ultra | luffing-sail | 0 | 0 | 0 | 1.48 | 0 | none | 0 |
+| Ultra | flogging-sail | 0 | 0 | 0 | 0.37 | 0 | none | 0 |
+| Ultra | tack-in-progress | 0 | 0 | 0 | 1.8 | 0 | tack | 0 |
+| Ultra | spray-fresh-wind | 0.59 | 1 | 0 | 2.85 | 0 | none | 16 |
+
+What the stills show, and do not show (looked at by the developer, software rendering only):
+
+- **Puff approaching:** a darker, rougher patch on the water to one side. 16 puffs were drawn (the shader's limit); the
+  boat was in a 30% gust.
+- **Luffing and flogging:**
+  - The "luffing" shot came out fully flogging (luff factor 0 on both sails): easing both sheets to 0.85 on a close
+    reach let them out completely. A part-luffing still was not captured.
+  - **A fully flogging sail is nearly invisible from directly astern in a still.** It lines up with the wind and is
+    edge-on to the chase camera, so only the mast shows (issue 225).
+  - In play its motion, the flutter sound and the sail panel's word carry it. Whether that is enough is for juniors to
+    show (validation sheet §E1).
+- **Tack in progress:** captured just after the boom crossed (cue state "tack"); the sails are edge-on, as above.
+- **Spray in fresh wind:** at 22 kn the spray rate at the captured frame was 0 (spray needs the bow to drop onto a wave
+  at speed, which it was not doing at that instant). No spray shows in these stills; the white is the water's foam and
+  ripples.
+- The cue values are **identical at every preset** (the presets change only the picture).
 
 **Cue consistency** (`tests/render/cues.test.ts`, 14 tests; `tests/e2e/juniorsCues.spec.ts`):
 
