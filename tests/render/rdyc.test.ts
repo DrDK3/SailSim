@@ -50,7 +50,7 @@ describe('colours', () => {
 describe('the ensign', () => {
   it('shows at colours only, flying downwind of the staff', () => {
     const en = new ClubEnsign([0, 0], 1, 11);
-    en.update(at('2026-07-15T10:00:00Z'), 0, 6, 0);
+    en.update(at('2026-07-15T10:00:00Z'), { fromDir: 0, speed: 6 }, 0);
     expect(en.flying).toBe(true);
     // Wind from the north: the fly streams south (three.js +z).
     const flag = en.group.getObjectByName('club-ensign-flag')!;
@@ -58,7 +58,7 @@ describe('the ensign', () => {
     const hoist = new THREE.Vector3(0, -0.45, 0).applyMatrix4(flag.matrixWorld);
     const fly = new THREE.Vector3(1.8, -0.45, 0).applyMatrix4(flag.matrixWorld);
     expect(fly.z - hoist.z).toBeGreaterThan(1.2);
-    en.update(at('2026-07-15T22:00:00Z'), 0, 6, 0);
+    en.update(at('2026-07-15T22:00:00Z'), { fromDir: 0, speed: 6 }, 0);
     expect(en.flying).toBe(false);
   });
 });

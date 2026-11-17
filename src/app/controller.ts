@@ -1963,6 +1963,8 @@ export class SimController {
     }
     this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
       puffs: sim.env.windField?.puffs() ?? [],
+      // Flags and vanes read the true wind where each one is (read only; src/render/flagMotion.ts).
+      windAt: (n, e) => sim.env.wind(sim.time, n, e),
       windAgainstTide: info?.windAgainstTide ?? false,
       sea: sim.env.seaState ? (n, e) => sim.env.seaState!(sim.time, n, e) : undefined,
       dart: this.dartScene

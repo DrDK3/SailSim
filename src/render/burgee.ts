@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { flagFlutter } from './flagMotion';
 
 /**
  * The Royal Dart Yacht Club burgee at the masthead. Its blazon, from the club's rules (rule 3.1, docs/SOURCES.md
@@ -169,15 +170,18 @@ export class Burgee {
 
   /**
    * Stream the flag in the apparent wind: `awa` (rad, > 0 from starboard) and `aws` (m/s) in the boat's frame
-   * (model x = starboard, z = aft). It droops in light air and flutters faster as the wind rises.
+   * (model x = starboard, z = aft). It droops in light air, hangs still in a calm and flutters harder and faster as
+   * the wind rises.
    */
   update(awa: number, aws: number, time: number): void {
     // Fly direction: away from where the wind comes from.
     this.flag.rotation.y = Math.atan2(-Math.cos(awa), -Math.sin(awa));
     const droop = 1 / (1 + (aws / 1.5) ** 2);
     const pos = this.geo.getAttribute('position') as THREE.BufferAttribute;
-    const freq = 1.2 + 0.35 * aws;
-    const amp = 0.05 * (0.4 + Math.min(1, aws / 8));
+    // Flutter from the wind's speed: none in a calm, less with reduced motion (flagMotion.ts); a small flag's quicker.
+    const fl = flagFlutter(aws);
+    const freq = 0.3 + 1.6 * fl.freq;
+    const amp = 0.06 * fl.amp;
     for (let i = 0; i < pos.count; i++) {
       const x = this.rest[i * 3]!;
       const y = this.rest[i * 3 + 1]!;

@@ -72,35 +72,48 @@ describe('Mosaique and the ship buoys', () => {
     expect(bad).toBe(0);
   });
 
-  it('flies the club’s ensign from a staff off her stern, and nothing at her masthead', () => {
+  it('flies the club’s ensign from a staff off her stern and its burgee at the stern, nothing at her masthead', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
     // The ensign's staff head is aft of the transom (her frame: aft is +z), on the centre line, low (not aloft).
     expect(ensign.position.z).toBeGreaterThan(MOSAIQUE.loa / 2 + 0.8);
     expect(Math.abs(ensign.position.x)).toBeLessThan(0.01);
     expect(ensign.position.y).toBeLessThan(8);
     expect(MOSAIQUE_DRAWN.ensign.fly / MOSAIQUE_DRAWN.ensign.hoist).toBeCloseTo(2, 6);
-    // No burgee: the ensign is her only flag.
-    expect(view.group.getObjectByName('mosaique-burgee')).toBeUndefined();
+    // The burgee (owner, 17 Nov 2026: "The RDYC burgee is missing from the superyacht's stern") on its staff at the
+    // port quarter: at the stern, low, nowhere near the masthead (owner, 15 Nov: "it should only be on the stern").
+    const burgee = view.yacht.getObjectByName('mosaique-burgee')!;
+    expect(burgee).toBeDefined();
+    expect(burgee.position.z).toBeGreaterThan(MOSAIQUE.loa / 2 - 1.5);
+    expect(burgee.position.x).toBeLessThan(-MOSAIQUE.beam / 2 + 1.5);
+    expect(burgee.position.y).toBeLessThan(5);
+    expect(burgee.getObjectByName('burgee-flag')).toBeDefined();
+    // Its flag 1.5 m on the fly (the Squibs' drawing, hoist 3 : fly 5), the top of its staff well below the masthead.
+    const box = new THREE.Box3().setFromObject(burgee);
+    expect(box.max.y).toBeLessThan(MOSAIQUE_DRAWN.masthead - 8);
+    // Her flags: the ensign and the burgee, both aft.
     const flags: string[] = [];
     view.group.traverse((o) => {
-      if (o.name.endsWith('-cloth')) flags.push(o.name);
+      if (o.name.endsWith('-cloth') || o.name === 'burgee-flag') flags.push(o.name);
     });
-    expect(flags).toEqual(['mosaique-ensign-cloth']);
+    expect(flags.sort()).toEqual(['burgee-flag', 'mosaique-ensign-cloth']);
   });
 
   it('the ensign is flown at colours (08:00 to sunset in summer) and lowered at night', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
-    view.update(Date.parse('2026-07-15T11:00:00Z'), Math.PI / 2, 6, 10);
+    const burgee = view.yacht.getObjectByName('mosaique-burgee')!;
+    view.update(Date.parse('2026-07-15T11:00:00Z'), { fromDir: Math.PI / 2, speed: 6 }, 10);
     expect(ensign.visible).toBe(true);
-    view.update(Date.parse('2026-07-15T02:00:00Z'), Math.PI / 2, 6, 10);
+    expect(burgee.visible).toBe(true);
+    view.update(Date.parse('2026-07-15T02:00:00Z'), { fromDir: Math.PI / 2, speed: 6 }, 10);
     expect(ensign.visible).toBe(false);
+    expect(burgee.visible).toBe(false);
   });
 
   it('the ensign streams away from the wind', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
     for (const fromDeg of [0, 90, 200, 290]) {
       const from = (fromDeg * Math.PI) / 180;
-      view.update(Date.parse('2026-07-15T11:00:00Z'), from, 7, 3);
+      view.update(Date.parse('2026-07-15T11:00:00Z'), { fromDir: from, speed: 7 }, 3);
       view.group.updateMatrixWorld(true);
       // The fly's direction in the world (+x of the pivot), against where the wind blows to (e, n) = -(sin, cos).
       const fly = new THREE.Vector3(1, 0, 0).transformDirection(ensign.matrixWorld);

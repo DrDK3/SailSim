@@ -4,6 +4,8 @@ import type { Course } from '../sim/course/types';
 import { makeLabel } from './labels';
 import { robotMark, sponsorsFor } from './robotMark';
 import { samaritanModel } from './samaritan';
+import { flagSwing, trueWindAt, type FlagWind, type WindAt } from './flagMotion';
+import { flagDroop, flagYaw } from './vane';
 
 /**
  * Course marks and lines on the water (floating at y = 0): robotic marks (src/render/robotMark.ts) for the
@@ -19,7 +21,12 @@ export class CourseScene {
   /** The robotic marks, each with a phase for its gentle bob. */
   private readonly robots: { g: THREE.Group; phase: number }[] = [];
   /** The committee boats, at anchor at their marks: they lie as the simulation says (`setCommitteeHeading`). */
-  private readonly committee: { boat: THREE.Object3D; n: number; e: number }[] = [];
+  private readonly committee: { boat: THREE.Object3D; n: number; e: number; heading: number; flag?: THREE.Object3D }[] = [];
+  /** The pin ends' flags: their marks' positions (local n, e) and the flag pivots. */
+  private readonly pinFlags: { n: number; e: number; pivot: THREE.Object3D }[] = [];
+  /** The wind the marks and flags answer: the one wind, and the true wind at a point (flagMotion.ts). */
+  private wind: FlagWind = { fromDir: 0, speed: 5 };
+  private windAt?: WindAt;
 
   /**
    * `realMarks`: buoys the harbour scene already draws (src/render/dart.ts). A course mark on one of them (a club
@@ -39,7 +46,7 @@ export class CourseScene {
         const boat = samaritanModel();
         boat.name = 'committee-boat';
         g.add(boat);
-        this.committee.push({ boat, n: p.n, e: p.e });
+        this.committee.push({ boat, n: p.n, e: p.e, heading: 0, flag: boat.getObjectByName('committee-flag') });
       } else if (m.kind === 'virtual') {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 10), yellow);
         post.position.y = 0.4;
@@ -49,6 +56,8 @@ export class CourseScene {
         const robot = robotMark(0xff7a1a, sponsors.get(m.id)!, m.kind === 'pin' ? 0xff7a1a : undefined);
         g.add(robot);
         this.robots.push({ g: robot, phase: this.robots.length * 1.7 });
+        const pivot = robot.getObjectByName('robot-mark-flag-pivot');
+        if (pivot) this.pinFlags.push({ n: p.n, e: p.e, pivot });
       } else if (!realMarks.some((q) => Math.hypot(q.n - p.n, q.e - p.e) < 5)) {
         // Navigation buoys and fixed marks used as course marks (where no real buoy is drawn).
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.65, 1.8, 20), orange);
@@ -95,11 +104,31 @@ export class CourseScene {
       r.g.rotation.x = 0.035 * Math.sin(time * 1.1 + r.phase * 1.3);
       r.g.rotation.z = 0.03 * Math.sin(time * 0.9 + r.phase * 0.7);
     }
+    // Flags at anchor fly in the true wind where they are (the robots hold station, the committee boat is anchored):
+    // downwind, swinging as they flutter, limp in a calm.
+    for (const f of this.pinFlags) {
+      const w = trueWindAt(this.windAt, f.n, f.e, this.wind);
+      const { yaw, aws } = flagYaw(w.fromDir, w.speed, this.wind.fromDir, 0);
+      f.pivot.rotation.set(0, yaw + flagSwing(aws, time, f.e), 0);
+      f.pivot.children[0]!.rotation.z = -flagDroop(aws);
+    }
+    for (const c of this.committee) {
+      if (!c.flag) continue;
+      const w = trueWindAt(this.windAt, c.n, c.e, this.wind);
+      const { yaw, aws } = flagYaw(w.fromDir, w.speed, c.heading, 0);
+      c.flag.rotation.set(0, yaw + flagSwing(aws, time, c.e), 0);
+      c.flag.children[0]!.rotation.z = -flagDroop(aws);
+    }
   }
 
-  /** The robotic marks hold station head to wind (`fromDir`, rad, compass: where the wind comes from). */
-  setWind(fromDir: number): void {
+  /**
+   * The robotic marks hold station head to wind (`fromDir`, rad, compass: where the wind comes from). `windAt`
+   * (the true wind at a point, read only) and `speed` (m/s) fly the flags; without `windAt` they read `fromDir`.
+   */
+  setWind(fromDir: number, windAt?: WindAt, speed = 5): void {
     for (const r of this.robots) r.g.rotation.y = -fromDir;
+    this.wind = { fromDir, speed };
+    this.windAt = windAt;
   }
 
   /**
@@ -107,6 +136,9 @@ export class CourseScene {
    * the hull drawn is the hull boats hit. The bow (−z in the model) points along the heading.
    */
   setCommitteeHeading(headingAt: (n: number, e: number) => number): void {
-    for (const c of this.committee) c.boat.rotation.y = -headingAt(c.n, c.e);
+    for (const c of this.committee) {
+      c.heading = headingAt(c.n, c.e);
+      c.boat.rotation.y = -c.heading;
+    }
   }
 }
