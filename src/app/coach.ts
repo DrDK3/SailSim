@@ -7,6 +7,7 @@
  * measured Squib data. The advice is training advice, not an adjudication: it never decides a rules question.
  */
 import type { Polar } from '../sim/ai/polar';
+import { SHEET_END } from './sailStatus';
 
 const DEG = Math.PI / 180;
 const KN = 1852 / 3600;
@@ -118,6 +119,11 @@ export interface CoachSample {
   rudderFrac: number;
   mainLuff: number;
   mainStall: number;
+  /**
+   * The main sheet in use (0 = hard in … 1 = fully eased). With it, a stalled main already eased right out (on a
+   * run) or a luffing main already hard in (pinching) is not called poor trim and no sheet is asked for (issue 199).
+   */
+  mainSheet?: number;
   autoMain: boolean;
   flatten: number;
   race: {
@@ -127,6 +133,16 @@ export interface CoachSample {
     mark?: { n: number; e: number };
     penaltyOwed: number;
   };
+}
+
+/** The main luffs and the sheet can still come in (not already hard in: then it is the helm, not the trim). */
+function trimLuff(s: CoachSample): boolean {
+  return s.mainLuff < 0.6 && (s.mainSheet === undefined || s.mainSheet > SHEET_END);
+}
+
+/** The main is stalled and the sheet can still go out (not already fully eased, as on a run). */
+function trimStall(s: CoachSample): boolean {
+  return s.mainStall > 0.5 && (s.mainSheet === undefined || s.mainSheet < 1 - SHEET_END);
 }
 
 type LegKind = 'beat' | 'reach' | 'run';
@@ -258,9 +274,9 @@ export class RaceCoach {
 
     // ---- trim (manual main only)
     if (!s.autoMain && r.phase === 'racing') {
-      if (s.mainLuff < 0.6) this.luffSince ??= s.t;
+      if (trimLuff(s)) this.luffSince ??= s.t;
       else this.luffSince = undefined;
-      if (s.mainStall > 0.5) this.stallSince ??= s.t;
+      if (trimStall(s)) this.stallSince ??= s.t;
       else this.stallSince = undefined;
       if (this.luffSince !== undefined && s.t - this.luffSince > 5) this.say(s.t, 'luffing', 'Main luffing: trim it in (W) until it just stops.');
       if (this.stallSince !== undefined && s.t - this.stallSince > 5) this.say(s.t, 'stalled', 'Main stalled (over-sheeted): ease it (S) until the luff just lifts, then trim back a touch.');
@@ -310,7 +326,7 @@ export class RaceCoach {
         this.tot.over += dt;
         if (s.flatten >= 0.7) this.tot.overFlat += dt;
       }
-      if (!s.autoMain && (s.mainLuff < 0.6 || s.mainStall > 0.5)) this.tot.poorTrim += dt;
+      if (!s.autoMain && (trimLuff(s) || trimStall(s))) this.tot.poorTrim += dt;
     }
     this.prev = s;
   }

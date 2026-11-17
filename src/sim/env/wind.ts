@@ -238,6 +238,40 @@ export class WindField {
 }
 
 /**
+ * A scripted wind shift (an exercise's environment input): from `atS` s the direction turns by `deg` (> 0 veers,
+ * clockwise; < 0 backs) at a steady rate over `rampS` s. Without `holdS` it then stays (a persistent shift); with
+ * `holdS` it stays that long and turns back over another `rampS` (a temporary shift).
+ */
+export interface ScriptedShift {
+  atS: number;
+  deg: number;
+  rampS: number;
+  holdS?: number;
+}
+
+/**
+ * A uniform wind with one scripted shift (training slice §8): the speed never changes; the direction is the base
+ * direction until `atS`, turns linearly over `rampS`, and holds the new direction after (and, with `holdS`, turns back
+ * after that long). Deterministic: no seed.
+ * An environment input only; nothing about the boat changes.
+ */
+export function scriptedShiftBase(speed: number, fromDir: number, shift: ScriptedShift): BaseWind {
+  const d = (shift.deg * Math.PI) / 180;
+  const ramp = Math.max(0, shift.rampS);
+  return {
+    at(_n: number, _e: number, t = 0) {
+      const up = (x: number) => (x <= 0 ? 0 : ramp === 0 || x >= ramp ? 1 : x / ramp);
+      const back = shift.holdS === undefined ? 0 : up(t - (shift.atS + ramp + shift.holdS));
+      const f = up(t - shift.atS) - back;
+      let dir = fromDir + f * d;
+      dir %= 2 * Math.PI;
+      if (dir < 0) dir += 2 * Math.PI;
+      return { speed, fromDir: dir };
+    },
+  };
+}
+
+/**
  * A base wind that follows a forecast through time: `steps` are bases valid at run times `t` (s, increasing).
  * Between two steps the wind vectors are interpolated linearly in time; before the first and after the last
  * step that step's field is used.

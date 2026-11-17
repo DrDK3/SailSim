@@ -136,11 +136,28 @@ export class SoundScape {
     this.settings = settings;
   }
 
-  /** Start (or wake) the sound after a user gesture; harmless to call often. */
+  /** Why sound could not start in this browser, if it could not (the app goes on silent). */
+  failed?: string;
+
+  /**
+   * Start (or wake) the sound after a user gesture; harmless to call often. Never throws: the controller calls it
+   * first thing on every key press, so an AudioContext that cannot be made (audio blocked, or too many contexts)
+   * must leave the app silent, not stop the controls (issue 203).
+   */
   resume(): void {
-    if (typeof window === 'undefined' || !('AudioContext' in window)) return;
-    if (!this.ctx) this.build();
-    if (this.ctx && !this.settings.muted && this.ctx.state === 'suspended') void this.ctx.resume();
+    if (typeof window === 'undefined' || !('AudioContext' in window) || this.failed) return;
+    if (!this.ctx) {
+      try {
+        this.build();
+      } catch (e) {
+        // A context made before the failure is closed, so a half-built one does not hold the audio device.
+        (this.ctx as AudioContext | undefined)?.close().catch(() => undefined);
+        this.ctx = undefined;
+        this.failed = (e as Error).message || 'Web Audio unavailable';
+        return;
+      }
+    }
+    if (this.ctx && !this.settings.muted && this.ctx.state === 'suspended') this.ctx.resume().catch(() => undefined);
   }
 
   get running(): boolean {
@@ -152,8 +169,8 @@ export class SoundScape {
     saveAudio(s);
     this.applyLevels();
     if (!this.ctx) return;
-    if (s.muted) void this.ctx.suspend();
-    else void this.ctx.resume();
+    if (s.muted) this.ctx.suspend().catch(() => undefined);
+    else this.ctx.resume().catch(() => undefined);
   }
 
   private build(): void {

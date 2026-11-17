@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
-import { SPEED_RAMP, speedColour, type Manoeuvre, type TrackPoint } from '../app/sailLog';
+import { SPEED_RAMP, debriefNotes, speedColour, type Manoeuvre, type TrackPoint } from '../app/sailLog';
 import { mmss } from '../app/lessons';
 
 const KN = 0.514444;
@@ -213,6 +213,7 @@ export function DebriefPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
           ))}
         </tbody>
       </table>
+      {d.points.length > 0 && <DebriefNotes summary={s} />}
       {d.coach && d.coach.items.length > 0 && (
         <>
           <h4>The coach</h4>
@@ -254,5 +255,31 @@ function ManoeuvreTable({ manoeuvres, t0 }: { manoeuvres: readonly Manoeuvre[]; 
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** What the debrief noticed (rules only): a few observations apart from their likely causes, and one next action. */
+function DebriefNotes({ summary }: { summary: Parameters<typeof debriefNotes>[0] }) {
+  const { notes, next } = debriefNotes(summary);
+  return (
+    <div className="debrief-notes" data-testid="debrief-notes">
+      {notes.length > 0 && (
+        <>
+          <h4>What we saw</h4>
+          <ul className="lesson-result">
+            {notes.map((n) => (
+              <li key={n.id}>
+                {n.observation}
+                {n.cause && <span className="fine-inline"> {n.cause}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p data-testid="debrief-next">
+        <strong>Next:</strong> {next.replace(/^Next time: /, '')}
+      </p>
+      <p className="fine">Draft notes from rules (thresholds provisional, E), awaiting an instructor’s review.</p>
+    </div>
   );
 }

@@ -103,7 +103,6 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
   return (
     <button
       className={`hold${hint ? ' suggest' : ''}${className ? ` ${className}` : ''}`}
-      aria-label={label}
       title={label}
       onPointerDown={on}
       onPointerUp={off}
@@ -111,7 +110,12 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
       onPointerLeave={off}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {children}
+      {/* The name is the full label, from the content (WCAG 2.5.3, label in name: axe flagged aria-label "Trim main (W)"
+          over the visible "Trim W"). The visible face is hidden from the name; the label starts with its word. */}
+      <span className="hold-face" aria-hidden="true">
+        {children}
+      </span>
+      <span className="sr-only">{label}</span>
     </button>
   );
 }
@@ -132,8 +136,8 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
   const sheet = ctl.sim.currentSheet(sail);
   const angle = sail === 'main' ? s.boomMain : s.boomJib;
   const keys = sail === 'main' ? { trim: 'W', ease: 'S' } : { trim: 'E', ease: 'Q' };
-  const state = sailState(f);
-  const st = sailAdvice(state, keys);
+  const state = sailState(f, angle);
+  const st = sailAdvice(state, keys, { sail, sheet, auto });
   const ok = st.cls === 'good';
   const name = sail === 'main' ? 'Main' : 'Jib';
   return (
@@ -158,7 +162,7 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
         </label>
       </div>
       <div className="mod-row">
-        <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`} hint={state === 'stalled'}>Ease <Key k={keys.ease} /></Hold>
+        <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`} hint={st.action === 'ease'}>Ease <Key k={keys.ease} /></Hold>
         <div
           className="sheet-bar sheet-meter"
           role="meter"
@@ -175,7 +179,7 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
             <span className="sheet-word"> eased</span>
           </span>
         </div>
-        <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`} hint={state === 'luffing'}>Trim <Key k={keys.trim} /></Hold>
+        <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`} hint={st.action === 'trim'}>Trim <Key k={keys.trim} /></Hold>
       </div>
     </div>
   );
@@ -218,11 +222,13 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
               className="stepper"
               onClick={stepFlatten}
               onContextMenu={stepFlatten}
-              aria-label={`Flatten the sails: ${pct(flatten)}. Click for more, Shift-click for less (Z, Shift+Z)`}
               title={`Flatten ${pct(flatten)}: cunningham, outhaul and kicker on, leech twisted open, to depower in a breeze. Less heel and weather helm, less power. Click for more, Shift-click or right-click for less (Z, Shift+Z)`}
               data-tutorial="flatten"
             >
-              Flat <span className="stepper-value">{pct(flatten)}</span> <Key k="Z" />
+              <span className="hold-face" aria-hidden="true">
+                Flat <span className="stepper-value">{pct(flatten)}</span> <Key k="Z" />
+              </span>
+              <span className="sr-only">{`Flatten the sails: ${pct(flatten)}. Click for more, Shift-click for less (Z, Shift+Z)`}</span>
             </button>
           )}
         </div>

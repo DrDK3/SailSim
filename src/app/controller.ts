@@ -47,6 +47,10 @@ import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
 import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
 import { Tutorial, type TutorialState } from './tutorial';
+import { Exercise, type ExerciseState } from './exercises/engine';
+import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
+import { CONTENT_STATUS, loadThresholds, mergeThresholds, resetThresholds, saveThresholds, thresholdsChanged, type ContentStatus } from './exercises/config';
+import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
 import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
 import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
@@ -241,6 +245,10 @@ export interface UiState {
   };
   /** The six lessons, with what is done in this browser. */
   lessons: { id: LessonId; group: LessonGroup; number: number; title: string; summary: string; minutes: number; done: boolean; bestS?: number }[];
+  /** The exercise running (src/app/exercises): its state, and how its content and thresholds stand. */
+  exercise?: { info: ExerciseInfo; state: ExerciseState; status: ContentStatus; thresholdsChanged: boolean; overlay: boolean; saved?: boolean };
+  /** The exercises on offer, with how many runs this browser keeps for each. */
+  exercises: (ExerciseInfo & { runs: number })[];
   /** The teaching overlay (heading, course over ground, stream, winds, VMG) is on outside the lessons. */
   teaching: boolean;
   /** How much the interface shows by default (src/app/level.ts). */
@@ -389,6 +397,10 @@ export class SimController {
   private lessonTarget?: { n: number; e: number };
   private lessonResult?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
   private lessonProgress: LessonProgress = loadLessonProgress();
+  /** The exercise running (src/app/exercises): its engine, how each attempt is set up, and its overlay. */
+  private exercise?: { info: ExerciseInfo; engine: Exercise; spec: ExerciseSpec; scenarioKey: string; changed: boolean; overlay: boolean; saved?: boolean; lastKey: string };
+  /** Set while the exercise itself restarts the boat (so the restart does not end it). */
+  private exerciseRestarting = false;
   /** Today's challenge, while it is the race being sailed. */
   private raceTag?: { key: string; scenario: string };
   /** This race's start and finish against your bests (once each). */
@@ -464,6 +476,18 @@ export class SimController {
    * passes the recorded one; by default the previous run's input carries over with the helm centred).
    */
   restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean } = {}): boolean {
+    // The exercise's own scenario, restarted from outside the exercise while an attempt (or the warm-up) runs: the
+    // attempt starts again through the exercise, so its measurements start again with the boat. In a review or the
+    // result the exercise is not measuring, so the boat simply restarts.
+    if (this.exercise && !this.exerciseRestarting && !opts.keepReplay && JSON.stringify(scenario) === this.exercise.scenarioKey) {
+      const stage = this.exercise.engine.state.stage;
+      if (stage === 'attempt' || stage === 'intro') {
+        this.exerciseRestartAttempt();
+        return true;
+      }
+    }
+    // A replay (or a ghost) is a recording, not an attempt: it ends the exercise.
+    if (opts.keepReplay) this.endExercise(false);
     let built: BuiltConditions;
     const geo = this.dartData?.geo;
     try {
@@ -569,6 +593,8 @@ export class SimController {
     if (this.raceTag && this.raceTag.scenario !== JSON.stringify(scenario)) this.raceTag = undefined;
     // The ghost stays for a reset of its own scenario; anything else ends it.
     if (this.ghost && this.ghost.scenario !== JSON.stringify(scenario)) this.ghost = undefined;
+    // Starting anything other than the exercise's own set-up ends the exercise.
+    if (this.exercise && !this.exerciseRestarting && JSON.stringify(scenario) !== this.exercise.scenarioKey) this.endExercise(false);
     // Starting anything other than the lesson's own scenario ends the lesson (a Reset keeps it).
     if (this.tutorial && JSON.stringify(scenario) !== JSON.stringify(this.lesson?.scenario)) this.endLesson();
     else if (this.tutorial) {
@@ -648,6 +674,7 @@ export class SimController {
     else this.sim.stepOnce();
     if (this.sim.step % CHECKPOINT_STEPS === 0) this.checkpoint();
     if (this.tutorial && this.sim.step % 10 === 0) this.updateTutorial();
+    else if (this.exercise && !this.replay && this.sim.step % 10 === 0) this.updateExercise();
     else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
@@ -696,7 +723,7 @@ export class SimController {
     coach.update({
       t, n: s.n, e: s.e, stw: s.stw, vmg: s.vmg, tws: s.tws, twd: s.twd, twa: s.twa, heel: s.heel,
       rudderFrac: s.rudder / this.sim.params.rudder.maxAngle,
-      mainLuff: s.forces.main.luff, mainStall: s.forces.main.stall, autoMain: s.input.autoMain, flatten: s.input.flatten ?? 0,
+      mainLuff: s.forces.main.luff, mainStall: s.forces.main.stall, mainSheet: this.sim.currentSheet('main'), autoMain: s.input.autoMain, flatten: s.input.flatten ?? 0,
       race: { phase: st.phase, toStart: session.committee.startTime - t, ocs: st.ocs, mark: leg?.target, penaltyOwed: session.owesPenalty('you') },
     });
     const done = st.phase === 'finished' || session.outOfRace('you') || session.committee.finished || session.committee.abandoned;
@@ -803,6 +830,14 @@ export class SimController {
    * would otherwise throw the race away (error prevention). Otherwise reset at once.
    */
   requestReset(): void {
+    // In an exercise, Reset starts the attempt (or the warm-up) again from its own start. In a review or the result
+    // it only restarts the boat: the attempt reviewed is kept.
+    if (this.exercise) {
+      const stage = this.exercise.engine.state.stage;
+      if (stage === 'attempt' || stage === 'intro') this.exerciseRestartAttempt();
+      else this.restart();
+      return;
+    }
     if (this.raceAtStake()) {
       this.confirmReset = true;
       this.publish(true);
@@ -857,6 +892,7 @@ export class SimController {
   freeSail(): void {
     if (this.replay) this.takeOver();
     if (this.tutorial) this.endLesson();
+    if (this.exercise) this.endExercise(false);
     if (this.race) {
       const free = structuredClone(this.scenario);
       delete free.course;
@@ -904,6 +940,7 @@ export class SimController {
   /** Start a lesson (src/app/lessons.ts): its own water and wind, steps checked as you sail. Default: the next one not done. */
   startLesson(id?: LessonId): void {
     const lesson = id ? lessonById(id) : nextLessonFor(this.lessonProgress);
+    this.endExercise(false);
     this.endLesson();
     if (!this.restart(structuredClone(lesson.scenario), { initialInput: lesson.input })) return;
     this.lesson = lesson;
@@ -917,6 +954,174 @@ export class SimController {
     this.applyTutorialInput();
     this.applyTeaching();
     this.publish(true);
+  }
+
+  // ------------------------------------------------------------- exercises (src/app/exercises)
+
+  /** Start an exercise: a warm-up, then attempts that each start the boat afresh (training slice §7–§8). */
+  startExercise(id: ExerciseId): void {
+    this.endLesson();
+    this.endExercise(false);
+    const info = EXERCISES.find((e) => e.id === id)!;
+    const thresholds = loadThresholds();
+    const spec = buildExercise(id, thresholds, this.steeringMode);
+    this.exercise = { info, engine: new Exercise(spec.def), spec, scenarioKey: '', changed: thresholdsChanged(thresholds), overlay: true, lastKey: '' };
+    // A free-sailing hint (and its "show me") does not carry into the exercise: the exercise has its own help.
+    this.hints.dismiss();
+    this.showMe = undefined;
+    this.applyExerciseSetup();
+    this.publish(true);
+  }
+
+  /** The engine asked for the boat to be set up afresh (the warm-up, a new attempt, or a restart). */
+  private applyExerciseSetup(): void {
+    const x = this.exercise;
+    const setup = x?.engine.pendingSetup;
+    if (!x || !setup) return;
+    x.engine.pendingSetup = undefined;
+    const start = setup.intro ? { autoMain: true, autoJib: true, autoCrew: true, overlay: true, help: 'auto' as const } : setup.plan.start;
+    const scenario = x.spec.scenario(setup.plan);
+    x.scenarioKey = JSON.stringify(scenario);
+    x.overlay = start.overlay;
+    this.exerciseRestarting = true;
+    try {
+      if (!this.restart(scenario, { initialInput: x.spec.input(start) })) return;
+    } finally {
+      this.exerciseRestarting = false;
+    }
+    // The exercise's mark (drawn as the lesson buoy, whatever the overlay).
+    this.lessonTarget = x.spec.mark;
+    this.paused = false;
+    this.lastFrame = performance.now();
+    this.applyTeaching();
+  }
+
+  private exerciseSample() {
+    const twd = (this.sim.snapshot(false).twd * 180) / Math.PI;
+    return { ...this.lessonSample(), mainSheet: this.sim.currentSheet('main'), jibSheet: this.sim.currentSheet('jib'), overlay: !!this.exercise?.overlay, twdDeg: ((twd % 360) + 360) % 360 };
+  }
+
+  /** Every 0.1 s of simulated time: the engine checks the phase, raises help, and may ask for a new set-up. */
+  private updateExercise(): void {
+    const x = this.exercise!;
+    if (x.engine.finished) return;
+    x.engine.update(this.exerciseSample());
+    this.afterExerciseChange();
+  }
+
+  private afterExerciseChange(): void {
+    const x = this.exercise;
+    if (!x) return;
+    if (x.engine.pendingSetup) this.applyExerciseSetup();
+    if (x.engine.finished && x.saved === undefined) {
+      x.saved = saveRun({ exercise: x.info.id, at: new Date().toISOString(), build: BUILD_ID, thresholdsChanged: x.changed, status: CONTENT_STATUS, attempts: x.engine.records, help: x.engine.log });
+      this.exerciseRuns = undefined;
+    }
+    const st = x.engine.state;
+    const key = `${st.stage}|${st.attempt}|${st.phase?.id}|${st.done}|${st.help?.level}|${st.help?.id}|${Math.round(st.progress * 10)}|${st.readout ?? ''}`;
+    if (key !== x.lastKey) {
+      x.lastKey = key;
+      this.publish(true);
+    }
+  }
+
+  /** Next: end the warm-up, skip a phase, or go on to the next attempt after a review. */
+  exerciseNext(): void {
+    this.exercise?.engine.next();
+    this.afterExerciseChange();
+    this.publish(true);
+  }
+
+  /** The learner's prediction before the first attempt (or skip it with exerciseNext). */
+  exercisePredict(choice: string): void {
+    this.exercise?.engine.predict(choice);
+    this.afterExerciseChange();
+    this.publish(true);
+  }
+
+  /** The learner asks for help (one level more, logged as asked for). */
+  exerciseHelp(): void {
+    this.exercise?.engine.askHelp();
+    this.afterExerciseChange();
+    this.publish(true);
+  }
+
+  /** Start the current attempt again from its own start. */
+  exerciseRestartAttempt(): void {
+    this.exercise?.engine.restartAttempt();
+    this.afterExerciseChange();
+    this.publish(true);
+  }
+
+  /** Show or hide the teaching overlay in an exercise (shown counts as assistance for the attempt). */
+  setExerciseOverlay(on: boolean): void {
+    if (!this.exercise) return;
+    this.exercise.overlay = on;
+    if (on) this.exercise.engine.noteAssists({ overlay: true });
+    this.applyTeaching();
+    this.publish(true);
+  }
+
+  endExercise(publish = true): void {
+    if (!this.exercise) return;
+    this.exercise = undefined;
+    if (!this.lesson) this.lessonTarget = undefined;
+    this.applyTeaching();
+    if (publish) this.publish(true);
+  }
+
+  /** How many runs of each exercise this browser keeps (read when they change, not every frame). */
+  private exerciseRuns?: Map<string, number>;
+
+  private exerciseList(): UiState['exercises'] {
+    if (!this.exerciseRuns) {
+      this.exerciseRuns = new Map();
+      for (const r of loadRuns()) this.exerciseRuns.set(r.exercise, (this.exerciseRuns.get(r.exercise) ?? 0) + 1);
+    }
+    return EXERCISES.map((e) => ({ ...e, runs: this.exerciseRuns!.get(e.id) ?? 0 }));
+  }
+
+  /** The exercise records kept in this browser, as a file's text (nothing personal: attempts, help and build). */
+  exportExerciseRecords(): string {
+    return exportRuns();
+  }
+
+  /** The exercise thresholds in use (shipped, or an instructor's for this browser), as a file's text. */
+  exportThresholds(): string {
+    return JSON.stringify({ schema: 'squib-exercise-thresholds-override/1', note: 'Values only; every one provisional (E). Units and sources: data/exercises/thresholds.json.', ...loadThresholds() }, null, 1);
+  }
+
+  /** Load an instructor's thresholds file for this browser (unknown keys and bad values are ignored). */
+  importThresholds(text: string): string {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return 'Not a JSON file.';
+    }
+    const t = mergeThresholds(raw);
+    if (!thresholdsChanged(t)) return 'The file holds no changed thresholds: nothing was changed.';
+    if (!saveThresholds(t)) return 'This browser does not allow saving settings.';
+    return 'Thresholds loaded for this browser: exercises started from now use them, and their results say so.';
+  }
+
+  resetExerciseThresholds(): string {
+    resetThresholds();
+    return 'Back to the shipped thresholds.';
+  }
+
+  importExerciseRecords(text: string): ReturnType<typeof importRuns> {
+    const r = importRuns(text);
+    this.exerciseRuns = undefined;
+    this.publish(true);
+    return r;
+  }
+
+  /** An exercise named in the address (?exercise=tack-recover): an instructor's repeatable set-up as a link. */
+  private openExerciseLink(): void {
+    if (typeof location === 'undefined') return;
+    const id = new URLSearchParams(location.search).get('exercise');
+    if (isExerciseId(id) && !this.exercise) this.startExercise(id);
   }
 
   /** The lessons began as one tutorial; "Learn to sail" starts the next lesson not yet done. */
@@ -953,13 +1158,17 @@ export class SimController {
   private applyTutorialInput(): void {
     const t = this.tutorial;
     if (!t?.pendingInput) return;
-    this.sim.setInput(t.pendingInput);
+    this.sim.setInput(this.handOver(t.pendingInput));
     t.pendingInput = undefined;
   }
 
   /** The teaching overlay: the lesson's parts during a lesson, else all of them when switched on (or none). */
   private applyTeaching(): void {
-    const parts: OverlayPart[] = this.lesson ? this.lesson.overlay : this.teachingOn ? ['heading', 'cog', 'current', 'wind', 'vmg'] : [];
+    const parts: OverlayPart[] = this.lesson
+      ? this.lesson.overlay
+      : this.exercise
+        ? this.exercise.overlay ? this.exercise.spec.overlay : []
+        : this.teachingOn ? ['heading', 'cog', 'current', 'wind', 'vmg'] : [];
     this.view?.setTeaching(parts, this.lessonTarget);
   }
 
@@ -994,6 +1203,11 @@ export class SimController {
 
   /** The teaching overlay outside the lessons (kept in this browser). */
   toggleTeaching(force?: boolean): void {
+    // In an exercise the overlay is the exercise's own (and counts as assistance while it shows).
+    if (this.exercise) {
+      this.setExerciseOverlay(force ?? !this.exercise.overlay);
+      return;
+    }
     this.teachingOn = force ?? !this.teachingOn;
     writeFlag('squib.teaching', this.teachingOn);
     this.applyTeaching();
@@ -1035,8 +1249,8 @@ export class SimController {
       sogKn: s.sog / KN,
       heelDeg: Math.abs(s.heel) * R2D,
       grounded: s.grounded,
-      main: sailState(s.forces.main),
-      jib: sailState(s.forces.jib),
+      main: sailState(s.forces.main, s.boomMain),
+      jib: sailState(s.forces.jib, s.boomJib),
       autoMain: s.input.autoMain,
       autoJib: s.input.autoJib,
       // The harbour's 6 kn limit runs from Castle Ledge buoy (n −1651 here) up the river (harbour guide).
@@ -1090,7 +1304,7 @@ export class SimController {
       twaDeg: Math.abs(s.twa) * R2D,
       stwKn: s.stw / KN,
       mainSide: s.mainSide,
-      main: sailState(s.forces.main),
+      main: sailState(s.forces.main, s.boomMain),
       autoMain: s.input.autoMain,
       autoCrew: s.input.autoCrew,
       crewHike: s.input.crewHike,
@@ -1099,7 +1313,7 @@ export class SimController {
       sogKn: s.sog / KN,
       vmgKn: s.vmg / KN,
       awsKn: s.aws / KN,
-      jib: sailState(s.forces.jib),
+      jib: sailState(s.forces.jib, s.boomJib),
       autoJib: s.input.autoJib,
       targetDistM: tg ? Math.hypot(tg.n - s.n, tg.e - s.e) : undefined,
       targetBearingRelDeg: tg ? ((((Math.atan2(tg.e - s.e, tg.n - s.n) - s.heading) * R2D) % 360) + 540) % 360 - 180 : undefined,
@@ -1500,6 +1714,8 @@ export class SimController {
     this.goLiveIfUntouched();
     // A shared run in the address (#ghost=…): race it, now the water it was sailed on is here.
     void this.openSharedLink();
+    // An exercise in the address (?exercise=…).
+    this.openExerciseLink();
   }
 
   // ------------------------------------------------------------ shared runs (src/app/shareLink.ts)
@@ -2166,8 +2382,22 @@ export class SimController {
 
   setInput(change: Partial<ControlInput>): void {
     if (this.replay) return; // playing back: the recording drives the boat
-    this.sim.setInput(change);
+    this.sim.setInput(this.handOver(change));
+    // Auto-trim or auto-crew switched on in an exercise counts for the attempt at once (even while paused).
+    this.exercise?.engine.noteAssists({ autoMain: change.autoMain, autoJib: change.autoJib, autoCrew: change.autoCrew });
     this.publish(true);
+  }
+
+  /**
+   * Turning auto-trim off hands the sheet to the crew where auto-trim had it, as the sheet keys do (issue 201).
+   * Before, the sheet jumped back to the crew's last manual setting: taking over a sheet stalled or overpowered the
+   * boat at once. A change that sets the sheet itself keeps its own value. Control input only: no physics changes.
+   */
+  private handOver(change: Partial<ControlInput>): Partial<ControlInput> {
+    const out = { ...change };
+    if (change.autoMain === false && this.sim.input.autoMain && change.mainSheet === undefined) out.mainSheet = this.sim.currentSheet('main');
+    if (change.autoJib === false && this.sim.input.autoJib && change.jibSheet === undefined) out.jibSheet = this.sim.currentSheet('jib');
+    return out;
   }
 
   releaseSheets(): void {
@@ -2464,6 +2694,10 @@ export class SimController {
             }
           : undefined,
       lessons: LESSONS.map((l) => ({ id: l.id, group: l.group, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id], bestS: this.lessonProgress[l.id]?.bestS })),
+      exercise: this.exercise
+        ? { info: this.exercise.info, state: this.exercise.engine.state, status: CONTENT_STATUS, thresholdsChanged: this.exercise.changed, overlay: this.exercise.overlay, saved: this.exercise.saved }
+        : undefined,
+      exercises: this.exerciseList(),
       teaching: this.teachingOn,
       level: this.interfaceLevel,
       confirmReset: this.confirmReset,
@@ -2498,7 +2732,7 @@ export class SimController {
       runningSlow: this.paused ? undefined : this.runningSlow,
       autoLowerGraphics: this.autoLowerGraphics,
       prefs: { ...this.prefs },
-      hint: this.hints.current,
+      hint: this.exercise ? undefined : this.hints.current,
       milestones: { ...this.milestones },
       resume: this.resumePoint
         ? {

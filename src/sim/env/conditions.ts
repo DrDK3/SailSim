@@ -3,7 +3,7 @@ import { knToMs } from '../units';
 import { composeEnvironment, type Environment, type WeatherInfo } from './environment';
 import { DEFAULT_TIDAL_STREAM, NO_CURRENT, dartStream, tidalStream, uniformCurrent, type CurrentModel, type StreamPattern, type TidalStreamSettings } from './current';
 import { manualTide, memoTide, parseTideSnapshot, snapshotTide, type TideSource } from './tide';
-import { GUST_PRESETS, WindField, uniformBase, type GustSettings } from './wind';
+import { GUST_PRESETS, WindField, scriptedShiftBase, uniformBase, type GustSettings, type ScriptedShift } from './wind';
 import { gustsFromSnapshot, metOfficeBase, metOfficeInfo, parseMetOfficeSnapshot } from './weather';
 import { modelSky, presetSky, SKY_PRESETS, type SkyPreset, type SkySource } from './sky';
 import { TerrainWind } from './terrainWind';
@@ -17,7 +17,8 @@ export interface ConditionsSettings {
   /** Real-world start time of the run (ISO); drives tides. */
   startTime: string;
   weather:
-    | { source: 'manual'; twsKn: number; twdDeg: number }
+    /** `shift`: one scripted shift (an exercise's environment input, src/sim/env/wind.ts scriptedShiftBase). */
+    | { source: 'manual'; twsKn: number; twdDeg: number; shift?: ScriptedShift }
     | { source: 'metoffice'; snapshot: unknown; replay?: boolean };
   /** Preset name or explicit settings; `seed` makes the fluctuations reproducible. */
   gusts: { preset: keyof typeof GUST_PRESETS | 'from-data'; seed: number; overrides?: Partial<GustSettings> };
@@ -90,11 +91,12 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
     sky = snap.model.sky?.length ? modelSky(snap.model.sky, startEpochMs, 'Sky: Met Office UKV forecast (live, today’s sky)') : presetSky('fair');
   }
   if (c.weather.source === 'manual') {
-    base = uniformBase(knToMs(c.weather.twsKn), c.weather.twdDeg * DEG);
+    const sh = c.weather.shift;
+    base = sh ? scriptedShiftBase(knToMs(c.weather.twsKn), c.weather.twdDeg * DEG, sh) : uniformBase(knToMs(c.weather.twsKn), c.weather.twdDeg * DEG);
     weather = {
       kind: 'manual',
-      label: `Manual: ${c.weather.twsKn} kn from ${Math.round(c.weather.twdDeg)}°`,
-      notes: ['Scenario setting, not measured.'],
+      label: `Manual: ${c.weather.twsKn} kn from ${Math.round(c.weather.twdDeg)}°${sh ? `, shifting ${Math.abs(sh.deg)}° ${sh.deg > 0 ? 'right (veering)' : 'left (backing)'} at ${sh.atS} s` : ''}`,
+      notes: ['Scenario setting, not measured.', ...(sh ? ['A scripted shift for an exercise: not a forecast.'] : [])],
     };
   } else {
     const snap = parseMetOfficeSnapshot(c.weather.snapshot);

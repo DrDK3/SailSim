@@ -22,6 +22,8 @@
     "ai:polar": "tsx tools/ai-polar.ts",
     "ai:trials": "tsx tools/ai-trials.ts",
     "envelope": "tsx tools/envelope.ts",
+    "exploits": "tsx tools/exploit-search.ts",
+    "shift-sensitivity": "tsx tools/shift-sensitivity.ts",
     "check:secrets": "tsx tools/check-secrets.ts dist"
   },
   "dependencies": {
@@ -30,6 +32,7 @@
     "three": "0.186.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.0",
     "@types/node": "22.20.5",
