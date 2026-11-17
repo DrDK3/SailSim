@@ -249,8 +249,18 @@ export function samaritanModel(): THREE.Group {
   kit.box(0.16, 0.12, 0.55, VMAT.steel, undefined, 0, h.sheer(bow) + 0.02, bow + 0.02);
   kit.box(0.34, 0.06, 0.2, VMAT.steel, undefined, 0, h.sheer(bow) - 0.05, bow - 0.18);
   // The committee boat's flag (orange, by the sailing instructions' usual convention) on a staff at the stern.
+  // The flag hangs from a pivot at the staff's head (named 'committee-flag'), its fly along the pivot's +x, so
+  // turning the pivot flies it with the wind (src/render/course.ts); built flying aft.
   kit.rod(V(0.75, ry(stern - 0.3) - 0.6, stern - 0.3), V(0.75, ry(stern - 0.3) + 1.8, stern - 0.3), 0.02, VMAT.paint, 0xcfcfca, 6);
-  kit.add(new THREE.PlaneGeometry(1.0, 0.65), VMAT.canvas, 0xff7a1a, place(0.75, ry(stern - 0.3) + 1.45, stern + 0.2, Math.PI / 2));
+  const flagGeo = new THREE.PlaneGeometry(1.0, 0.65);
+  flagGeo.translate(0.5, -0.325, 0);
+  const cloth = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.9, side: THREE.DoubleSide }));
+  cloth.name = 'committee-flag-cloth';
+  const flagPivot = new THREE.Group();
+  flagPivot.name = 'committee-flag';
+  flagPivot.position.set(0.75, ry(stern - 0.3) + 1.78, stern - 0.3);
+  flagPivot.rotation.y = -Math.PI / 2;
+  flagPivot.add(cloth);
 
   const g = kit.build('samaritan');
   for (const c of g.children) {
@@ -258,6 +268,7 @@ export function samaritanModel(): THREE.Group {
     (c as THREE.Mesh).castShadow = true;
     (c as THREE.Mesh).receiveShadow = true;
   }
+  g.add(flagPivot);
   // Her name on both bows, on the white topsides below the rubbing strake (where is not in the photograph: E).
   const map = nameTexture(SAMARITAN.name);
   if (map) {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
 import { coloursFlying } from './colours';
 import { flagDroop, flagYaw } from './vane';
+import { flagSwing, type FlagWind } from './flagMotion';
 
 let tex: THREE.Texture | undefined;
 
@@ -190,7 +191,11 @@ export class ClubEnsign {
   private readonly pivot = new THREE.Group();
   private readonly flag: THREE.Mesh;
 
+  /** Where it flies (local n, e): the wind is read here. */
+  readonly at: { n: number; e: number };
+
   constructor(at: [number, number], fromM: number, height: number) {
+    this.at = { n: at[1] - 2.2, e: at[0] };
     this.group.name = 'club-ensign';
     const geo = new THREE.PlaneGeometry(1.8, 0.9);
     // Hoist (the canton side) at the pivot, the fly along +x, hanging below the gaff's peak.
@@ -204,13 +209,14 @@ export class ClubEnsign {
     this.group.add(this.pivot);
   }
 
-  /** Show it at colours, flying with the wind (from `windFromDir` rad, `windSpeed` m/s). */
-  update(epochMs: number, windFromDir: number, windSpeed: number, time: number): void {
+  /** Show it at colours, flying with the true wind where it is (`wind`: from rad, compass; speed m/s). */
+  update(epochMs: number, wind: FlagWind, time: number): void {
     const up = coloursFlying(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
     this.group.visible = up;
     if (!up) return;
-    const { yaw, aws } = flagYaw(windFromDir, windSpeed, 0, 0);
-    this.pivot.rotation.y = yaw + Math.min(0.1, 0.02 * aws) * Math.sin(time * (2 + aws));
+    const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, 0, 0);
+    // Swinging about the downwind line as it flutters: none in a calm (flagMotion.ts).
+    this.pivot.rotation.y = yaw + flagSwing(aws, time, 0, 0.1);
     this.flag.rotation.z = -flagDroop(aws);
   }
 

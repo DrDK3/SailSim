@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Kit, VMAT, cabin, hull, place } from './vessels';
 import { vaneYaw, windexGeometry } from './vane';
+import { flagSwing, trueWindAt, type WindAt } from './flagMotion';
 
 /**
  * Boats lying still: in the marinas, alongside the river's pontoons and on the trot moorings. Hundreds of
@@ -22,6 +23,10 @@ export interface BoatSlot {
 
 /** All models are built 10 m long and scaled. */
 const REF = 10;
+/** How often the vanes read the wind (s). */
+const VANE_READ_S = 0.1;
+const VANE_SCRATCH = { q: new THREE.Quaternion(), p: new THREE.Vector3(), m: new THREE.Matrix4(), up: new THREE.Vector3(0, 1, 0), one: new THREE.Vector3(1, 1, 1) };
+
 /** The sloop's mast top (model frame): its wind vane stands here. */
 const MAST_TOP = { y: 13.5, z: -0.06 * REF - 0.4 * REF * 0.12 };
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -146,6 +151,11 @@ export class BerthedFleet {
   private readonly lastCam = new THREE.Vector3(Infinity, 0, 0);
   private dirty = true;
   private windFrom = 0;
+  /** The vanes drawn now: each one's masthead (world) and where its boat lies (local n, e). */
+  private vaneTops: { x: number; y: number; z: number; n: number; e: number }[] = [];
+  /** Each vane's wind (where it comes from, rad; speed, m/s), read at most every VANE_READ_S. */
+  private vaneWind: { fromDir: number; speed: number }[] = [];
+  private vaneReadAt = -Infinity;
 
   /**
    * @param capacity most boats at once; `nearRange` (m): detailed models within it (fewer on a software
@@ -228,6 +238,7 @@ export class BerthedFleet {
     const pos = new THREE.Vector3();
     const scl = new THREE.Vector3();
     let vaneCount = 0;
+    const tops: typeof this.vaneTops = [];
     const qv = new THREE.Quaternion().setFromAxisAngle(up, vaneYaw(this.windFrom));
     const top = new THREE.Vector3();
     const one = new THREE.Vector3(1, 1, 1);
@@ -255,6 +266,7 @@ export class BerthedFleet {
         if (s.kind === 'yacht') {
           top.set(0, MAST_TOP.y, MAST_TOP.z).applyMatrix4(m);
           this.vanes.setMatrixAt(vaneCount++, mv.compose(top, qv, one));
+          tops.push({ x: top.x, y: top.y, z: top.z, n: s.n, e: s.e });
         }
       } else {
         this.far[s.kind].setMatrixAt(farCount[s.kind]++, m);
@@ -271,6 +283,34 @@ export class BerthedFleet {
       this.far[k].instanceMatrix.needsUpdate = true;
     }
     this.vanes.count = vaneCount;
+    this.vanes.instanceMatrix.needsUpdate = true;
+    this.vaneTops = tops;
+    this.vaneReadAt = -Infinity;
+  }
+
+  /**
+   * Turn each drawn vane into the true wind at its own boat (`windAt`, the simulation's wind field, read only),
+   * hunting a little about it as the wind rises (none in a calm, less with reduced motion: flagMotion.ts). The wind
+   * is read every VANE_READ_S; the hunting is drawn every frame. Without `windAt`, every vane reads `setWind`'s
+   * wind at `speed` (m/s).
+   */
+  updateVanes(windAt: WindAt | undefined, speed: number, time: number): void {
+    const tops = this.vaneTops;
+    if (!tops.length) return;
+    if (time - this.vaneReadAt >= VANE_READ_S || time < this.vaneReadAt || this.vaneWind.length !== tops.length) {
+      this.vaneReadAt = time;
+      const fallback = { fromDir: this.windFrom, speed };
+      this.vaneWind = tops.map((t) => trueWindAt(windAt, t.n, t.e, fallback));
+    }
+    const q = VANE_SCRATCH.q;
+    const p = VANE_SCRATCH.p;
+    const m = VANE_SCRATCH.m;
+    for (let i = 0; i < tops.length; i++) {
+      const t = tops[i]!;
+      const w = this.vaneWind[i]!;
+      q.setFromAxisAngle(VANE_SCRATCH.up, vaneYaw(w.fromDir) + flagSwing(w.speed, time, t.e * 0.7 + t.n * 0.3, 0.07));
+      this.vanes.setMatrixAt(i, m.compose(p.set(t.x, t.y, t.z), q, VANE_SCRATCH.one));
+    }
     this.vanes.instanceMatrix.needsUpdate = true;
   }
 

@@ -8,12 +8,14 @@ import * as THREE from 'three';
 import type { DartGeo } from '../sim/geo/dart';
 import type { NE } from '../sim/boat/forces';
 import { mooringSwingDeg } from '../sim/race/anchored';
+import { isTrotArea, trotBuoys, trotHeading } from '../sim/env/trots';
 import type { DartFeatures, ManifestFull } from '../app/geoLoader';
 import { ferryStates } from '../app/ferrySchedule';
 import { FIXED_BOATS, berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
 import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
+import { trueWindAt, type WindAt } from './flagMotion';
 import { ShipBuoysView } from './mosaique';
 import { MOSAIQUE, SHIP_BUOYS, mooredBerth } from '../sim/env/shipBuoys';
 import { buildIslets } from './islets';
@@ -87,6 +89,11 @@ export interface DartUpdate {
   windFromDir: number;
   /** True wind speed at the surface (m/s), for the flags and vanes. */
   windSpeed?: number;
+  /**
+   * The true wind at a point now, from the simulation's wind field (read only): each flag and vane reads the wind
+   * where it is (flagMotion.ts). Without it, they all read `windFromDir` and `windSpeed`.
+   */
+  windAt?: WindAt;
   showLabels: boolean;
   /** The run's river traffic (ferries crabbing in its stream, Dart Marina boats); else ferries alone. */
   traffic?: RiverTraffic;
@@ -94,7 +101,7 @@ export interface DartUpdate {
    * Where a moored boat lies now: the simulation's own pose (src/sim/race/anchored.ts), so the drawn boat is
    * the one the physics collides with. Without it (tests), boats lie head to the stream or `windFromDir`.
    */
-  mooredPose?: (m: { n: number; e: number; l: number; swingDeg: number }) => { n: number; e: number; heading: number };
+  mooredPose?: (m: { n: number; e: number; l: number; swingDeg: number; area?: string }) => { n: number; e: number; heading: number };
 }
 
 
@@ -122,7 +129,7 @@ export class DartScene {
   readonly floating = new THREE.Group();
   private boatfloat?: Boatfloat;
   readonly labels = new THREE.Group();
-  /** Boats on the trot moorings (first) and in the marinas and on the pontoons (after). */
+  /** Boats on the moorings, swinging or on trots (first), and in the marinas and on the pontoons (after). */
   private readonly boats?: BerthedFleet;
   private readonly berths: readonly Berth[] = [];
   private readonly buoys?: THREE.InstancedMesh;
@@ -928,8 +935,10 @@ export class DartScene {
     }
   }
 
+  /** Mooring buoys: one per swinging mooring, two per trot mooring (bow and stern, src/sim/env/trots.ts). */
   private buildMoorings(f: DartFeatures): THREE.InstancedMesh {
-    const buoys = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.6 }), f.moorings.length);
+    const count = f.moorings.reduce((k, m) => k + (isTrotArea(m.a) ? 2 : 1), 0);
+    const buoys = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.6 }), count);
     buoys.name = 'moorings';
     buoys.frustumCulled = false;
     this.floating.add(buoys);
@@ -940,9 +949,12 @@ export class DartScene {
     const f = this.features;
     if (!f || !this.boats || !this.buoys) return;
     const m = new THREE.Matrix4();
+    let k = 0;
     f.moorings.forEach((b, i) => {
       const swingDeg = mooringSwingDeg(b.h);
-      let pose = u.mooredPose?.({ n: b.n, e: b.e, l: b.l, swingDeg });
+      const trot = trotHeading(b.a);
+      let pose = u.mooredPose?.({ n: b.n, e: b.e, l: b.l, swingDeg, area: b.a });
+      if (!pose && trot !== undefined) pose = { n: b.n, e: b.e, heading: trot };
       if (!pose) {
         // No simulation pose: head to the stream, in slack water head to the wind; the buoy is at the bow end
         // of the chain and the boat lies downstream of it.
@@ -952,8 +964,11 @@ export class DartScene {
         pose = { n: b.n - Math.cos(bowTo) * back, e: b.e - Math.sin(bowTo) * back, heading: bowTo };
       }
       this.boats!.set(i, { n: pose.n, e: pose.e, heading: pose.heading, length: b.l, kind: b.k === 'motor' ? 'motor' : 'yacht', seed: b.h, visible: true });
-      m.makeTranslation(b.e, 0.05, -b.n);
-      this.buoys!.setMatrixAt(i, m);
+      // On a trot, her buoys ahead and astern on the row; on a swinging mooring, the one buoy.
+      for (const p of trot !== undefined ? trotBuoys(b, trot) : [{ n: b.n, e: b.e }]) {
+        m.makeTranslation(p.e, 0.05, -p.n);
+        this.buoys!.setMatrixAt(k++, m);
+      }
     });
     this.buoys.instanceMatrix.needsUpdate = true;
   }
@@ -1175,8 +1190,13 @@ export class DartScene {
     this.fixed.position.y = -u.waterLevel;
     this.pontoons?.update(u.waterLevel);
     this.boatfloat?.update(u.waterLevel);
-    for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
-    this.shipBuoys?.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time, u.camera);
+    // Flags and vanes ashore and moored: the true wind where each one is.
+    const wind = { fromDir: u.windFromDir, speed: u.windSpeed ?? 5 };
+    for (const en of this.ensigns) en.update(u.epochMs, trueWindAt(u.windAt, en.at.n, en.at.e, wind), u.time);
+    if (this.shipBuoys) {
+      const at = this.shipBuoys.flagsAt;
+      this.shipBuoys.update(u.epochMs, trueWindAt(u.windAt, at.n, at.e, wind), u.time, u.camera);
+    }
     this.kingswearLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
     this.bayardsLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
@@ -1187,11 +1207,12 @@ export class DartScene {
     }
     this.boats?.setWind(u.windFromDir);
     this.boats?.update(u.camera);
+    this.boats?.updateVanes(u.windAt, u.windSpeed ?? 5, u.time);
     // Steam trains: smoke drifts downwind (about 3 m/s, E).
     this.railway?.update(u.epochMs, u.time, { e: -Math.sin(u.windFromDir) * 3, n: -Math.cos(u.windFromDir) * 3 });
     if (this.features) {
       const states = u.traffic ? u.traffic.states(u.epochMs) : ferryStates(this.features.ferries, u.epochMs);
-      this.traffic.update(states, u.time, u.camera, u.showLabels, u.windSpeed !== undefined ? { fromDir: u.windFromDir, speed: u.windSpeed } : undefined, u.waterLevel);
+      this.traffic.update(states, u.time, u.camera, u.showLabels, u.windSpeed !== undefined ? { fromDir: u.windFromDir, speed: u.windSpeed, at: u.windAt } : undefined, u.waterLevel);
     }
     // Lights: flash groups within the period (e.g. Fl G 5s: one 0.5 s flash every 5 s).
     for (const ml of this.markLights) {
