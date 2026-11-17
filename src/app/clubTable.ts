@@ -54,9 +54,19 @@ export function newToken(): string {
   return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
+/** The replay as sent: its JSON compressed (deflate-raw) and base64-encoded (a few tens of kB for a 10-minute run). */
+export async function encodeReplay(rec: Recording): Promise<string> {
+  const json = new TextEncoder().encode(JSON.stringify(rec));
+  const stream = new Blob([json as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
 /** Exactly what is sent: nothing else is added anywhere. */
-export function submissionBody(rec: Recording, name: string, build: string, token: string, ua = typeof navigator === 'undefined' ? '' : navigator.userAgent) {
-  return { replay: rec, name, build, engine: engineOf(ua), token };
+export async function submissionBody(rec: Recording, name: string, build: string, token: string, ua = typeof navigator === 'undefined' ? '' : navigator.userAgent) {
+  return { replay: await encodeReplay(rec), name, build, engine: engineOf(ua), token };
 }
 
 /** The runs submitted from this device: week, time, token (to remove or to ask the verdict). Kept in this browser only. */

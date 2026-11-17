@@ -103,7 +103,7 @@ export function ClubSubmit({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       const headers: Record<string, string> = { 'content-type': 'application/json' };
       const bot = await turnstileToken();
       if (bot) headers['cf-turnstile-response'] = bot;
-      const r = await fetch(`${url}/submit`, { method: 'POST', headers, body: JSON.stringify(submissionBody(rec, ui.social.name, BUILD_ID, token)) });
+      const r = await fetch(`${url}/submit`, { method: 'POST', headers, body: JSON.stringify(await submissionBody(rec, ui.social.name, BUILD_ID, token)) });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) return setState(`Not sent: ${j.error ?? r.status}.`);
       saveMine([...loadMine(), { week: f.key.slice(7), timeS: f.timeS, token, status: 'waiting to be checked' }]);

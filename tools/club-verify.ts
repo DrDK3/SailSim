@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, w
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { inflateRawSync } from 'node:zlib';
 import { identicalTiming, verifySubmission, type Submission, type Verdict } from '../src/app/clubVerify';
 import { CLUB_TABLE_SCHEMA, type ClubTableFile, type TableEntry } from '../src/app/clubTable';
 import { BUILD_ID } from '../src/app/controller';
@@ -93,7 +94,14 @@ try {
   // 1. Pending submissions: verify, record the verdict, delete the replay.
   const pending = await list<Submission>('pending:');
   const verdicts: { sub: Submission; v: Verdict }[] = [];
-  for (const { key, value: sub } of pending) {
+  for (const { key, value: raw } of pending) {
+    // The replay arrives compressed and base64-encoded (the endpoint does not open it): opened here, at most 64 MB.
+    let sub: Submission = raw;
+    try {
+      sub = { ...raw, replay: typeof raw.replay === 'string' ? JSON.parse(inflateRawSync(Buffer.from(raw.replay, 'base64'), { maxOutputLength: 64 << 20 }).toString('utf8')) : raw.replay };
+    } catch {
+      sub = { ...raw, replay: null };
+    }
     const v = verify(sub);
     verdicts.push({ sub, v });
     await put(`status:${sub.tokenHash}`, { status: v.status, reason: v.reason, week: v.week, timeS: v.timeS, at: now.toISOString().slice(0, 16) + 'Z' });

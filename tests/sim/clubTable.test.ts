@@ -6,6 +6,7 @@
  *   from another browser engine follow the documented tolerance; nothing is silently dropped.
  */
 import { describe, expect, it } from 'vitest';
+import { inflateRawSync } from 'node:zlib';
 import { ADJECTIVES as A2, CREATURES as C2, LIMITS, handle, memoryStore } from '../../server/club-table/worker.js';
 import { ADJECTIVES, CREATURES } from '../../src/app/safeNames';
 import { SimController } from '../../src/app/controller';
@@ -19,7 +20,8 @@ const TOKEN = 'a'.repeat(64);
 
 describe('the endpoint', () => {
   const env = () => ({ STORE: memoryStore(), ADMIN_TOKEN: 'secret-admin', ALLOWED_ORIGIN: '*' });
-  const replay = { schema: 'squib-replay/1', created: 'x', title: 'Blue Heron 42: run', build: 'b', scenario: { conditions: {} }, initialInput: null, dart: 'none', inputs: [[0, 0, 0.3, 0.3, 0.6, 4]], checkpoints: [], endStep: 10 };
+  // The replay as the app sends it: compressed and base64-encoded (not opened by the endpoint).
+  const replay = Buffer.from('a compressed replay would be here').toString('base64');
   const body = (o: Record<string, unknown> = {}) => ({ replay, name: 'Blue Heron 42', build: 'production-abc', engine: 'chromium', token: TOKEN, ...o });
   const post = (e: ReturnType<typeof env>, path: string, b: unknown, headers: Record<string, string> = {}, now = Date.parse('2026-11-17T10:00:00Z')) =>
     handle(new Request(`http://x${path}`, { method: 'POST', body: typeof b === 'string' ? b : JSON.stringify(b), headers: { 'content-type': 'application/json', ...headers } }), e, now);
@@ -47,10 +49,9 @@ describe('the endpoint', () => {
     expect((await post(e, '/submit', body({ email: 'a@b.c' }))).status).toBe(400);
     expect(await (await post(e, '/submit', body({ name: 'Sam Smith 1' }))).json()).toEqual({ error: 'name-not-on-word-list' });
     expect((await post(e, '/submit', body({ token: 'short' }))).status).toBe(400);
-    expect((await post(e, '/submit', body({ replay: { schema: 'x' } }))).status).toBe(400);
+    expect(await (await post(e, '/submit', body({ replay: { schema: 'squib-replay/1' } }))).json()).toEqual({ error: 'not-an-encoded-replay' });
     expect((await post(e, '/submit', 'not json')).status).toBe(400);
-    const big = { ...replay, inputs: Array.from({ length: 40_000 }, (_, i) => [i, 0.123456789, 0.3, 0.3, 0.6, 4]) };
-    expect(JSON.stringify(big).length).toBeGreaterThan(LIMITS.maxBytes);
+    const big = 'A'.repeat(LIMITS.maxBytes + 4);
     expect((await post(e, '/submit', body({ replay: big }))).status).toBe(413);
     expect([...e.STORE.map.keys()].some((k) => k.startsWith('pending:'))).toBe(false);
   });
@@ -112,10 +113,17 @@ describe('the verifier', () => {
   const BUILD = rec.build;
   const sub = (o: Partial<Submission> = {}, r: Recording = rec): Submission => ({ id: 'x', receivedAt: at.toISOString(), name: 'Blue Heron 42', build: BUILD, engine: 'chromium', tokenHash: 'h', replay: JSON.parse(JSON.stringify(r)), ...o });
 
-  it('the submission body is exactly the replay, the name, the build, the engine family and the token', () => {
-    const b = submissionBody(rec, 'Blue Heron 42', BUILD, TOKEN, 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0');
+  it('the submission body is exactly the replay (compressed), the name, the build, the engine family and the token', async () => {
+    const b = await submissionBody(rec, 'Blue Heron 42', BUILD, TOKEN, 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0');
     expect(Object.keys(b).sort()).toEqual(['build', 'engine', 'name', 'replay', 'token']);
     expect(b.engine).toBe('chromium');
+    const back = JSON.parse(inflateRawSync(Buffer.from(b.replay, 'base64')).toString('utf8'));
+    expect(back.endStep).toBe(rec.endStep);
+    // The endpoint takes it as it is.
+    const e = { STORE: memoryStore(), ADMIN_TOKEN: 'a', ALLOWED_ORIGIN: '*' };
+    const r = await handle(new Request('http://x/submit', { method: 'POST', body: JSON.stringify(b) }), e, at.getTime());
+    expect(r.status).toBe(202);
+    console.log(`submission: ${(JSON.stringify(b).length / 1024).toFixed(0)} kB for ${(rec.endStep / 100).toFixed(0)} s sailed with the AI on the helm`);
   });
 
   it('accepts a genuine run, with the re-sailed time, as assisted (auto-trim was on)', () => {

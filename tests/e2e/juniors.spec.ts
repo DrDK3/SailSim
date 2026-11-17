@@ -105,3 +105,32 @@ test('touch controls on a tablet: every sailing control at least 24 px, and the 
   console.log(`touch targets: ${at44}/${sizes.length} ≥ 44 px`, JSON.stringify(sizes));
   await ctx.close();
 });
+
+/**
+ * Accessibility of the juniors round's new screens (axe-core, WCAG 2.2 A and AA rules): the device check and its
+ * result, the game-controller and gust-outline settings, the weekly course card and the challenge card.
+ */
+test('axe-core: no violations on the new screens', async ({ page }) => {
+  test.setTimeout(240_000 * CI_SLOW);
+  await page.goto('/?nowelcome&quality=low');
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 90_000 * CI_SLOW });
+  await page.addScriptTag({ path: 'node_modules/axe-core/axe.min.js' });
+  const axe = (selector: string) =>
+    page.evaluate(async (sel) => {
+      const w = window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<{ violations: { id: string; impact: string; nodes: { target: string[] }[] }[] }> } };
+      const r = await w.axe.run(sel, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } });
+      return r.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+    }, selector);
+  // Settings: the device check (with a result), the controller and gust-outline settings.
+  await page.evaluate(() => window.__squib!.controller.startDeviceCheck(3));
+  await page.waitForFunction(() => !!window.__squib!.controller.lastDeviceReport, null, { timeout: 120_000 * CI_SLOW });
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
+  await expect(page.getByTestId('device-check-result')).toBeVisible();
+  expect(await axe('[data-testid="device-check"]')).toEqual([]);
+  expect(await axe('[data-testid="settings-panel"]')).toEqual([]);
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(false));
+  // The weekly course card.
+  await page.getByRole('button', { name: 'Race', exact: true }).click();
+  await expect(page.getByTestId('weekly-card')).toBeVisible();
+  expect(await axe('[data-testid="weekly-card"]')).toEqual([]);
+});

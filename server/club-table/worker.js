@@ -8,6 +8,10 @@
  *  - POST /submit   {replay, name, build, engine, token}: checks the size, the shape, the word-list name and (when
  *                    configured) the Turnstile bot check; rate limits; stores the run as pending. Stores the SHA-256 of
  *                    the deletion token, never the token. Stores no IP address or other identifier.
+ *                    `replay` is the replay's JSON compressed (deflate-raw) and base64-encoded: a 10-minute run sailed
+ *                    with the keys is about 75 kB compressed (670 kB as JSON), one steered with a stick or the AI about
+ *                    800 kB (measured, docs/JUNIORS_REPORT.md §4). The endpoint does not open it (the free plan's CPU
+ *                    time per request is small): the verifier checks the replay itself.
  *  - POST /remove   {token}: asks for the entry made with this token to be removed (the next verifier run does it).
  *  - GET  /status?token=…: the verifier's verdict for the run made with this token (accepted, or the reason not).
  *  - Admin (Authorization: Bearer ADMIN_TOKEN, held only in GitHub secrets for the scheduled verifier):
@@ -22,10 +26,10 @@
 export const ADJECTIVES = ['Blue', 'Bold', 'Brave', 'Bright', 'Brisk', 'Calm', 'Clever', 'Cosy', 'Daring', 'Eager', 'Fair', 'Gentle', 'Golden', 'Green', 'Happy', 'Jolly', 'Keen', 'Kind', 'Lively', 'Lucky', 'Merry', 'Mighty', 'Nimble', 'Plucky', 'Proud', 'Quick', 'Quiet', 'Rapid', 'Silver', 'Smart', 'Speedy', 'Steady', 'Sunny', 'Swift', 'Tidy', 'Trusty', 'Wise', 'Zippy'];
 export const CREATURES = ['Anchovy', 'Avocet', 'Barnacle', 'Cockle', 'Cormorant', 'Crab', 'Curlew', 'Dolphin', 'Dunlin', 'Egret', 'Gannet', 'Guillemot', 'Gull', 'Heron', 'Kittiwake', 'Limpet', 'Lobster', 'Mackerel', 'Mullet', 'Otter', 'Oystercatcher', 'Pipefish', 'Plover', 'Porpoise', 'Prawn', 'Puffin', 'Razorbill', 'Redshank', 'Seahorse', 'Seal', 'Shearwater', 'Shrimp', 'Starfish', 'Tern', 'Turnstone', 'Whelk', 'Wrasse'];
 
-/** Limits (E: sized for a club's juniors; a 60-minute course's replay is about 200 kB, measured). */
+/** Limits (E: sized for a club's juniors and the measured replay sizes above). */
 export const LIMITS = {
-  /** Largest request body (bytes). */
-  maxBytes: 512 * 1024,
+  /** Largest request body (bytes): about 1.6 MB of compressed replay after base64. */
+  maxBytes: 2_200_000,
   /** Submissions accepted for storage in any 10-minute window (all players together). */
   perWindow: 30,
   windowS: 600,
@@ -55,11 +59,8 @@ export function checkSubmission(b) {
   if (typeof b.build !== 'string' || !/^[\w.-]{1,80}$/.test(b.build)) return 'bad-build';
   if (!['chromium', 'gecko', 'webkit', 'other'].includes(b.engine)) return 'bad-engine';
   if (typeof b.token !== 'string' || !/^[0-9a-f]{64}$/.test(b.token)) return 'bad-token';
-  const r = b.replay;
-  if (!r || typeof r !== 'object' || r.schema !== 'squib-replay/1') return 'not-a-replay';
-  if (!Array.isArray(r.inputs) || !Array.isArray(r.checkpoints) || typeof r.endStep !== 'number' || !r.scenario || typeof r.scenario !== 'object') return 'not-a-replay';
-  for (const row of r.inputs) if (!Array.isArray(row) || (row.length !== 6 && row.length !== 7) || !row.every((v) => typeof v === 'number' && Number.isFinite(v))) return 'bad-input-row';
-  if (typeof r.title !== 'string' || r.title.length > 120) return 'bad-title';
+  // The replay, compressed and base64-encoded (checked by the verifier when it is opened).
+  if (typeof b.replay !== 'string' || b.replay.length < 16 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b.replay)) return 'not-an-encoded-replay';
   return undefined;
 }
 

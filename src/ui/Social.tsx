@@ -4,6 +4,7 @@ import type { Attempt } from '../app/bests';
 import { ADJECTIVES, CREATURES, nameFrom, nameParts } from '../app/safeNames';
 import { MEDALS, type Medal } from '../app/targets';
 import { useModal } from './useModal';
+import { SHARE_MAX_CHARS } from '../app/shareLink';
 import { ClubTableSection, ClubSubmit } from './ClubTable';
 
 /** m:ss.s */
@@ -162,14 +163,19 @@ export function SocialResult({ ctl, ui }: { ctl: SimController; ui: UiState }) {
                 void ctl.social.challengeLink(location.href).then((u) => {
                   if (!u) return;
                   setLink(u);
-                  void navigator.clipboard?.writeText(u).catch(() => undefined);
+                  if (u.length <= SHARE_MAX_CHARS) void navigator.clipboard?.writeText(u).catch(() => undefined);
                 })
               }
             >
               Challenge a friend
             </button>
           </div>
-          {link && (
+          {link && link.length > SHARE_MAX_CHARS && (
+            <p className="fine" role="status" data-testid="challenge-link-too-long">
+              This run is too long to fit in a link ({Math.round(link.length / 1000)} thousand characters). Save it instead (Library → Save replay) and send the file: your friend opens it to race it as a ghost.
+            </p>
+          )}
+          {link && link.length <= SHARE_MAX_CHARS && (
             <p className="fine" data-testid="challenge-link-ready">
               Link copied: send it to a friend. It holds your run and your name ({s.name}) and nothing else; opening it uploads nothing. {link.length > 8000 ? 'It is long: some messaging apps may cut it short.' : ''}
             </p>

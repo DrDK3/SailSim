@@ -200,3 +200,51 @@ Documents please.
 | Interviewer | |
 | Scenarios sailed | |
 | Answers stored at | `docs/validation/<date>-<sailor>.md` |
+
+## E. Juniors round (17 Nov 2026): feel, cues and social goals
+
+A short protocol for checks that only people can make ([JUNIORS_REPORT.md](../JUNIORS_REPORT.md)). Nothing in this
+section has been done yet. Record the results in section D's table, with the date and the build (Help shows it).
+
+### E1. The first five minutes, with juniors
+
+5–10 juniors (with a parent's or guardian's consent), each on their own or a club device, using the build alone.
+**Say nothing**; do not help unless they ask twice. For each junior, note:
+
+| | Notes |
+|---|---|
+| Device (kind, roughly how old) and the device check's result (Settings → Display → Check this device; [procedure](../DEVICE_CHECK.md)) | |
+| What they comment on, in their words | |
+| Where they get stuck, and for how long | |
+| Do they notice the **gusts** (darker water) before one reaches them, without being told? | |
+| Do they notice the sails **luffing** (flapping, the sound, the word on the sail panel)? | |
+| Do they notice the **tack** feedback (the boom across, the thump, the camera's small settle)? | |
+| Do they ask to play again? | |
+
+### E2. The low preset: would you play this?
+
+Show the owner and two or three juniors the **Smooth** and **Balanced** presets side by side (the screenshot sheets in
+the report, then the app on a real device). Ask one question: **"Would you play this?"** Note the answer for each
+preset, and why. The owner, not the developer, judges whether Smooth "looks good".
+
+### E3. Instructors: do the cues teach the right thing?
+
+An instructor sails the weekly course and a few gusty scenarios. Check for **negative learning**:
+
+- Are gusts on the water **more obvious than on the real river** (so juniors learn to rely on a cue they will not have)?
+  The natural look should be readable but not exaggerated. The outlines are a teaching aid (off by default and off in
+  races).
+- Does anyone **rely on vibration or the overlay**? Turn both off and see whether they still sail as well.
+- Is the **acceleration out of a tack too forgiving**? (The physics is unchanged from earlier rounds. Only the sound
+  and camera feel were added. Note whether the feel suggests otherwise.)
+- Do the telltales behave as on a real jib: the windward ones lifting when pinching or under-trimmed, the leeward ones
+  when over-trimmed?
+
+### E4. Social goals, during a trial week with the club table on
+
+| Question | Notes |
+|---|---|
+| Do juniors understand that ghosts are **recordings** that do not react, and that targets are **model-sailed** (not people)? | |
+| Do the weekly course and the club table **motivate without pressure**? (Watch for anxiety about ranking, or for juniors comparing real identities behind the word-list names.) | |
+| Did **anything need a person to step in** during the week? (The target is nothing: note every case.) | |
+| Do parents find the **plain-language note** ([PARENTS.md](../club-table/PARENTS.md)) clear and acceptable? | |
