@@ -24,6 +24,16 @@ describe('scriptedShiftBase', () => {
     expect(base.at(-2000, 900, 75)).toEqual(base.at(10, 10, 75));
   });
 
+  it('a temporary shift holds, then turns back over the same ramp to the manual wind', () => {
+    const b = scriptedShiftBase(10 * KN, 225 * DEG, { atS: 60, deg: -15, rampS: 20, holdS: 90 });
+    expect(b.at(0, 0, 80).fromDir).toBeCloseTo(210 * DEG, 12);
+    expect(b.at(0, 0, 170).fromDir).toBeCloseTo(210 * DEG, 12);
+    expect(b.at(0, 0, 180).fromDir).toBeCloseTo(217.5 * DEG, 12);
+    expect(b.at(0, 0, 190).fromDir).toBeCloseTo(225 * DEG, 12);
+    expect(b.at(0, 0, 500).fromDir).toBeCloseTo(225 * DEG, 12);
+    expect(b.at(0, 0, 175).speed).toBe(10 * KN);
+  });
+
   it('wraps through north and handles a zero ramp', () => {
     const b = scriptedShiftBase(5, 5 * DEG, { atS: 10, deg: -20, rampS: 0 });
     expect(b.at(0, 0, 10).fromDir).toBeCloseTo(5 * DEG, 12);
