@@ -76,9 +76,18 @@ export function scanText(file: string, text: string, knownSecrets: string[] = []
   return out;
 }
 
+/**
+ * Names that look secret but hold values that are public by design, so the site must contain them. Each entry is
+ * exact (no patterns), says why, and was approved by the owner; nothing else is exempt.
+ * - VITE_TURNSTILE_SITEKEY: a Cloudflare Turnstile *site* key, which every page showing the widget carries. Its
+ *   private counterpart, the secret key, is TURNSTILE_SECRET, held only by the club-table Worker (never VITE_).
+ *   Exempt since 17 Nov 2026 (juniors round, optional club table).
+ */
+export const PUBLIC_BY_DESIGN: ReadonlySet<string> = new Set(['VITE_TURNSTILE_SITEKEY']);
+
 /** Values of environment variables whose names say they are secret (KEY, TOKEN, SECRET, PASSWORD). */
 export function secretEnvValues(env: Record<string, string | undefined>): string[] {
-  const names = Object.keys(env).filter((k) => /(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)/i.test(k) && !/^(?:npm_|PUBLIC_)/i.test(k));
+  const names = Object.keys(env).filter((k) => /(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)/i.test(k) && !/^(?:npm_|PUBLIC_)/i.test(k) && !PUBLIC_BY_DESIGN.has(k));
   return [...new Set(names.map((k) => env[k] ?? '').filter((v) => v.length >= 8))];
 }
 
@@ -90,6 +99,7 @@ export function scanViteEnvNames(file: string, text: string): Finding[] {
   const out: Finding[] = [];
   const re = /\bVITE_[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*\b/g;
   for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (PUBLIC_BY_DESIGN.has(m[0])) continue;
     out.push({ file, line: lineOf(text, m.index), rule: 'secret-looking VITE_ variable (Vite bundles it into the client)', excerpt: m[0] });
   }
   return out;
