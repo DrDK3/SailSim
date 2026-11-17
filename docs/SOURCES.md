@@ -346,3 +346,12 @@ The owner's chart pictures (a chart app's view of the river and Start Bay; Admir
 
 **Not established:** the islets' heights (OUTSTANDING 182); the Kingswear light's position (185). The islets' outlines are OpenStreetMap's (G1); the LIDAR (G2) has no survey there.
 
+## The rocky coast, the Kingswear light and the minimap (17 Nov 2026)
+
+| ID | Source | URL | Date | Access | What it gives |
+|---|---|---|---|---|---|
+| L1 | The owner's information on the Kingswear light, citing Dart Harbour's notices LNTM 03/24 and LNTM 01/26 ("Kingswear lighthouse unreliable") | https://www.dartharbour.org/news-and-notices/port-notices/2024/02/29/lntm-03-24-kingswear-lighthouse-unreliable/ ; https://www.dartharbour.org/news-and-notices/port-notices/2026/01/04/lntm-01-26-kingswear-lighthouse-unreliable | 17 Nov 2026 (notices 2024, 2026) | Owner's message; the notices were not fetched here | Chart position 50°20.81'N 003°34.09'W; a compact 4 m round cylindrical tower with a conical lantern on a large rock on the shoreline, just NNW of Kingswear Castle (it replaced an 11 m tower demolished in 1980); focal height 9 m above mean high water; a rectangular window facing south-west; white sector 325°–331°; Iso WRG 3s |
+| G1 (used again) | Overture Maps release 2026-10-21.0, "land" theme (OpenStreetMap natural=beach, heath, bare_rock, cliff) | as G1 | 2026 | Cached extract | The beaches, the heath on the cliff tops, the bare and tidal rock and the cliff lines south of the towns (`src/sim/env/coastData.ts`, ODbL 1.0, © OpenStreetMap contributors) |
+
+The character Iso WRG 3s agrees with the Dart Harbour guide (K6). **Not established:** the light's red and green sector limits; Bayard's Cove light's position; the cliffs' heights (OUTSTANDING 187–191).
+

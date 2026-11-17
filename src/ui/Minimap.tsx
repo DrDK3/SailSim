@@ -1,22 +1,50 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { ferryStates } from '../app/ferrySchedule';
+import { chartSpec, drawChart, minimapLabels } from './minimapChart';
+import { SHIP_BUOYS, tenderOutline, yachtOutline } from '../sim/env/shipBuoys';
+import { isletOutlines } from '../sim/env/islets';
+import { KINGSWEAR_LIGHT, kingswearLightLocal, kingswearRockOutline } from '../sim/env/shoreLights';
+import { notABuilding } from '../sim/env/notBuildings';
+import { DAYMARK } from '../render/daymark';
+import { DART_PROJECTION } from '../sim/geo/projection';
 
 const W = 220;
 const H = 250;
 /** Visible width of the map in metres at each zoom step. */
-const SPANS = [1200, 2500, 6800];
+const SPANS = [600, 1200, 2500, 6800];
 
 /**
- * North-up overview drawn from the pipeline's minimap image: the boat and its course over ground, the other boats
- * of the fleet, ferries (amber = restricted in ability to manoeuvre) and the navigation marks that have a
- * stated position.
+ * North-up overview: a chart drawn from the sim's own ground (src/ui/minimapChart.ts; the pipeline's picture until
+ * it is ready), the boat and its course over ground, the other boats of the fleet, ferries (amber = restricted in
+ * ability to manoeuvre), the navigation marks that have a stated position, the ship buoys and the yacht on them,
+ * the Kingswear light with its white sector, the Daymark, and the places' names.
  */
 export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [zoom, setZoom] = useState(1);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [chart, setChart] = useState<{ canvas: HTMLCanvasElement; e0: number; nTop: number; w: number; h: number } | null>(null);
   const data = ctl.dartData;
+
+  // The chart, once, after the river has loaded and where the minimap shows (it is hidden on phones).
+  useEffect(() => {
+    const geo = data?.geo;
+    const m = data?.manifest;
+    if (!geo || !m || chart || ui.dart.status !== 'loaded') return;
+    if (canvas.current && canvas.current.offsetParent === null) return;
+    const id = window.setTimeout(() => {
+      const s = chartSpec(m.domain);
+      const c = drawChart((n, e) => geo.bedElevation(n, e), s, -geo.cdBelowOdn, {
+        buildings: data.features?.buildings.filter((b) => !notABuilding(b.r)),
+        roads: data.roads?.roads,
+        rocks: [...isletOutlines().map((o) => o.ring), kingswearRockOutline()],
+      });
+      setChart({ canvas: c, e0: s.e0, nTop: s.nTop, w: s.nx * s.cell, h: s.ny * s.cell });
+    }, 30);
+    return () => window.clearTimeout(id);
+  }, [data, chart, ui.dart.status]);
+  const labels = useRef(minimapLabels());
 
   useEffect(() => {
     if (!data?.minimapUrl) return;
@@ -42,13 +70,92 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     const span = SPANS[zoom]!;
     const k = W / span; // px per metre
     const toPx = (n: number, e: number) => [W / 2 + (e - s.e) * k, H / 2 - (n - s.n) * k] as const;
-    ctx.fillStyle = '#1f4b6b';
+    ctx.fillStyle = '#184266';
     ctx.fillRect(0, 0, W, H);
-    if (img) {
+    if (chart) {
+      const [x0, y0] = toPx(chart.nTop, chart.e0);
+      const [x1, y1] = toPx(chart.nTop - chart.h, chart.e0 + chart.w);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(chart.canvas, x0, y0, x1 - x0, y1 - y0);
+    } else if (img) {
       const [x0, y0] = toPx(m.domain.nMax, m.domain.eMin);
       const [x1, y1] = toPx(m.domain.nMin, m.domain.eMax);
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0);
+    }
+    // The Kingswear light: its white sector (bearings 325°–331° of the light, so out from it towards 145°–151°) as
+    // a faint wedge between dashed limits, and the light as a chart marks one, a magenta flare.
+    const kl = kingswearLightLocal();
+    const [lx, ly] = toPx(kl.n, kl.e);
+    const reach = Math.min(1500 * k, W);
+    const ray = (b: number) => [lx + Math.sin(((b + 180) * Math.PI) / 180) * reach, ly - Math.cos(((b + 180) * Math.PI) / 180) * reach] as const;
+    const [a0, a1] = [ray(KINGSWEAR_LIGHT.white[0]), ray(KINGSWEAR_LIGHT.white[1])];
+    ctx.fillStyle = 'rgba(255,255,240,0.13)';
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(a0[0], a0[1]);
+    ctx.lineTo(a1[0], a1[1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,240,0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    for (const [ex, ey] of [a0, a1]) {
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#d23fd0';
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.quadraticCurveTo(lx - 7, ly + 3, lx - 6, ly + 8);
+    ctx.quadraticCurveTo(lx - 2, ly + 6, lx, ly);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0b1a24';
+    ctx.beginPath();
+    ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // The Daymark: a beacon tower.
+    const dm = DART_PROJECTION.toLocal(DAYMARK.lat, DAYMARK.lon);
+    const [dx, dy] = toPx(dm.n, dm.e);
+    ctx.fillStyle = '#efe9da';
+    ctx.strokeStyle = '#0b1a24';
+    ctx.beginPath();
+    ctx.moveTo(dx, dy - 6);
+    ctx.lineTo(dx + 3, dy + 2);
+    ctx.lineTo(dx - 3, dy + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // The yacht on the ship buoys (and her tender), and the buoys: yellow, as they are.
+    const poly = (r: readonly [number, number][]) => {
+      ctx.beginPath();
+      r.forEach(([e, n], i) => {
+        const [x, y] = toPx(n, e);
+        if (i) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      });
+      ctx.closePath();
+    };
+    ctx.fillStyle = '#f4f3ee';
+    ctx.lineWidth = 0.8;
+    for (const r of [yachtOutline(), tenderOutline()]) {
+      poly(r);
+      ctx.fill();
+      ctx.stroke();
+    }
+    for (const b of SHIP_BUOYS) {
+      const [x, y] = toPx(b.n, b.e);
+      ctx.fillStyle = '#f2c21b';
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(2, 1.5 * k), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
     }
     const f = data.features;
     if (f) {
@@ -141,6 +248,24 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         ctx.lineWidth = 1;
       }
     }
+    // The places' names, at the zooms they suit, with a dark halo so they read on land and water.
+    ctx.font = '600 10px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    for (const l of labels.current) {
+      if (!l.zooms.includes(zoom)) continue;
+      const [x0, y] = toPx(l.n, l.e);
+      if (x0 < -40 || x0 > W + 40 || y < -10 || y > H + 10) continue;
+      // Kept whole inside the map near its edges.
+      const half = ctx.measureText(l.text).width / 2 + 3;
+      const x = Math.min(W - half, Math.max(half, x0));
+      ctx.strokeStyle = 'rgba(8,20,28,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(l.text, x, y);
+      ctx.fillStyle = '#f2efe6';
+      ctx.fillText(l.text, x, y);
+    }
     // The other boats of the fleet, in their hull colours.
     for (const b of ui.fleet) {
       const [fx, fy] = toPx(b.n, b.e);
@@ -183,7 +308,7 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-  }, [ui.snapshot, ui.fleet, zoom, img, data, ctl]);
+  }, [ui.snapshot, ui.fleet, zoom, img, chart, data, ctl]);
 
   if (ui.dart.status !== 'loaded' || !data?.manifest) return null;
   // The scale, under the map rather than drawn on it (owner review, 5 Nov 2026: its figures ran onto the map):

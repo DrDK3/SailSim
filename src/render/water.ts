@@ -268,8 +268,17 @@ void main() {
   float rough = clamp(0.035 + 1.4 * sqrt(lostVar), 0.035, 0.45);
   vec3 viewDir = normalize(cameraPosition - vWorld);
   float facing = max(dot(n, viewDir), 0.0);
-  float fres = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
-  vec3 skyCol = skyLight(reflect(-viewDir, n), rough);
+  // Slopes too fine for the pixel to show still tilt the facets towards the eye: far out, a rough sea is no mirror
+  // at a glancing view. It reflects less of the sky, and a higher, bluer part of it, and shows more of the water's
+  // own colour; without this the open sea (seen much further than the river) fades into a milky band of reflected
+  // horizon (owner, 17 Nov 2026: "ensure the graphic quality for the sea matches the quality of the river").
+  // The amounts are for the eye (E).
+  float lostSlope = sqrt(lostVar);
+  float facingEff = clamp(facing + 0.9 * lostSlope, 0.0, 1.0);
+  float fres = 0.02 + 0.98 * pow(1.0 - facingEff, 5.0);
+  vec3 rdir = reflect(-viewDir, n);
+  rdir.y += 1.1 * lostSlope;
+  vec3 skyCol = skyLight(normalize(rdir), rough);
 #ifdef PLANAR_REFLECT
   // Calm water mirrors the shore, the boats and the sky; the waves' slope shifts the picture (more for nearer
   // water) so it wobbles and breaks up, and wind ripples, a puff, a swell or roughness the pixel cannot resolve

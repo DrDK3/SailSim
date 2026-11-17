@@ -20,6 +20,8 @@ import { structuresInWater } from '../env/structures';
 import { notABuilding } from '../env/notBuildings';
 import { shipBuoyStructures } from '../env/shipBuoys';
 import { isletStructures } from '../env/islets';
+import { shoreLightStructures } from '../env/shoreLights';
+import { coastRockStructures, coastRocks } from '../env/coastRocks';
 import { mooringSwingDeg } from './anchored';
 import { markPosition, placeCommitteeBoats } from '../course/course';
 
@@ -188,8 +190,10 @@ export function raceStructures(features: RaceFeatures | undefined, geo: DartGeo 
   // The main-stream ship buoys and the superyacht moored on them (src/sim/env/shipBuoys.ts), on the river data only.
   const buoys = geo ? shipBuoyStructures() : [];
   // The islets off the mouth (the Mew Stone, the Blackstones, …): rock the terrain leaves under the water (src/sim/env/islets.ts).
-  const islets = geo ? isletStructures() : [];
-  return [...(features.piers ?? []), ...wet, ...buoys, ...islets];
+  const islets = geo ? [...isletStructures(), ...shoreLightStructures()] : [];
+  // The rocky coast's faces south of the towns (src/sim/env/coastRocks.ts): solid at the foot of the cliffs.
+  const coast = geo ? coastRockStructures(coastRocks(geo, (n, e) => geo.bedElevation(n, e), features)) : [];
+  return [...(features.piers ?? []), ...wet, ...buoys, ...islets, ...coast];
 }
 
 export interface CreatedRace {

@@ -25,6 +25,8 @@ export interface WoodlandInput {
   onRoad?: (e: number, n: number) => boolean;
   /** The towns (garden trees and shrubs; no woodland by slope), as well as wherever houses stand. */
   towns?: readonly { eMin: number; eMax: number; nMin: number; nMax: number }[];
+  /** Bare ground where no tree grows: the cliffs' rock and the open coast (src/sim/env/coastRocks.ts). */
+  bare?: (e: number, n: number) => boolean;
 }
 
 const CHUNK = 400;
@@ -253,6 +255,7 @@ export class Woodland {
         const ground = G(x, y);
         if (!(ground > SHORE_ODN)) continue;
         if ((town || garden) && this.input.onRoad?.(x, y)) continue;
+        if (!town && this.input.bare?.(x, y)) continue;
         const isConifer = hash(e, n, 4) < (garden ? 0.18 : 0.1);
         let h = isConifer ? 12 + 9 * hash(e, n, 5) : 10 + 8 * hash(e, n, 5);
         // Crowns wider than the spacing in woodland, so the canopy closes over.

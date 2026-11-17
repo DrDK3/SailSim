@@ -358,6 +358,18 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 26.4 | Check the buoys against the chart | Homestone and Checkstone (red cans), Castle Ledge (green cone), the Mewstone and West Rock south cardinals, the two yellow 6-knot buoys, RDYC 1–4 in Start Bay | |
 | 26.5 | Compare the rocks' heights with what you know | The heights are estimates: tell us any that look wrong | |
 
+## 27. The western cliffs and rocks, the Kingswear light, the minimap, the sea (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 27.1 | Sail out past Dartmouth Castle and look along the west shore to Compass Cove and Blackstone Point | Grey slate faces at the water, higher where the ground is steep, with a dark weedy band and a black band at high water, boulders at their foot; the beach at Compass Cove left clear | |
+| 27.2 | Sail on south and look at the cliffs under Little Dartmouth and along Start Bay | Cliffs rising from the water to the heath on top; no trees standing on the rock or on the open heath | |
+| 27.3 | Sail gently into the rocks under a cliff | You meet them ("Contact with the rocks") and do not sail into the cliff | |
+| 27.4 | Find the Kingswear light on the eastern shore just inside the entrance, NNW of Kingswear Castle | A small white round tower with a dark lantern on a large rock at the water's edge, labelled; at night it shows white, on and off every 1.5 s, only when you are in its white sector (on the line in, bearing about 328°) | |
+| 27.5 | Open the minimap and zoom from 600 m out to 6.8 km | A sharp chart: deeper water darker, drying ground and foreshore, hill-shaded land, roads and buildings in the towns, the islets; the Kingswear light's white sector; the ship buoys and Mosaique; place names that do not overlap | |
+| 27.6 | Look out over Start Bay from the mouth, then up the river | The open sea keeps its colour and texture out to the horizon (no milky band), as the river does | |
+| 27.7 | Compare the cliffs' heights and the light's tower with what you know | The cliffs' heights and the rocks are estimates: tell us any that look wrong | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
