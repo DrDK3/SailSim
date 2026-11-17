@@ -91,7 +91,35 @@ With SwiftShader the CPU draws every pixel, so the throttle slows the drawing to
 stand-in is "Struggling" before and after**, which says nothing about real devices with any graphics hardware. The runs
 draw only 10–41 frames, so their statistics are rough.
 
-STANDIN_TABLES
+Stand-ins: laptop-x1 (1366 × 768, no throttle), laptop-x4 and chromebook-x6 (1366 × 768, CPU ×4 and ×6), tablet-x4 (1024 × 768, touch), phone-x6 (390 × 844, touch); all at pixel ratio 1.
+
+**Before (main, automatic quality off)**
+
+| Stand-in | Verdict | Frames | Frame median / p95 / longest (ms) | Main thread median / p95 / longest (ms) | First frame (ms) | Sailable (ms) | Start-up stalls over 100 ms (ms, cause) | Key to screen, median (ms) | Resolution at end |
+|---|---|---|---|---|---|---|---|---|---|
+| chromebook-x6 | Struggling | 12 | 3399.9 / 8416.3 / 8416.3 | 195.5 / 8383.8 / 8383.8 | 926 | 10993 | 7200 (shader compile), 1950 (unknown), 917 (shader compile) | 3435 | 0.75 |
+| laptop-x1 | Struggling | 17 | 2783.2 / 6483.1 / 6483.1 | 21.3 / 6436 / 6436 | 254 | 8787 | 5033 (shader compile), 2517 (unknown), 967 (shader compile), 6833 (unknown) | 2708 | 0.75 |
+| laptop-x4 | Struggling | 10 | 4416.5 / 9716.3 / 9716.3 | 117.8 / 9624.4 / 9624.4 | 563 | 10079 | 6416 (shader compile), 2050 (unknown), 1050 (shader compile) | 4098 | 0.75 |
+| phone-x6 | Struggling | 41 | 833.4 / 2733.2 / 4949.8 | 66.3 / 264.1 / 2625.6 | 885 | 10218 | 7116 (shader compile), 1583 (unknown), 633 (shader compile) | 2102 | 0.75 |
+| tablet-x4 | Struggling | 14 | 3116.6 / 6733.1 / 6733.1 | 109.9 / 6718.2 / 6718.2 | 532 | 10315 | 7066 (shader compile), 1883 (unknown), 833 (shader compile) | 3078 | 0.75 |
+
+**After (this branch, automatic quality off)**
+
+| Stand-in | Verdict | Frames | Frame median / p95 / longest (ms) | Main thread median / p95 / longest (ms) | First frame (ms) | Sailable (ms) | Start-up stalls over 100 ms (ms, cause) | Key to screen, median (ms) | Resolution at end |
+|---|---|---|---|---|---|---|---|---|---|
+| chromebook-x6 | Struggling | 11 | 3949.9 / 7033 / 7033 | 158.2 / 6233.5 / 6233.5 | 912 | 10962 | 3917 (shader compile), 4267 (unknown), 950 (unknown) | 6810 | 0.75 |
+| laptop-x1 | Struggling | 17 | 2816.5 / 5816.4 / 5816.4 | 22.5 / 5819.5 / 5819.5 | 269 | 9218 | 1667 (shader compile), 5000 (unknown), 817 (unknown), 600 (unknown), 5033 (unknown), 3764 (shader compile) | 2821 | 0.75 |
+| laptop-x4 | Struggling | 10 | 3769.8 / 8749.6 / 8749.6 | 131.6 / 3672 / 3672 | 546 | 9663 | 3250 (shader compile), 4133 (unknown), 983 (unknown) | 7522 | 0.75 |
+| phone-x6 | Struggling | 35 | 900 / 3549.9 / 5166.5 | 68.1 / 2822.9 / 5132.4 | 858 | 9858 | 3883 (shader compile), 3633 (unknown), 667 (unknown), 400 (unknown) | 3261 | 0.75 |
+| tablet-x4 | Struggling | 11 | 3733.1 / 9016.3 / 9016.3 | 124.5 / 4788.3 / 4788.3 | 508 | 9807 | 3067 (shader compile), 4683 (unknown), 917 (unknown) | 4984 | 0.75 |
+
+**After, automatic quality on**
+
+| Stand-in | Verdict | Frames | Frame median / p95 / longest (ms) | Main thread median / p95 / longest (ms) | First frame (ms) | Sailable (ms) | Start-up stalls over 100 ms (ms, cause) | Key to screen, median (ms) | Resolution at end |
+|---|---|---|---|---|---|---|---|---|---|
+| laptop-x4 | Struggling | 11 | 4762.7 / 7216.4 / 7216.4 | 125.5 / 5697.1 / 5697.1 | 641 | 12224 | 4600 (shader compile), 5550 (unknown) | 5029 | 0.75 |
+| phone-x6 | Struggling | 34 | 1266.6 / 2866.7 / 4799.9 | 71.2 / 1371.8 / 2569.8 | 976 | 10125 | 3467 (shader compile), 4100 (unknown), 667 (unknown), 417 (unknown) | 2127 | 0.68 |
+
 
 Read with care:
 
@@ -114,8 +142,6 @@ development build) under the DevTools profilers:
 | Longest frame (main thread) | 80,660 ms (one vessel appearing: `toDataURL`) | 1,975 ms (a new vessel's model and shaders) |
 | Median / 95th percentile main thread | 17.5 / 36.0 ms | 11.3 / 26.4 ms |
 | The device check's restart (scenario change) | 38,956 ms (horizon shader compile), then 44,836 ms (synchronous read-back) | 4,401 ms (new geometry uploaded for Start Bay) |
-
-PROFILE_THROTTLED
 
 **Measured but not fixed** (issues 211–213):
 
@@ -169,7 +195,16 @@ device check):
 
 ### 2.5 Physics budget
 
-PERF_LINE
+`npm run perf` (physics only, not drawing), before and after, on this machine with nothing else running:
+
+| Case | Before: mean / p99 / max (ms per 1/60 s frame) | After |
+|---|---|---|
+| 21 boats, physics only (River Dart, grounding, channel stream, shifty gusts) | 0.36 / 0.85 / 2.9 | 0.36 / 0.98 / 2.8 |
+| 1 + 20 AI boats, pre-start and start | 0.77 / 2.46 / 54.7 | 0.80 / 2.47 / 30.6 |
+| 1 + 20 AI boats, racing | 0.68 / 1.78 / 6.2 | 0.72 / 2.15 / 15.5 |
+
+No regression beyond run-to-run noise (no simulation code changed). The 99th percentiles stay under the 3 ms budget. The
+maxima are single frames (garbage collection, AI replanning) and vary between runs.
 
 ### 2.6 Not measured
 
@@ -266,7 +301,7 @@ So:
 - this week's course (2026-W47) is RDYC C1: the end-to-end test's first run, sent as JSON with a 2.2 MB limit, was
   refused as too large, which led to this design;
 - challenge links over 150,000 characters are not offered (the replay file does the same job);
-- re-sailing took 2.6 s (practice) and 19 s (C1) in Node, bit for bit.
+- re-sailing a run recorded in Node took 2.6 s (practice) and 19 s (C1) in Node, bit for bit.
 
 The RDYC courses take the "good" AI about 52 minutes: too long for a juniors' weekly course? That is an owner decision
 (issue 215; `season.json` can limit the rotation to practice courses).
@@ -282,23 +317,33 @@ The verifier (`src/app/clubVerify.ts`) checks, in order:
 4. The assist claim against the auto-trim flags in the inputs.
 5. Re-sails it.
 
-Chromium (the verifier's own engine, V8) must match bit for bit, and match the claimed time to 0.05 s. Other engines:
+Re-sailing a run recorded in a browser is not expected to match bit for bit in Node (below), so:
 
-- a bit-exact match is accepted;
-- a re-sailed finish within **2 s (E)** of the claim is accepted, with the re-sailed time;
-- anything else is listed separately as "recorded on another browser engine, not verified";
+- if every checkpoint matches, the claimed time must match to 0.05 s;
+- otherwise the run is accepted, **with the re-sailed time** (so changed inputs gain nothing), if its claim is within
+  **2 s (E)**;
+- beyond that, a Chromium run is rejected ("time not as claimed");
+- other engines' runs are listed separately as "recorded on another browser engine, not verified";
 - nothing is silently dropped.
 
 Plausibility flags (perfectly periodic presses, over 12 presses a second sustained, identical timing across runs) put a
 run in a separate list rather than reject it. **A low-stakes club table, not anti-cheat:** re-sailing proves a run was
 possible, not that a person sailed it.
 
-**Cross-engine results.** Firefox and WebKit are **not installed** in this environment, so whether their runs replay
-exactly could not be measured. The policy's branches are tested with runs perturbed late in the race; one gave a finish
-within the tolerance. Measured instead:
+**Cross-engine results (measured).**
 
-- a run **recorded in Chromium** in the end-to-end test re-sails in **Node** with every checkpoint matching (both V8);
-- Node re-sails Node runs bit for bit.
+- **Chromium → Node is not bit-exact.** The brief assumed Node and Chrome share an engine, so replays would match bit
+  for bit. They do not: the end-to-end test's genuine run (this week's RDYC C1, 3,176 s, recorded in Chromium with the
+  AI on the player's helm) did not match the checkpoints when re-sailed in Node. This agrees with criterion 11
+  (`tests/e2e/smoke.spec.ts`): Node's V8 and Chromium's V8 differ in the last bit of `Math.sin`, `Math.cos` and
+  `Math.pow`, about 1e-13 after 600 s. The first verifier, which required bit-exactness from Chromium, therefore
+  rejected a genuine run ("did-not-replay-exactly"). The policy above is the correction.
+- **The drift is tiny.** That run's re-sailed finish was **3,176.2 s, the same to the tenth as the claim** of 3,176.2 s.
+  So the 2 s tolerance is generous for Chromium.
+- **Node → Node** is bit-exact.
+- **Firefox and WebKit are not installed** in this environment, so their drift was not measured; their runs beyond the
+  tolerance are listed apart (issue 217).
+- The policy's branches are unit-tested with runs perturbed late in the race.
 
 Results the tests show:
 
