@@ -22,6 +22,7 @@
     "ai:polar": "tsx tools/ai-polar.ts",
     "ai:trials": "tsx tools/ai-trials.ts",
     "envelope": "tsx tools/envelope.ts",
+    "exploits": "tsx tools/exploit-search.ts",
     "check:secrets": "tsx tools/check-secrets.ts dist"
   },
   "dependencies": {
