@@ -953,7 +953,7 @@ export class SimController {
   private applyTutorialInput(): void {
     const t = this.tutorial;
     if (!t?.pendingInput) return;
-    this.sim.setInput(t.pendingInput);
+    this.sim.setInput(this.handOver(t.pendingInput));
     t.pendingInput = undefined;
   }
 
@@ -2164,8 +2164,20 @@ export class SimController {
 
   setInput(change: Partial<ControlInput>): void {
     if (this.replay) return; // playing back: the recording drives the boat
-    this.sim.setInput(change);
+    this.sim.setInput(this.handOver(change));
     this.publish(true);
+  }
+
+  /**
+   * Turning auto-trim off hands the sheet to the crew where auto-trim had it, as the sheet keys do (issue 201).
+   * Before, the sheet jumped back to the crew's last manual setting: taking over a sheet stalled or overpowered the
+   * boat at once. A change that sets the sheet itself keeps its own value. Control input only: no physics changes.
+   */
+  private handOver(change: Partial<ControlInput>): Partial<ControlInput> {
+    const out = { ...change };
+    if (change.autoMain === false && this.sim.input.autoMain && change.mainSheet === undefined) out.mainSheet = this.sim.currentSheet('main');
+    if (change.autoJib === false && this.sim.input.autoJib && change.jibSheet === undefined) out.jibSheet = this.sim.currentSheet('jib');
+    return out;
   }
 
   releaseSheets(): void {
