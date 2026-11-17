@@ -1,4 +1,5 @@
 import { gpuCardSeen, markGpuCardSeen, saveFix, type MaterialCheck, type MaterialFix } from '../render/gpuCheck';
+import { raceClub } from '../sim/race/class1866';
 import { signalCaption } from './signalCaption';
 import { ocsGuide, type OcsGuide } from './ocsGuide';
 import { helmAction, loadSteering, saveSteering, type SteeringMode } from './steering';
@@ -1298,8 +1299,11 @@ export class SimController {
   }
 
   /** The other boats of the fleet (for the 3D view). */
-  private fleetList(): { id: string; label: string; colour: number; ghost?: boolean }[] {
-    const list: { id: string; label: string; colour: number; ghost?: boolean }[] = (this.race?.session.fleet.boats ?? []).filter((b) => b.id !== 'you').map((b) => ({ id: b.id, label: b.sailNumber, colour: b.colour }));
+  private fleetList(): { id: string; label: string; colour: number; ghost?: boolean; club?: string }[] {
+    // A Class of 1866 boat is labelled with her club and sail number (RUYC · AI01).
+    const list: { id: string; label: string; colour: number; ghost?: boolean; club?: string }[] = (this.race?.session.fleet.boats ?? [])
+      .filter((b) => b.id !== 'you')
+      .map((b) => ({ id: b.id, label: raceClub(b.club) ? `${raceClub(b.club)!.short} · ${b.sailNumber}` : b.sailNumber, colour: b.colour, club: b.club }));
     if (this.ghost) list.push({ id: 'ghost', label: `Ghost: ${this.ghost.title}`, colour: 0xbfe3ff, ghost: true });
     return list;
   }

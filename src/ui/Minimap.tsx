@@ -4,7 +4,7 @@ import { ferryStates } from '../app/ferrySchedule';
 import { chartSpec, drawChart, minimapLabels } from './minimapChart';
 import { SHIP_BUOYS, tenderOutline, yachtOutline } from '../sim/env/shipBuoys';
 import { isletOutlines } from '../sim/env/islets';
-import { KINGSWEAR_LIGHT, kingswearLightLocal, kingswearRockOutline } from '../sim/env/shoreLights';
+import { SECTOR_LIGHTS, kingswearRockOutline, lightLocal } from '../sim/env/shoreLights';
 import { notABuilding } from '../sim/env/notBuildings';
 import { DAYMARK } from '../render/daymark';
 import { DART_PROJECTION } from '../sim/geo/projection';
@@ -84,46 +84,49 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0);
     }
-    // The Kingswear light: its sectors (bearings of the light from seaward, so drawn out from it the other way),
-    // green, white and red, as faint wedges between dashed limits, and the light as a chart marks one, a magenta flare.
-    const kl = kingswearLightLocal();
-    const [lx, ly] = toPx(kl.n, kl.e);
-    const reach = Math.min(1500 * k, W);
-    const ray = (b: number) => [lx + Math.sin(((b + 180) * Math.PI) / 180) * reach, ly - Math.cos(((b + 180) * Math.PI) / 180) * reach] as const;
+    // The sector lights (the Kingswear light; Bayard's Cove light, estimated): their sectors (bearings of the light
+    // from seaward, so drawn out from it the other way), green, white and red, as faint wedges between dashed limits,
+    // and each light as a chart marks one, a magenta flare.
     const SECTOR_FILL = { green: 'rgba(70,220,110,0.24)', white: 'rgba(255,255,240,0.15)', red: 'rgba(250,60,45,0.32)' } as const;
-    for (const sec of KINGSWEAR_LIGHT.sectors) {
-      const [a0, a1] = [ray(sec.from), ray(sec.to)];
-      ctx.fillStyle = SECTOR_FILL[sec.colour];
+    for (const light of SECTOR_LIGHTS) {
+      const kl = lightLocal(light);
+      const [lx, ly] = toPx(kl.n, kl.e);
+      const reach = Math.min(1500 * k, W);
+      const ray = (b: number) => [lx + Math.sin(((b + 180) * Math.PI) / 180) * reach, ly - Math.cos(((b + 180) * Math.PI) / 180) * reach] as const;
+      for (const sec of light.sectors) {
+        const [a0, a1] = [ray(sec.from), ray(sec.to)];
+        ctx.fillStyle = SECTOR_FILL[sec.colour];
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(a0[0], a0[1]);
+        ctx.lineTo(a1[0], a1[1]);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(255,255,240,0.55)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      for (const b of new Set(light.sectors.flatMap((x) => [x.from, x.to]))) {
+        const [ex, ey] = ray(b);
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#d23fd0';
       ctx.beginPath();
       ctx.moveTo(lx, ly);
-      ctx.lineTo(a0[0], a0[1]);
-      ctx.lineTo(a1[0], a1[1]);
-      ctx.closePath();
+      ctx.quadraticCurveTo(lx - 7, ly + 3, lx - 6, ly + 8);
+      ctx.quadraticCurveTo(lx - 2, ly + 6, lx, ly);
       ctx.fill();
-    }
-    ctx.strokeStyle = 'rgba(255,255,240,0.55)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
-    for (const b of new Set(KINGSWEAR_LIGHT.sectors.flatMap((x) => [x.from, x.to]))) {
-      const [ex, ey] = ray(b);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#0b1a24';
       ctx.beginPath();
-      ctx.moveTo(lx, ly);
-      ctx.lineTo(ex, ey);
+      ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
     }
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#d23fd0';
-    ctx.beginPath();
-    ctx.moveTo(lx, ly);
-    ctx.quadraticCurveTo(lx - 7, ly + 3, lx - 6, ly + 8);
-    ctx.quadraticCurveTo(lx - 2, ly + 6, lx, ly);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#0b1a24';
-    ctx.beginPath();
-    ctx.arc(lx, ly, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
     // The Daymark: a beacon tower.
     const dm = DART_PROJECTION.toLocal(DAYMARK.lat, DAYMARK.lon);
     const [dx, dy] = toPx(dm.n, dm.e);

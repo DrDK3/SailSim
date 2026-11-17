@@ -41,8 +41,11 @@ export function burgeeCanvas(): HTMLCanvasElement {
   return c;
 }
 
-/** A royal crown: jewelled band, rim of pearls, two arches meeting under an orb and cross. */
-function drawCrown(g: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+/**
+ * A royal crown: jewelled band, rim of pearls, two arches meeting under an orb and cross. Drawn in the current fill
+ * colour (gold), its cap and jewels in red.
+ */
+export function drawCrown(g: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
   const s = size / 100;
   const band = { x: cx - 42 * s, y: cy + 18 * s, w: 84 * s, h: 18 * s };
   g.fillRect(band.x, band.y, band.w, band.h);
@@ -148,7 +151,8 @@ export class Burgee {
   private readonly geo: THREE.PlaneGeometry;
   private readonly rest: Float32Array;
 
-  constructor() {
+  /** `map`: the flag's picture (default the Royal Dart Yacht Club's burgee). */
+  constructor(map?: THREE.Texture | null) {
     this.group.name = 'burgee';
     const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, BURGEE_STICK, 6), new THREE.MeshStandardMaterial({ color: 0x8b6a43, roughness: 0.6 }));
     stick.position.y = BURGEE_STICK / 2;
@@ -157,7 +161,7 @@ export class Burgee {
     this.geo.translate(BURGEE_FLY / 2, 0, 0);
     this.rest = Float32Array.from(this.geo.getAttribute('position').array as Float32Array);
     // Bunting is matt; a little below full albedo so the sunlit red stays red under the tone mapping.
-    this.flag = new THREE.Mesh(this.geo, new THREE.MeshStandardMaterial({ map: burgeeTexture(), color: 0xa8a8a8, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.9 }));
+    this.flag = new THREE.Mesh(this.geo, new THREE.MeshStandardMaterial({ map: map === undefined ? burgeeTexture() : map, color: 0xa8a8a8, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.9 }));
     this.flag.name = 'burgee-flag';
     this.flag.position.y = BURGEE_STICK - BURGEE_HOIST / 2 - 0.01;
     this.group.add(stick, this.flag);

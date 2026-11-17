@@ -18,10 +18,10 @@ import { ShipBuoysView } from './mosaique';
 import { MOSAIQUE, SHIP_BUOYS, mooredBerth } from '../sim/env/shipBuoys';
 import { buildIslets } from './islets';
 import { DAYMARK, buildDaymark } from './daymark';
-import { KingswearLightView } from './kingswearLight';
+import { BayardsLightView, KingswearLightView } from './kingswearLight';
 import { buildCoastRocks } from './coastRocks';
 import { coastRockCover, coastRocks, openCoast } from '../sim/env/coastRocks';
-import { kingswearLightLocal, kingswearRockTop } from '../sim/env/shoreLights';
+import { BAYARDS_COVE_LIGHT, kingswearLightLocal, kingswearRockTop, lightLocal } from '../sim/env/shoreLights';
 import { isletOutlines } from '../sim/env/islets';
 import { DART_PROJECTION } from '../sim/geo/projection';
 import { RailwayView } from './railway';
@@ -144,6 +144,8 @@ export class DartScene {
   private shipBuoys?: ShipBuoysView;
   /** The Kingswear light (src/render/kingswearLight.ts), and the daylight (0 night … 1 day) its light follows. */
   private kingswearLight?: KingswearLightView;
+  /** Bayard's Cove light (src/render/kingswearLight.ts). */
+  private bayardsLight?: BayardsLightView;
   private daylight = 1;
   /** Letters by lights for players who cannot tell red from green. */
   private lightLetters = false;
@@ -1123,6 +1125,15 @@ export class DartScene {
     klab.userData.fixedToLand = true;
     klab.userData.priority = 0;
     this.labels.add(klab);
+    // Bayard's Cove light on the Dartmouth shore (its place and sectors estimated: src/sim/env/shoreLights.ts).
+    const bc = lightLocal(BAYARDS_COVE_LIGHT);
+    this.bayardsLight = new BayardsLightView(this.groundAt(bc.e, bc.n));
+    this.fixed.add(this.bayardsLight.group);
+    const blab = makeLabel("Bayard's Cove light (Fl WRG 2s)", '#bff5c8');
+    blab.position.set(bc.e, this.groundAt(bc.e, bc.n) + 9, -bc.n);
+    blab.userData.fixedToLand = true;
+    blab.userData.priority = 0;
+    this.labels.add(blab);
     const lab = makeLabel('The Daymark', '#ffffff');
     lab.position.set(d.e, g + DAYMARK.height + 8, -d.n);
     lab.userData.fixedToLand = true;
@@ -1167,6 +1178,7 @@ export class DartScene {
     for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
     this.shipBuoys?.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time, u.camera);
     this.kingswearLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
+    this.bayardsLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;

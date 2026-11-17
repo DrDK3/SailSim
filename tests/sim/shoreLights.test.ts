@@ -8,8 +8,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { raceStructures } from '../../src/sim/race/setup';
-import { KINGSWEAR_LIGHT, inWhiteSector, kingswearLightBearing, kingswearLightLocal, kingswearRockTop, sectorColour, shoreLightStructures } from '../../src/sim/env/shoreLights';
-import { KingswearLightView } from '../../src/render/kingswearLight';
+import { BAYARDS_COVE_LIGHT, KINGSWEAR_LIGHT, SECTOR_LIGHTS, inWhiteSector, lightBearing, lightColour, lightLocal, lightOn, kingswearLightBearing, kingswearLightLocal, kingswearRockTop, sectorColour, shoreLightStructures } from '../../src/sim/env/shoreLights';
+import { BayardsLightView, KingswearLightView } from '../../src/render/kingswearLight';
 import { DART_PROJECTION } from '../../src/sim/geo/projection';
 import { loadDartApp } from './helpers';
 
@@ -123,3 +123,65 @@ describe('the Kingswear light', () => {
     expect(raceStructures(app.features as never, undefined).some((s) => s.name === rock!.name)).toBe(false);
   });
 });
+
+describe("Bayard's Cove light (position and sector limits estimated, at the owner's choice)", () => {
+  const b = lightLocal(BAYARDS_COVE_LIGHT);
+  const from = (brg: number, d: number) => {
+    const r = (brg * Math.PI) / 180;
+    return { e: b.e - Math.sin(r) * d, n: b.n - Math.cos(r) * d };
+  };
+
+  it('has its charted character, Fl WRG 2s 5m 6M, flashing 0.5 s in every 2 s, 5 m above high water', () => {
+    expect(BAYARDS_COVE_LIGHT.character).toBe('Fl WRG 2s 5m 6M');
+    expect(BAYARDS_COVE_LIGHT.period).toBe(2);
+    expect(BAYARDS_COVE_LIGHT.focalAboveMHW).toBe(5);
+    expect(lightOn(BAYARDS_COVE_LIGHT, 0.2)).toBe(true);
+    expect(lightOn(BAYARDS_COVE_LIGHT, 1.2)).toBe(false);
+    expect(lightOn(BAYARDS_COVE_LIGHT, 4.3)).toBe(true);
+    expect(SECTOR_LIGHTS).toContain(BAYARDS_COVE_LIGHT);
+  });
+
+  it('stands at the water\'s edge on the Dartmouth shore, west of the Kingswear light', () => {
+    expect(app.geo.bedElevation(b.n, b.e)).toBeGreaterThan(0.5);
+    expect(app.geo.bedElevation(b.n, b.e + 15)).toBeLessThan(-2);
+    expect(b.e).toBeLessThan(kingswearLightLocal().e - 400);
+  });
+
+  it('its white sector holds the 293° lead, with green and red edge to edge either side (red to port coming in)', () => {
+    const ss = BAYARDS_COVE_LIGHT.sectors;
+    expect(ss.map((x) => x.colour)).toEqual(['green', 'white', 'red']);
+    for (let i = 1; i < ss.length; i++) expect(ss[i]!.from).toBe(ss[i - 1]!.to);
+    expect(ss[1]!.from).toBeLessThan(293);
+    expect(ss[1]!.to).toBeGreaterThan(293);
+    const on = from(293, 700);
+    expect(lightColour(BAYARDS_COVE_LIGHT, on.e, on.n)).toBe('white');
+    expect(lightBearing(BAYARDS_COVE_LIGHT, on.e, on.n)).toBeCloseTo(293, 6);
+    // South of the line (to port heading in, 293°) the light bears more: red; north of it, green.
+    expect(lightColour(BAYARDS_COVE_LIGHT, on.e, on.n - 90)).toBe('red');
+    expect(lightColour(BAYARDS_COVE_LIGHT, on.e, on.n + 90)).toBe('green');
+    expect(lightColour(BAYARDS_COVE_LIGHT, from(320, 700).e, from(320, 700).n)).toBeUndefined();
+  });
+
+  it('the 293° lead runs over water from the narrows up to the light', () => {
+    for (let d = 60; d <= 900; d += 30) {
+      const p = from(293, d);
+      expect(app.geo.bedElevation(p.n, p.e)).toBeLessThan(0);
+    }
+  });
+
+  it('the view flashes the colour of the camera\'s sector at night', () => {
+    const v = new BayardsLightView(app.geo.bedElevation(b.n, b.e));
+    const cam = new THREE.PerspectiveCamera();
+    for (const [brg, c] of [[286, 'green'], [293, 'white'], [300, 'red']] as const) {
+      const p = from(brg, 600);
+      cam.position.set(p.e, 4, -p.n);
+      v.update(cam, 0.2, true);
+      expect(v.showingColour).toBe(c);
+      v.update(cam, 1.0, true);
+      expect(v.showing).toBe(false);
+      v.update(cam, 0.2, false);
+      expect(v.showing).toBe(false);
+    }
+  });
+});
+

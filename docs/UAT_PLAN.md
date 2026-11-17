@@ -370,6 +370,16 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 27.6 | Look out over Start Bay from the mouth, then up the river | The open sea keeps its colour and texture out to the horizon (no milky band), as the river does | |
 | 27.7 | Compare the cliffs' heights and the light's tower with what you know | The cliffs' heights and the rocks are estimates: tell us any that look wrong | |
 
+## 28. Bayard's Cove light; the Class of 1866 (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 28.1 | At night (or with the time set to night) come in past the Kingswear light and turn up the harbour towards Bayard's Cove | Bayard's Cove light on the Dartmouth shore by the fort, flashing every 2 s: white on the lead (about 293°), green to the north of it, red to the south; nothing outside. Its position and limits are estimates: tell us where it really stands and its charted sectors | |
+| 28.2 | Open the minimap near the entrance | The sectors of both lights, the Kingswear light's and Bayard's Cove's | |
+| 28.3 | Start a race with four or more AI boats | The fleet is the Class of 1866: Royal Ulster (navy hull), KDY (red hull), Boston (white hull, blue stripe), Atlantic (white hull, red stripe), labelled "RUYC · AI01" and so on; the results list them as RUYC 1, KDY 1, BYC 1, AYC 1 | |
+| 28.4 | Look at an AI boat's masthead (or zoom in on her) | Her club's burgee: Royal Ulster's blue with the red hand on a white shield under a crown; KDY's white with three red stars under a crown; Boston's white with a blue and red cross and a white star; Atlantic's white with a red "A". Your own boat flies the Royal Dart's | |
+| 28.5 | Compare the hull colours with the clubs' colours as you know them | Which colour goes on the topsides, stripe and boot top is our choice: tell us if a club would look different | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
