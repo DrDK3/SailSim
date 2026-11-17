@@ -39,6 +39,7 @@ test('submit → verify → publish → shown → remove → gone, with no perso
   const name = await page.evaluate(() => window.__squib!.controller.social.name);
 
   const out1 = verify();
+  console.log(`[club verifier] ${out1.trim()}`);
   expect(out1).toMatch(/: accepted/);
   // The table is a static file on the site now.
   const week = await page.evaluate(() => window.__squib!.controller.social.ui().weekly.week);
