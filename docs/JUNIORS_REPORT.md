@@ -191,11 +191,19 @@ Under software rendering, the measured costs are triangles and fill, not these.
 
 ### 2.4 Budgets for each preset (software rendering; relative only)
 
-GFX_BUDGETS
+| Preset | Views measured | Draw calls | Triangles (M) | Texture memory (MB, E) | Shader programs | Render time, SwiftShader (s) |
+|---|---|---|---|---|---|---|
+| Smooth | 8 (chase-river, helm-river, sail-close, wake-stern, chase-sea, golden-river, backlit-sails, drone-harbour) | 132–677 | 0.92–3.46 | 31.5–39.3 | 59–63 | 0.6–3.5 |
+| Balanced | 4 (chase-river, helm-river, sail-close, wake-stern) | 234–1543 | 2.61–11.54 | 39.3–39.3 | 103–110 | 3.8–8.1 |
+| Ultra | 1 (chase-river) | not measured (†) | not measured (†) | 39.3–39.3 | 70–70 | 14.2–14.2 |
+
+(†) Ultra draws through a post-processing pass (ambient occlusion): its final full-screen draw resets three.js's counters, so the tool read 1 draw call. Not measured; an Ultra frame draws at least Balanced's scene plus the reflection and post passes.
+
+Balanced was measured on 4 views and Ultra on 1: their runs (minutes a frame under software rendering) were cut short to free the machine for the tests.
 
 Texture memory is an estimate: width × height × 4 bytes, × 4/3 with mipmaps, over the textures on the scene's
 materials. Render time is the time to submit and draw one frame and read a pixel back, under SwiftShader at 1280 × 720.
-On a GPU it would be one or two orders of magnitude lower. Budgets proposed for real devices (E, to be checked with the
+On a graphics card it is expected to be far lower; that was not measured. Budgets proposed for real devices (E, to be checked with the
 device check):
 
 | Preset | Draw calls | Triangles | Texture memory | Render time |
@@ -234,7 +242,7 @@ made about a graphics card's picture.
 
 **Preset sheets** (the eight fixed views of `tools/gfx-bench.mjs`, left to right, top to bottom: chase-river, helm-river,
 sail-close, wake-stern, chase-sea, golden-river, backlit-sails, drone-harbour; 1280 × 720 renders reduced for the page).
-Balanced has the first four views and Ultra none: their benchmarks were stopped to free the machine for the tests (§2.4).
+Balanced has the first four views; Ultra's single measured view (chase-river) is not shown as a sheet. Their benchmarks were cut short to free the machine for the tests (§2.4).
 
 **Smooth, before (no haze, no spray)** (chase-river, helm-river, sail-close, wake-stern, chase-sea, golden-river, backlit-sails, drone-harbour):
 
