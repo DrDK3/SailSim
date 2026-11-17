@@ -17,7 +17,7 @@ import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
 import { hasStoredLevel } from '../app/level';
 import { Confirm } from './Confirm';
 import { activityOf } from './activity';
-import { ActivityIcon, IconHome } from './icons';
+import { ActivityIcon } from './icons';
 import type { CameraMode } from '../render/scene';
 
 /** Panels opened on demand load their code when first opened (docs/PERFORMANCE.md). */
@@ -107,7 +107,8 @@ export function App({ ctl }: { ctl: SimController }) {
     }
   };
   // The main menu (owner, 14 Nov 2026: "a main menu option that allows the player to return to the top menu
-  // quickly"): the hub, from the toolbar's first button or the Home key. The sail waits while it is open and goes
+  // quickly"; 16 Nov: "please remove the home button"): the hub, from the activity button (first on the toolbar) or the
+  // Home key. The sail waits while it is open and goes
   // on as it was when it closes (a new activity starts itself).
   const hubPaused = useRef(false);
   const openHub = () => {
@@ -252,12 +253,8 @@ export function App({ ctl }: { ctl: SimController }) {
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
         <div className="tb-items">
-          {/* Back to the main menu at once; what you are doing, and the way to the other experiences. */}
+          {/* What you are doing, and the way back to the main menu (the other experiences). */}
           <div className="tb-group">
-            <button className="tb-home" onClick={openHub} aria-haspopup="dialog" aria-label="Main menu" title="Main menu: learn, sail freely, race or choose a scenario (Home)" data-testid="main-menu">
-              <IconHome />
-              <span className="tb-label">Main menu</span>
-            </button>
             <button
               className="activity-chip"
               data-kind={activity.kind}

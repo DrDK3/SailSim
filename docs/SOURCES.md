@@ -333,3 +333,16 @@ The owner's photographs of Mosaique (supplied in the conversation; not committed
 
 **Not established:** the buoys' positions (placed from M1–M3: src/sim/env/shipBuoys.ts); which pair Mosaique lies on and which way her bow points; her heights, deck layout and colours beyond what the photographs show; whether her hull is the darker blue of the older photographs or the lighter blue of the later ones (a mid blue is drawn).
 
+## The mouth of the Dart and Start Bay (16–17 Nov 2026)
+
+The owner's chart pictures (a chart app's view of the river and Start Bay; Admiralty chart 2253) and photographs (supplied in the conversation; not committed: stock pictures with watermarks among them).
+
+| ID | Source | URL | Date | Access | What it gives |
+|---|---|---|---|---|---|
+| D1 | Historic England, list entry 1108546, "The Tower" (the Daymark), Kingswear; britishlistedbuildings 101108546 | https://historicengland.org.uk/listing/the-list/list-entry/1108546 | listed 1949 | Search excerpts only | Grade II; National Grid Reference SX 90334 50283 (converted with pyproj: 50.34223 N, 3.54252 W) |
+| D2 | Wikipedia, "Kingswear Daymark"; Explore Devon; Greyarrows forum | https://en.wikipedia.org/wiki/Kingswear_Daymark | n.d. | Search excerpts only | A 24 m (80 ft) octagonal limestone day beacon, 1864, hollow on tall arched legs, built by the Dartmouth Harbour Commissioners as a guide to the entrance, in a field above Froward Point |
+| V17 | The owner's chart pictures: the river and Start Bay with its buoys and marks; Admiralty chart 2253 (thumbnail) | — | 16 Nov 2026 | Owner's files | The marks' places and the islets off the mouth, against which the sim's were checked |
+| V18 | The owner's photographs of the mouth: the Daymark and the Mew Stone from the west; Dartmouth Castle and St Petrox from the air; the view out of the mouth; the cliffs and rocks on the west side looking to the Daymark; the estuary from high above | — | 16–17 Nov 2026 | Owner's files | The islets standing out of the water, the Daymark on the skyline, the castles, the cliffs |
+
+**Not established:** the islets' heights (OUTSTANDING 182); the Kingswear light's position (185). The islets' outlines are OpenStreetMap's (G1); the LIDAR (G2) has no survey there.
+

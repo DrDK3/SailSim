@@ -16,6 +16,10 @@ import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
 import { ClubEnsign } from './clubEnsign';
 import { ShipBuoysView } from './mosaique';
 import { MOSAIQUE, SHIP_BUOYS, mooredBerth } from '../sim/env/shipBuoys';
+import { buildIslets } from './islets';
+import { DAYMARK, buildDaymark } from './daymark';
+import { isletOutlines } from '../sim/env/islets';
+import { DART_PROJECTION } from '../sim/geo/projection';
 import { RailwayView } from './railway';
 import { dartBerths, type RiverTraffic } from '../sim/env/traffic';
 import { makeLabel } from './labels';
@@ -208,6 +212,7 @@ export class DartScene {
       this.buildMarks(f);
       this.buildLabels(f);
       this.buildShipBuoys();
+      this.buildMouth();
     }
     if (input.roads && this.roadNet) {
       const net = this.roadNet;
@@ -1052,6 +1057,37 @@ export class DartScene {
       lab.userData.priority = 0;
       this.labels.add(lab);
     }
+  }
+
+  /**
+   * The mouth of the Dart (owner, 16–17 Nov 2026): the islets and rocks off it (the Mew Stone, Shag Stone, Shooter
+   * Rock, Eastern Black Rock, the Western Blackstone, the Dancing Beggars: src/sim/env/islets.ts) and the Daymark on
+   * the hill above Froward Point, with labels for the larger ones.
+   */
+  private buildMouth(): void {
+    const outlines = isletOutlines();
+    this.fixed.add(buildIslets(outlines));
+    const labelled = new Set(['Mew Stone', 'Eastern Black Rock', 'Western Blackstone', 'Shag Stone']);
+    const done = new Set<string>();
+    for (const o of outlines) {
+      if (!labelled.has(o.name) || done.has(o.name)) continue;
+      done.add(o.name);
+      const ce = o.ring.reduce((a, p) => a + p[0], 0) / o.ring.length;
+      const cn = o.ring.reduce((a, p) => a + p[1], 0) / o.ring.length;
+      const lab = makeLabel(o.name, '#ffffff');
+      lab.position.set(ce, o.height + 8, -cn);
+      lab.userData.fixedToLand = true;
+      lab.userData.priority = 1;
+      this.labels.add(lab);
+    }
+    const d = DART_PROJECTION.toLocal(DAYMARK.lat, DAYMARK.lon);
+    const g = this.groundAt(d.e, d.n);
+    this.fixed.add(buildDaymark(d.e, d.n, g));
+    const lab = makeLabel('The Daymark', '#ffffff');
+    lab.position.set(d.e, g + DAYMARK.height + 8, -d.n);
+    lab.userData.fixedToLand = true;
+    lab.userData.priority = 1;
+    this.labels.add(lab);
   }
 
   /** MS1–MS5 and Mosaique on MS1–MS2, with their labels (positions: src/sim/env/shipBuoys.ts, estimates). */

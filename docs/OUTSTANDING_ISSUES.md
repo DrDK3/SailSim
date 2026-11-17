@@ -185,4 +185,9 @@ Updated: 13 Nov 2026 (two buildings in the river by the Boatfloat not drawn; car
 | 179 | MS1 is now drawn, but river course R2 still does not use it as a mark: its position is an estimate (A3) | R2 cannot be raced as written | MS1's position |
 | 180 | The club's ensign is drawn from the owner's drawing with a simplified crown | — | — |
 | 181 | Some of the harbour's statements (M2, M3, M5) are from search excerpts: the pages themselves could not be fetched here | — | Read the pages |
+| 182 | The islets' heights are estimates (the Mew Stone 30 m, Eastern Black Rock 15 m, Shag Stone 10 m, Shooter Rock and the Western Blackstone 6 m, the Dancing Beggars 3 m): the LIDAR has no survey off the shore and no chart height could be read here | They may look too high or too low | Admiralty chart 2253's heights, or the owner's eye (UAT 26.5) |
+| 183 | The islets' shapes are illustrative (OpenStreetMap's outlines raised into rock with steep sides and a broken top); their rocky ledges and the drying rocks round them (the Homestone, Castle Ledge, the Checkstone, West Rock) are not drawn | Recognisable; not the real profile | Photographs from more sides; the chart's drying heights |
+| 184 | The western side of the mouth (Compass Cove, Blackstone Point) and the cliffs under the Kingswear headland are drawn from the LIDAR terrain only: they read as a smooth slope and a grey shelf at the water, not the cliffs and jagged foreshore rocks of the photographs | Less dramatic than the real coast | A cliff and foreshore treatment of the terrain (OpenStreetMap maps the cliffs and bare rock there) |
+| 185 | The Kingswear light (Iso WRG 3s) and its white tower are not drawn: no position could be read here | — | Its position (Admiralty List of Lights, or Dart Harbour) |
+| 186 | The minimap's picture was made before the islets were added and does not show them | — | Remake the minimap image |
 

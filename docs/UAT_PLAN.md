@@ -339,7 +339,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
-| 25.1 | While sailing, click **Main menu** (the house, first on the toolbar) | The main menu opens at once (Learn to sail, Free sailing, Race against AI, Scenarios); the boat stops | |
+| 25.1 | While sailing, click the activity button (first on the toolbar; there is no house button now, 16 Nov) | The main menu opens at once (Learn to sail, Free sailing, Race against AI, Scenarios); the boat stops | |
 | 25.2 | Close it (× or Escape) | Back on the water, sailing on from where you were | |
 | 25.3 | Press the Home key | The main menu opens the same way | |
 | 25.4 | Look along the toolbar | **Options** (was Scenario) opens the boat, wind, tide, place, course and fleet panel; **Settings ▾** (was More) holds lessons, what is shown, sound and "All settings…" | |
@@ -347,6 +347,16 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 25.6 | Look at Mosaique on MS1 and MS2, all round | A blue-hulled 50 m superyacht moored bow and stern to the two buoys; nothing flying at her masthead; the club's defaced red ensign (crown and arrow in the fly) flying from a staff off her stern by day; her tender alongside; recognisable from your photographs | |
 | 25.7 | Sail gently into her side, into a buoy, and into one of her mooring lines between her and a buoy | You meet them ("Contact with the superyacht Mosaique", "… ship buoy MS…", "… Mosaique's mooring line") and do not pass through; the mooring line stops you without damage | |
 | 25.8 | Look at the yacht club's flagstaff | The same ensign, the arrow pointing to the hoist | |
+
+## 26. The mouth of the Dart and Start Bay (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 26.1 | Sail out of the mouth past Castle Ledge and look east, with place labels (L) on | The Mew Stone, a rocky islet off Inner Froward Point, with Shag Stone and Shooter Rock beside it; Eastern Black Rock further east; the Western Blackstone off Blackstone Point under the western cliffs | |
+| 26.2 | Look up at the hill above Froward Point | The Daymark: a tall pale stone tower on arched legs on the skyline, labelled | |
+| 26.3 | Sail gently into the Mew Stone | You meet it ("Contact with the Mew Stone") and do not pass through | |
+| 26.4 | Check the buoys against the chart | Homestone and Checkstone (red cans), Castle Ledge (green cone), the Mewstone and West Rock south cardinals, the two yellow 6-knot buoys, RDYC 1–4 in Start Bay | |
+| 26.5 | Compare the rocks' heights with what you know | The heights are estimates: tell us any that look wrong | |
 
 ## Accepting the build
 

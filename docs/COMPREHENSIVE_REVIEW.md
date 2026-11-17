@@ -1716,3 +1716,17 @@ The owner: "the squib should not be able to go through the super yacht mooring l
 
 The determinism hash is unchanged (`11824f89f479d0f4`). **Checked in software rendering only.**
 
+## 23. The mouth of the Dart and Start Bay; the home button (16–17 Nov 2026)
+
+The owner: "please remove the home button. Please review the mouth of the river dart area and start bay (images attached) including buoys, islands etc.", with a chart of the river and Start Bay, Admiralty chart 2253, and photographs of the Daymark and the Mew Stone from the west, Dartmouth Castle and St Petrox from the air, the view out of the mouth, the rocks under the western cliffs, and the estuary from high above.
+
+**The review** (renders from the photographs' viewpoints, software rendering): the buoys were all there (the club's list of marks, with Homestone, Checkstone, Castle Ledge, the Mewstone and West Rock cardinals, the 6-knot buoys and RDYC 1–4, is drawn at all times); the coastline's plan and the castles matched; **the islets were missing** (the Mew Stone, Shag Stone, Shooter Rock, Eastern Black Rock, the Western Blackstone, the Dancing Beggars: the LIDAR terrain has no survey off the shore, so the water covered them, and a boat could sail over them); **the Daymark was missing**; the cliffs and foreshore rocks on the western side read as a flat grey shelf rather than the cliffs of the photographs (left for now: OUTSTANDING 184).
+
+| What | Built | Files | Checked by |
+|---|---|---|---|
+| **No home button** | The house button is gone from the toolbar; the activity button (first on it) and the Home key still open the main menu | `src/ui/App.tsx`, `src/ui/icons.tsx`, `src/ui/styles.css` | `tests/e2e/ux.spec.ts` (eight toolbar buttons; the activity button and Home open the main menu, the sail waits) |
+| **The islets** | Nine outlines from OpenStreetMap (the Mew Stone about 120 m by 100 m, Shag Stone, Shooter Rock, Eastern Black Rock, the Western Blackstone, the Dancing Beggars) raised into craggy rock: steep from the water, ridges and gullies, a dark weedy band where the tide covers them, grey rock with lichen above, a little green and the birds' lime on the Mew Stone. Solid to the boats (fixed rock); labelled. **Heights are estimates** (no survey or chart height could be read): the Mew Stone 30 m, Eastern Black Rock 15 m, Shag Stone 10 m, Shooter Rock and the Western Blackstone 6 m, the Dancing Beggars 3 m | `src/sim/env/islets.ts`, `src/render/islets.ts`, `src/sim/race/setup.ts`, `src/render/dart.ts` | `tests/sim/islets.test.ts` (all there, where the water was, solid, no mark on one, a Squib sailed at the Mew Stone meets it and stays out); `tests/render/islets.test.ts` |
+| **The Daymark** | The Dartmouth Harbour Commissioners' day beacon of 1864 at its listed grid reference (SX 90334 50283): a hollow octagonal limestone tower 24 m high on arched legs, tapering to a point, on the hill above Froward Point; labelled | `src/render/daymark.ts`, `src/render/dart.ts` | `tests/sim/islets.test.ts` (on the hill), `tests/render/islets.test.ts` (24 m, octagonal); renders from the photographs' viewpoints |
+
+The determinism hash is unchanged (`11824f89f479d0f4`). **Checked in software rendering only.**
+
