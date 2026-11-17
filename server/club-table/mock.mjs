@@ -10,7 +10,7 @@ import { handle, memoryStore } from './worker.js';
 const port = Number(process.argv[2] ?? 8787);
 const env = { STORE: memoryStore(), ADMIN_TOKEN: process.argv[3] ?? process.env.CLUB_ADMIN_TOKEN ?? 'local-admin-token', ALLOWED_ORIGIN: '*' };
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const body = Buffer.concat(chunks);
@@ -22,4 +22,7 @@ createServer(async (req, res) => {
   const r = await handle(request, env);
   res.writeHead(r.status, Object.fromEntries(r.headers));
   res.end(Buffer.from(await r.arrayBuffer()));
-}).listen(port, () => console.log(`club-table mock on http://localhost:${port} (admin token: ${env.ADMIN_TOKEN})`));
+});
+// Long enough for the verifier, which re-sails a run (up to about 20 s) between requests on one connection.
+server.keepAliveTimeout = 120_000;
+server.listen(port, () => console.log(`club-table mock on http://localhost:${port} (admin token: ${env.ADMIN_TOKEN})`));

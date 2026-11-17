@@ -65,6 +65,20 @@ if (!base || !token) {
   process.exit(0);
 }
 const auth = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+/**
+ * fetch with three tries on a network error (not on an HTTP error): re-sailing a long run takes tens of seconds, and a
+ * kept-alive connection the server has closed meanwhile fails once ("fetch failed").
+ */
+async function fetch(url: string, init?: RequestInit): Promise<Response> {
+  for (let i = 0; ; i++) {
+    try {
+      return await globalThis.fetch(url, init);
+    } catch (e) {
+      if (i >= 2) throw e;
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+}
 async function list<T>(prefix: string): Promise<{ key: string; value: T }[]> {
   const r = await fetch(`${base}/admin/list?prefix=${encodeURIComponent(prefix)}`, { headers: auth });
   if (!r.ok) throw new Error(`list ${prefix}: ${r.status}`);
