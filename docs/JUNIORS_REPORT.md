@@ -165,7 +165,18 @@ development build) under the DevTools profilers:
 - **haze from the sky's colour** (a few vector operations a frame on the CPU);
 - **bow spray** (point sprites, only when the bow slams at speed).
 
-GFX_SMOOTH
+| View | Before: render / submit (ms) | After: render / submit (ms) | Draw calls (before → after) | Triangles (M) |
+|---|---|---|---|---|
+| chase-river | 2388 / 11 | 2345 / 8.9 | 353 → 353 | 2.79 → 2.79 |
+| helm-river | 2623 / 9.3 | 2483 / 7.7 | 374 → 374 | 3.02 → 3.02 |
+| sail-close | 3687 / 10.9 | 3454 / 12.6 | 677 → 677 | 3.46 → 3.46 |
+| wake-stern | 688 / 9.8 | 630 / 9.6 | 132 → 132 | 0.92 → 0.92 |
+| chase-sea | 613 / 9.2 | 614 / 8.2 | 132 → 132 | 0.92 → 0.92 |
+| golden-river | 3423 / 10.7 | 2427 / 8.2 | 338 → 338 | 2.63 → 2.63 |
+| backlit-sails | 2864 / 8.3 | 2916 / 8.9 | 379 → 379 | 3.23 → 3.23 |
+| drone-harbour | 2005 / 9.9 | 1812 / 8.9 | 388 → 388 | 3.12 → 3.12 |
+
+Total over the eight views: 18289 ms before, 16683 ms after. Draw calls and triangles are the same: haze is a fog colour, and spray is one point-sprite draw that is empty until the bow slams. The render-time differences are within this machine's run-to-run noise (the golden-river view moved by 1 s in a direction the change cannot explain). **Kept**, on the evidence that they cost nothing measurable here. Whether they make Smooth look better is the owner's judgement: compare the before and after sheets in §3.
 
 **Not evaluated this round** (left for a round with a GPU to measure on):
 
@@ -464,4 +475,19 @@ Under 18s:
 
 ## 7. Tests and checks run
 
-E2E_SUMMARY
+| Check | Result |
+|---|---|
+| `npm run typecheck`, `npm run lint` | Clean |
+| Unit tests (`npx vitest run`) | 104 files, 695 tests, all pass. New this round: device check, dynamic resolution (including a simulated 5-minute run), gamepad (the controller with a mocked `navigator.getGamepads`), cues (14), word-list names, challenges, like-for-like bests, the assist record, weekly course (BST and GMT boundaries), weekly targets (practice and RDYC C1 with the River Dart data), club table endpoint and verifier (10) |
+| The endpoint's own tests | In `tests/sim/clubTable.test.ts`: size limit, header shapes, word-list names, rate limits, no IP or user agent stored, token hashed, admin routes protected |
+| `npm run envelope`, `npm run golden:update` | Identical before and after (§2.5) |
+| `npm run perf` | No regression (§2.5) |
+| E2E, `tests/e2e/juniors.spec.ts` | Device check end to end with JSON export; game controller (mocked Gamepad API); touch sizes on a tablet layout; axe-core (WCAG 2.2 A/AA rules) on the device check, the Settings panel and the weekly card: no violations. All pass |
+| E2E, `tests/e2e/juniorsCues.spec.ts` | Every cue at Smooth, Balanced and Ultra; gust outlines removable and off in races. Pass |
+| E2E, `tests/e2e/juniorsSocial.spec.ts` | Targets missing, stale, then published, and a target ghost raced; a challenge link round-trips into a second browser, accepted, raced, compared; a forged name refused. Pass. The round-trip timed out once with two workers on the overloaded machine (a slow-renderer timeout: it passes alone in 2.1 min, and now waits for the friend's River Dart data) |
+| E2E, `tests/e2e/juniorsClub.spec.ts` (against the local mock, a build with the flag on) | Submit → verify → publish → shown in the app → remove → gone, with no manual step. Pass on the third run. First run: a real defect (this week's RDYC C1 run was too large for a JSON body), fixed by sending the replay as compressed bytes. Second: a real defect in the verifier (a kept-alive connection closed during a 20 s re-sail), fixed with retries. Third: the verifier rejected a genuine Chromium run as not bit-exact in Node, a wrong assumption in the brief, fixed by the tolerance policy (§4.4) |
+| E2E, `tests/e2e/graphics.spec.ts` (updated for "Smooth") | Pass. It timed out once at 180 s under load (two software-rendering workers plus a benchmark) and passed when re-run alone |
+| The rest of the e2e suite | **Not re-run in full here** (about 80 tests, 20–45 minutes per CI shard under software rendering). CI runs it on the branch's pushes; check the PR's checks. `e2e/daylight.spec.ts` is known to be intermittently flaky (issue 202 on the training branch) |
+| Firefox and WebKit engines | **Not present** in this environment (only Chromium is installed); not run |
+
+No listening test was done; no real device, GPU, game controller or tablet was used.
