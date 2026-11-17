@@ -696,7 +696,7 @@ export class SimController {
     coach.update({
       t, n: s.n, e: s.e, stw: s.stw, vmg: s.vmg, tws: s.tws, twd: s.twd, twa: s.twa, heel: s.heel,
       rudderFrac: s.rudder / this.sim.params.rudder.maxAngle,
-      mainLuff: s.forces.main.luff, mainStall: s.forces.main.stall, autoMain: s.input.autoMain, flatten: s.input.flatten ?? 0,
+      mainLuff: s.forces.main.luff, mainStall: s.forces.main.stall, mainSheet: this.sim.currentSheet('main'), autoMain: s.input.autoMain, flatten: s.input.flatten ?? 0,
       race: { phase: st.phase, toStart: session.committee.startTime - t, ocs: st.ocs, mark: leg?.target, penaltyOwed: session.owesPenalty('you') },
     });
     const done = st.phase === 'finished' || session.outOfRace('you') || session.committee.finished || session.committee.abandoned;
@@ -1035,8 +1035,8 @@ export class SimController {
       sogKn: s.sog / KN,
       heelDeg: Math.abs(s.heel) * R2D,
       grounded: s.grounded,
-      main: sailState(s.forces.main),
-      jib: sailState(s.forces.jib),
+      main: sailState(s.forces.main, s.boomMain),
+      jib: sailState(s.forces.jib, s.boomJib),
       autoMain: s.input.autoMain,
       autoJib: s.input.autoJib,
       // The harbour's 6 kn limit runs from Castle Ledge buoy (n −1651 here) up the river (harbour guide).
@@ -1090,7 +1090,7 @@ export class SimController {
       twaDeg: Math.abs(s.twa) * R2D,
       stwKn: s.stw / KN,
       mainSide: s.mainSide,
-      main: sailState(s.forces.main),
+      main: sailState(s.forces.main, s.boomMain),
       autoMain: s.input.autoMain,
       autoCrew: s.input.autoCrew,
       crewHike: s.input.crewHike,
@@ -1099,7 +1099,7 @@ export class SimController {
       sogKn: s.sog / KN,
       vmgKn: s.vmg / KN,
       awsKn: s.aws / KN,
-      jib: sailState(s.forces.jib),
+      jib: sailState(s.forces.jib, s.boomJib),
       autoJib: s.input.autoJib,
       targetDistM: tg ? Math.hypot(tg.n - s.n, tg.e - s.e) : undefined,
       targetBearingRelDeg: tg ? ((((Math.atan2(tg.e - s.e, tg.n - s.n) - s.heading) * R2D) % 360) + 540) % 360 - 180 : undefined,

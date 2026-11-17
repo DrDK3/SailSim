@@ -132,8 +132,8 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
   const sheet = ctl.sim.currentSheet(sail);
   const angle = sail === 'main' ? s.boomMain : s.boomJib;
   const keys = sail === 'main' ? { trim: 'W', ease: 'S' } : { trim: 'E', ease: 'Q' };
-  const state = sailState(f);
-  const st = sailAdvice(state, keys);
+  const state = sailState(f, angle);
+  const st = sailAdvice(state, keys, { sail, sheet, auto });
   const ok = st.cls === 'good';
   const name = sail === 'main' ? 'Main' : 'Jib';
   return (
@@ -158,7 +158,7 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
         </label>
       </div>
       <div className="mod-row">
-        <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`} hint={state === 'stalled'}>Ease <Key k={keys.ease} /></Hold>
+        <Hold ctl={ctl} action={sail === 'main' ? 'mainOut' : 'jibOut'} label={`Ease ${sail} (${keys.ease})`} hint={st.action === 'ease'}>Ease <Key k={keys.ease} /></Hold>
         <div
           className="sheet-bar sheet-meter"
           role="meter"
@@ -175,7 +175,7 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
             <span className="sheet-word"> eased</span>
           </span>
         </div>
-        <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`} hint={state === 'luffing'}>Trim <Key k={keys.trim} /></Hold>
+        <Hold ctl={ctl} action={sail === 'main' ? 'mainIn' : 'jibIn'} label={`Trim ${sail} (${keys.trim})`} hint={st.action === 'trim'}>Trim <Key k={keys.trim} /></Hold>
       </div>
     </div>
   );
