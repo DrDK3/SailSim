@@ -22,7 +22,11 @@
     "ai:polar": "tsx tools/ai-polar.ts",
     "ai:trials": "tsx tools/ai-trials.ts",
     "envelope": "tsx tools/envelope.ts",
-    "check:secrets": "tsx tools/check-secrets.ts dist"
+    "check:secrets": "tsx tools/check-secrets.ts dist",
+    "tools:build": "vite build -c vite.tools.config.ts",
+    "weekly:targets": "npm run tools:build && node dist-tools/weekly-targets.mjs",
+    "club:verify": "npm run tools:build && node dist-tools/club-verify.mjs",
+    "club:mock": "node server/club-table/mock.mjs"
   },
   "dependencies": {
     "react": "19.2.9",

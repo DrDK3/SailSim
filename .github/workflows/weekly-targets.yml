@@ -1,0 +1,37 @@
+# The weekly course's model-sailed targets (juniors round; docs/JUNIORS_REPORT.md §6), written into weekly/ on the
+# gh-pages branch next to live/. The week runs Monday to Sunday in Europe/London time: this runs early on Monday
+# (02:23 UTC is after midnight in London in summer and in winter) and again on Monday afternoon in case the first
+# run failed; it can also be started by hand. No secrets. If it fails, the app builds the week's course itself and
+# says "targets not available this week".
+name: Weekly targets
+on:
+  schedule:
+    - cron: '23 2 * * 1'
+    - cron: '23 14 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+jobs:
+  targets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+          path: site
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run tools:build
+      - name: Sail the week's course with the AI (club, good, expert; three seeds each)
+        env:
+          BUILD_ID: ${{ github.sha }}
+        run: node dist-tools/weekly-targets.mjs site/weekly --seeds 1,2,3
+      - run: bash tools/ci/push-site-data.sh site weekly "Weekly targets"

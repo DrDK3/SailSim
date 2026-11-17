@@ -6,9 +6,10 @@ import { useModal } from './useModal';
 import { PRESETS, matchPreset, presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { LIGHTING_PRESETS } from '../app/lighting';
 import type { AudioSettings } from '../render/audio';
+import { DEVICE_CHECK_SECONDS, reportText } from '../app/deviceCheck';
 
 const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
-  performance: { label: 'Performance', note: 'For older laptops: lower resolution, simple water and shadows, less scenery detail.' },
+  performance: { label: 'Smooth', note: 'For school laptops, tablets and older computers: every sailing cue (gusts on the water, sails, telltales, wake) at a lower resolution, with simpler water, shadows and scenery.' },
   balanced: { label: 'Balanced', note: 'The sky and, in calm water, the shore and boats reflected; foam and spray, haze, shadows over the town and woods.' },
   ultra: { label: 'Ultra', note: 'As Balanced, with sharper reflections and shadows, soft shadows where surfaces meet, drawn at full sharpness on high-density screens.' },
 };
@@ -55,8 +56,9 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <p className="fine">{g.preset !== 'custom' ? PRESET_INFO[g.preset].note : 'Your own mix of the options below.'} Measured now: {ui.fps.toFixed(ui.fps < 10 ? 1 : 0)} frames a second.</p>
             <label className="check">
               <input type="checkbox" checked={ui.autoLowerGraphics} onChange={(e) => ctl.setAutoLowerGraphics(e.target.checked)} />
-              Lower the graphics when the simulation cannot keep up with real time (until you choose graphics yourself)
+              Automatic quality: lower the resolution, then the graphics, when frames come too slowly or the simulation cannot keep up (until you choose graphics yourself)
             </label>
+            <DeviceCheck ctl={ctl} ui={ui} />
             <div className="settings-grid">
               <label>
                 Resolution <span className="fine">{pct(g.resolutionScale)}</span>
@@ -148,6 +150,17 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
           </label>
         </div>
+        <h5>Game controller</h5>
+        <p className="fine" data-testid="gamepad-help">
+          {ui.gamepad ? 'A game controller is connected. ' : 'Connect a game controller (and press a button) to use it. '}
+          Left stick: the helm, a little or a lot · right / left trigger: trim / ease the main · right / left shoulder: trim / ease the jib · A: tack (helm
+          over while held) · B: gybe · X: let both sheets go · Y: centre the helm · Start: pause · Back: camera · d-pad: the steering keys.
+        </p>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.haptics} onChange={(e) => ctl.setPrefs({ haptics: e.target.checked })} data-testid="pref-haptics" />
+          Vibration on the controller for a gust, the boom crossing and contact (where the browser supports it; never with reduced motion; each also
+          shows on screen and has a sound)
+        </label>
         <h5>Interface level</h5>
         <div className="row left wrap" role="radiogroup" aria-label="Interface level" data-testid="level">
           {LEVELS.map((l) => (
@@ -174,6 +187,17 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <input type="checkbox" checked={ui.prefs.devTools} onChange={(e) => ctl.setPrefs({ devTools: e.target.checked })} data-testid="pref-dev" />
           Physics and developer tools in the Settings menu (validation dashboard, polar sweep, physics panel, force arrows; on at the Expert level)
         </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.gustOutlines} onChange={(e) => ctl.setPrefs({ gustOutlines: e.target.checked })} data-testid="pref-gust-outlines" />
+          Outline the gusts on the water (a teaching aid: rings round each gust, the nearest labelled with its strength; the darker, rougher
+          water of a gust is always drawn)
+        </label>
+        {ui.prefs.gustOutlines && (
+          <label className="check">
+            <input type="checkbox" checked={ui.prefs.gustOutlinesInRaces} onChange={(e) => ctl.setPrefs({ gustOutlinesInRaces: e.target.checked })} />
+            Also in races
+          </label>
+        )}
         <h4 className="settings-group">Sound</h4>
         <div className="settings-grid">
           <label className="check">
@@ -252,6 +276,61 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         <h5>Something looks wrong?</h5>
         <ReportProblem ctl={ctl} />
       </section>
+    </div>
+  );
+}
+
+/**
+ * Check this device (juniors round): sails a fixed route for about 50 s and says how smoothly this device drew it,
+ * with the reasons, and offers the result to copy or save. Nothing is sent anywhere.
+ */
+function DeviceCheck({ ctl, ui }: { ctl: SimController; ui: UiState }) {
+  const r = ui.deviceReport;
+  const [copied, setCopied] = useState(false);
+  const json = r ? JSON.stringify(r, null, 2) : '';
+  return (
+    <div data-testid="device-check" className="device-check">
+      <h5>Check this device</h5>
+      <p className="fine">
+        Sails a fixed route for about {DEVICE_CHECK_SECONDS} s (the run you have now comes back afterwards) and measures how smoothly this device draws it,
+        how long it took to load and how quickly the helm shows a key press. The result stays on this device until you copy or save it; it contains no
+        personal details.
+      </p>
+      {ui.deviceCheck ? (
+        <p role="status">
+          Checking: {Math.round(ui.deviceCheck.progress * 100)}% <button onClick={() => ctl.cancelDeviceCheck()}>Stop the check</button>
+        </p>
+      ) : (
+        <button onClick={() => ctl.startDeviceCheck()} data-testid="device-check-start">Check this device</button>
+      )}
+      {r && (
+        <div data-testid="device-check-result" role="status">
+          <p>
+            <strong data-testid="device-verdict">{r.verdict.label}</strong>
+          </p>
+          <ul className="fine">
+            {r.verdict.reasons.map((x) => <li key={x}>{x}</li>)}
+          </ul>
+          <p className="fine">
+            Typical frame {r.frames.medianMs} ms, 95% under {r.frames.p95Ms} ms, longest {r.frames.longestMs} ms; {r.frames.over33} of {r.frames.frames} frames over 33 ms.
+            {r.input.medianMs !== undefined ? ` Helm shown about ${r.input.medianMs} ms after a key press.` : ''}
+          </p>
+          <div className="row left">
+            <button
+              onClick={() => {
+                void navigator.clipboard?.writeText(`${reportText(r)}\n\n${json}`).catch(() => undefined);
+                setCopied(true);
+              }}
+              data-testid="device-check-copy"
+            >
+              {copied ? 'Copied' : 'Copy the result'}
+            </button>
+            <a className="button" download={`sailsim-device-check-${r.ranAt.slice(0, 10)}.json`} href={`data:application/json;charset=utf-8,${encodeURIComponent(json)}`} data-testid="device-check-save">
+              Save as a file
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

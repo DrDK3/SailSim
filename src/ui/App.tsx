@@ -1,3 +1,5 @@
+import { presetLabel } from '../render/graphics';
+import { ChallengeCard, SocialResult } from './Social';
 import { Suspense, lazy, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { SimController } from '../app/controller';
 import { Instruments } from './Instruments';
@@ -402,7 +404,24 @@ export function App({ ctl }: { ctl: SimController }) {
         // Same place as the paused pill (the two never show together).
         <div className="banner paused-pill slow-pill" role="status" data-testid="running-slow" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
           Running slow: {Math.round(ui.runningSlow.ratio * 100)}% of real time
-          {ui.runningSlow.lowered ? ` · graphics lowered to ${ui.runningSlow.lowered[0]!.toUpperCase()}${ui.runningSlow.lowered.slice(1)}` : ''}
+          {ui.runningSlow.lowered ? ` · graphics lowered to ${presetLabel(ui.runningSlow.lowered)}` : ''}
+        </div>
+      )}
+      {!ui.runningSlow && !ui.paused && (ui.dynamicScale !== undefined || ui.deviceCheck || ui.warming) && (
+        <div className="banner paused-pill slow-pill" role="status" data-testid="quality-pill" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
+          {ui.warming ? (
+            'Preparing the 3D view…'
+          ) : ui.deviceCheck ? (
+            <>
+              Checking this device: {Math.round(ui.deviceCheck.progress * 100)}%{' '}
+              <button className="link" onClick={() => ctl.cancelDeviceCheck()}>Stop</button>
+            </>
+          ) : (
+            <>
+              Resolution lowered to {Math.round((ui.dynamicScale ?? 1) * 100)}% to keep it smooth{' '}
+              <button className="link" onClick={() => ctl.setAutoLowerGraphics(false)} data-testid="keep-quality">Keep full quality</button>
+            </>
+          )}
         </div>
       )}
       {ui.contact && (
@@ -424,7 +443,9 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={() => copyShareLink(ctl)} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} />}</Suspense>
+      {ui.race?.results && ui.showResults && <SocialResult ctl={ctl} ui={ui} />}
+      <ChallengeCard ctl={ctl} ui={ui} />
       <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.protest.open && <ProtestRoom ctl={ctl} ui={ui} onClose={() => ctl.toggleProtestRoom(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showEditor && <CourseEditor ctl={ctl} ui={ui} onClose={() => ctl.toggleEditor(false)} />}</Suspense>

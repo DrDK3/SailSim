@@ -35,6 +35,11 @@ export interface Recording {
   /** [step, state hash] every CHECKPOINT_STEPS steps, and at the end. */
   checkpoints: [number, string][];
   endStep: number;
+  /**
+   * What the sailor's app said the run achieved, for a club-table submission (juniors round): the finish time from the
+   * start signal and whether it was sailed without assists. The verifier re-sails the run and checks both.
+   */
+  claimed?: { finishS: number; independent: boolean };
 }
 
 export function encodeInputs(log: readonly InputLogEntry[]): InputRow[] {

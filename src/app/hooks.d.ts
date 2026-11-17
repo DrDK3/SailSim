@@ -10,6 +10,7 @@ declare global {
       determinismState: (seconds: number) => number[];
       advance: (seconds: number) => void;
       controller: SimController;
+      aiHelm: (level?: 'club' | 'good' | 'expert') => boolean;
     };
   }
 }

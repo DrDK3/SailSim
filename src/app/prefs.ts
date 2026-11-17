@@ -15,6 +15,11 @@ export interface Prefs {
   devTools: boolean;
   /** The start countdown spoken by the device's own voice (src/app/countdown.ts, src/render/speech.ts). */
   spokenCountdown: boolean;
+  /** Gust outlines on the water (a teaching aid: src/render/puffOutlines.ts), and whether also in races. */
+  gustOutlines: boolean;
+  gustOutlinesInRaces: boolean;
+  /** Vibration on a game controller (gusts, the boom crossing, contact); never with reduced motion. */
+  haptics: boolean;
 }
 
 /** A touch screen with no mouse (a phone or tablet): the battery saver starts on there. */
@@ -26,7 +31,7 @@ export function touchOnly(): boolean {
   }
 }
 
-export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false, daylightView: false, devTools: false, spokenCountdown: false };
+export const DEFAULT_PREFS: Prefs = { lightLabels: false, hints: true, batterySaver: false, daylightView: false, devTools: false, spokenCountdown: false, haptics: true, gustOutlines: false, gustOutlinesInRaces: false };
 
 function defaults(): Prefs {
   return { ...DEFAULT_PREFS, batterySaver: touchOnly() };
@@ -46,6 +51,9 @@ export function loadPrefs(): Prefs {
       daylightView: typeof p.daylightView === 'boolean' ? p.daylightView : d.daylightView,
       devTools: typeof p.devTools === 'boolean' ? p.devTools : d.devTools,
       spokenCountdown: typeof p.spokenCountdown === 'boolean' ? p.spokenCountdown : d.spokenCountdown,
+      haptics: typeof p.haptics === 'boolean' ? p.haptics : d.haptics,
+      gustOutlines: typeof p.gustOutlines === 'boolean' ? p.gustOutlines : d.gustOutlines,
+      gustOutlinesInRaces: typeof p.gustOutlinesInRaces === 'boolean' ? p.gustOutlinesInRaces : d.gustOutlinesInRaces,
     };
   } catch {
     return defaults();

@@ -39,10 +39,23 @@ export interface GraphicsSettings {
 }
 
 export const PRESETS: Record<GraphicsPreset, Omit<GraphicsSettings, 'preset' | 'cameraMotion'>> = {
-  performance: { resolutionScale: 0.75, maxPixelRatio: 1, scenery: 'low', shadows: 'standard', water: 'low', reflections: 'off', ambientOcclusion: false, hullFoam: true, spray: false, atmosphere: false },
+  /**
+   * "Smooth" on screen. Juniors round: haze from the sky's colour (consistent light and a clear horizon, at the cost of a
+   * few vector operations a frame) and the bow spray (a fresh-wind cue) are on here too; both measured with
+   * tools/gfx-bench.mjs before and after (docs/JUNIORS_REPORT.md §2).
+   */
+  performance: { resolutionScale: 0.75, maxPixelRatio: 1, scenery: 'low', shadows: 'standard', water: 'low', reflections: 'off', ambientOcclusion: false, hullFoam: true, spray: true, atmosphere: true },
   balanced: { resolutionScale: 1, maxPixelRatio: 1.5, scenery: 'high', shadows: 'standard', water: 'high', reflections: 'low', ambientOcclusion: false, hullFoam: true, spray: true, atmosphere: true },
   ultra: { resolutionScale: 1, maxPixelRatio: 2, scenery: 'high', shadows: 'fine', water: 'high', reflections: 'high', ambientOcclusion: true, hullFoam: true, spray: true, atmosphere: true },
 };
+
+/**
+ * What the presets are called on screen (juniors round): the lowest is "Smooth", so it does not sound like a
+ * downgrade. The stored keys are unchanged, so saved settings still load.
+ */
+export const PRESET_LABELS: Record<GraphicsPreset, string> = { performance: 'Smooth', balanced: 'Balanced', ultra: 'Ultra' };
+
+export const presetLabel = (p: string): string => PRESET_LABELS[p as GraphicsPreset] ?? p;
 
 export const DEFAULT_CAMERA_MOTION = 0.5;
 const KEY = 'squib.graphics.v1';

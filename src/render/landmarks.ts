@@ -527,8 +527,9 @@ export function facingDir(ring: readonly [number, number][], deg: number, tolDeg
 export function insideRing(ring: readonly (readonly [number, number])[], e: number, n: number): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i]!;
-    const [xj, yj] = ring[j]!;
+    const ri = ring[i]!;
+    const rj = ring[j]!;
+    const xi = ri[0], yi = ri[1], xj = rj[0], yj = rj[1];
     if (yi > n !== yj > n && e < ((xj - xi) * (n - yi)) / (yj - yi) + xi) inside = !inside;
   }
   return inside;

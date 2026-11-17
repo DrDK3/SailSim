@@ -8,6 +8,8 @@
 set -euo pipefail
 DIST="${1:?usage: publish-pages.sh DIST_DIR}"
 JOB_FILES="latest.json tide.json tide-predicted.json tide-harmonics.json"
+# Folders written by the juniors-round jobs (weekly targets, the club table when it is on): kept whole.
+JOB_DIRS="weekly club"
 WORK="$(mktemp -d)"
 KEEP="$(mktemp -d)"
 
@@ -25,12 +27,18 @@ fi
 for f in $JOB_FILES; do
   if [ -f "$WORK/live/$f" ]; then cp "$WORK/live/$f" "$KEEP/"; fi
 done
+for d in $JOB_DIRS; do
+  if [ -d "$WORK/$d" ]; then cp -a "$WORK/$d" "$KEEP/dir-$d"; fi
+done
 # Replace the site with the build (everything but .git), then put the job files back.
 find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -a "$DIST"/. "$WORK"/
 mkdir -p "$WORK/live"
 for f in $JOB_FILES; do
   if [ -f "$KEEP/$f" ]; then cp "$KEEP/$f" "$WORK/live/"; fi
+done
+for d in $JOB_DIRS; do
+  if [ -d "$KEEP/dir-$d" ]; then rm -rf "${WORK:?}/$d" && cp -a "$KEEP/dir-$d" "$WORK/$d"; fi
 done
 python3 tools/ingest/index.py "$WORK/live"
 touch "$WORK/.nojekyll"   # serve files as they are (no Jekyll processing)

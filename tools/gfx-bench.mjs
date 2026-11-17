@@ -33,9 +33,12 @@ if (process.env.GFX) await page.addInitScript((g) => localStorage.setItem('squib
 await page.goto(`${process.env.BASE ?? 'http://localhost:4173/'}?nowelcome&quality=${quality}`);
 await page.waitForFunction(() => window.__squib?.controller.getState().dart.status === 'loaded', null, { timeout: 400_000 });
 await page.waitForTimeout(1500);
-// The benchmark drives the frames itself.
+// The benchmark drives the frames itself, at the settings asked for (no automatic quality: it would change them).
 await page.evaluate(() => {
   const c = window.__squib.controller;
+  c.autoLowerGraphics = false;
+  c.dynRes.enabled = false;
+  c.view.setDynamicScale(1);
   cancelAnimationFrame(c.raf);
   c.raf = 0;
 });
@@ -105,7 +108,8 @@ for (const [name, loc, time, tws, twd, secs, cam, off, lift] of VIEWS) {
   });
   const m = await page.evaluate(() => {
     const c = window.__squib.controller;
-    const r = c.view.renderer;
+    const view = c.view;
+    const r = view.renderer;
     const gl = r.getContext();
     const px = new Uint8Array(4);
     const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
@@ -123,7 +127,23 @@ for (const [name, loc, time, tws, twd, secs, cam, off, lift] of VIEWS) {
       total += performance.now() - t0;
     }
     const info = r.info;
-    return { submitMs: +(submit / N).toFixed(1), totalMs: +(total / N).toFixed(1), calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? null, pixelRatio: r.getPixelRatio() };
+    // Texture memory (estimate): every texture on a material in the scene, width × height × 4 bytes, × 4/3 with mipmaps.
+    const seen = new Set();
+    let texBytes = 0;
+    view.scene.traverse((o) => {
+      for (const m of [o.material].flat()) {
+        if (!m) continue;
+        for (const v of Object.values(m)) {
+          const img = v && v.isTexture ? v.image : undefined;
+          if (!img || seen.has(v)) continue;
+          seen.add(v);
+          const w = img.width ?? img.data?.width ?? 0;
+          const h = img.height ?? img.data?.height ?? 0;
+          texBytes += w * h * 4 * (v.generateMipmaps ? 4 / 3 : 1);
+        }
+      }
+    });
+    return { texMB: +(texBytes / 2 ** 20).toFixed(1), submitMs: +(submit / N).toFixed(1), totalMs: +(total / N).toFixed(1), calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? null, pixelRatio: r.getPixelRatio() };
   });
   await page.addStyleTag({ content: hideUi });
   await page.waitForTimeout(400);

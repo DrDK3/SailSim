@@ -1,3 +1,4 @@
+import { sprayRate } from './cues';
 import * as THREE from 'three';
 import { SEA_COMMON, SEA_DISPLACE } from './water';
 
@@ -452,7 +453,7 @@ export class BowSpray {
   update(boat: THREE.Object3D, stw: number, bowDrop: number, windToX: number, windToZ: number, dt: number): void {
     const step = Math.min(dt, 0.1);
     // Emit: droplets a second, by how hard the bow comes down and how fast she is going.
-    const rate = this.enabled ? 900 * Math.max(0, -bowDrop - 0.45) * THREE.MathUtils.smoothstep(stw, 1.6, 3.2) : 0;
+    const rate = this.enabled ? sprayRate(stw, bowDrop) : 0;
     this.carry += rate * step;
     if (this.carry > 0) {
       const q = boat.quaternion;

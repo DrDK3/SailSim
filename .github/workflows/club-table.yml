@@ -1,0 +1,59 @@
+# The club table (juniors round, layer B; docs/DEPLOYMENT.md "Club table"). OFF until the owner sets it up: the job
+# does nothing unless the repository variable CLUB_TABLE_ENABLED is 'true' and the secrets CLUB_TABLE_URL and
+# CLUB_ADMIN_TOKEN exist. Every 30 minutes at the live-data job's minutes (7 and 37), it re-sails pending submissions
+# with the simulator, records each verdict where the submitter's token can read it, deletes the replays (keeping the
+# week's top three as ghosts), applies removals and the season's expiry, and publishes club/ on the gh-pages branch.
+# No person is involved. The verifiers of the last five builds are kept on the branch club-verifiers, so a run made
+# just before a deploy can still be checked with the build that recorded it.
+name: Club table
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: vars.CLUB_TABLE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+          path: site
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the verifier (the same build id as the deployed site)
+        env:
+          VITE_BUILD_ID: ${{ github.sha }}
+        run: npm run tools:build
+      - name: Keep this build's verifier, and the last five (branch club-verifiers)
+        run: |
+          if git ls-remote --exit-code --heads origin club-verifiers >/dev/null; then
+            git clone --depth 1 --branch club-verifiers "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" verifiers
+          else
+            mkdir verifiers && cd verifiers && git init -q -b club-verifiers && git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" && cd ..
+          fi
+          id="production-${{ github.sha }}"
+          mkdir -p "verifiers/$id" && cp dist-tools/club-verify.mjs "verifiers/$id/"
+          touch "verifiers/$id/.kept-$(date -u +%Y%m%d%H%M)"
+          # Keep the five most recently added builds.
+          ls -1d verifiers/production-* | while read d; do echo "$(ls -A "$d" | grep '^.kept-' | sort | tail -1) $d"; done | sort -r | tail -n +6 | cut -d' ' -f2 | xargs -r rm -rf
+          cd verifiers
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && (git diff --cached --quiet || (git commit -qm "Verifier for ${{ github.sha }}" && git push origin club-verifiers))
+      - name: Verify, remove, expire, publish
+        env:
+          CLUB_TABLE_URL: ${{ secrets.CLUB_TABLE_URL }}
+          CLUB_ADMIN_TOKEN: ${{ secrets.CLUB_ADMIN_TOKEN }}
+        run: node dist-tools/club-verify.mjs --site site --builds verifiers --season-weeks ${{ vars.CLUB_SEASON_WEEKS || 26 }}
+      - run: bash tools/ci/push-site-data.sh site club "Club table"

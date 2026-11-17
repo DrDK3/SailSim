@@ -681,6 +681,24 @@ export class Water {
     return this.material.uniforms.uLight!.value as number;
   }
 
+  /**
+   * Up to 16 puffs from the cue state (north, east in metres; strength as the wind model adds it), without allocating:
+   * Three.js x = east, z = −north (src/render/frames.ts nedToThree).
+   */
+  setPuffsNE(puffs: readonly { n: number; e: number; radius: number; strength: number }[]): void {
+    const u = this.material.uniforms.uPuffs!.value as THREE.Vector4[];
+    for (let i = 0; i < u.length; i++) {
+      const p = puffs[i];
+      if (p) u[i]!.set(p.e, -p.n, p.radius, p.strength);
+      else u[i]!.w = 0;
+    }
+  }
+
+  /** The puffs the shader draws now, back in north/east (tests: they must match the wind model's). */
+  drawnPuffs(): { n: number; e: number; radius: number; strength: number }[] {
+    return (this.material.uniforms.uPuffs!.value as THREE.Vector4[]).filter((v) => v.w > 0).map((v) => ({ n: -v.y, e: v.x, radius: v.z, strength: v.w }));
+  }
+
   /** Up to 16 puffs as (x, z, radius, strength) in Three.js world coordinates. */
   setPuffs(puffs: { x: number; z: number; radius: number; strength: number }[]): void {
     const u = this.material.uniforms.uPuffs!.value as THREE.Vector4[];

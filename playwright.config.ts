@@ -30,12 +30,14 @@ export default defineConfig({
     // The first-visit welcome dialog is tested on its own (tests/e2e/ux.spec.ts); elsewhere it is already seen.
     storageState: {
       cookies: [],
-      origins: ['http://localhost:4173', 'http://localhost:4174'].map((origin) => ({ origin, localStorage: [{ name: 'squib.welcomed.v1', value: '1' }] })),
+      origins: ['http://localhost:4173', 'http://localhost:4174', 'http://localhost:4175'].map((origin) => ({ origin, localStorage: [{ name: 'squib.welcomed.v1', value: '1' }] })),
     },
   },
   projects: [
     // The app and its features, on the production build served at the root.
-    { name: 'app', testIgnore: /deploy\.spec\.ts/ },
+    { name: 'app', testIgnore: /deploy\.spec\.ts|juniorsClub\.spec\.ts/ },
+    // The club table against the local mock endpoint (a build with the flag on).
+    { name: 'club', testMatch: /juniorsClub\.spec\.ts/, use: { baseURL: 'http://localhost:4175' } },
     // Phase 6 acceptance: the production build served under a sub-path, missing and stale data.
     { name: 'deploy', testMatch: /deploy\.spec\.ts/, use: { baseURL: PAGES_URL } },
   ],
@@ -45,6 +47,20 @@ export default defineConfig({
       url: 'http://localhost:4173',
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
+    },
+    {
+      // The club table (juniors round, layer B): a build with the flag on, pointed at the local mock endpoint, and
+      // the headless tools (the verifier) built from the same code. Only tests/e2e/juniorsClub.spec.ts uses it.
+      command: 'VITE_CLUB_TABLE_URL=http://localhost:8787 npx vite build --outDir dist-club --emptyOutDir && npx vite build -c vite.tools.config.ts && npx vite preview --outDir dist-club --port 4175 --strictPort',
+      url: 'http://localhost:4175',
+      reuseExistingServer: !process.env.CI,
+      timeout: 300_000,
+    },
+    {
+      command: 'node server/club-table/mock.mjs 8787 e2e-admin-token',
+      url: 'http://localhost:8787/status?token=' + '0'.repeat(64),
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
     },
     {
       // Serves dist/ (built by the first server's command) the way GitHub Pages serves a project site.

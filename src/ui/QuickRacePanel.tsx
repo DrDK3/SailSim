@@ -1,3 +1,4 @@
+import { WeeklyCard } from './Social';
 import { useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { DEFAULT_QUICK_RACE, QUICK_WIND_KN, SHORT_COURSE_LEG_M, dailyChallenge, type QuickCourse, type QuickRaceOptions } from '../app/quickRace';
@@ -91,6 +92,8 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         </div>
         <button className="primary" onClick={() => start(challenge.options, false)} data-testid="challenge-start">Sail it</button>
       </div>
+
+      <WeeklyCard ctl={ctl} ui={ui} onStarted={onClose} />
 
       <label className="field">
         <span>Competitors</span>

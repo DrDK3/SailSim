@@ -79,6 +79,8 @@ export interface AudioInput {
   bowDrop: number;
   /** The boom crossed since the last frame. */
   boomCrossed: boolean;
+  /** A gust arrived at the boat this frame: its size 0…1 (0 none), from the cue state (src/render/cues.ts). */
+  gustOnset?: number;
   /** 0 … 1: how close moored boats are (halyards). */
   harbour: number;
   /** Simulation paused: the scene is still, so is the sound. */
@@ -98,7 +100,8 @@ const smooth = (a: number, b: number, x: number) => {
 
 /** Wind loudness 0 … 1 and band centre (Hz) for an apparent wind speed (m/s). */
 export function windVoice(aws: number): { level: number; freq: number; whistle: number } {
-  return { level: 0.08 + 0.92 * smooth(0.5, 14, aws), freq: 350 + 70 * Math.min(aws, 20), whistle: smooth(9, 16, aws) };
+  // Silent in a dead calm (juniors round: no cue when the simulation's value is zero), a breath from 0.5 m/s.
+  return { level: 0.08 * smooth(0, 0.5, aws) + 0.92 * smooth(0.5, 14, aws), freq: 350 + 70 * Math.min(aws, 20), whistle: smooth(9, 16, aws) };
 }
 
 /** Water rush and bubble hiss 0 … 1 for a speed through the water (m/s). */
@@ -110,6 +113,11 @@ export function waterVoice(stw: number): { rush: number; hiss: number } {
 export function flutterVoice(luff: number, aws: number): { level: number; rate: number } {
   const flog = Math.max(0, 1 - luff);
   return { level: smooth(0.15, 0.7, flog) * smooth(1, 6, aws), rate: 3 + 0.9 * Math.min(aws, 16) };
+}
+
+/** A gust's swell: peak level for its size (0…1) and the apparent wind (0 for no gust or no wind). */
+export function gustLevel(size: number, aws: number): number {
+  return 0.18 * Math.max(0, Math.min(1, size)) * smooth(0, 6, aws);
 }
 
 export class SoundScape {
@@ -370,6 +378,7 @@ export class SoundScape {
       this.burst(this.buses!.water, Math.min(1, (-a.bowDrop - 0.6) / 1.2) * 0.35, 260, 0.18);
     }
     if (a.boomCrossed) this.boom();
+    if (a.gustOnset && a.gustOnset > 0) this.gust(a.gustOnset, a.aws);
     // Halyards: random clinks, more the more moored boats are about.
     if (a.harbour > 0.05 && t > this.nextClink) {
       this.nextClink = t + (0.6 + Math.random() * 3) / Math.max(0.1, a.harbour);
@@ -394,6 +403,34 @@ export class SoundScape {
     s.start(t, Math.random() * 1.5);
     s.stop(t + decay + 0.05);
   }
+
+  /**
+   * A gust arriving: the wind's own band swelling over about a second and a half, louder for a bigger gust and in more
+   * wind (its picture: the darker water reaching the boat, the heel and the sails loading up).
+   */
+  private gust(size: number, aws: number): void {
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise!;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 0.8;
+    f.frequency.setValueAtTime(windVoice(aws).freq, t);
+    f.frequency.linearRampToValueAtTime(windVoice(aws).freq * 1.4, t + 0.8);
+    const g = ctx.createGain();
+    const peak = gustLevel(size, aws);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    s.connect(f).connect(g).connect(this.buses!.wind);
+    s.start(t, Math.random() * 1.5);
+    s.stop(t + 1.7);
+    this.lastGustLevel = peak;
+  }
+
+  /** The last gust swell's peak level (tests). */
+  lastGustLevel = 0;
 
   /** The boom crossing: a dull thump and a short creak of the gooseneck. */
   private boom(): void {

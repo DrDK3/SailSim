@@ -32,12 +32,12 @@ test('graphics and sound: presets apply and are kept, sound mutes with U, the ph
   await page.getByRole('menuitemcheckbox', { name: /^All settings/ }).click();
   const panel = page.getByTestId('settings-panel');
   await expect(panel).toBeVisible();
-  // A software renderer starts on Performance.
-  await expect(panel.getByRole('radio', { name: 'Performance' })).toHaveAttribute('aria-checked', 'true');
+  // A software renderer starts on Smooth (the lowest preset, called Performance before the juniors round).
+  await expect(panel.getByRole('radio', { name: 'Smooth' })).toHaveAttribute('aria-checked', 'true');
   const s0 = await scale();
   await panel.getByRole('radio', { name: 'Ultra' }).click();
   await expect.poll(() => page.evaluate(() => window.__squib!.controller.getState().graphics?.preset)).toBe('ultra');
-  // Ultra draws at full resolution, Performance at three quarters.
+  // Ultra draws at full resolution, Smooth at three quarters.
   await expect.poll(scale).toBeGreaterThan(s0);
   // Scenery and shadows need a reload: the panel says so.
   await expect(panel).toContainText('take effect when the page is reloaded');
