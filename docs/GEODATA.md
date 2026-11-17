@@ -32,7 +32,7 @@ The River Dart in the simulator is built from open data by a reproducible pipeli
 | Landmarks | OSM names and footprints | Labels at footprint centroids; real footprints only, no invented detail | S |
 | Piers and pontoons | OSM `man_made=pier` | Floating if tagged so or named "Pontoon". Line widths (2.5–3 m) and fixed deck height (+3.0 m ODN) are estimates | S / E |
 | Mooring areas | OSM water polygons: Kingswear, Noss and Distins Trots, DHNA anchorage | As mapped | S |
-| Moorings and moored boats | **Generated** | Rows 22 m apart, buoys 16 m apart inside the mooring areas, only where the bed is below −1 m ODN; boat type and size random (seeded) | **E** |
+| Moorings and moored boats | **Generated** | Rows 22 m apart, buoys 16 m apart inside the mooring areas, only where the bed is below −1 m ODN; boat type and size random (seeded). From Dart Haven Marina to the Higher Ferry (the DHNA mooring area and the Kingswear Trots) the boats lie fore and aft on trots along the layout's rows, bow upstream, a buoy 1 m off each end (`src/sim/env/trots.ts`, 17 Nov 2026); above the Higher Ferry they swing | **E** |
 | Ferry routes | OSM ferry routes | Clipped to the domain | S |
 | Ferry timetables, vessel sizes | **Estimate** | Shuttle every 6–90 min between 07:00 and 23:00 UTC (`src/app/ferrySchedule.ts`). Lower and Higher Ferries flagged as restricted in their ability to manoeuvre (DHNA sailing directions, S(p)) | **E** |
 | Navigation marks | Castle Ledge buoy only (visitmyharbour, S) | Other marks have no established position and are listed, not placed | S / N |
