@@ -6,6 +6,7 @@ import { bakedPerson } from './crew';
 import { Kit, VMAT, cabin, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, type Hull } from './vessels';
 import { updateLights } from './navLights';
 import { flagDroop, flagYaw } from './vane';
+import { flagSwing, trueWindAt, type WindAt } from './flagMotion';
 import { Exhaust } from './railway';
 import { longAxisDeg } from './landmarks';
 
@@ -1212,8 +1213,11 @@ export class TrafficView {
     return [...this.entries.values()].flatMap((e) => (e.label ? [e.label] : []));
   }
 
-  /** `wind`: where the true wind comes from (rad, compass) and its speed (m/s), for the ensigns; else they fly aft. */
-  update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean, wind?: { fromDir: number; speed: number }, waterLevel = 0): void {
+  /**
+   * `wind`: where the true wind comes from (rad, compass) and its speed (m/s), and, with `at`, the true wind at each
+   * point (flagMotion.ts), for the ensigns: each flies in the apparent wind on her own deck; without `wind` they fly aft.
+   */
+  update(states: VesselState[], time: number, camera: THREE.Camera, showLabels: boolean, wind?: { fromDir: number; speed: number; at?: WindAt }, waterLevel = 0): void {
     const stamp = time;
     const lit = this.day < 0.35;
     for (const s of states) {
@@ -1256,9 +1260,11 @@ export class TrafficView {
           : undefined);
       }
       if (wind) {
-        const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, s.heading, s.sog);
-        // A flutter that quickens with the wind (E).
-        const flutter = Math.min(0.12, 0.02 * aws) * Math.sin(time * (2 + aws) + s.e);
+        // The true wind where she is, less her own way: the apparent wind on her deck.
+        const w = trueWindAt(wind.at, s.n, s.e, wind);
+        const { yaw, aws } = flagYaw(w.fromDir, w.speed, s.heading, s.sog);
+        // A flutter that grows and quickens with the wind, none in a calm (flagMotion.ts).
+        const flutter = flagSwing(aws, time, s.e);
         for (const f of e.ensigns) {
           f.rotation.y = yaw + flutter;
           f.children[0]!.rotation.z = -flagDroop(aws);

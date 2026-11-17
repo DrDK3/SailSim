@@ -1,6 +1,6 @@
 /**
- * The assist record of an attempt (juniors round §6.2), the same shape and definition as the training slice's
- * (branch training-slice, not merged when this was written: one of the two should be kept at merge):
+ * The assist record of an attempt (juniors round §6.2). The shape and the rule are the exercise engine's
+ * (`Assists` and `isIndependent` in src/app/exercises/engine.ts), kept in one place since the training slice merged:
  * an attempt is `independent` only if at no time during it auto-trim was on for either sail, the teaching overlay was
  * shown (the lesson overlay or the gust outlines), or live help was shown or asked for (a hint or a coach tip).
  * Auto-crew (hiking) does not by itself make a run assisted.
@@ -9,10 +9,11 @@
  * and are as reported by the app (src/app/clubTable.ts says so).
  */
 import type { InputRow } from './replay';
+import { isIndependent, type Assists } from './exercises/engine';
 
 export interface AssistRecord {
   independent: boolean;
-  assists: { autoMain: boolean; autoJib: boolean; autoCrew: boolean; overlay: boolean; liveHelp: boolean };
+  assists: Assists;
 }
 
 export function noAssists(): AssistRecord {
@@ -27,7 +28,7 @@ export function noteAssists(r: AssistRecord, now: Partial<AssistRecord['assists'
   if (now.autoCrew) a.autoCrew = true;
   if (now.overlay) a.overlay = true;
   if (now.liveHelp) a.liveHelp = true;
-  r.independent = !(a.autoMain || a.autoJib || a.overlay || a.liveHelp);
+  r.independent = isIndependent(a);
 }
 
 /** Auto-trim as the replay's input log shows it (flags: autoMain 1, autoJib 2, autoCrew 4), up to `endStep`. */

@@ -31,6 +31,7 @@ import type { SkyState } from '../sim/env/sky';
 import { daylight } from '../sim/env/sun';
 import { CloudDome, Rain } from './weather';
 import { CueMemory, cameraFeel, deriveCues, selectPuffsForShader, type CuePuff, type CueState } from './cues';
+import { setFlagMotionReduced, type WindAt } from './flagMotion';
 
 export type CameraMode = 'chase' | 'scenic' | 'helm' | 'orbit' | 'drone' | 'top' | 'line' | 'free';
 
@@ -42,6 +43,11 @@ export interface SceneEnvironment {
   sea?: (n: number, e: number) => SeaSample;
   /** River Dart state (when the geodata is loaded). */
   dart?: Omit<DartUpdate, 'camera' | 'time'>;
+  /**
+   * The true wind at a point now, from the simulation's wind field (read only): flags and vanes moored or ashore
+   * fly in the wind where they are (src/render/flagMotion.ts). Without it they read the one wind at the boat.
+   */
+  windAt?: WindAt;
   course?: { nextLeg: number; phase: string; showLabels: boolean; committeeHeading?: (n: number, e: number) => number };
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
@@ -270,6 +276,8 @@ export class SceneView {
   private readonly onMotionPref = () => {
     this.reducedMotion = !!this.motionQuery?.matches;
     if (this.reducedMotion) this.blend = undefined;
+    // Flags still follow the wind; their flutter is cut (flagMotion.ts).
+    setFlagMotionReduced(this.reducedMotion);
   };
   private blend?: { p: THREE.Vector3; q: THREE.Quaternion; t: number };
   private readonly ride: WaveRide = { heave: 0, pitch: 0, roll: 0 };
@@ -885,12 +893,12 @@ export class SceneView {
     this.clouds.update(this.camera, frameDt, wx, wz);
     this.rain.update(this.camera, frameDt, wx, wz);
     if (this.dart && env?.dart) {
-      this.dart.update({ ...env.dart, camera: this.camera, time });
+      this.dart.update({ ...env.dart, windAt: env.dart.windAt ?? env.windAt, camera: this.camera, time });
       this.water.setWaterLevel(env.dart.waterLevel);
       this.waterLevel = env.dart.waterLevel;
     }
     if (this.course && env?.course) {
-      this.course.setWind(curr.twdGround);
+      this.course.setWind(curr.twdGround, env.windAt, curr.twsGround);
       if (env.course.committeeHeading) this.course.setCommitteeHeading(env.course.committeeHeading);
       this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
     }

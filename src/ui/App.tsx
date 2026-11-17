@@ -15,6 +15,7 @@ import { GpuCard } from './GpuCard';
 import { ReplayBar } from './ReplayBar';
 import { Menu } from './Menu';
 import { TutorialPanel } from './TutorialPanel';
+import { ExercisePanel } from './ExercisePanel';
 import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
 import { hasStoredLevel } from '../app/level';
 import { Confirm } from './Confirm';
@@ -316,6 +317,11 @@ export function App({ ctl }: { ctl: SimController }) {
               title="Settings: lessons, course editor, what is shown, sound, all settings, and physics tools"
               items={[
                 { section: 'Learn and plan', label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
+                ...ui.exercises.map((e) => ({
+                  label: `Exercise: ${e.title}`,
+                  checked: ui.exercise?.info.id === e.id,
+                  onSelect: () => (ui.exercise?.info.id === e.id ? ctl.endExercise() : ctl.leaveTo(`Starting the exercise ${e.title}`, () => ctl.startExercise(e.id))),
+                })),
                 { label: 'Teaching overlay', checked: ui.teaching, onSelect: () => ctl.toggleTeaching() },
                 { label: 'Course editor', checked: ui.showEditor, onSelect: () => ctl.toggleEditor() },
                 { label: 'Your sail (debrief)', checked: ui.showDebrief, onSelect: () => ctl.toggleDebrief() },
@@ -347,6 +353,7 @@ export function App({ ctl }: { ctl: SimController }) {
       </nav>
       <div className="side" style={sideTop === undefined ? undefined : { top: sideTop, maxHeight: `calc(100% - ${sideTop + 230}px)` }}>
         {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} onRace={() => openRace(true)} />}
+        {ui.exercise && <ExercisePanel ctl={ctl} ui={ui} />}
         <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => openScenario(false)} onRace={() => openRace(true)} />}</Suspense>
         <Suspense fallback={null}>{libraryOpen && <LibraryPanel ctl={ctl} ui={ui} onClose={() => openLibrary(false)} />}</Suspense>
         <Suspense fallback={null}>{raceOpen && <QuickRacePanel ctl={ctl} ui={ui} onClose={() => openRace(false)} />}</Suspense>

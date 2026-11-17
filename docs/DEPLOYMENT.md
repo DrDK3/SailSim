@@ -54,7 +54,7 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
 
 | Workflow | When | What |
 |---|---|---|
-| `ci.yml` | Every push and pull request | Job **checks**: lint; build (typecheck, Vite, **secret check**); unit tests; ingest tests (Python). Job **browser**, in three parallel shards: browser tests on the production build, at the root and under `/squib-dart-sim/` |
+| `ci.yml` | Every pull request and every push to `main` (a branch is tested through its pull request, or by hand: Actions → CI → Run workflow) | Job **checks**: lint; build (typecheck, Vite, **secret check**); unit tests; ingest tests (Python). Job **browser**, in four parallel shards: browser tests on the production build, at the root and under `/squib-dart-sim/` |
 | `deploy.yml` | Push to `main`, or by hand | Build and test, then `tools/ci/publish-pages.sh`: replace the site on `gh-pages`, keep the live-data files, rebuild `live/index.json` |
 | `live-data.yml` | :07 and :37 past each hour, 06–20 UTC; hourly 21–05 UTC | Runs `tools/ingest/weather.py`, `tide.py` and `index.py`, then `tools/ci/push-live-data.sh` |
 | `tide-harmonics.yml` | Mondays 03:23 UTC, or by hand | `tools/ingest/harmonics.py`: derive the constants, validate them, write a year of HW/LW events |

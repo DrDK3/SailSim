@@ -54,7 +54,10 @@ export interface CircleObstacle {
   hull?: Outline;
 }
 
-/** A boat on a swinging mooring: buoy position, length (m) and kind, from the provisional mooring layout. */
+/**
+ * A boat on a mooring: buoy position (on a trot, her centre), length (m) and area, from the provisional mooring
+ * layout. Boats in the trot areas (src/sim/env/trots.ts) lie fore and aft; the rest swing.
+ */
 export interface MooredBoat {
   n: number;
   e: number;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { matchDataSource } from '../app/sourceMatch';
 import { START_LOCATIONS, type AppScenario, type SimController, type StartLocationId, type UiState } from '../app/controller';
 import type { ConditionsSettings } from '../sim/env/conditions';
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
@@ -83,8 +84,9 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
   const c = draft.conditions;
   const setC = (patch: Partial<ConditionsSettings>) => setDraft({ ...draft, conditions: { ...c, ...patch } });
   const w = c.weather;
-  const sourceId = w.source === 'manual' ? 'manual' : (ui.weatherSources.find((s) => s.json === w.snapshot)?.id ?? 'manual');
-  const tideSourceId = c.tide?.mode === 'snapshot' ? (ui.tideSources.find((s) => s.json === (c.tide as { snapshot: unknown }).snapshot)?.id ?? 'none') : undefined;
+  // The draft is a deep copy of the scenario: find its files by their contents, not by identity (issue 198).
+  const sourceId = w.source === 'manual' ? 'manual' : (matchDataSource(ui.weatherSources, w.snapshot)?.id ?? 'manual');
+  const tideSourceId = c.tide?.mode === 'snapshot' ? (matchDataSource(ui.tideSources, (c.tide as { snapshot: unknown }).snapshot)?.id ?? 'none') : undefined;
   const tideMode = c.tide?.mode === 'snapshot' ? (tideSourceId ?? 'none') : (c.tide?.mode ?? 'none');
   const weatherSrc = ui.weatherSources.find((s) => s.id === sourceId);
   // Today's sky under a set wind (a random race or today's challenge) shows as the forecast's sky.

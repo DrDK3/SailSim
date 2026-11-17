@@ -4,6 +4,12 @@ import { Tutorial, type TutorialSample } from '../../src/app/tutorial';
 import { SimController } from '../../src/app/controller';
 import { sailAdvice, sailState } from '../../src/app/sailStatus';
 
+/** The jib's state as the console shows it (the sail's angle tells by-the-lee from stalled: issue 200). */
+const jibState = (c: SimController) => {
+  const sn = c.sim.snapshot(false);
+  return sailState(sn.forces.jib, sn.boomJib);
+};
+
 /** The six lessons (review §8.1, U9): their step logic, and each one sailed to the end by a scripted helmsman. */
 
 const R2D = 180 / Math.PI;
@@ -195,10 +201,10 @@ describe('lessons in the app, sailed by a scripted helmsman with the keys alone 
     log.push(`after main: ${step(c)}`);
     expect(c.sim.input.autoJib).toBe(false);
     c.press('jibOut', true);
-    for (let i = 0; i < 100 && sailState(c.sim.snapshot(false).forces.jib) !== 'luffing'; i++) c.advance(0.1);
+    for (let i = 0; i < 100 && jibState(c) !== 'luffing'; i++) c.advance(0.1);
     c.press('jibOut', false);
     for (let i = 0; i < 100 && step(c) === 'jib'; i++) {
-      const st = sailState(c.sim.snapshot(false).forces.jib);
+      const st = jibState(c);
       c.press('jibIn', st === 'luffing');
       c.press('jibOut', st === 'stalled');
       c.advance(0.1);

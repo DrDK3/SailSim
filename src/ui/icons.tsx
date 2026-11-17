@@ -56,6 +56,7 @@ export function ActivityIcon({ kind }: { kind: ActivityKind }) {
     case 'course':
       return <IconRace />;
     case 'tutorial':
+    case 'exercise':
       return <IconLearn />;
     case 'replay':
       return <IconReplay />;

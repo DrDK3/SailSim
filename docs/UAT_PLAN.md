@@ -380,6 +380,18 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 28.4 | Look at an AI boat's masthead (or zoom in on her) | Her club's burgee: Royal Ulster's blue with the red hand on a white shield under a crown; KDY's white with three red stars under a crown; Boston's white with a blue and red cross and a white star; Atlantic's white with a red "A". Your own boat flies the Royal Dart's | |
 | 28.5 | Compare the hull colours with the clubs' colours as you know them | Which colour goes on the topsides, stripe and boot top is our choice: tell us if a club would look different | |
 
+## 29. Trot moorings; Mosaique's burgee; flags and vanes in the wind (17 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 29.1 | Sail (or look with the drone camera) up the river from off Dart Haven Marina to the Higher Ferry | The moored boats lie in rows along the river, nose to tail, a buoy off each end, all pointing up the river; they stay that way when the wind or the tide turns | |
+| 29.2 | Go on above the Higher Ferry to the Noss and Distins moorings | The boats there lie to single buoys and swing with the wind and the stream, as before | |
+| 29.3 | Sail into the side of a boat on a trot | She is solid: you meet her and stay out | |
+| 29.4 | Look at Mosaique's stern in daylight | The club's ensign on its staff at the stern, and the RDYC burgee on its own staff at the port quarter; nothing at her masthead. Both lowered at night | |
+| 29.5 | Change the wind direction (Options) and watch the flags: your burgee, an AI boat's, Mosaique's, the club's flagstaff, a ferry's ensign, the committee boat's and the pin end's flags, the vanes on the moored boats | Each flies downwind (the vanes point into the wind); on a moving ferry the ensign follows the wind she feels, swung towards her stern | |
+| 29.6 | Compare a calm with a fresh breeze; then turn on the system's "reduce motion" | In a calm the flags hang limp and still; in a breeze they stream out and flutter, faster as it blows harder. With reduced motion they still point downwind but barely flutter | |
+| 29.7 | Tell us where the trots really are and which way their boats lie | The rows' places and bearings are our estimates | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

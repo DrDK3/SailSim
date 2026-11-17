@@ -1,11 +1,16 @@
-# Every push and pull request: lint, typecheck, build (with the no-secrets check), unit tests, ingest tests,
-# and the browser tests against the production build (at the root and under a GitHub Pages sub-path).
-# The hosted runners have no GPU: the 3D scene is drawn in software, so the browser tests are split over three
+# Every pull request, and every push to main: lint, typecheck, build (with the no-secrets check), unit tests,
+# ingest tests, and the browser tests against the production build (at the root and under a GitHub Pages sub-path).
+# A push to a branch is tested through its pull request only: running both doubled the jobs, and with the account's
+# limit on jobs at once, the site's publishing job (GitHub Pages) waited behind them. A branch without a pull
+# request can still be tested by hand (Actions → CI → Run workflow).
+# The hosted runners have no GPU: the 3D scene is drawn in software, so the browser tests are split over four
 # parallel jobs with one browser each (two browsers on one runner starve each other: docs/DEPLOYMENT.md).
 name: CI
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

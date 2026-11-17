@@ -3,10 +3,11 @@ import { hypot2 } from '../math/hypot';
 import { windFrom } from '../boat/forces';
 import type { Environment } from '../env/environment';
 import { hullOutline, type Outline } from './hull';
+import { trotHeading } from '../env/trots';
 
 /**
  * Boats that lie to an anchor or a mooring: the committee boat at the end of the starting line and the boats
- * on the trots. One set of pose functions serves both the physics (contact) and the picture, so what is drawn
+ * on moorings (swinging, or fore and aft on the trots). One set of pose functions serves both the physics (contact) and the picture, so what is drawn
  * is what a boat hits (comprehensive review, CO-3 and CO-4).
  *
  * How such a boat lies (E): head to the stream when it runs, head to the wind in slack water, blended between
@@ -52,8 +53,14 @@ export function mooringSwingDeg(h: number): number {
   return (h % 30) - 15;
 }
 
-/** Where a moored boat lies: on her heading, downstream (or downwind) of her buoy, at the end of her chain. */
-export function mooredBoatPose(m: { n: number; e: number; l: number; swingDeg?: number }, env: Environment, t: number): { n: number; e: number; heading: number } {
+/**
+ * Where a moored boat lies. On a swinging mooring: on her heading, downstream (or downwind) of her buoy, at the end of
+ * her chain. On a trot (`area` one of src/sim/env/trots.ts TROT_AREAS, from Dart Haven Marina up to the Higher
+ * Ferry): fore and aft between her two buoys, centred on her mooring, along her row whatever the wind and stream.
+ */
+export function mooredBoatPose(m: { n: number; e: number; l: number; swingDeg?: number; area?: string }, env: Environment, t: number): { n: number; e: number; heading: number } {
+  const trot = trotHeading(m.area);
+  if (trot !== undefined) return { n: m.n, e: m.e, heading: trot };
   const heading = lyingHeading(env, t, m.n, m.e, ((m.swingDeg ?? 0) * Math.PI) / 180);
   const back = m.l * 0.5 + 2;
   return { n: m.n - Math.cos(heading) * back, e: m.e - Math.sin(heading) * back, heading };
