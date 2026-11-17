@@ -190,6 +190,86 @@ Documents please.
 
 ---
 
+## T. Training exercises: learners, instructors and Squib sailors (training slice)
+
+**Prepared, not completed. No learner, instructor or sailor has tried the exercises yet.** Every threshold, help text and review rule in them is the simulator's draft (content status: draft; thresholds tagged E in `data/exercises/thresholds.json`). Nothing here is a syllabus, an accreditation or a claim that the exercises teach well. See [TRAINING_SLICE_REPORT.md](../TRAINING_SLICE_REPORT.md).
+
+### T1. Who, and how to record it
+
+| Group | Who | What they do | About |
+|---|---|---|---|
+| Beginners | 3–5 people new to sailing (or nearly) | T2: pre-test, the beginner exercise, post-test, independent attempt, transfer | 45 min each |
+| Instructors | 2 RDYC instructors | T3: accept, change or reject each exercise item; watch at least one beginner | 60 min |
+| Squib sailors | 2 people who sail Squibs | T4: the B-section questions the exercises lean on, and the tactical exercise | 40 min |
+
+- **Consent.** Written consent before the session, kept by the club, not in the repository. Anyone under 18 needs a parent's or guardian's consent too. Learners are recorded by code only (B1–B5), never by name.
+- **Build.** Note the commit hash (Settings → All settings → About, or the replay file's `build`).
+- **Records.** One file per person in `docs/validation/<date>-<group>-<code>.md` with the date, build hash and that consent was given (yes/no, not the form). Attach the learner's exported records (`squib-exercise-records.json`, "Save records (file)") and, where useful, replay files of attempts ("Save this attempt (replay)").
+- **No coefficient or threshold changes without a recorded answer behind them**, as for sections B and C.
+
+### T2. Beginners
+
+1. **Pre-test (5 min, spoken or written, no sim).** Q1 Which way can a boat not sail? Q2 What does a luffing sail look like, and what does it tell you? Q3 What are the steps of a tack? Q4 After a tack, what do you do first? Q5 If the boat is slow after a tack, what do you try? Score each 0/1/2 (none, partly, right).
+2. **Warm-up and attempts 1–3 (assisted).** Start the beginner exercise from the lessons list, or the instructor link `?exercise=tack-recover`. The observer says nothing beyond "carry on" unless the learner is stuck for 2 minutes.
+3. **Attempt 4 (on your own: both sheets, no overlay, help only on request).** The app records whether it was independent.
+4. **Post-test (5 min).** The same five questions, reworded (for example Q2: "The front of the jib flaps: what is happening and what do you do?").
+5. **Independent performance.** Repeat the exercise once more, from the start, on their own: the result card's "Independent attempts" line.
+6. **Transfer.** Without help: lesson 4 (Tacking and gybing), or the beginner exercise with the wind changed to 14 kn by the instructor (a thresholds file with `tackRecover.windKn` 14). Record completion and the tack's slowest speed.
+
+**Measures** (from the result card and records file unless stated): attempts complete (assisted / independent); tack time, slowest speed as a share of the speed going in, time back on course and speed; help shown by level (Look / Why / Try) and asked for; restarts; skipped steps; in-irons episodes; pre- and post-test scores; time on task (observer); confidence 1–5 before and after (asked); "would you do this again?" (asked).
+
+### T3. Instructors: accept, change or reject
+
+For each item: **Accept / Change (to what) / Reject**, and why. Items are listed in the order a learner meets them.
+
+| # | Item | Draft (E) | Verdict and reason |
+|---|---|---|---|
+| T3.1 | Close-hauled band and speed (both exercises) | TWA 38–55° at 2.5 kn or more, held 5 s (issue 47) | |
+| T3.2 | The cue: head up to the luff, back to drawing, held 2 s | as built | |
+| T3.3 | A tack counted from TWA under 35° to TWA 35–90° on the other tack above 1 kn | as lesson 4 | |
+| T3.4 | Recovery: course and 80% of the speed going in, held 3 s; "slow" after 25 s | as built | |
+| T3.5 | In irons: under 0.8 kn with the bow within 30° of the wind for 6 s | as built | |
+| T3.6 | A "slow tack" over 15 s; a "big loss" under 40% of the speed going in | as built | |
+| T3.7 | Help timing: Look after 10 s stuck, Why after 20 s, Try after 30 s | as built | |
+| T3.8 | Each help text (Look / Why / Try) for: too low, too high, slow, sheet not drawing, find the luff, back to drawing, start the tack, in irons, headed | read them on the card | |
+| T3.9 | Each review rule (observation, likely cause, next time): irons, big loss, slow tack, overshoot, sheet not drawing, slow recovery, clean | read them after an attempt | |
+| T3.10 | Assistance falling over four attempts (auto-trim and overlay, then main in hand, then both and help on request) | as built | |
+| T3.11 | "Independent" means: no auto-trim on either sail, no overlay, no live help at any time in the attempt (auto-crew allowed) | as built | |
+| T3.12 | Wind-shift exercise: a 600 m beat; 15° backing shift after 60 s that returns after 90 s; a 30 s decision window | as built | |
+| T3.13 | Wind-shift review: the decision judged against model demonstrations ("in this model"), apart from the time to the mark | as built | |
+| T3.14 | The debrief's notes after any sail: tack cost over 5 s, gybe over 6 s, start over 10 s late (E) | as built | |
+| T3.15 | Content status: what must change before an item can be marked "instructor-reviewed"? | all draft | |
+
+### T4. Squib sailors (the B-section questions the exercises lean on)
+
+| # | Question | Model | Verdict / how much / confidence |
+|---|---|---|---|
+| T4.1 | B1.5: your tacking angle, and the true wind angle you sail close-hauled at in 10 kn (PH-10: the model's best VMG is at 30–38°; the exercise asks for 38–55°) | best VMG 38° in the exploit search | |
+| T4.2 | B3.1: a tack in 10 kn: time and speed lost | 8.6 s; 4.8 → 2.5 kn | |
+| T4.3 | B3.6: from a tack, how long until full speed again? | 10 s to 90% from 3 kn on a close reach | |
+| T4.4 | With the tiller let go on a close reach in 10 kn, does a Squib round up to close-hauled, and how fast? | the model rounds up from TWA 72° to about 45° in about 15 s | |
+| T4.5 | Sail the wind-shift exercise: is a 15° shift for 90 s on a 600 m beat a fair test? Would you tack on the header? | tacking on each header was 30 s faster in this model | |
+
+### T5. Negative-learning probes
+
+Each is something the exercises could teach wrongly. Check it on purpose; record what happened.
+
+| # | Risk | How to probe | What would show the problem |
+|---|---|---|---|
+| T5.1 | UX-8: the bow-direction keys are the opposite of a tiller | After the exercise, ask: "To head up on starboard, which way do you push the tiller?" | Beginners who answer with the key direction |
+| T5.2 | PH-10: the model may point too high, so close-hauled feels higher than in a Squib | T4.1; watch whether beginners pinch to TWA 30–35° because the boat still goes | A sailor's tacking angle well above the model's; beginners rewarded for pinching |
+| T5.3 | Overlays: reliance on the wind arrows | Compare attempts 1–2 (overlay) with 4 (none); ask "how did you know where the wind was?" | Performance falling with the overlay off; answers naming only the arrows |
+| T5.4 | O3: by the lee and stalled (issue 200, fixed) | Show a stalled main on a broad reach (sheet hard in); ask what the status means and what to do | Answers saying "head up" (the old wrong advice) instead of "ease" |
+| T5.5 | Auto-trim expectations | Attempts 3–4 (sheets in hand): count reviews with "the main/jib was not drawing for … s" | Learners waiting for the sails to trim themselves |
+| T5.6 | "Tack on every header" over-generalised | Ask instructors and sailors: "In a persistent shift, would you still tack on the header?" (in this model a persistent shift gave no gain: report §6) | Learners or the exercise implying it always pays |
+| T5.7 | The model's weather helm (T4.4) | Watch whether beginners hold the helm against it all the time | A habit a real Squib would not need |
+
+### T6. What to send back
+
+The completed tables, the records and replay files, and the observer's notes, in `docs/validation/` as above. Results change thresholds, help texts or rules only through a recorded answer (and a note in `docs/OUTSTANDING_ISSUES.md`).
+
+---
+
 ## D. Record
 
 | Field | Value |
