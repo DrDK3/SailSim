@@ -69,15 +69,15 @@ Layer A works with no server at all. Layer B is written, tested against a local 
 | **Word-list names**: adjective + sea creature or shore bird + 1–99 ("Blue Heron 42"), chosen from menus or re-rolled. Never free text; the endpoint and verifier check the same lists | `src/app/safeNames.ts` |
 | **Challenge a friend**: after a finish, a link carries the run, the name, the course, the time and the time at each mark. The friend's app shows a challenge card ("does not react"), races the run as a ghost, and then says "You beat Blue Heron 42 by 12 s" or "Blue Heron 42 was 8 s faster: watch how their ghost sails the leg to the windward mark: they gained 9 s there", with a split table. A link whose name is not a word-list name is refused | `src/app/challenge.ts`, `src/ui/Social.tsx` |
 | **Like-for-like bests** for the weekly course and the daily challenge only, **independent** and **assisted** kept apart, with the last 20 attempts as a small chart (shapes as well as colours). The existing bests stay, still described as a record of what you did | `src/app/bests.ts` |
-| **The assist record**, the training slice's shape and rule (auto-trim, the overlay or live help make a run assisted; auto-crew does not). The training slice has not merged, so this is a compatible minimal copy, to reconcile at merge | `src/app/assists.ts` |
+| **The assist record**, the training slice's shape and rule (auto-trim, the overlay or live help make a run assisted; auto-crew does not). Since the training slice merged (PR #31), this file uses the slice's `Assists` and `isIndependent` directly | `src/app/assists.ts` |
 | **The weekly course**: one per ISO week, Monday to Sunday in Europe/London time, chosen from a rotation of the eight RDYC courses (pending the club's check) and four practice courses. Conditions are seeded by the week (8–14 kn, moderate or shifty, a fixed Wednesday afternoon). Rondar Squib, damage as in every race, **no tidal stream** (parity with the AI, RA-2), sailed alone with targets and friends as ghosts. An optional `data/weekly/season.json` can set chosen weeks | `src/app/weekly.ts` |
 | **Model-sailed targets**: a scheduled Action sails the week's course with the AI at club, good and expert over three seeds, and publishes bronze, silver and gold with a ghost track each (`weekly/<week>.json`, atomic, kept four weeks). The app checks the file is for this week and this scenario; otherwise "targets not available this week" | `src/app/targets.ts`, `weeklyTargets.ts`, `tools/weekly-targets.ts`, `.github/workflows/weekly-targets.yml` |
 | **Club table** (layer B, flag `clubTable` = built with `VITE_CLUB_TABLE_URL`, off): opt-in submit, endpoint, automatic verifier, publish, removal, expiry: §4 | `server/club-table/`, `src/app/clubTable.ts`, `clubVerify.ts`, `src/ui/ClubTable.tsx`, `tools/club-verify.ts`, `.github/workflows/club-table.yml` |
 
-Overlap with the training slice (PR #31), to resolve at merge:
+Overlap with the training slice (PR #31), now merged into this branch (merge `abe1b44`):
 
 - `src/app/controller.ts`: additive only: the frame hook, the gamepad poll, the social hub, the warm-up, the cue events, a `BUILD_ID` export and one line in `checkRaceBests`.
-- `src/app/assists.ts`: duplicates the slice's assist record.
+- `src/app/assists.ts`: now uses the slice's assist record (no duplicate).
 - Issues are numbered from 210.
 - None of `sailStatus.ts`, `Controls.tsx`, `lessons.ts`, `DebriefPanel.tsx` or `wind.ts` was edited.
 
@@ -486,7 +486,7 @@ Under 18s:
 | Check | Result |
 |---|---|
 | `npm run typecheck`, `npm run lint` | Clean |
-| Unit tests (`npx vitest run`) | 104 files, 695 tests, all pass. New this round: device check, dynamic resolution (including a simulated 5-minute run), gamepad (the controller with a mocked `navigator.getGamepads`), cues (14), word-list names, challenges, like-for-like bests, the assist record, weekly course (BST and GMT boundaries), weekly targets (practice and RDYC C1 with the River Dart data), club table endpoint and verifier (10) |
+| Unit tests (`npx vitest run`) | 116 files, 786 tests, all pass (after merging `main`). New this round: device check, dynamic resolution (including a simulated 5-minute run), gamepad (the controller with a mocked `navigator.getGamepads`), cues (14), word-list names, challenges, like-for-like bests, the assist record, weekly course (BST and GMT boundaries), weekly targets (practice and RDYC C1 with the River Dart data), club table endpoint and verifier (10) |
 | The endpoint's own tests | In `tests/sim/clubTable.test.ts`: size limit, header shapes, word-list names, rate limits, no IP or user agent stored, token hashed, admin routes protected |
 | `npm run envelope`, `npm run golden:update` | Identical before and after (§2.5) |
 | `npm run perf` | No regression (§2.5) |
