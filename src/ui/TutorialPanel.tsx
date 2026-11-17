@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { mmss } from '../app/lessons';
+import { ExerciseList } from './ExercisePanel';
 
 /**
  * The lessons, with what is done in this browser and a Start button for each: the six basics, then seamanship
  * (open to everyone, suggested once the basics are done).
  */
-export function LessonList({ ui, onStart }: { ui: UiState; onStart: (id: UiState['lessons'][number]['id']) => void }) {
+export function LessonList({ ui, onStart, onExercise }: { ui: UiState; onStart: (id: UiState['lessons'][number]['id']) => void; onExercise?: (id: UiState['exercises'][number]['id']) => void }) {
   // Progress kept in this browser: the first lesson not yet done is the one to take next (every lesson stays open).
   const next = ui.lessons.find((l) => !l.done)?.id;
   const basicsDone = ui.lessons.filter((l) => l.group === 'basics').every((l) => l.done);
@@ -15,6 +16,12 @@ export function LessonList({ ui, onStart }: { ui: UiState; onStart: (id: UiState
       <LessonGroupList lessons={ui.lessons.filter((l) => l.group === 'basics')} next={next} onStart={onStart} testId="lesson-list" />
       <h4 className="lesson-group">Seamanship{basicsDone ? '' : <span className="fine-inline"> · best after the six basics</span>}</h4>
       <LessonGroupList lessons={ui.lessons.filter((l) => l.group === 'seamanship')} next={next} onStart={onStart} testId="lesson-list-seamanship" />
+      {onExercise && ui.exercises.length > 0 && (
+        <>
+          <h4 className="lesson-group">Exercises<span className="fine-inline"> · repeated attempts with less help each time (draft)</span></h4>
+          <ExerciseList ui={ui} onStart={onExercise} />
+        </>
+      )}
     </>
   );
 }
@@ -81,6 +88,10 @@ export function TutorialPanel({ ctl, ui, onRace }: { ctl: SimController; ui: UiS
           onStart={(id) => {
             setList(false);
             ctl.startLesson(id);
+          }}
+          onExercise={(id) => {
+            setList(false);
+            ctl.startExercise(id);
           }}
         />
         <div className="row left">
