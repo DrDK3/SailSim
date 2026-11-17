@@ -145,6 +145,8 @@ export class DartScene {
   /** The Kingswear light (src/render/kingswearLight.ts), and the daylight (0 night … 1 day) its light follows. */
   private kingswearLight?: KingswearLightView;
   private daylight = 1;
+  /** Letters by lights for players who cannot tell red from green. */
+  private lightLetters = false;
   /** The terrain's material (the satellite picture with its detail), for the cliff tops to share. */
   private terrainMaterial?: THREE.Material;
   /** Where the rocky coast's faces and tops lie, and the open coast: no trees there (src/sim/env/coastRocks.ts). */
@@ -893,6 +895,7 @@ export class DartScene {
   /** Letters by the vessels' sidelights for players who cannot tell red from green (src/render/navLights.ts). */
   setLightLabels(on: boolean): void {
     this.traffic.lightLabels = on;
+    this.lightLetters = on;
   }
 
   setDaylight(day: number): void {
@@ -1163,7 +1166,7 @@ export class DartScene {
     this.boatfloat?.update(u.waterLevel);
     for (const en of this.ensigns) en.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time);
     this.shipBuoys?.update(u.epochMs, u.windFromDir, u.windSpeed ?? 5, u.time, u.camera);
-    this.kingswearLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35);
+    this.kingswearLight?.update(u.camera, u.epochMs / 1000, this.daylight < 0.35, this.lightLetters);
     for (const l of this.labels.children) l.position.y = (l.userData.baseY ??= l.position.y) - (l.userData.fixedToLand ? u.waterLevel : 0);
     if (u.time - this.lastMooringUpdate > 2 || u.time < this.lastMooringUpdate) {
       this.lastMooringUpdate = u.time;

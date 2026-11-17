@@ -1,18 +1,21 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { isletGeometry } from './islets';
-import { glowSprite } from './navLights';
-import { KINGSWEAR_LIGHT, inWhiteSector, kingswearLightLocal, kingswearRockOutline, kingswearRockTop } from '../sim/env/shoreLights';
+import { glowSprite, letterSprite } from './navLights';
+import { KINGSWEAR_LIGHT, kingswearLightLocal, kingswearRockOutline, kingswearRockTop, sectorColour, type SectorColour } from '../sim/env/shoreLights';
 
 /**
  * The Kingswear light (src/sim/env/shoreLights.ts): a large rock at the water's edge, and on it a compact round
- * tower 4 m high with a conical lantern, its window facing south-west over the entrance. At night its light shows
- * white to a viewer inside the white sector (325°–331°), isophase every 3 s; the red and green sectors are not
- * drawn (their limits are not established). The tower's colours are estimates (E). Land-fixed group (m ODN).
+ * tower 4 m high with a conical lantern, its window facing south-west over the entrance. At night its light shows,
+ * isophase every 3 s, the colour of the sector the viewer is in: green 318°–325°, white 325°–331°, red 331°–340°
+ * (bearings of the light from seaward); outside them it is not seen. With the colour-blind letters on, a G or an R
+ * stands by it in the coloured sectors. The tower's colours are estimates (E). Land-fixed group (m ODN).
  */
 export class KingswearLightView {
   readonly group = new THREE.Group();
-  private readonly glow: THREE.Sprite;
+  private readonly glows: Record<SectorColour, THREE.Sprite>;
+  private readonly letters: Partial<Record<SectorColour, THREE.Sprite>> = {};
+  private shown: SectorColour | undefined;
 
   constructor() {
     this.group.name = 'kingswear-light';
@@ -45,23 +48,48 @@ export class KingswearLightView {
     tg.position.set(c.e, top, -c.n);
     for (const m of [tower, lantern, roof]) m.castShadow = m.receiveShadow = true;
     this.group.add(tg);
-    this.glow = glowSprite('white');
-    this.glow.name = 'kingswear-light-glow';
-    this.glow.position.set(c.e, top + H - 1.1 + 0.3, -c.n);
-    this.glow.visible = false;
-    this.group.add(this.glow);
+    const focal = top + H - 1.1 + 0.3;
+    const make = (colour: SectorColour) => {
+      const g = glowSprite(colour);
+      g.name = `kingswear-light-${colour}`;
+      g.position.set(c.e, focal, -c.n);
+      g.visible = false;
+      this.group.add(g);
+      return g;
+    };
+    this.glows = { green: make('green'), white: make('white'), red: make('red') };
+    for (const [colour, letter] of [['green', 'G'], ['red', 'R']] as const) {
+      const l = letterSprite(letter);
+      if (!l) continue;
+      l.name = `kingswear-light-letter-${letter}`;
+      l.position.set(c.e, focal + 2.2, -c.n);
+      l.visible = false;
+      this.group.add(l);
+      this.letters[colour] = l;
+    }
   }
 
-  /** At night (`lit`), the light shows to the camera in its white sector, on and off every 1.5 s. */
-  update(camera: THREE.Camera, timeS: number, lit: boolean): void {
-    const e = camera.position.x;
-    const n = -camera.position.z;
-    const on = ((timeS % KINGSWEAR_LIGHT.period) + KINGSWEAR_LIGHT.period) % KINGSWEAR_LIGHT.period < KINGSWEAR_LIGHT.period / 2;
-    this.glow.visible = lit && on && inWhiteSector(e, n);
+  /**
+   * At night (`lit`), the light shows to the camera the colour of the sector it is in, on and off every 1.5 s;
+   * `letters` adds G or R beside it in the coloured sectors.
+   */
+  update(camera: THREE.Camera, timeS: number, lit: boolean, letters = false): void {
+    const p = KINGSWEAR_LIGHT.period;
+    const on = ((timeS % p) + p) % p < p / 2;
+    const colour = lit ? sectorColour(camera.position.x, -camera.position.z) : undefined;
+    this.shown = on ? colour : undefined;
+    for (const k of Object.keys(this.glows) as SectorColour[]) this.glows[k].visible = this.shown === k;
+    // The letter stays while the light is dark between flashes, so it can be read.
+    for (const [k, l] of Object.entries(this.letters) as [SectorColour, THREE.Sprite][]) l.visible = letters && colour === k;
   }
 
   /** Whether its light shows now (for tests). */
   get showing(): boolean {
-    return this.glow.visible;
+    return this.shown !== undefined;
+  }
+
+  /** The colour it shows now, if any (for tests). */
+  get showingColour(): SectorColour | undefined {
+    return this.shown;
   }
 }

@@ -84,24 +84,28 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0);
     }
-    // The Kingswear light: its white sector (bearings 325°–331° of the light, so out from it towards 145°–151°) as
-    // a faint wedge between dashed limits, and the light as a chart marks one, a magenta flare.
+    // The Kingswear light: its sectors (bearings of the light from seaward, so drawn out from it the other way),
+    // green, white and red, as faint wedges between dashed limits, and the light as a chart marks one, a magenta flare.
     const kl = kingswearLightLocal();
     const [lx, ly] = toPx(kl.n, kl.e);
     const reach = Math.min(1500 * k, W);
     const ray = (b: number) => [lx + Math.sin(((b + 180) * Math.PI) / 180) * reach, ly - Math.cos(((b + 180) * Math.PI) / 180) * reach] as const;
-    const [a0, a1] = [ray(KINGSWEAR_LIGHT.white[0]), ray(KINGSWEAR_LIGHT.white[1])];
-    ctx.fillStyle = 'rgba(255,255,240,0.13)';
-    ctx.beginPath();
-    ctx.moveTo(lx, ly);
-    ctx.lineTo(a0[0], a0[1]);
-    ctx.lineTo(a1[0], a1[1]);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,240,0.6)';
+    const SECTOR_FILL = { green: 'rgba(70,220,110,0.24)', white: 'rgba(255,255,240,0.15)', red: 'rgba(250,60,45,0.32)' } as const;
+    for (const sec of KINGSWEAR_LIGHT.sectors) {
+      const [a0, a1] = [ray(sec.from), ray(sec.to)];
+      ctx.fillStyle = SECTOR_FILL[sec.colour];
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(a0[0], a0[1]);
+      ctx.lineTo(a1[0], a1[1]);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(255,255,240,0.55)';
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
-    for (const [ex, ey] of [a0, a1]) {
+    for (const b of new Set(KINGSWEAR_LIGHT.sectors.flatMap((x) => [x.from, x.to]))) {
+      const [ex, ey] = ray(b);
       ctx.beginPath();
       ctx.moveTo(lx, ly);
       ctx.lineTo(ex, ey);

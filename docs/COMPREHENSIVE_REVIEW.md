@@ -1743,3 +1743,14 @@ The owner: "improve the western cliffs and rocks at the mouth", then the Kingswe
 
 The determinism hash is unchanged (`11824f89f479d0f4`). Unit tests: 619 passed (95 files); the end-to-end tests of the minimap and the river's loading pass. **Checked in software rendering only.**
 
+## 25. The Kingswear light's red and green sectors (17 Nov 2026)
+
+The owner: "add the red and green sectors to the Kingswear light. The charted true bearings from seaward for the Kingswear Lighthouse (Admiralty A0236) sectors are 318°–325° Green, 325°–331° White, and 331°–340°". The message stops before the third sector's colour; the light is Iso **WRG** 3s, so with green and white given the third is **red**, which is also red to port coming in (a boat west of the line in sees the light bear more than 331°).
+
+| What | Built | Files | Checked by |
+|---|---|---|---|
+| **The sectors** | Green 318°–325°, white 325°–331°, red 331°–340° (bearings of the light from the viewer, true). At night the light shows the colour of the sector the viewer is in, isophase every 3 s; outside 318°–340° it is not seen. A bearing on a limit goes to the sector clockwise of it (340° is red's). With the colour-blind letters on (the setting that letters vessels' sidelights), a G or an R stands by it in the coloured sectors | `src/sim/env/shoreLights.ts` (`sectors`, `sectorColour`, `kingswearLightBearing`), `src/render/kingswearLight.ts`, `src/render/navLights.ts` (`letterSprite`), `src/render/dart.ts` | `tests/sim/shoreLights.test.ts` (the three sectors edge to edge; each colour only in its own sector; red to port and green to starboard coming in; the view shows the right colour, on and off, and nothing outside) |
+| **On the minimap** | The three sectors as faint green, white and red wedges out from the light, between dashed limits at 318°, 325°, 331° and 340° | `src/ui/Minimap.tsx` | Minimap screenshots at 1.2 km and 2.5 km (software rendering) |
+
+The determinism hash is unchanged (`11824f89f479d0f4`). **Checked in software rendering only.**
+
