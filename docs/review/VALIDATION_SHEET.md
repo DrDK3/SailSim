@@ -235,7 +235,7 @@ For each item: **Accept / Change (to what) / Reject**, and why. Items are listed
 | T3.9 | Each review rule (observation, likely cause, next time): irons, big loss, slow tack, overshoot, sheet not drawing, slow recovery, clean | read them after an attempt | |
 | T3.10 | Assistance falling over four attempts (auto-trim and overlay, then main in hand, then both and help on request) | as built | |
 | T3.11 | "Independent" means: no auto-trim on either sail, no overlay, no live help at any time in the attempt (auto-crew allowed) | as built | |
-| T3.12 | Wind-shift exercise: a 600 m beat; 15° backing shift after 60 s that returns after 90 s; a 30 s decision window | as built | |
+| T3.12 | Wind-shift exercise: a 600 m beat; 15° backing shift after 60 s that returns after 90 s; a 40 s decision window, timed from where the tack begins; help at 8 / 16 / 24 s headed (all E) | as built | |
 | T3.13 | Wind-shift review: the decision judged against model demonstrations ("in this model"), apart from the time to the mark | as built | |
 | T3.14 | The debrief's notes after any sail: tack cost over 5 s, gybe over 6 s, start over 10 s late (E) | as built | |
 | T3.15 | Content status: what must change before an item can be marked "instructor-reviewed"? | all draft | |

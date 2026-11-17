@@ -149,7 +149,7 @@ Built on a new exercise engine (`src/app/exercises/engine.ts`) and the lessons' 
 | Steady preset, no stream, fixed seed, manual wind, Learn assistance | Start Bay open water, 10 kn from 225°, gusts "steady" seed 1, no current; attempts 1–2 with auto-trim, overlay and help that comes by itself |
 | Close-hauled → cues → tack → course and speed → repeat with less assistance | Four phases per attempt: close-hauled (TWA 38–55° at ≥ 2.5 kn, sails drawing, 5 s); the cue (head up until a sail luffs, back to drawing, 2 s); the tack (as lesson 4 times it); recover (course and 80% of the speed going in, 3 s). Four attempts: full assistance ×2, main sheet in hand, then both sheets with no overlay and help only on request |
 | Alternate port and starboard, seed-varied heading | Starboard, port, starboard, port; each from a close reach at 70° ± 12° TWA from the seed (`tackRecoverPlans`) |
-| Graduated help, every level logged | Look (attention: the part of the screen is outlined) → Why (explain) → Try (suggest an action) after 10 / 20 / 30 s stuck, or on request; level 4 is the review after each attempt. Every level shown is logged with attempt, phase, problem and time. The suggestions for sheets come from the fixed advice (§4), so they are always actionable |
+| Graduated help, every level logged | Look (attention: the part of the screen is outlined) → Why (explain) → Try (suggest an action) after 10 / 20 / 30 s stuck, or on request; level 4 is the review after each attempt. Help shows only while the learner is stuck or has just asked, so it never goes stale. Every level shown is logged with attempt, phase, problem and time, including a change of problem at the same level. The suggestions for sheets come from the fixed advice (§4), so they are always actionable. Close-hauled in the band, a sheet in the learner's hands that is not drawing is named before the course. A gybe does not pass the tack phase: it is noted, and the help says what a tack is |
 | A well-performing learner gets no level-3 help | Tested: a scripted learner completes all four attempts with **no level-3 help** and the last attempt independent |
 | Per-attempt assistance record; result card splits assisted and independent | `{ autoMain, autoJib, autoCrew, overlay, liveHelp }` per attempt; **independent** = no auto-trim on either sail, no overlay and no live help at any time (auto-crew allowed). The result card reports the two groups apart, with an attempts table |
 | Configurable thresholds, provisional (E), from issue 47 | `data/exercises/thresholds.json`: each value with unit, tag E and source (issue 47's 38–55°, 2.5 kn, 5 s, 35° and 1 kn among them). An instructor can load a thresholds file for a browser; results then say so |
@@ -179,7 +179,7 @@ After a persistent shift any path inside the new laylines takes about as long, s
 | One short beat, one deterministic scripted shift, isolated and tested | As above; `tests/sim/scriptedShift.test.ts` (6 tests) |
 | Compass, heading history, removable Learn shift overlay | The compass (instruments); a heading history in the card (a header shows as a step, with its range in words); with the overlay, the wind arrows and a readout "wind from 210° (15° left of the start)". Unticking Overlay removes both (e2e) |
 | Optional prediction | Before the first attempt: tack / hold / not sure, or skip; the review compares it with what was done, without judging it |
-| Debrief separating decision quality from outcome, with a counterfactual | The **decision** (did you tack within 30 s of the shift?) is judged against model demonstrations of both rules from the same start ("in this model … reached the mark N s sooner"); the **outcome** (your time) is compared with the demonstration of the *same* decision, so the difference is the sailing, not the decision. A map shows your track and both demonstrations, labelled in words and dash patterns |
+| Debrief separating decision quality from outcome, with a counterfactual | The **decision** (a tack begun within 40 s of the shift beginning, timed from where the turn starts, E) is judged against model demonstrations of both rules from the same start ("in this model … reached the mark N s sooner"); the **outcome** (your time) is compared with the demonstration of the *same* decision, so the difference is the sailing, not the decision. A later tack before the shift turns back is reported as **late** and compared with neither demonstration; a tack at the layline (the mark 42° or more off the wind on the other side, the demonstrations' pointing) is how holding on ends, not a decision. A beat skipped before the shift has no decision; a beat that runs out of time is incomplete. When a demonstration does not reach the mark, the review says so instead of quoting a margin. A map shows your track and both demonstrations, labelled in words and dash patterns |
 | Pointing sensitivity through calibration multipliers, test harness only | `npm run shift-sensitivity` (`src/app/exercises/sensitivity.ts`, `tests/sim/exerciseWindShift.test.ts`): |
 
 | Variant | Tack on the header (s) | Hold (s) | Better | Margin (s) |
@@ -227,25 +227,45 @@ Machine: cloud container, 4 vCPU Xeon 2.1 GHz, Node 22.22, Chromium 141 with **S
 | Check | Result |
 |---|---|
 | `npm run typecheck`, `npm run lint` | Pass |
-| `npm test` (Vitest) | **106 files, 690 tests, all pass** (baseline on the branch base: 96 files, 632). New: 10 files, 58 tests |
+| `npm test` (Vitest) | **106 files, 702 tests, all pass** (baseline on the branch base: 96 files, 632). New: 10 files, 70 tests (12 of them from the review, §9.1) |
 | Physics unchanged: determinism hash (the 400 s race with 6 AI boats) | `11824f89f479d0f4`, unchanged after every commit |
 | `npm run envelope` | **Byte-identical** to the baseline (`envelope.json` and `envelope.md` diffed) |
 | Golden traces (`npm run golden:update`) | Regenerated rows **identical**; only the files' `generated` date changed, so the files were left as they were |
 | `npm run perf` (per 1/60 s frame) | Physics only, 21 boats: 0.48–0.59 ms mean, 1.20–1.49 ms p99 on baseline and branch alike. Full race, 1 + 20 AI: baseline 0.95–1.45 ms mean, branch 0.86–1.27 ms; **p99 2.54–3.67 ms on both** (the race start crosses 3 ms on the unchanged baseline too on this shared machine). Alternated runs, same machine: no regression attributable to the branch; no physics code changed |
 | Exploit search | No pattern beats steady sailing; toggling auto-trim now costs 0.0% (was 20–24%) |
 | Wind-shift sensitivity | The better choice holds in all 11 variants (§6) |
-| E2E, new (`tests/e2e/training.spec.ts`, 6 tests) and the dock (3), one worker, here | **8 of 8 pass** (9.7 min): issue 198; the beginner exercise through the instructor link; the tactical exercise; layout stability through a tack; axe-core on every exercise state and the dock |
+| E2E, new (`tests/e2e/training.spec.ts`, 5 tests) and the dock (3), one worker, here | **8 of 8 pass**, again after the review fixes: issue 198; the beginner exercise through the instructor link; the tactical exercise; layout stability through a tack; axe-core on every exercise state and the dock |
 | E2E, all specs, CI | See the PR's checks. The only failure on this branch's runs so far is `daylight.spec.ts:9` (issue 202), which fails the same way on `main` (8f86fb7) and does not touch the exercises. A local run of the older smoke specs under parallel load timed out twice on the 90 s local limit (course editor, practice start): slow software rendering, not a defect; CI gives 180 s and one worker |
-| State machines | Restart during a tack; pause during a review; Reset restarts the attempt; starting anything else ends the exercise (unit tests) |
+| State machines | Restart during a tack; pause during a review; Reset restarts the attempt (in a review it keeps the attempt reviewed); restarting the exercise's own scenario from elsewhere restarts the attempt; a replay or anything else ends the exercise (unit tests) |
 | Reproducibility | Frame-rate independence and seeds (trust checks); an exercise attempt saved as a replay plays back to the identical state hash |
 | Assistance recorded | Per attempt, and the independent attempt classified correctly (unit tests) |
 | Advice property test | 120 seeded states × 2 sails, three rules (§4) |
 | Instruments and settings agree | Issue 198 e2e (the Options source and the instruments); same physics in every mode (unit) |
 | Audio | Web Audio settings asserted against a fake AudioContext; **no listening test was done** |
 | Claims grep | No RYA, accreditation, "validated" or "realistic" claim in anything this branch adds (only its disclaimers and the content-status type, whose values include one, "empirically-validated", that no content has) |
-| Reviewer pass | Not done (no second reviewer available in this session) |
+| Reviewer pass | An independent automated review of the exercise code (a separate agent that read the code without this report): 10 findings and 5 minor ones, all fixed with tests (§9.1). **No human reviewer yet** |
 
-**Screenshots** (fixed seeds; **software rendering only: no real GPU**, so colours, shading and frame rate on real devices are not shown):
+### 9.1 Independent review and fixes
+
+The review read the exercise engine, both exercises, the controller wiring and the panel. Every finding below was reproduced by a test that failed before its fix. App logic and presentation only: no physics change; the hash, envelope and golden traces are unchanged.
+
+| # | Finding | Fix | Test |
+|---|---|---|---|
+| 1 | Wind shift: once shown, the "headed" help stayed after the shift had turned back, and on port it never ended | "Headed" is bounded: on starboard while the shift lasts; on port only in the window after it turns back; never when already heading at the mark. Help shows only while stuck or just asked | Holding starboard after the shift returns: no help |
+| 2 | Wind shift: the help's suggestion (Try, then 30 s in) came after the 30 s decision window, so following it was judged as holding on | Window 40 s (E), timed from where the tack begins; help at 8 / 16 / 24 s (E) | A tack begun at the Try counts as tacking on the header |
+| 3 | Beginner: close-hauled with a manual main let out, the help blamed the course ("too high") | In the band, a sheet in hand that is not drawing is named first | Luffing main at TWA 45°: help "trim-main" |
+| 4 | Beginner: a gybe passed the tack phase | A tack must start with the bow close to the wind on the old side; a gybe is noted and has its own help and review line. A turn given up (back to close-hauled on the old side) clears, so help returns | Gybe, then a real tack |
+| 5 | Wind shift: a beat skipped before the shift was judged "held on" | Decision "skipped"; the review says there is no decision to judge | Skip at 20 s |
+| 6 | A beat that ran out of time was recorded as complete | "Timeout" makes the attempt incomplete | Time limit 100 s |
+| 7 | Overlay or auto-trim switched on while paused and off again before a sample was not counted | Assistance switched on is recorded at once | Toggle while paused |
+| 8 | A free-sailing hint stayed up over an exercise | Dismissed when an exercise starts, and hidden during one | Hint injected, then exercise |
+| 9 | Restarting the exercise's own scenario from elsewhere, or a replay, kept the exercise with stale measurements | The attempt restarts through the exercise; a replay ends the exercise | Same-scenario restart; replay |
+| 10 | When a demonstration missed the mark, the comparison quoted a margin anyway | "Only the … demonstration reached the mark", or "neither …, so the decision cannot be compared" | Short time limits |
+| minor | Reset during a review discarded the attempt; duplicate list keys; the recovery target carried over a skipped tack; a half-built audio context was not closed | Fixed; Reset in a review restarts only the boat | Reset in a review |
+
+Fixing (2) exposed one more: the "hold" learner's tack at the layline counted as a late decision. A tack begun with the mark 42° or more off the wind on the other side (the demonstrations' pointing, E) is now how holding on ends, as it is for the "hold" demonstration. Two existing tests were updated for the new provisional values, not weakened: the "held starboard for N s" text now reads the window from the thresholds, and the level-1 help check stops 10 s after the shift instead of 22 s (help now comes at 8 s).
+
+**Screenshots** (taken before the review fixes in §9.1, which change help timing and review wording but not the cards' layout; fixed seeds; **software rendering only: no real GPU**, so colours, shading and frame rate on real devices are not shown):
 
 | | Laptop 1280×800 | Phone 390×844 |
 |---|---|---|
@@ -278,7 +298,7 @@ What the screenshots show and do not: the cards read at both sizes; on a phone t
   - the sensitivity harness;
   - the advice property test;
   - the exercise, sound, debrief and mode tests;
-  - six e2e tests.
+  - five e2e tests.
 - **Docs:**
   - this report;
   - validation sheet section T;
@@ -313,7 +333,7 @@ New findings:
 - opponents in the tactical exercise (optional);
 - key remapping (documented gap);
 - O4's in-app explanation;
-- a second reviewer's pass;
+- a human reviewer's pass (an independent automated review was done, §9.1);
 - issue 202 (CI flake, not investigated);
 - real devices and a listening test.
 
