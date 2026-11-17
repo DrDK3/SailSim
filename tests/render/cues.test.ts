@@ -168,7 +168,7 @@ describe('the luffing picture, sound and label agree', () => {
   const force = (luff: number, stall = 0) => ({ luff, stall, incidence: 0.2 }) as SailForce;
 
   it('label "Luffing" ⇔ an audible flutter and a moving leech; "Drawing" ⇔ neither', () => {
-    const rows = [1, 0.98, 0.8, 0.6, 0.45, 0.3, 0.1, 0].map((luff) => ({ luff, label: sailState(force(luff)), sound: flutterVoice(luff, 6).level, picture: leechRange(luff) }));
+    const rows = [1, 0.98, 0.8, 0.6, 0.45, 0.3, 0.1, 0].map((luff) => ({ luff, label: sailState(force(luff), 0.25), sound: flutterVoice(luff, 6).level, picture: leechRange(luff) }));
     for (const r of rows) {
       if (r.label === 'luffing') {
         expect(r.sound, `sound at luff ${r.luff}`).toBeGreaterThan(0.3);
