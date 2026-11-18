@@ -48,7 +48,7 @@ export interface SceneEnvironment {
    * fly in the wind where they are (src/render/flagMotion.ts). Without it they read the one wind at the boat.
    */
   windAt?: WindAt;
-  course?: { nextLeg: number; phase: string; showLabels: boolean; committeeHeading?: (n: number, e: number) => number };
+  course?: { nextLeg: number; phase: string; showLabels: boolean; committeeHeading?: (n: number, e: number) => number; laylines?: readonly { tack: 'starboard' | 'port'; from: { n: number; e: number }; to: { n: number; e: number } }[] };
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
   /** The wind model's gust factor at the boat (speed / mean here), for the cue state (src/render/cues.ts). */
@@ -194,6 +194,7 @@ export interface SceneWeather {
   sunElevationDeg: number;
   sunAzimuthDeg: number;
 }
+const SCREEN_SCRATCH = new THREE.Vector3();
 const FOG_DENSITY = 0.0016;
 /** With the River Dart loaded the hills should stay visible across the harbour. */
 const FOG_DENSITY_DART = 0.00024;
@@ -763,6 +764,22 @@ export class SceneView {
   }
 
   /**
+   * Where a point on the water (local n, e; 1 m above it) is in the camera's view: x right and y up, each −1…1 across
+   * the screen, and whether it is behind the camera (then x and y are mirrored, as a projection gives them).
+   */
+  screenOf(n: number, e: number): { x: number; y: number; behind: boolean } {
+    const behind = SCREEN_SCRATCH.set(e, 1, -n).applyMatrix4(this.camera.matrixWorldInverse).z > 0;
+    const v = SCREEN_SCRATCH.set(e, 1, -n).project(this.camera);
+    return { x: v.x, y: v.y, behind };
+  }
+
+  /** The compass heading the camera looks along (rad, 0 = north, clockwise). */
+  get viewHeading(): number {
+    const d = this.camera.getWorldDirection(SCREEN_SCRATCH);
+    return Math.atan2(d.x, -d.z);
+  }
+
+  /**
    * Dynamic resolution (src/render/dynamicResolution.ts): a multiplier on the preset's own resolution, set by the
    * controller while frames are over budget. Pixels only: what is drawn is unchanged.
    */
@@ -917,6 +934,7 @@ export class SceneView {
     if (this.course && env?.course) {
       this.course.setWind(curr.twdGround, env.windAt, curr.twsGround);
       if (env.course.committeeHeading) this.course.setCommitteeHeading(env.course.committeeHeading);
+      this.course.setLaylines(env.course.laylines);
       this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time, { height: (cx, cz) => this.water.heightAt(cx, cz, time), dt: frameDt });
     }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);

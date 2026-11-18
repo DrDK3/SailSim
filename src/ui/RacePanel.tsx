@@ -1,6 +1,7 @@
 import type { RaceUi, SimController } from '../app/controller';
 import type { RaceEvent } from '../sim/course/judge';
 import type { Flag } from '../sim/race/committee';
+import { ordinal } from '../app/raceStory';
 
 /** Flags as text chips (never colour alone). */
 const FLAGS: Record<Flag, { label: string; title: string; cls: string }> = {
@@ -12,7 +13,6 @@ const FLAGS: Record<Flag, { label: string; title: string; cls: string }> = {
   'first-substitute': { label: '1st Sub', title: 'First Substitute (rule 29.2): general recall, new start to come', cls: 'flag-fs' },
 };
 
-const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
 
 const STATUS: Record<RaceUi['courseStatus'], { label: string; cls: string }> = {
   simulated: { label: 'Simulated course', cls: 'warn' },
@@ -70,6 +70,12 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
           <span key={f} className={`flag ${FLAGS[f].cls}`} title={FLAGS[f].title}>{FLAGS[f].label}</span>
         ))}
         {race.attempt > 1 && <span className="fine-inline">start {race.attempt}</span>}
+        {race.shift && (
+          // Lifted or headed against the wind's recent mean (race aids: src/app/raceAids.ts). Words, not colour alone.
+          <span className={`flag shift-call ${race.shift.call}`} title="The wind against its mean over the last minute and a half, sailing upwind (an estimate). Lifted: you can point higher. Headed: you have to bear away." data-testid="shift-call">
+            {race.shift.call === 'steady' ? 'Wind steady' : `${race.shift.call === 'lifted' ? 'Lifted' : 'Headed'} ${race.shift.deg}°`}
+          </span>
+        )}
         {race.position !== undefined && race.phase !== 'pre-start' && (
           <span className="race-pos" data-testid="position">{ordinal(race.position)} of {race.fleetSize}</span>
         )}
@@ -172,15 +178,6 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
           );
         })}
       </ol>
-      {race.fleetSize > 1 && race.log.length > 0 && (
-        <ol className="race-events race-log" aria-label="Fleet events">
-          {race.log.slice(-4).map((l, i) => (
-            <li key={`${l.t}-${i}`} className={`ev ${l.kind === 'incident' ? 'bad' : l.kind === 'penalty' ? 'warn' : 'info'}`}>
-              <span className="ev-t">{rel(l.t, t0)}</span> {l.text}
-            </li>
-          ))}
-        </ol>
-      )}
       {race.warnings.length > 0 && (
         <p className="fine race-warn" title={race.warnings.map((w) => w.message).join('\n')}>
           {race.warnings.length} course warning{race.warnings.length === 1 ? '' : 's'} (hover for details)
@@ -190,7 +187,6 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
         <button onClick={() => ctl.toggleResults()} disabled={!race.results} title={race.results ? 'Results table' : 'Results once you have finished'}>Results</button>
         <button onClick={() => ctl.retire()} disabled={race.phase === 'finished' || race.raceOver}>Retire</button>
       </div>
-      <p className="fine">Simplified rules, not an authoritative adjudication; AI sail numbers invented.</p>
     </section>
   );
 }

@@ -1010,3 +1010,77 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 .name-chooser { gap: 6px; align-items: center; margin: 6px 0; }
 .challenge-card { max-width: min(480px, calc(100vw - 32px)); }
 .device-check ul { margin: 4px 0; padding-left: 18px; }
+
+/*
+ * Race UX round (owner, 18 Nov 2026): the race at a glance (src/ui/RaceGlance.tsx), the finish as a moment
+ * (src/ui/ResultsPanel.tsx), the race from above (src/ui/RaceReplay.tsx).
+ */
+/* The last minute, large, top centre. Decoration to a screen reader (the race panel carries the same time). */
+.race-countdown { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); z-index: 2; pointer-events: none; font-size: clamp(56px, 8vw, 104px); font-weight: 800; line-height: 1; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 2px 4px rgba(4, 14, 22, 0.9), 0 0 22px rgba(4, 14, 22, 0.75); }
+.race-countdown.last { color: var(--amber-400); }
+.race-countdown.go { color: var(--teal-400); }
+/* The arrow at the edge of the view to the next mark (or the line). Placed by transform every frame. */
+.mark-pointer { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px 4px 6px; border-radius: 99px; background: rgba(8, 20, 30, 0.8); border: 1px solid color-mix(in srgb, var(--amber-400) 70%, transparent); color: var(--text); font-size: 13px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; will-change: transform; }
+.mark-pointer[data-shown='0'] { visibility: hidden; }
+.mark-pointer-arrow { display: inline-flex; color: var(--amber-400); }
+/* Lifted, headed or steady (a tactical aid): a chip in the race panel, a word in the phone strip. */
+.flag.shift-call { border-color: transparent; font-weight: 650; padding: 1px 7px; }
+.flag.shift-call.lifted { background: color-mix(in srgb, var(--good) 22%, transparent); color: color-mix(in srgb, var(--good) 75%, white); }
+.flag.shift-call.headed { background: color-mix(in srgb, var(--warn) 22%, transparent); color: color-mix(in srgb, var(--warn) 80%, white); }
+.flag.shift-call.steady { background: var(--surface-control); color: var(--muted); }
+/* A phone: the race in one line. */
+.hud-left .race-strip { display: flex; align-items: center; justify-content: flex-start; gap: 7px; width: 100%; min-height: 44px; padding: 6px 9px; text-align: left; font-size: 14px; color: var(--text); border: 1px solid var(--border); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.race-strip.alert { border-color: color-mix(in srgb, var(--bad) 70%, transparent); }
+.race-strip-lead { font-size: 20px; font-weight: 750; line-height: 1; flex: none; }
+.race-strip-of { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 1px; }
+.race-strip-shift { flex: none; }
+.race-strip-dist { flex: none; }
+.race-strip-alert { color: color-mix(in srgb, var(--bad) 65%, white); font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
+.race-strip-shift.lifted { color: color-mix(in srgb, var(--good) 75%, white); }
+.race-strip-shift.headed { color: color-mix(in srgb, var(--warn) 80%, white); }
+.race-strip-next { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; min-width: 0; }
+.race-strip-arrow { display: inline-flex; color: var(--amber-400); flex: none; }
+.race-strip-label { font-weight: 650; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.race-strip-more { color: var(--muted); flex: none; }
+
+/* The finish: your place, large, with the gaps; your place at the start and at each mark. */
+.finish-story { display: flex; align-items: center; gap: 16px; margin: 6px 0 10px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--good) 10%, transparent)); border: 1px solid var(--border); }
+.finish-place { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.finish-place-n { font-size: clamp(44px, 9vw, 68px); font-weight: 800; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.finish-place-of { font-size: 15px; color: var(--muted); }
+.finish-gaps { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; min-width: 0; }
+.finish-gaps .fine-inline { font-weight: 400; }
+.mark-places { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 10px; }
+.mark-places li { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 58px; padding: 5px 9px; border-radius: 8px; background: var(--surface-control); position: relative; }
+.mark-places li + li::before { content: ''; position: absolute; left: -6px; top: 50%; width: 6px; height: 1px; background: var(--border); }
+.mark-places-label { font-size: 11px; color: var(--muted); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mark-places-n { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.results-sub { margin: 10px 0 2px; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.results .race-log { max-height: 140px; }
+@media (max-width: 700px) {
+  .finish-story { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+/* The minimap in a race: "Whole course" beside the note (the scale's row has no room for it). */
+.minimap-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; }
+.minimap-foot .minimap-note { margin-top: 0; }
+.minimap-foot .map-course { padding: 1px 8px; min-height: 24px; font-size: 12px; white-space: nowrap; }
+.minimap-foot .minimap-note { white-space: nowrap; }
+.minimap-foot .map-course.on { background: var(--accent-tint); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+/* The debrief: what to show, and the race from above (src/ui/RaceReplay.tsx). */
+.debrief-views { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.debrief-views button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.replay-bar { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; }
+.replay-bar input[type='range'] { flex: 1; min-width: 60px; }
+.replay-clock { font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; min-width: 9.5em; text-align: right; }
+.replay-bar .replay-speed { min-height: 32px; }
+.replay-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0; margin: 0 0 4px; font-size: 12px; }
+.replay-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.replay-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, 0.6); }
+@media (max-width: 700px) {
+  .replay-bar { flex-wrap: wrap; }
+  .replay-clock { min-width: 0; }
+}
+@media (max-width: 700px) {
+  /* The debrief's Close clear of the Menu button in the corner. */
+  .debrief-panel .dash-head { padding-right: 88px; }
+}

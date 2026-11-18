@@ -7,6 +7,7 @@ import { DamageBanner, DamageCard } from './DamageCard';
 import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
+import { MarkPointer, RaceStrip, StartCountdown, useNarrow } from './RaceGlance';
 import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
 import { GhostChip, GhostStatus, ResumeCard } from './ResumeCard';
@@ -68,6 +69,9 @@ export function App({ ctl }: { ctl: SimController }) {
   // How much of the toolbar shows on one row (owner review, 4 Nov 2026: no wrapping, no blank space).
   const [density, setDensity] = useState<'full' | 'compact' | 'minimal' | 'menu'>('full');
   const ui = useSyncExternalStore(ctl.subscribe, ctl.getState);
+  // Phones: the race panel as one line, opened on demand (owner, 18 Nov 2026).
+  const narrow = useNarrow();
+  const [raceOpenNarrow, setRaceOpenNarrow] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [raceOpen, setRaceOpen] = useState(false);
@@ -248,9 +252,14 @@ export function App({ ctl }: { ctl: SimController }) {
       <div className="hud-left">
         <Instruments s={ui.snapshot} level={ui.level} />
         <DamageCard ctl={ctl} ui={ui} />
-        {ui.race && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
-        {ui.race && <CoachCard ctl={ctl} ui={ui} />}
+        {/* On a phone the race is one line (the panel covered the water); tap it for the panel and the coach. */}
+        {ui.race && narrow && <RaceStrip race={ui.race} ctl={ctl} open={raceOpenNarrow} onToggle={() => setRaceOpenNarrow(!raceOpenNarrow)} />}
+        {ui.race && (!narrow || raceOpenNarrow) && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
+        {ui.race && (!narrow || raceOpenNarrow) && <CoachCard ctl={ctl} ui={ui} />}
       </div>
+      {ui.race && !narrow && <StartCountdown race={ui.race} top={(barTop ?? 72) + (ui.camera === 'drone' || ui.camera === 'helm' ? 92 : 44)} />}
+      {/* On a phone the strip carries the arrow to the next mark; a second one at the edge would only cover water. */}
+      {ui.race && !narrow && <MarkPointer ctl={ctl} />}
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation" data-density={density}>
         <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
           {toolsOpen ? 'Close menu' : 'Menu'}
@@ -327,6 +336,7 @@ export function App({ ctl }: { ctl: SimController }) {
                 { label: 'Your sail (debrief)', checked: ui.showDebrief, onSelect: () => ctl.toggleDebrief() },
                 ...(ui.race ? [{ label: `Protest room${ui.protest.count ? ` (${ui.protest.count})` : ''}`, checked: ui.protest.open, onSelect: () => ctl.toggleProtestRoom() }] : []),
                 { label: 'Race coach', checked: ui.coach?.on ?? ctl.coachEnabled, onSelect: () => ctl.toggleCoach() },
+                { label: 'Race aids (laylines, lifted or headed)', checked: ui.raceAids, onSelect: () => ctl.setRaceAids(!ui.raceAids) },
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
                 { label: 'Daylight view when dark', checked: ui.prefs.daylightView, onSelect: () => ctl.setPrefs({ daylightView: !ui.prefs.daylightView }) },
                 { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
@@ -450,7 +460,7 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} race={ui.race} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} />}</Suspense>
       {ui.race?.results && ui.showResults && <SocialResult ctl={ctl} ui={ui} />}
       <ChallengeCard ctl={ctl} ui={ui} />
       <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
