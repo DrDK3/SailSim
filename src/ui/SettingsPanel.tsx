@@ -57,6 +57,7 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <label className="check">
               <input type="checkbox" checked={ui.autoLowerGraphics} onChange={(e) => ctl.setAutoLowerGraphics(e.target.checked)} />
               Automatic quality: lower the resolution, then the graphics, when frames come too slowly or the simulation cannot keep up (until you choose graphics yourself)
+              {ui.dynamicScale !== undefined && <span className="fine-inline" data-testid="resolution-now"> · resolution at {Math.round(ui.dynamicScale * 100)}% now</span>}
             </label>
             <DeviceCheck ctl={ctl} ui={ui} />
             <div className="settings-grid">

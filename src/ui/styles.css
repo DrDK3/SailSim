@@ -518,7 +518,11 @@ button { min-height: 32px; display: inline-flex; align-items: center; justify-co
 /* Notices: out of the boat's way */
 .banner.paused-pill { top: 76px; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--panel-strong); }
 /* Information only: clicks pass through to whatever is under it. */
+/* The pill lets clicks through to the water under it, but its own buttons take them (they could not be clicked). */
 .banner.slow-pill { pointer-events: none; font-weight: 500; }
+.banner.slow-pill button { pointer-events: auto; }
+.pill-close { margin-left: 8px; min-width: 24px; min-height: 24px; padding: 0 6px; border-radius: 50%; background: transparent; border-color: transparent; color: var(--muted); font-size: 16px; line-height: 1; }
+.pill-close:hover { color: var(--text); background: var(--surface-control); }
 .minimap { bottom: 30px; }
 .minimap canvas { max-width: 200px; height: auto; }
 

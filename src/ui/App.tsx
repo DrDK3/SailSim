@@ -73,6 +73,15 @@ export function App({ ctl }: { ctl: SimController }) {
   // Phones: the race panel as one line, opened on demand (owner, 18 Nov 2026).
   const narrow = useNarrow();
   const [raceOpenNarrow, setRaceOpenNarrow] = useState(false);
+  // The "resolution lowered" notice: said once a visit, until dismissed or for a quarter of a minute (owner, 18 Nov
+  // 2026: it stayed up and could not be dismissed). Settings → Graphics shows the resolution in use at any time.
+  const [qualityNoteDone, setQualityNoteDone] = useState(false);
+  const lowered = ui.dynamicScale !== undefined;
+  useEffect(() => {
+    if (!lowered || qualityNoteDone) return;
+    const id = window.setTimeout(() => setQualityNoteDone(true), 15_000);
+    return () => window.clearTimeout(id);
+  }, [lowered, qualityNoteDone]);
   // What the simulator is and how far to trust it (the caveats that were in the welcome).
   const [showAbout, setShowAbout] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
@@ -428,7 +437,7 @@ export function App({ ctl }: { ctl: SimController }) {
           {ui.runningSlow.lowered ? ` · graphics lowered to ${presetLabel(ui.runningSlow.lowered)}` : ''}
         </div>
       )}
-      {!ui.runningSlow && !ui.paused && (ui.dynamicScale !== undefined || ui.deviceCheck || ui.warming) && (
+      {!ui.runningSlow && !ui.paused && ((lowered && !qualityNoteDone) || ui.deviceCheck || ui.warming) && (
         <div className="banner paused-pill slow-pill" role="status" data-testid="quality-pill" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
           {ui.warming ? (
             'Preparing the 3D view…'
@@ -441,6 +450,9 @@ export function App({ ctl }: { ctl: SimController }) {
             <>
               Resolution lowered to {Math.round((ui.dynamicScale ?? 1) * 100)}% to keep it smooth{' '}
               <button className="link" onClick={() => ctl.setAutoLowerGraphics(false)} data-testid="keep-quality">Keep full quality</button>
+              <button className="pill-close" onClick={() => setQualityNoteDone(true)} aria-label="Dismiss this notice" title="Dismiss" data-testid="quality-dismiss">
+                <span aria-hidden="true">×</span>
+              </button>
             </>
           )}
         </div>
