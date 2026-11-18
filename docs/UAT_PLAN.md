@@ -404,6 +404,22 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 30.6 | Look at the committee boat's stern | SAMARITAN across the transom, above the bathing platform. Tell us if it should be elsewhere or in another style | |
 | 30.7 | Open the Library | No "Met Office forecast replay, 23 Oct 2026 14:00 UTC"; the other built-in scenarios are there. (Options still offers that forecast as a weather source) | |
 
+## 31. The race at a glance; a phone; tactical aids; the finish; the welcome (18 Nov 2026) (25 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 31.1 | Start a race in Start Bay (one-minute sequence) and watch the last minute | From 1:00 the time shows large at the top centre, the last ten seconds as bare figures in amber, then "Start" for two seconds. Tell us if it hides anything you want to see | |
+| 31.2 | Before the start, turn away from the line; after it, turn away from the first mark | An arrow at the edge of the view points to the line, then to the mark, with its name and distance; it goes when the target is in view. It never sits on the instruments or the minimap | |
+| 31.3 | Look at the race panel during the race, and at the results afterwards | No list of the fleet's incidents and no "Simplified rules…" line in the race panel; both are in the results (incidents and penalties under the table) | |
+| 31.4 | Race on a phone held upright | The race is one line under the instruments: the countdown or your place, the next mark with its distance, an arrow (up = ahead). A good third of the screen is water. Tap the line for the full panel and the coach, and again to put them away | |
+| 31.5 | On the first beat, look at the water ahead and at the minimap | Two lines to the windward mark: solid green (the starboard-tack layline) and dashed red (port). The same on the minimap. They move as the wind shifts. Tell us whether they sit where you would expect in a stream (no allowance is made for it) | |
+| 31.6 | Look at the minimap during a race; press + and then "Course" | The whole course in the map: the legs with arrowheads, the marks named, the next mark ringed, the fleet. "+" follows the boat instead; "Course" brings the whole course back. The scale reads a round figure | |
+| 31.7 | Beat to windward in a shifty wind | A chip in the race panel reads "Lifted n°", "Headed n°" or "Wind steady"; lifted when you can point higher than a minute ago | |
+| 31.8 | Settings → All settings → Interface level: choose Expert, then Club | At Expert the laylines and the lifted/headed chip go; the "Race aids" box under the levels puts them back; Club and Learn have them on | |
+| 31.9 | Finish a race | The results open with your place in large figures, the gaps to the boats ahead and behind, and your place at the start, at each mark and at the finish | |
+| 31.10 | From the results press "Your sail" | "The race from above" opens: every boat's track over the course. Play runs the race through; the slider moves the moment; pointing at a boat names her. "Your track" still shows your own track by speed | |
+| 31.11 | Open the site in a private window (a first visit) | One question and a large "Sail now", nothing else to read. "More ways to sail" shows the four ways in; "About this simulator" has what it is and how far to trust it. Settings → About this simulator opens the same page later | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).

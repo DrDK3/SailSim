@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { SPEED_RAMP, debriefNotes, speedColour, type Manoeuvre, type TrackPoint } from '../app/sailLog';
 import { mmss } from '../app/lessons';
+import { RaceReplay } from './RaceReplay';
 
 const KN = 0.514444;
 const W = 560;
@@ -11,6 +12,9 @@ const H = 360;
  * The debrief after every sail (src/app/sailLog.ts): the track on the chart, coloured by speed over the ground (one
  * hue, muted to bright), the tacks (T) and gybes (G), the start line in a race; then the numbers, each tack and gybe
  * with what it cost, and the coach's notes in a race. Hover the track for the time and speed there.
+ *
+ * In a race there is also the race from above (src/ui/RaceReplay.tsx): the whole fleet's tracks over the course, to
+ * play back or step through. It is what opens first once you have finished.
  */
 export function DebriefPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
   // Recomputed when the panel opens and every few seconds while it is open (the track grows once a second).
@@ -22,7 +26,10 @@ export function DebriefPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const d = useMemo(() => ctl.sailDebrief(), [ctl, tick, ui.snapshot.t > 0]);
   const s = d.summary;
   const [hover, setHover] = useState<{ x: number; y: number; p: TrackPoint } | undefined>();
-  const [table, setTable] = useState(false);
+  // What is shown: your track by speed, the race from above (in a race), or each tack and gybe as a table.
+  const fleetView = !!ctl.race && ctl.fleetTrack.boats.length > 0;
+  const [tab, setTab] = useState<'track' | 'fleet' | 'table'>(() => (ctl.race && ctl.fleetTrack.boats.length > 1 && ui.race?.phase === 'finished' ? 'fleet' : 'track'));
+  const shown = tab === 'fleet' && !fleetView ? 'track' : tab;
   const canvas = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const data = ctl.dartData;
@@ -141,7 +148,7 @@ export function DebriefPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
       ctx.arc(hover.x, hover.y, 7, 0, Math.PI * 2);
       ctx.stroke();
     }
-  }, [view, img, d, hover, maxSog, s.manoeuvres, data?.manifest]);
+  }, [view, img, d, hover, maxSog, s.manoeuvres, data?.manifest, shown]);
 
   const onMove = (ev: React.MouseEvent<HTMLCanvasElement>) => {
     if (!view || !d.points.length) return;
@@ -176,14 +183,26 @@ export function DebriefPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
     <section className="panel dashboard debrief-panel" aria-label="Your sail" data-testid="debrief">
       <div className="dash-head">
         <h3>Your sail</h3>
-        <button aria-pressed={table} onClick={() => setTable(!table)}>
-          {table ? 'Chart' : 'Each tack and gybe'}
-        </button>
         <button onClick={onClose} aria-label="Close the debrief">Close</button>
       </div>
-      {!d.points.length ? (
+      <div className="debrief-views" role="group" aria-label="What to show">
+        <button aria-pressed={shown === 'track'} onClick={() => setTab('track')} data-testid="debrief-view-track">
+          Your track
+        </button>
+        {fleetView && (
+          <button aria-pressed={shown === 'fleet'} onClick={() => setTab('fleet')} data-testid="debrief-view-fleet">
+            The race from above
+          </button>
+        )}
+        <button aria-pressed={shown === 'table'} onClick={() => setTab('table')} data-testid="debrief-view-table">
+          Each tack and gybe
+        </button>
+      </div>
+      {shown === 'fleet' ? (
+        <RaceReplay ctl={ctl} img={img} tick={tick} />
+      ) : !d.points.length ? (
         <p className="fine">Sail for a few seconds and your track appears here.</p>
-      ) : table ? (
+      ) : shown === 'table' ? (
         <ManoeuvreTable manoeuvres={s.manoeuvres} t0={d.points[0]!.t} />
       ) : (
         <>

@@ -23,6 +23,8 @@ export class CourseScene {
   /** The robotic marks, each with a phase for its gentle bob. */
   private readonly robots: { g: THREE.Group; phase: number }[] = [];
   /** The committee boats, at anchor at their marks: they lie as the simulation says (`setCommitteeHeading`). */
+  private laylines?: readonly { tack: 'starboard' | 'port'; from: { n: number; e: number }; to: { n: number; e: number } }[];
+  private readonly layObjs: { line: THREE.LineSegments }[] = [];
   private readonly committee: { boat: THREE.Object3D; n: number; e: number; heading: number; flag?: THREE.Object3D; ride: WaveRide; rideStarted: boolean }[] = [];
   /** The pin ends' flags: their marks' positions (local n, e) and the flag pivots. */
   private readonly pinFlags: { n: number; e: number; pivot: THREE.Object3D }[] = [];
@@ -119,6 +121,7 @@ export class CourseScene {
       f.pivot.rotation.set(0, yaw + flagSwing(aws, time, f.e), 0);
       f.pivot.children[0]!.rotation.z = -flagDroop(aws);
     }
+    this.drawLaylines(waves?.height ?? FLAT);
     // The committee boats float on the drawn sea: heave, pitch and roll from the surface over their waterplane (eased
     // for a hull's inertia), visual only. Her waterplane is sampled over her own length, so short chop pitches her less
     // than a Squib (SAMARITAN is 10.8 m; the samples are a Squib's 5.8 m: E).
@@ -150,6 +153,58 @@ export class CourseScene {
   }
 
   /**
+   * The laylines to the next mark (src/app/raceAids.ts), or none: two lines on the water from the mark, riding the
+   * waves; the starboard-tack line green and solid, the port-tack line red and dashed (never colour alone).
+   */
+  setLaylines(lines?: readonly { tack: 'starboard' | 'port'; from: { n: number; e: number }; to: { n: number; e: number } }[]): void {
+    this.laylines = lines;
+    for (const l of this.layObjs) l.line.visible = false;
+    if (!lines) return;
+    lines.forEach((l, i) => {
+      let o = this.layObjs[i];
+      if (!o) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(LAY_SEGMENTS * 2 * 3), 3));
+        const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ transparent: true, opacity: 0.85, depthWrite: false }));
+        line.frustumCulled = false;
+        line.name = 'layline';
+        this.group.add(line);
+        o = { line };
+        this.layObjs[i] = o;
+      }
+      const stbd = l.tack === 'starboard';
+      const m = o.line.material as THREE.LineBasicMaterial;
+      m.color.setHex(stbd ? 0x5fe08a : 0xff6b5e);
+      o.line.userData.tack = l.tack;
+      o.line.visible = true;
+    });
+  }
+
+  /** Lay the laylines' points on the water now (called from update with the sea's height). */
+  private drawLaylines(height: (x: number, z: number) => number): void {
+    const lines = this.laylines;
+    if (!lines) return;
+    lines.forEach((l, i) => {
+      const o = this.layObjs[i];
+      if (!o) return;
+      const pos = o.line.geometry.getAttribute('position') as THREE.BufferAttribute;
+      // Short stretches, each laid on the water where it is; the port-tack line is dashed (every other stretch left out).
+      const dashed = l.tack === 'port';
+      const put = (k: number, f: number) => {
+        const x = l.to.e + (l.from.e - l.to.e) * f;
+        const z = -(l.to.n + (l.from.n - l.to.n) * f);
+        pos.setXYZ(k, x, height(x, z) + 0.12, z);
+      };
+      for (let k = 0; k < LAY_SEGMENTS; k++) {
+        const a = k / LAY_SEGMENTS;
+        put(2 * k, a);
+        put(2 * k + 1, dashed && k % 2 === 1 ? a : (k + 1) / LAY_SEGMENTS);
+      }
+      pos.needsUpdate = true;
+    });
+  }
+
+  /**
    * The committee boats' headings (rad, compass) at their marks, from the simulation (src/sim/race/anchored.ts):
    * the hull drawn is the hull boats hit. The bow (−z in the model) points along the heading.
    */
@@ -162,3 +217,6 @@ export class CourseScene {
 }
 
 const RIDE_SCRATCH: WaveRide = { heave: 0, pitch: 0, roll: 0 };
+/** Stretches along each layline (each follows the waves). */
+const LAY_SEGMENTS = 64;
+const FLAT = () => 0;

@@ -8,6 +8,8 @@ import { SECTOR_LIGHTS, kingswearRockOutline, lightLocal } from '../sim/env/shor
 import { notABuilding } from '../sim/env/notBuildings';
 import { DAYMARK } from '../render/daymark';
 import { DART_PROJECTION } from '../sim/geo/projection';
+import { coursePoints, fitCourse } from '../app/courseFit';
+import { drawCourse } from './courseMap';
 
 const W = 220;
 const H = 250;
@@ -19,10 +21,18 @@ const SPANS = [600, 1200, 2500, 6800];
  * it is ready), the boat and its course over ground, the other boats of the fleet, ferries (amber = restricted in
  * ability to manoeuvre), the navigation marks that have a stated position, the ship buoys and the yacht on them,
  * the Kingswear light with its white sector, the Daymark, and the places' names.
+ *
+ * In a race the map shows the course (owner, 18 Nov 2026: it was "an almost empty blue square in open water"): by
+ * default the whole course fitted into the map with the boat moving over it, the legs drawn with the way round, the
+ * marks named, the next mark ringed and, with the race aids on, the laylines to it. "+" and "−" go back to the map
+ * that follows the boat; "Course" returns to the whole course.
  */
 export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [zoom, setZoom] = useState(1);
+  // In a race: the whole course fitted into the map (the default), or the map following the boat.
+  const [courseView, setCourseView] = useState(true);
+  const [fitSpan, setFitSpan] = useState<number>();
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [chart, setChart] = useState<{ canvas: HTMLCanvasElement; e0: number; nTop: number; w: number; h: number } | null>(null);
   const data = ctl.dartData;
@@ -56,7 +66,9 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   useEffect(() => {
     const c = canvas.current;
     const m = data?.manifest;
-    if (!c || !m) return;
+    const race = ctl.race;
+    // The river's map needs the river; a course can be drawn on open water without it.
+    if (!c || (!m && !race)) return;
     const ctx = c.getContext('2d');
     if (!ctx) return;
     // Sharp on high-density screens: the canvas at the device's pixels, drawn in CSS pixels.
@@ -67,9 +79,12 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const s = ui.snapshot;
-    const span = SPANS[zoom]!;
+    const fit = race && courseView ? fitCourse(coursePoints(race.resolved), { n: s.n, e: s.e }, { w: W, h: H }) : undefined;
+    if (fit?.span !== fitSpan) setFitSpan(fit?.span);
+    const span = fit?.span ?? SPANS[zoom]!;
     const k = W / span; // px per metre
-    const toPx = (n: number, e: number) => [W / 2 + (e - s.e) * k, H / 2 - (n - s.n) * k] as const;
+    const centre = fit ?? { n: s.n, e: s.e };
+    const toPx = (n: number, e: number) => [W / 2 + (e - centre.e) * k, H / 2 - (n - centre.n) * k] as const;
     ctx.fillStyle = '#184266';
     ctx.fillRect(0, 0, W, H);
     if (chart) {
@@ -78,7 +93,7 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(chart.canvas, x0, y0, x1 - x0, y1 - y0);
-    } else if (img) {
+    } else if (img && m) {
       const [x0, y0] = toPx(m.domain.nMax, m.domain.eMin);
       const [x1, y1] = toPx(m.domain.nMin, m.domain.eMax);
       ctx.imageSmoothingEnabled = true;
@@ -164,7 +179,7 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       ctx.fill();
       ctx.stroke();
     }
-    const f = data.features;
+    const f = data?.features;
     if (f) {
       for (const mk of f.marks) {
         const [x, y] = toPx(mk.n, mk.e);
@@ -208,60 +223,26 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
         ctx.stroke();
       }
     }
-    // Course: legs (lap 1), lines and marks; the next mark ringed.
-    const race = ctl.race;
+    // The course: its legs with the way round, both lines, the marks named, the next mark ringed, and the laylines
+    // to it with the race aids on (src/ui/courseMap.ts). Names when the map is close enough to read them.
     if (race) {
-      const r = race.resolved;
-      ctx.strokeStyle = 'rgba(255,170,90,0.75)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 3]);
-      ctx.beginPath();
-      const sm = { n: (r.start[0].n + r.start[1].n) / 2, e: (r.start[0].e + r.start[1].e) / 2 };
-      let [px, py] = toPx(sm.n, sm.e);
-      ctx.moveTo(px, py);
-      for (const l of r.legs.filter((x) => x.lap === 1)) {
-        [px, py] = toPx(l.target.n, l.target.e);
-        ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      for (const [a, b] of [r.start, r.finish]) {
-        const [x0, y0] = toPx(a.n, a.e);
-        const [x1, y1] = toPx(b.n, b.e);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
-        ctx.stroke();
-      }
-      ctx.lineWidth = 1;
-      for (const p of r.pos.values()) {
-        const [x, y] = toPx(p.n, p.e);
-        ctx.fillStyle = '#ff7a1a';
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
       const judge = race.session.judgeOf('you');
-      const next = r.legs[judge.legIndex];
-      if (next && judge.phase === 'racing') {
-        const [x, y] = toPx(next.target.n, next.target.e);
-        ctx.strokeStyle = '#5fe08a';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(x, y, 7, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.lineWidth = 1;
-      }
+      drawCourse(ctx, race.resolved, toPx, {
+        legIndex: judge.phase === 'pre-start' ? undefined : judge.legIndex,
+        ringNext: judge.phase === 'racing',
+        names: span <= 3200,
+        laylines: ctl.raceLaylines?.lines,
+      });
     }
     // The places' names, at the zooms they suit, with a dark halo so they read on land and water.
     ctx.font = '600 10px system-ui, -apple-system, "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
+    // The zoom step the places' names go by: in the course view, the nearest step to the width shown.
+    const labelZoom = fit ? SPANS.reduce((best, sp, i) => (Math.abs(sp - span) < Math.abs(SPANS[best]! - span) ? i : best), 0) : zoom;
     for (const l of labels.current) {
-      if (!l.zooms.includes(zoom)) continue;
+      if (!l.zooms.includes(labelZoom)) continue;
       const [x0, y] = toPx(l.n, l.e);
       if (x0 < -40 || x0 > W + 40 || y < -10 || y > H + 10) continue;
       // Kept whole inside the map near its edges.
@@ -315,25 +296,48 @@ export function Minimap({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-  }, [ui.snapshot, ui.fleet, zoom, img, chart, data, ctl]);
+  }, [ui.snapshot, ui.fleet, ui.raceAids, zoom, courseView, fitSpan, img, chart, data, ctl]);
 
-  if (ui.dart.status !== 'loaded' || !data?.manifest) return null;
+  const racing = !!ui.race;
+  if (!racing && (ui.dart.status !== 'loaded' || !data?.manifest)) return null;
+  const fitted = racing && courseView && fitSpan !== undefined;
   // The scale, under the map rather than drawn on it (owner review, 5 Nov 2026: its figures ran onto the map):
   // a bar a quarter of the map's width and its length.
-  const bar = SPANS[zoom]! / 4;
+  const bar = (fitted ? fitSpan : SPANS[zoom]!) / 4;
+  // Leaving the course view: the nearest step of the boat's map, then one in or out.
+  const step = (d: number) => {
+    const from = fitted ? SPANS.reduce((best, sp, i) => (Math.abs(sp - fitSpan) < Math.abs(SPANS[best]! - fitSpan) ? i : best), 0) : zoom;
+    setCourseView(false);
+    setZoom(Math.max(0, Math.min(SPANS.length - 1, from + d)));
+  };
   return (
     <section className="panel minimap" aria-label="Minimap">
-      <canvas ref={canvas} width={W} height={H} data-testid="minimap" role="img" aria-label="Map of the River Dart around the boat, north up" />
+      <canvas
+        ref={canvas}
+        width={W}
+        height={H}
+        data-testid="minimap"
+        data-view={fitted ? 'course' : 'boat'}
+        role="img"
+        aria-label={fitted ? 'Map of the whole race course, north up: the legs, the marks, the fleet and your boat' : 'Map of the River Dart around the boat, north up'}
+      />
       <div className="minimap-bar">
-        <button onClick={() => setZoom(Math.max(0, zoom - 1))} aria-label="Zoom in" disabled={zoom === 0}>+</button>
-        <button onClick={() => setZoom(Math.min(SPANS.length - 1, zoom + 1))} aria-label="Zoom out" disabled={zoom === SPANS.length - 1}>−</button>
+        <button onClick={() => step(-1)} aria-label="Zoom in" disabled={!fitted && zoom === 0}>+</button>
+        <button onClick={() => step(1)} aria-label="Zoom out" disabled={!fitted && zoom === SPANS.length - 1}>−</button>
         <span className="map-scale" data-testid="minimap-scale" title="Scale of the map">
           <span className="map-scale-bar" aria-hidden="true" />
           {bar >= 1000 ? `${bar / 1000} km` : `${bar} m`}
         </span>
         <span className="map-north" title="North is up">N↑</span>
       </div>
-      <div className="fine-inline minimap-note">Not for navigation</div>
+      <div className="minimap-foot">
+        {racing && (
+          <button className={`map-course${courseView ? ' on' : ''}`} onClick={() => setCourseView(!courseView)} aria-pressed={courseView} title="The whole course in the map, or the map following the boat" aria-label="Show the whole course" data-testid="minimap-course">
+            Course
+          </button>
+        )}
+        <span className="fine-inline minimap-note">Not for navigation</span>
+      </div>
     </section>
   );
 }

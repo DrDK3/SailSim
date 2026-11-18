@@ -11,6 +11,9 @@ import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
 import { FRAME_EVERY_S, IncidentRecorder, type ProtestCase } from './protestRoom';
+import { WindTrend, laylines, shiftCall, type Layline, type ShiftCall } from './raceAids';
+import { finishStory, legMarkName, markPlaces, type BoatPassings, type FinishStory, type MarkPlace } from './raceStory';
+import { FleetTrack } from './fleetTrack';
 import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, type TrackPoint } from './sailLog';
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
@@ -55,7 +58,7 @@ import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
 import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
-import { RaceCoach, type Debrief, type Tip } from './coach';
+import { COACH, RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
 import { countdownCall } from './countdown';
 import { SHARE_LONG_CHARS, SHARE_MAX_CHARS, decodeShare, encodeShare, sharedPayload, shareUrl } from './shareLink';
@@ -162,6 +165,14 @@ export interface RaceUi {
   drill?: { attempt: number; last?: DrillStart & { verdict: string }; history: DrillStart[]; bestLateS?: number };
   /** Your start and finish against your bests in this browser (src/app/bests.ts). */
   best?: { start?: { delayS: number; best: boolean; previousS?: number }; finish?: { timeS: number; best: boolean; previousS?: number; label: string } };
+  /** Race aids on (laylines, lifted or headed: src/app/raceAids.ts), and the wind's shift now when sailing upwind. */
+  aids: boolean;
+  shift?: ShiftCall;
+  /** Once you have finished: your place with the gaps either side, and your place at the start and at each mark. */
+  story?: FinishStory;
+  markPlaces?: MarkPlace[];
+  /** With the results: every incident and penalty of the race, as the simplified judge found them. */
+  rulings?: LogEntry[];
 }
 
 export const DEFAULT_SCENARIO: AppScenario = {
@@ -197,6 +208,8 @@ export interface UiState {
   camera: CameraMode;
   /** Drone view: carried along with the boat. */
   droneFollow: boolean;
+  /** Race aids (laylines, lifted or headed) on: by the interface level unless set in Settings. */
+  raceAids: boolean;
   /** The race coach (races only): its briefing, latest tips and, after the finish, the debrief. */
   coach?: { on: boolean; briefing: string[]; tips: readonly Tip[]; debrief?: Debrief; now: number };
   /** A hint when you are stuck (src/app/hints.ts), and your first sails counted in this browser. */
@@ -452,6 +465,11 @@ export class SimController {
   private coach?: RaceCoach;
   private debrief?: Debrief;
   private coachOn = readFlag('squib.coach', true);
+  /** Race aids (laylines, lifted or headed): by the interface level unless set in Settings. */
+  private raceAidsOn = readFlag('squib.raceAids', levelDefaults(loadLevel()).raceAids);
+  /** The wind's recent mean for the lifted/headed readout: the coach's definition (src/app/raceAids.ts). */
+  private readonly aidTrend = new WindTrend(COACH.meanWindS);
+  private aidTrendT?: number;
   private fpsT0 = 0;
   private fps = 0;
   private physMs = 0;
@@ -482,10 +500,14 @@ export class SimController {
   private showDebrief = false;
   /** The protest room (src/app/protestRoom.ts): clips of your incidents in a race, and whether its panel is open. */
   private readonly incidents = new IncidentRecorder();
+  /** The whole fleet's positions through the race, once a second: the replay from above (src/app/fleetTrack.ts). */
+  readonly fleetTrack = new FleetTrack();
   private showProtest = false;
   /** Free sailing: the user's boat in a one-boat fleet (contact with moored boats and ferries). */
   private soloFleet?: Fleet;
   private resultsShown = false;
+  /** The results have opened for your own finish (they open again when the race is over). */
+  private finishShown = false;
   private showMinimap = true;
   private showLayers = false;
   private showEditor = false;
@@ -638,12 +660,16 @@ export class SimController {
     this.showResults = false;
     this.track.clear();
     this.incidents.reset();
+    this.fleetTrack.clear();
+    this.aidTrend.reset();
+    this.aidTrendT = undefined;
     this.lineWind.reset();
     // A drill goes on through a Reset of its own start (the next attempt); anything else ends it.
     if (this.drill && this.drill.scenario === JSON.stringify(this.scenario)) this.drill = { ...this.drill, attempt: this.drill.attempt + 1, gun: undefined, crossed: undefined, scored: undefined };
     else this.drill = undefined;
     this.showProtest = false;
     this.resultsShown = false;
+    this.finishShown = false;
     this.view?.setBoatType(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE, boatParams, scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
@@ -706,6 +732,8 @@ export class SimController {
     else if (this.exercise && !this.replay && this.sim.step % 10 === 0) this.updateExercise();
     else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
+    if (this.race && this.sim.step % 50 === 0) this.updateAidTrend();
+    if (this.race && !this.replay && this.sim.step % 100 === 0) this.recordFleetTrack();
     if (!this.replay && this.sim.step % 10 === 0) this.noteRunAssists();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
     if (this.sim.step % (TRACK_EVERY_S * 100) === 0) this.recordTrack();
@@ -1222,6 +1250,8 @@ export class SimController {
     writeFlag('squib.teaching', d.teaching);
     this.coachOn = d.coach;
     writeFlag('squib.coach', d.coach);
+    this.raceAidsOn = d.raceAids;
+    writeFlag('squib.raceAids', d.raceAids);
     try {
       localStorage.setItem('squib.instruments.more', d.allInstruments ? '1' : '0');
     } catch {
@@ -2069,7 +2099,7 @@ export class SimController {
           }
         : undefined,
       course: this.race
-        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e) }
+        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e), laylines: this.raceLaylines?.lines }
         : undefined,
       fleet: this.race || this.ghost ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
     });
@@ -2652,6 +2682,104 @@ export class SimController {
     this.publish(true);
   }
 
+  // --------------------------------------------------------------- the race at a glance, and its aids
+
+  /** Once a second in a race: where every boat is, for the replay from above. */
+  private recordFleetTrack(): void {
+    const r = this.race!;
+    this.fleetTrack.add(
+      this.sim.time,
+      r.session.fleet.boats.map((b) => {
+        const st = b.sim.state;
+        return { id: b.id, label: b.id === 'you' ? 'You' : b.sailNumber, colour: b.colour, you: b.id === 'you', n: st.n, e: st.e, heading: st.psi };
+      }),
+    );
+  }
+
+  /** Every half second of a race: the wind's direction into its recent mean (the lifted/headed readout). */
+  private updateAidTrend(): void {
+    const s = this.sim.snapshot(false);
+    const dt = this.aidTrendT === undefined ? 0 : Math.max(0, Math.min(2, s.t - this.aidTrendT));
+    this.aidTrendT = s.t;
+    this.aidTrend.update(dt, s.twd);
+  }
+
+  /** Race aids (laylines, lifted or headed) on or off; the interface level sets the default. */
+  get raceAids(): boolean {
+    return this.raceAidsOn;
+  }
+
+  setRaceAids(on: boolean): void {
+    this.raceAidsOn = on;
+    writeFlag('squib.raceAids', on);
+    this.publish(true);
+  }
+
+  /**
+   * The laylines to the next mark, while racing with the aids on: on a beat or a run, at the model polar's best angle
+   * in the wind at the boat now (E: no allowance for leeway or the stream). Undefined on a reach and before the start.
+   */
+  get raceLaylines(): { kind: 'beat' | 'run'; twaDeg: number; lines: [Layline, Layline] } | undefined {
+    const r = this.race;
+    if (!r || !this.raceAidsOn) return undefined;
+    const judge = r.session.judgeOf('you');
+    const leg = r.resolved.legs[judge.legIndex];
+    if (judge.phase !== 'racing' || !leg) return undefined;
+    const s = this.currSnap;
+    return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.polar);
+  }
+
+  /**
+   * What the race's arrow points at: before the start the nearest point of the starting line (the nearer end to round
+   * when over it after the signal), then the next mark, then the finishing line. With how far off it is.
+   */
+  get raceTarget(): { n: number; e: number; label: string; short: string; distanceM: number } | undefined {
+    const r = this.race;
+    if (!r) return undefined;
+    const t = this.sim.time;
+    const st = r.session.judgeOf('you').state(t);
+    if (st.phase === 'finished' || r.session.outOfRace('you')) return undefined;
+    const s = this.sim.state;
+    const to = (p: { n: number; e: number }, label: string, short = label) => ({ n: p.n, e: p.e, label, short, distanceM: Math.hypot(p.n - s.n, p.e - s.e) });
+    if (st.phase === 'pre-start') {
+      const [a, b] = r.resolved.start;
+      if (st.ocs && t >= r.session.committee.startTime) {
+        const [la, lb] = this.endLabels(r);
+        return Math.hypot(a.n - s.n, a.e - s.e) <= Math.hypot(b.n - s.n, b.e - s.e) ? to(a, la) : to(b, lb);
+      }
+      // The nearest point of the line (kept a little inside its ends).
+      const len2 = (b.n - a.n) ** 2 + (b.e - a.e) ** 2 || 1;
+      const f = Math.max(0.08, Math.min(0.92, ((s.n - a.n) * (b.n - a.n) + (s.e - a.e) * (b.e - a.e)) / len2));
+      return to({ n: a.n + (b.n - a.n) * f, e: a.e + (b.e - a.e) * f }, 'Start line', 'Line');
+    }
+    const leg = r.resolved.legs[st.legIndex];
+    // A mark with the side to leave it ("Windward to port"); a gate by its short name.
+    const name = this.legName(r, st.legIndex);
+    if (leg) return to(leg.target, leg.leg.type === 'mark' ? leg.label : (name ?? leg.label), name);
+    const [fa, fb] = r.resolved.finish;
+    return to({ n: (fa.n + fb.n) / 2, e: (fa.e + fb.e) / 2 }, 'Finish line', 'Finish');
+  }
+
+  /** The mark or gate of a leg by a short name (src/app/raceStory.ts), for the arrow, the strip and the results. */
+  private legName(r: NonNullable<SimController['race']>, legIndex: number): string | undefined {
+    const leg = r.resolved.legs[legIndex];
+    if (!leg) return undefined;
+    return legMarkName(leg.leg, (id) => r.course.marks.find((m) => m.id === id)?.name ?? id);
+  }
+
+  /**
+   * Where a point on the water is on the screen: x right and y up, each −1…1 across the view; `behind` when it is
+   * behind the camera. Undefined without a 3D view.
+   */
+  screenOf(n: number, e: number): { x: number; y: number; behind: boolean } | undefined {
+    return this.view?.screenOf(n, e);
+  }
+
+  /** The compass heading the camera looks along (rad): for an arrow drawn where the 3D view cannot be asked. */
+  get viewHeading(): number {
+    return this.view?.viewHeading ?? this.currSnap.heading;
+  }
+
   /** The protest room's cases: your incidents in this race, each with its clip. */
   get protestCases(): readonly ProtestCase[] {
     return this.incidents.cases;
@@ -2957,7 +3085,12 @@ export class SimController {
     this.lastPublish = performance.now();
     // Sunk in a race: she retires (she cannot finish).
     if (this.race && !this.replay && this.sim.damage.state === 'sunk' && !this.race.session.outOfRace('you')) this.race.session.retire('you');
-    // Show the results once when the race is over.
+    // Show the results once when you finish (your place, large, while the others are still racing: owner, 18 Nov
+    // 2026, "make the finish a moment"), and once when the race is over.
+    if (this.race && !this.finishShown && this.race.session.judgeOf('you').phase === 'finished') {
+      this.finishShown = true;
+      this.showResults = true;
+    }
     const over = !!this.race && (this.race.session.committee.finished || this.race.session.committee.abandoned);
     if (over && !this.resultsShown) {
       this.resultsShown = true;
@@ -3024,6 +3157,7 @@ export class SimController {
       graphicsLost: this.graphicsLost,
       runningSlow: this.paused ? undefined : this.runningSlow,
       autoLowerGraphics: this.autoLowerGraphics,
+      raceAids: this.raceAidsOn,
       gamepad: this.gamepadConnected || undefined,
       social: this.social.ui(),
       warming: !!this.warming || undefined,
@@ -3123,6 +3257,22 @@ export class SimController {
         })
       : undefined;
     const dq = cm.bfd.has('you') ? 'Black flag (rule 30.4): disqualified (BFD)' : cm.ufd.has('you') ? 'U flag (rule 30.3): disqualified (UFD)' : undefined;
+    // Once there are results: each boat's start, marks and finish as her judge recorded them, for the places at each mark.
+    const passings: BoatPassings[] | undefined = results
+      ? session.fleet.boats.map((b) => {
+          const ev = session.judgeOf(b.id).state(t).events;
+          const start = ev.find((x) => x.type === 'start');
+          const finish = ev.find((x) => x.type === 'finish');
+          return {
+            id: b.id,
+            start: start?.type === 'start' ? start.time : undefined,
+            marks: ev.flatMap((x) => (x.type === 'rounded' || x.type === 'gate' ? [{ leg: x.leg, label: this.legName(r, x.leg) ?? x.label, time: x.time }] : [])),
+            finish: finish?.type === 'finish' ? finish.time : undefined,
+          };
+        })
+      : undefined;
+    const snap = this.currSnap;
+    const shift = this.raceAidsOn && this.aidTrend.shiftDeg !== undefined && st.phase !== 'finished' ? shiftCall(this.aidTrend.shiftDeg, snap.twa) : undefined;
     return {
       courseName: r.course.name,
       courseStatus: r.course.status,
@@ -3155,6 +3305,11 @@ export class SimController {
       raceOver,
       disqualified: dq,
       best: this.raceBest.start || this.raceBest.finish ? { ...this.raceBest } : undefined,
+      aids: this.raceAidsOn,
+      shift,
+      story: results ? finishStory(results) : undefined,
+      rulings: results ? session.log.filter((l) => l.kind === 'incident' || l.kind === 'penalty') : undefined,
+      markPlaces: passings ? markPlaces(passings) : undefined,
       line: st.phase === 'pre-start' && !st.ocs ? this.lineUi(r, cm.startTime - t) : undefined,
       drill: this.drill
         ? {

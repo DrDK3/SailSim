@@ -3,17 +3,17 @@
  * you sailed before?") and changeable in Settings. It only changes defaults; every part can still be switched
  * on or off by hand, and the physics is the same at every level.
  *
- *  - Learn: the teaching overlay on, the race coach on, the dock without its advanced controls (flatten, the
- *    crew's hiking by hand).
- *  - Club: as the simulator has been: the coach on, the overlay off, the main instruments.
- *  - Expert: every instrument shown, the coach and the overlay off.
+ *  - Learn: the teaching overlay on, the race coach and the race aids on, the dock without its advanced controls
+ *    (flatten, the crew's hiking by hand).
+ *  - Club: as the simulator has been: the coach and the race aids on, the overlay off, the main instruments.
+ *  - Expert: every instrument shown; the coach, the overlay and the race aids (laylines, lifted or headed) off.
  */
 export type InterfaceLevel = 'learn' | 'club' | 'expert';
 
 export const LEVELS: { id: InterfaceLevel; label: string; text: string }[] = [
-  { id: 'learn', label: 'Learn', text: 'The teaching overlay and the coach, and a simpler dock.' },
-  { id: 'club', label: 'Club', text: 'The main instruments and the coach.' },
-  { id: 'expert', label: 'Expert', text: 'Every instrument; no coach or overlay.' },
+  { id: 'learn', label: 'Learn', text: 'The teaching overlay, the coach and the race aids, and a simpler dock.' },
+  { id: 'club', label: 'Club', text: 'The main instruments, the coach and the race aids (laylines, lifted or headed).' },
+  { id: 'expert', label: 'Expert', text: 'Every instrument; no coach, overlay or race aids.' },
 ];
 
 const KEY = 'squib.level.v1';
@@ -46,10 +46,12 @@ export function saveLevel(l: InterfaceLevel): void {
 }
 
 /** What each level turns on by default. */
-export function levelDefaults(l: InterfaceLevel): { teaching: boolean; coach: boolean; allInstruments: boolean; advancedDock: boolean } {
+export function levelDefaults(l: InterfaceLevel): { teaching: boolean; coach: boolean; raceAids: boolean; allInstruments: boolean; advancedDock: boolean } {
   return {
     teaching: l === 'learn',
     coach: l !== 'expert',
+    // Laylines and the lifted/headed readout in a race (owner, 18 Nov 2026: on for Learn and Club, off for Expert).
+    raceAids: l !== 'expert',
     allInstruments: l === 'expert',
     advancedDock: l !== 'learn',
   };
