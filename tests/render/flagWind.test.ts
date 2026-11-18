@@ -122,7 +122,7 @@ describe('flags and vanes point with the wind where they are', () => {
     }
   });
 
-  it('Mosaique\'s ensign and her stern burgee (moored): downwind of the true wind at her stern', () => {
+  it('Mosaique\'s ensign and her masthead burgee (moored): downwind of the true wind where she lies', () => {
     const view = new ShipBuoysView();
     const ensign = view.yacht.getObjectByName('mosaique-ensign-cloth')!;
     const burgee = view.yacht.getObjectByName('mosaique-burgee')!.getObjectByName('burgee-flag')!;
