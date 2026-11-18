@@ -1013,7 +1013,7 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 
 /*
  * Race UX round (owner, 18 Nov 2026): the race at a glance (src/ui/RaceGlance.tsx), the finish as a moment
- * (src/ui/ResultsPanel.tsx), the race from above (src/ui/RaceReplay.tsx).
+ * (src/ui/ResultsPanel.tsx), the race from above (src/ui/RaceReplay.tsx), the lighter welcome.
  */
 /* The last minute, large, top centre. Decoration to a screen reader (the race panel carries the same time). */
 .race-countdown { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); z-index: 2; pointer-events: none; font-size: clamp(56px, 8vw, 104px); font-weight: 800; line-height: 1; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 2px 4px rgba(4, 14, 22, 0.9), 0 0 22px rgba(4, 14, 22, 0.75); }
@@ -1080,6 +1080,18 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .replay-bar { flex-wrap: wrap; }
   .replay-clock { min-width: 0; }
 }
+/* The lighter welcome: one question and a large "Sail now"; the ways in and the About page behind links. */
+.hub.hub-light { width: min(520px, calc(100% - 24px)); }
+.hub-light .sail-now { align-items: center; text-align: center; padding: 18px 20px; margin-top: var(--s4); }
+.hub-light .sail-now-title { font-size: 26px; letter-spacing: 0.01em; }
+.hub-light .sail-now-text { font-size: 14px; }
+.hub-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-top: var(--s4); }
+.hub-links .link { min-height: 32px; }
+.about-title { margin: var(--s3) 0 0; font-size: var(--fs-lg, 17px); }
+.about { line-height: 1.5; }
+.about h4 { margin: var(--s3) 0 4px; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.about ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.about p { margin: var(--s3) 0 0; }
 @media (max-width: 700px) {
   /* The debrief's Close clear of the Menu button in the corner. */
   .debrief-panel .dash-head { padding-right: 88px; }

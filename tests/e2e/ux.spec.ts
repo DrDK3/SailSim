@@ -23,13 +23,15 @@ test.describe('first visit', () => {
   test('the welcome puts "Sail now" first: for a newcomer it starts lesson 1, step by step, moving on when the goal is met', async ({ page }) => {
     test.setTimeout(180_000 * CI_SLOW);
     const errors = await ready(page);
-    // The welcome is the experience hub: one question, "Sail now" first and largest, then four ways in.
+    // The welcome is the experience hub: one question and "Sail now", first and largest; the four ways in wait
+    // behind "More ways to sail" (owner, 18 Nov 2026: tests/e2e/raceGlance.spec.ts).
     const welcome = page.getByRole('dialog', { name: 'Squib sailing simulator' });
     await expect(welcome).toBeVisible();
     await expect(page.getByTestId('sail-now')).toBeFocused();
     // Not answered yet: a newcomer (Learn), so Sail now is lesson 1.
     await expect(page.getByTestId('steer-bow')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('sail-now')).toContainText('Lesson 1');
+    await page.getByTestId('hub-more').click();
     for (const door of ['Learn to sail', 'Free sailing', 'Race against AI', 'Scenarios']) await expect(welcome.getByRole('button', { name: door })).toBeVisible();
     await page.getByTestId('sail-now').click();
     await expect(welcome).toBeHidden();

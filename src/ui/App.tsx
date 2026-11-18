@@ -7,6 +7,7 @@ import { DamageBanner, DamageCard } from './DamageCard';
 import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
+import { AboutDialog } from './About';
 import { MarkPointer, RaceStrip, StartCountdown, useNarrow } from './RaceGlance';
 import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
@@ -72,6 +73,8 @@ export function App({ ctl }: { ctl: SimController }) {
   // Phones: the race panel as one line, opened on demand (owner, 18 Nov 2026).
   const narrow = useNarrow();
   const [raceOpenNarrow, setRaceOpenNarrow] = useState(false);
+  // What the simulator is and how far to trust it (the caveats that were in the welcome).
+  const [showAbout, setShowAbout] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [raceOpen, setRaceOpen] = useState(false);
@@ -343,6 +346,7 @@ export function App({ ctl }: { ctl: SimController }) {
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
                 { section: 'Settings', label: 'All settings…', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
+                { label: 'About this simulator', checked: showAbout, onSelect: () => setShowAbout(!showAbout) },
                 { label: ui.audio.muted ? 'Sound off' : 'Sound on', keys: 'U', checked: !ui.audio.muted, onSelect: () => ctl.toggleMute() },
                 // The engineering tools (calibration and checking the physics): Expert level, or Settings → Help and accessibility.
                 ...(ui.prefs.devTools || ui.level === 'expert'
@@ -502,6 +506,7 @@ export function App({ ctl }: { ctl: SimController }) {
           lessonsDone={ui.lessons.filter((l) => l.done && l.group === 'basics').length}
         />
       )}
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
       {ui.confirmLeave && (
         <Confirm id="leave" title="Leave the race?" keep="Keep racing" go="Leave the race" onAnswer={(yes) => ctl.answerLeave(yes)} testId="confirm-leave">
           The race is under way. {ui.confirmLeave} ends it, and the race is lost.
