@@ -40,9 +40,10 @@ const ROLL_FOLLOW = 0.6;
  * How a hull floats on the drawn sea (visual only: the physics does not see the waves yet, issue 51). The
  * plane fitted by least squares to the surface over the waterplane gives the heave, pitch and cross slope,
  * so the hull rides the waves rather than crests running through it. `height` is the water surface at a
- * Three.js (x, z); `heading` the compass heading (rad).
+ * Three.js (x, z); `heading` the compass heading (rad). `size` stretches the sampled waterplane for a hull longer
+ * than a Squib's (1: a Squib's), so short chop pitches a long hull less.
  */
-export function rideWaves(height: (x: number, z: number) => number, x: number, z: number, heading: number, out: WaveRide): WaveRide {
+export function rideWaves(height: (x: number, z: number) => number, x: number, z: number, heading: number, out: WaveRide, size = 1): WaveRide {
   const fx = Math.sin(heading);
   const fz = -Math.cos(heading);
   const sx = Math.cos(heading);
@@ -52,16 +53,16 @@ export function rideWaves(height: (x: number, z: number) => number, x: number, z
   let ht = 0;
   for (const s of RIDE_S) {
     for (const t of RIDE_T) {
-      const h = height(x + fx * s + sx * t, z + fz * s + sz * t);
+      const h = height(x + fx * s * size + sx * t * size, z + fz * s * size + sz * t * size);
       sum += h;
       hs += h * s;
       ht += h * t;
     }
   }
   out.heave = sum / (RIDE_S.length * RIDE_T.length);
-  out.pitch = Math.atan(hs / RIDE_SS);
+  out.pitch = Math.atan(hs / (RIDE_SS * size));
   // The higher side lifts: water rising to starboard rolls the boat to port.
-  out.roll = -ROLL_FOLLOW * Math.atan(ht / RIDE_TT);
+  out.roll = -ROLL_FOLLOW * Math.atan(ht / (RIDE_TT * size));
   return out;
 }
 

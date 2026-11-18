@@ -917,7 +917,7 @@ export class SceneView {
     if (this.course && env?.course) {
       this.course.setWind(curr.twdGround, env.windAt, curr.twsGround);
       if (env.course.committeeHeading) this.course.setCommitteeHeading(env.course.committeeHeading);
-      this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+      this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time, { height: (cx, cz) => this.water.heightAt(cx, cz, time), dt: frameDt });
     }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.drawReflection();
