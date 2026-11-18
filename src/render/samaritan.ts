@@ -109,7 +109,7 @@ function loft(sections: { z: number; pts: THREE.Vector2[] }[], pick: (i: number,
 /**
  * SAMARITAN, bow towards −z (the model frame of src/render/vessels.ts), centred on the origin at the waterline.
  * Named meshes: `samaritan-body`, `samaritan-glass`, `samaritan-fittings`, `samaritan-name-port`,
- * `samaritan-name-starboard`.
+ * `samaritan-name-starboard`, `samaritan-name-stern`.
  */
 export function samaritanModel(): THREE.Group {
   const kit = new Kit();
@@ -284,6 +284,28 @@ export function samaritanModel(): THREE.Group {
       plane.name = s > 0 ? 'samaritan-name-starboard' : 'samaritan-name-port';
       g.add(plane);
     }
+  }
+  // Her name across the transom (owner, 18 Nov 2026: "Add the name … across the stern of the committee boat"), between
+  // the bathing platform and the deck edge, on the transom's face. The transom is raked (top forward: transomRake
+  // 0.25 m over its height), so the lettering leans with it. Without a DOM (tests) the plate is there but hidden.
+  {
+    const top = h.sheer(stern) - 0.12;
+    const foot = 0.47; // the bathing platform's top is 0.41 m
+    const y = (top + foot) / 2;
+    // The transom's face at height y: the hull (vessels.ts) sets it 0.25 × (0.5 − f) aft of L/2, f the share of the
+    // height from the keel (keel depth at the stern from the hull spec: draft × (1 − sternRise)).
+    const keel = 0.55 * (1 - 0.25);
+    const face = (yy: number) => stern + 0.25 * (0.5 - (yy + keel) / (h.sheer(stern) + keel));
+    const plate = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.0, 0.31),
+      new THREE.MeshStandardMaterial({ map, transparent: true, roughness: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    );
+    plate.position.set(0, y, face(y) + 0.03);
+    // Lean with the transom: its top forward (towards −z).
+    plate.rotation.x = -Math.atan((face(foot) - face(top)) / (top - foot));
+    plate.name = 'samaritan-name-stern';
+    plate.visible = !!map;
+    g.add(plate);
   }
   return g;
 }
