@@ -37,7 +37,7 @@ describe('free-sailing start locations', () => {
 /** The races the app offers: built-in scenarios with a course, and the quick-race venues. */
 function races() {
   const out: { name: string; scenario: ReturnType<typeof quickRaceScenario>['scenario'] }[] = [];
-  for (const b of builtInScenarios([], true)) if (b.scenario?.course) out.push({ name: b.id, scenario: b.scenario as never });
+  for (const b of builtInScenarios(true)) if (b.scenario?.course) out.push({ name: b.id, scenario: b.scenario as never });
   for (const venue of ['start-bay', 'river'] as const) out.push({ name: `quick-${venue}`, scenario: quickRaceScenario({ ...DEFAULT_QUICK_RACE, venue, conditions: 'as-set' }, DEFAULT_SCENARIO).scenario });
   return out;
 }

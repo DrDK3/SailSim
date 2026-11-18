@@ -1197,7 +1197,7 @@ export class DartScene {
     // Flags and vanes ashore and moored: the true wind where each one is.
     const wind = { fromDir: u.windFromDir, speed: u.windSpeed ?? 5 };
     for (const en of this.ensigns) en.update(u.epochMs, trueWindAt(u.windAt, en.at.n, en.at.e, wind), u.time);
-    for (const b of this.burgees) b.update(trueWindAt(u.windAt, b.at.n, b.at.e, wind), u.time);
+    for (const b of this.burgees) b.update(u.epochMs, trueWindAt(u.windAt, b.at.n, b.at.e, wind), u.time);
     if (this.shipBuoys) {
       const at = this.shipBuoys.flagsAt;
       this.shipBuoys.update(u.epochMs, trueWindAt(u.windAt, at.n, at.e, wind), u.time, u.camera);

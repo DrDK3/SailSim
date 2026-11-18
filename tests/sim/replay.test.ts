@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording } from '../../src/app/replay';
 import { SimController, type AppScenario } from '../../src/app/controller';
@@ -149,18 +148,15 @@ describe('replay in the app controller', () => {
 
 describe('scenario library', () => {
   it('every built-in scenario starts; those needing missing data say why instead', () => {
-    const replayFile = readFileSync('public/live/metoffice-replay-2026-10-23T1400Z.json', 'utf8');
-    const source = { id: 'r', kind: 'replay' as const, label: 'r', url: 'live/metoffice-replay-2026-10-23T1400Z.json', validTime: '2026-10-23T14:00:00Z', json: JSON.parse(replayFile) };
-    const without = builtInScenarios([], false);
-    const metOffice = without.find((s) => s.id.startsWith('metoffice'))!;
-    expect(metOffice.scenario).toBeUndefined();
-    expect(metOffice.unavailable).toMatch(/not found/);
-    expect(without.filter((s) => s.unavailable).map((s) => s.id).sort()).toEqual(['metoffice-2026-10-23', 'river-range', 'wind-against-tide']);
+    const without = builtInScenarios(false);
+    expect(without.filter((s) => s.unavailable).map((s) => s.id).sort()).toEqual(['river-range', 'wind-against-tide']);
+    // The Met Office forecast replay of 23 Oct 2026 is no longer in the library (owner, 18 Nov 2026).
+    expect(without.some((s) => s.id.startsWith('metoffice') || /Met Office forecast replay/.test(s.title))).toBe(false);
     // Here the River Dart data is not loaded, so check the river scenarios' conditions need it, and run the rest.
-    const all = builtInScenarios([source], true);
+    const all = builtInScenarios(true);
     expect(all.every((s) => s.scenario)).toBe(true);
     for (const s of all) {
-      if (without.find((w) => w.id === s.id)?.unavailable && s.id !== metOffice.id) {
+      if (without.find((w) => w.id === s.id)?.unavailable) {
         if (s.scenario!.conditions.current.mode === 'dart') expect(() => buildConditions(s.scenario!.conditions)).toThrow(/River Dart data/);
         continue;
       }

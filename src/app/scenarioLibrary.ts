@@ -1,5 +1,5 @@
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
-import type { AppScenario, DataSource, StartLocationId } from './controller';
+import type { AppScenario, StartLocationId } from './controller';
 import { START_LOCATIONS } from './controller';
 
 /**
@@ -150,39 +150,15 @@ const BUILT_IN: { id: string; title: string; description: string; needsDart?: bo
   },
 ];
 
-/** The bundled Met Office replay, offered when its file was found (it is fetched, not built in). */
-const MET_OFFICE_REPLAY = {
-  id: 'metoffice-2026-10-23',
-  file: 'metoffice-replay-2026-10-23T1400Z.json',
-  title: 'Met Office forecast replay, 23 Oct 2026 14:00 UTC',
-  description: 'Real Met Office UKV model wind over the area, following the forecast every 15 minutes, with its cloud, visibility and rain. Model output, not measurements.',
-};
-
-/** Built-in scenarios; those that need data that is missing (a file, the River Dart data) are marked unavailable. */
-export function builtInScenarios(weatherSources: readonly DataSource[], dartLoaded: boolean): LibraryScenario[] {
-  const out: LibraryScenario[] = BUILT_IN.map(({ needsDart, ...b }) =>
+/** Built-in scenarios; those that need data that is missing (the River Dart data) are marked unavailable. */
+export function builtInScenarios(dartLoaded: boolean): LibraryScenario[] {
+  // The Met Office forecast replay of 23 Oct 2026 was taken out of the library at the owner's request (18 Nov 2026);
+  // its file stays, offered as a weather source in Options.
+  return BUILT_IN.map(({ needsDart, ...b }) =>
     needsDart && !dartLoaded
       ? { ...b, group: 'built-in', unavailable: 'Needs the River Dart data, which is not loaded.' }
       : { ...b, group: 'built-in', scenario: structuredClone(b.scenario) },
   );
-  const src = weatherSources.find((s) => s.url.endsWith(MET_OFFICE_REPLAY.file));
-  out.push({
-    id: MET_OFFICE_REPLAY.id,
-    title: MET_OFFICE_REPLAY.title,
-    description: MET_OFFICE_REPLAY.description,
-    group: 'built-in',
-    ...(src
-      ? {
-          scenario: {
-            conditions: { startTime: src.validTime ?? '2026-10-23T14:00:00Z', weather: { source: 'metoffice', snapshot: src.json, replay: true }, gusts: { preset: 'from-data', seed: 1 }, current: { mode: 'none' } },
-            startLocation: 'off-rdyc',
-            startHeadingDeg: 170,
-            startSpeedKn: 3,
-          },
-        }
-      : { unavailable: `The forecast file (live/${MET_OFFICE_REPLAY.file}) was not found next to the app.` }),
-  });
-  return out;
 }
 
 const USER_KEY = 'squib.userScenarios.v1';

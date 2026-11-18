@@ -37,8 +37,9 @@ test('graphics and sound: presets apply and are kept, sound mutes with U, the ph
   const s0 = await scale();
   await panel.getByRole('radio', { name: 'Ultra' }).click();
   await expect.poll(() => page.evaluate(() => window.__squib!.controller.getState().graphics?.preset)).toBe('ultra');
-  // Ultra draws at full resolution, Smooth at three quarters.
-  await expect.poll(scale).toBeGreaterThan(s0);
+  // Ultra draws at full resolution, Smooth at three quarters. The canvas is resized at the start of the next drawn frame
+  // (so it is never shown empty), and the first frame on Ultra compiles new shaders: slow on a software renderer.
+  await expect.poll(scale, { timeout: 60_000 * CI_SLOW }).toBeGreaterThan(s0);
   // Scenery and shadows need a reload: the panel says so.
   await expect(panel).toContainText('take effect when the page is reloaded');
   // A single option makes it a custom mix.
@@ -120,10 +121,16 @@ test('a resolution change is drawn in the same frame as the resize, so the scree
   await page.evaluate(() => window.__squib!.controller.setAutoLowerGraphics(false));
   await expect.poll(() => page.evaluate(() => (window as unknown as { __frameLog: string[] }).__frameLog.filter((x) => x === 'end').length), { timeout: 60_000 * CI_SLOW }).toBeGreaterThan(2);
   for (const f of [0.7, 1]) {
-    const w0 = await width();
-    await page.evaluate((f) => (window.__squib!.controller as unknown as { view: { setDynamicScale(f: number): void } }).view.setDynamicScale(f), f);
+    // The step and the read in one synchronous call: no frame can run in between (in separate calls one may, and then
+    // the canvas has rightly been resized and drawn already).
+    const [w0, wNow] = await page.evaluate((f) => {
+      const c = document.querySelector('canvas')!;
+      const before = c.width;
+      (window.__squib!.controller as unknown as { view: { setDynamicScale(f: number): void } }).view.setDynamicScale(f);
+      return [before, c.width];
+    }, f);
     // Between frames the canvas keeps its size (and what it shows) …
-    expect(await width()).toBe(w0);
+    expect(wNow).toBe(w0);
     // … and the next frame resizes it and draws it.
     await expect.poll(width, { timeout: 60_000 * CI_SLOW }).not.toBe(w0);
   }

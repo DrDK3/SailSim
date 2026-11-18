@@ -105,10 +105,12 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   const errors = await open(page, '?quality=low');
   await page.getByRole('button', { name: 'Library' }).click();
   const lib = library(page);
-  // The bundled Met Office replay and the River Dart scenarios are available here.
-  for (const name of ['First sail off RDYC', 'Fog in the harbour', 'Wind against tide at the entrance', 'Met Office forecast replay, 23 Oct 2026 14:00 UTC']) {
+  // The River Dart scenarios are available here. The Met Office forecast replay of 23 Oct 2026 is no longer in the
+  // library (owner, 18 Nov 2026).
+  for (const name of ['First sail off RDYC', 'Fog in the harbour', 'Wind against tide at the entrance']) {
     await expect(lib.getByRole('button', { name: `Load ${name}` })).toBeEnabled();
   }
+  await expect(lib.getByRole('button', { name: /Met Office forecast replay/ })).toHaveCount(0);
   await lib.getByRole('button', { name: 'Load Fog in the harbour' }).click();
   const more = page.getByRole('button', { name: 'All instruments and conditions' });
   if (await more.isVisible()) await more.click();

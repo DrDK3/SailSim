@@ -397,11 +397,12 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
 | 30.1 | Sail for five minutes on the device where the screen blinked, in the river and at sea, turning the camera about | No blink. (The resolution may still drop a little, and rise again, on a busy view; that is the "lower the graphics" setting at work, now without blanking the screen) | |
-| 30.2 | Look at the RDYC flagstaff, before 09:00 and later in the day | The club burgee at the top of the staff at any time, streaming with the wind; the ensign on the gaff only from colours (08:00, or 09:00 in winter) to sunset | |
+| 30.2 | Look at the RDYC flagstaff, before 09:00 and later in the day | The club burgee at the top of the staff and the ensign on the gaff, both raised at colours (08:00 local time from 25 March to 20 September, 09:00 the rest of the year) and lowered at sunset; neither flies outside those times. Both stream with the wind | |
 | 30.3 | Look at the quay wall in front of the Royal Dart, by the Kingswear Lower Ferry slip | No small building in the wall; the wall runs on unbroken | |
 | 30.4 | Look at Mosaique | The burgee at the top of her signal mast; nothing at her stern quarter; the ensign on its staff off the stern | |
 | 30.5 | Start a race and look at the committee boat in a breeze (Start Bay, a fresh wind) | She rises and falls with the waves, pitching and rolling a little, as the Squibs do | |
 | 30.6 | Look at the committee boat's stern | SAMARITAN across the transom, above the bathing platform. Tell us if it should be elsewhere or in another style | |
+| 30.7 | Open the Library | No "Met Office forecast replay, 23 Oct 2026 14:00 UTC"; the other built-in scenarios are there. (Options still offers that forecast as a weather source) | |
 
 ## Accepting the build
 
