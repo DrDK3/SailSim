@@ -1797,3 +1797,14 @@ The owner, after the juniors round merged (with two screenshots): "1. The screen
 
 The determinism hash is unchanged (`11824f89f479d0f4`, no incidents). No physics file changed except the not-a-building list, which the race physics reads; the hut was never in it as a structure. Every view above is from **software rendering (SwiftShader)**: not checked on a real GPU or device. The blink fix in particular needs the owner's device to confirm.
 
+## 29. The RDYC flags at colours; the forecast replay out of the library (18 Nov 2026, later)
+
+The owner: "please revert the ensign back to the correct raising and lowering times" and "Remove the following from the library: Met Office forecast replay, 23 Oct 2026 14:00 UTC".
+
+| What | Built | Files | Checked by |
+|---|---|---|---|
+| **The RDYC flagstaff's flags at colours** | The club burgee added in §28 had flown at all times. It is now raised and lowered with the ensign, at colours (hoisted at 08:00 local time from 25 March to 20 September and 09:00 the rest of the year, lowered at sunset; `coloursFlying`). The ensign's own times were never changed. Before 09:00 on a winter morning the flagstaff is bare, as the owner's screenshot showed | `src/render/clubEnsign.ts`, `src/render/dart.ts` | `tests/render/flagWind.test.ts` (burgee and ensign together: up at 11:00 in July and at noon in November; down at 02:00 and at 08:10 on a November morning; downwind) |
+| **The forecast replay out of the library** | The built-in library entry "Met Office forecast replay, 23 Oct 2026 14:00 UTC" is gone. `builtInScenarios` no longer takes the weather sources, which only that entry used. The forecast file stays: Options still offers it as a weather source | `src/app/scenarioLibrary.ts`, `src/ui/LibraryPanel.tsx`, README | `tests/sim/replay.test.ts` (not among the built-ins; every other built-in starts); e2e `phase6.spec.ts` (not listed in the Library) |
+
+Presentation and library only: the determinism hash is unchanged.
+
