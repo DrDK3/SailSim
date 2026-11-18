@@ -120,9 +120,19 @@ describe('gables and signs', () => {
 describe('footprints in the river that are not buildings', () => {
   const buildings = (JSON.parse(readFileSync(new URL('../../public/geo/features.json', import.meta.url), 'utf8')) as { buildings: { r: [number, number][]; b: number }[] }).buildings;
 
-  it('each names exactly one footprint, standing in the river (owner, 13 Nov 2026: "in the river and shouldn\'t be there"; "is not a kiosk, please remove")', () => {
-    expect(NOT_BUILDINGS).toHaveLength(3);
+  it('each names exactly one footprint; the first three stand in the river (owner, 13 Nov 2026: "in the river and shouldn\'t be there"; "is not a kiosk, please remove")', () => {
+    expect(NOT_BUILDINGS).toHaveLength(4);
     for (const x of NOT_BUILDINGS) {
+      const hits = buildings.filter((b) => insideRing(b.r, x.at[0], x.at[1]));
+      expect(hits, x.why).toHaveLength(1);
+      expect(notABuilding(hits[0]!.r)).toBe(true);
+    }
+    // The fourth: the hut in the quay wall by the Kingswear Lower Ferry (owner, 18 Nov 2026), at the quay's level.
+    const hut = buildings.filter((b) => insideRing(b.r, -18, 29.6));
+    expect(hut).toHaveLength(1);
+    expect(hut[0]!.b).toBeGreaterThan(0);
+    expect(hut[0]!.b).toBeLessThan(3);
+    for (const x of NOT_BUILDINGS.slice(0, 3)) {
       const hits = buildings.filter((b) => insideRing(b.r, x.at[0], x.at[1]));
       expect(hits).toHaveLength(1);
       // Their base below the datum: standing in the water.
@@ -134,5 +144,11 @@ describe('footprints in the river that are not buildings', () => {
     const york = buildings.find((b) => insideRing(b.r, -304, 348))!;
     expect(notABuilding(station.r)).toBe(false);
     expect(notABuilding(york.r)).toBe(false);
+    // Nor by the Kingswear slip: the long building behind the hut, the Royal Dart and the Yacht Club stay.
+    for (const [e, n] of [[0, 25], [12.5, 53.5], [1.6, 1.0]] as const) {
+      const b = buildings.find((x) => insideRing(x.r, e, n));
+      expect(b, `a building at (${e}, ${n})`).toBeDefined();
+      expect(notABuilding(b!.r)).toBe(false);
+    }
   });
 });
