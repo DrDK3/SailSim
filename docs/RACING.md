@@ -179,14 +179,22 @@ It never changes the physics.
 - the flags shown, as text chips: class, P, U, black, X, First Substitute;
 - your place in the fleet;
 - penalty turns owed, with how to take them;
-- the fleet's events (starts, roundings, incidents, penalties);
+- your own events (the start, each rounding, the finish); the fleet's incidents and penalties are listed in the results (18 Nov 2026);
 - Results and Retire buttons.
 
 **Results:**
-- **Low points:** results are scored by low points and open by themselves when the committee closes the race.
-- **Live view:** the table is available as soon as you have finished.
+- **Low points:** results are scored by low points. They open by themselves when you finish (provisional while boats are still racing; 18 Nov 2026) and again when the committee closes the race.
+- **Your place first:** your place in large figures with the gaps to the boats either side, and your place at the start and at each mark, above the table.
 
 **3D view and minimap:** the AI boats are shown in their hull colours with sail-number labels. Sail numbers ("AI01" …) are invented.
+
+### The race display, tactical aids and the finish (18 Nov 2026)
+
+- **At a glance** (`src/ui/RaceGlance.tsx`): a large countdown at the top centre for the last minute; an arrow at the screen's edge to the race's target when it is out of view (the starting line, then the next mark, then the finishing line; `SimController.raceTarget`, placed by `src/app/edgePointer.ts`); on a phone the race panel as one line, opened by a tap.
+- **Race aids** (`src/app/raceAids.ts`; on at the Learn and Club levels, off at Expert, one setting): the laylines to the next mark on a beat or a run, at the model polar's best VMG angle in the wind at the boat (solid green starboard, dashed red port; no allowance for leeway or the stream, E), drawn on the water (`src/render/course.ts`) and on the minimap; and "lifted", "headed" or "steady" sailing upwind, from the wind's direction against its 90 s mean (the coach's mean; under 3° is steady, E).
+- **The minimap in a race** (`src/app/courseFit.ts`, `src/ui/courseMap.ts`): the whole course fitted into the map by default, the legs with the way round, the next mark ringed.
+- **The finish** (`src/app/raceStory.ts`, `src/ui/ResultsPanel.tsx`): your place large, the gaps to the boats either side, your place at the start and at each mark (from each boat's judge), then the table, the incidents and penalties, and the standing note that the rules are simplified.
+- **The race from above** (`src/app/fleetTrack.ts`, `src/ui/RaceReplay.tsx`): every boat's position kept once a second during the race, shown in the debrief as tracks over the course with play, pause and a time slider. A record, not a re-simulation.
 
 ## 6. Acceptance and how it was measured
 
