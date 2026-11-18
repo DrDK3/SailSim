@@ -88,3 +88,61 @@ test('cameras: the scenic view circles the boat low and well off; the wheel zoom
   await expect.poll(dist, { timeout: 20_000 * CI_SLOW }).toBeGreaterThan(20);
   expect(errors).toEqual([]);
 });
+
+test('a resolution change is drawn in the same frame as the resize, so the screen never shows an empty canvas', async ({ page }) => {
+  test.setTimeout(120_000 * CI_SLOW);
+  const errors = await ready(page);
+  // Owner, 18 Nov 2026: the screen blinked every 10–20 s. Dynamic resolution resized the canvas just after a frame
+  // was drawn; a resized canvas is empty until drawn again, so an empty frame was shown at every step.
+  await page.evaluate(() => {
+    type R = { setSize: (...a: unknown[]) => unknown; render: (...a: unknown[]) => unknown };
+    const view = (window.__squib!.controller as unknown as { view: { renderer: R } }).view;
+    const log: string[] = [];
+    (window as unknown as { __frameLog: string[] }).__frameLog = log;
+    const r = view.renderer;
+    const setSize = r.setSize.bind(r);
+    const render = r.render.bind(r);
+    r.setSize = (...a: unknown[]) => (log.push('size'), setSize(...a));
+    r.render = (...a: unknown[]) => (log.push('draw'), render(...a));
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) =>
+      raf((t) => {
+        log.push('frame');
+        try {
+          cb(t);
+        } finally {
+          log.push('end');
+        }
+      });
+  });
+  // Dynamic resolution off (so it does not step by itself here), then two steps as it would take them.
+  const width = () => page.evaluate(() => document.querySelector('canvas')!.width);
+  await page.evaluate(() => window.__squib!.controller.setAutoLowerGraphics(false));
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __frameLog: string[] }).__frameLog.filter((x) => x === 'end').length), { timeout: 60_000 * CI_SLOW }).toBeGreaterThan(2);
+  for (const f of [0.7, 1]) {
+    const w0 = await width();
+    await page.evaluate((f) => (window.__squib!.controller as unknown as { view: { setDynamicScale(f: number): void } }).view.setDynamicScale(f), f);
+    // Between frames the canvas keeps its size (and what it shows) …
+    expect(await width()).toBe(w0);
+    // … and the next frame resizes it and draws it.
+    await expect.poll(width, { timeout: 60_000 * CI_SLOW }).not.toBe(w0);
+  }
+  const log = await page.evaluate(() => (window as unknown as { __frameLog: string[] }).__frameLog);
+  // Every resize happens inside a frame, and a draw follows it before that frame ends.
+  let inFrame = false;
+  let pendingResize = false;
+  for (const x of log) {
+    if (x === 'frame') inFrame = true;
+    if (x === 'size') {
+      expect(inFrame, `a resize between frames: ${log.join(' ')}`).toBe(true);
+      pendingResize = true;
+    }
+    if (x === 'draw') pendingResize = false;
+    if (x === 'end') {
+      expect(pendingResize, `a frame ended resized but not drawn: ${log.join(' ')}`).toBe(false);
+      inFrame = false;
+    }
+  }
+  expect(log.filter((x) => x === 'size').length).toBeGreaterThanOrEqual(2);
+  expect(errors).toEqual([]);
+});

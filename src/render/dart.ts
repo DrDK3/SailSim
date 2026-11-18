@@ -14,7 +14,7 @@ import { ferryStates } from '../app/ferrySchedule';
 import { FIXED_BOATS, berthOccupancy, type Berth } from '../sim/env/marinas';
 import { BerthedFleet } from './berthed';
 import { PONTOON, buildPontoons, type Pontoons } from './pontoons';
-import { ClubEnsign } from './clubEnsign';
+import { ClubBurgee, ClubEnsign } from './clubEnsign';
 import { trueWindAt, type WindAt } from './flagMotion';
 import { ShipBuoysView } from './mosaique';
 import { MOSAIQUE, SHIP_BUOYS, mooredBerth } from '../sim/env/shipBuoys';
@@ -147,6 +147,7 @@ export class DartScene {
   private readonly street?: StreetLife;
   private pontoons?: Pontoons;
   private readonly ensigns: ClubEnsign[] = [];
+  private readonly burgees: ClubBurgee[] = [];
   /** The main-stream ship buoys and the superyacht on them (src/render/mosaique.ts). */
   private shipBuoys?: ShipBuoysView;
   /** The Kingswear light (src/render/kingswearLight.ts), and the daylight (0 night … 1 day) its light follows. */
@@ -216,6 +217,7 @@ export class DartScene {
       this.buildBuildings(f);
       this.buildShips(f);
       for (const en of this.ensigns) this.fixed.add(en.group);
+      for (const b of this.burgees) this.fixed.add(b.group);
       this.buildPiers(f);
       this.berths = dartBerths({ piers: f.piers, marinas: f.marinas ?? [], geo: input.geo });
       const low = input.detail === 'low';
@@ -848,13 +850,15 @@ export class DartScene {
       this.fixed.add(mesh);
     }
     if (kit.pos.length) this.fixed.add(kit.mesh('landmark-details'));
-    // The Royal Dart Yacht Club as itself, with its terrace and sea wall; its ensign flies from the flagstaff.
+    // The Royal Dart Yacht Club as itself, with its terrace and sea wall; its ensign flies from the flagstaff's gaff
+    // and its burgee at the masthead.
     if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'rdyc')) {
       const club = buildRdycClub();
       this.club = club;
       this.fixed.add(club.group);
       this.fixed.add(buildRdycPines((e, n) => this.groundAt(e, n)));
       this.ensigns.push(new ClubEnsign(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
+      this.burgees.push(new ClubBurgee(club.flagstaff.at, club.flagstaff.fromM, club.flagstaff.height));
     }
     // The Royal Dart and its north wing as themselves, from the owner's photographs (src/render/royalDart.ts).
     if (f.buildings.some((b) => landmarkFor(b.r)?.id === 'royal-dart-hotel')) {
@@ -1193,6 +1197,7 @@ export class DartScene {
     // Flags and vanes ashore and moored: the true wind where each one is.
     const wind = { fromDir: u.windFromDir, speed: u.windSpeed ?? 5 };
     for (const en of this.ensigns) en.update(u.epochMs, trueWindAt(u.windAt, en.at.n, en.at.e, wind), u.time);
+    for (const b of this.burgees) b.update(trueWindAt(u.windAt, b.at.n, b.at.e, wind), u.time);
     if (this.shipBuoys) {
       const at = this.shipBuoys.flagsAt;
       this.shipBuoys.update(u.epochMs, trueWindAt(u.windAt, at.n, at.e, wind), u.time, u.camera);

@@ -6,6 +6,8 @@ import { robotMark, sponsorsFor } from './robotMark';
 import { samaritanModel } from './samaritan';
 import { flagSwing, trueWindAt, type FlagWind, type WindAt } from './flagMotion';
 import { flagDroop, flagYaw } from './vane';
+import { easeRide, orientBoat, rideWaves, type WaveRide } from './frames';
+import { SAMARITAN } from './samaritan';
 
 /**
  * Course marks and lines on the water (floating at y = 0): robotic marks (src/render/robotMark.ts) for the
@@ -21,7 +23,7 @@ export class CourseScene {
   /** The robotic marks, each with a phase for its gentle bob. */
   private readonly robots: { g: THREE.Group; phase: number }[] = [];
   /** The committee boats, at anchor at their marks: they lie as the simulation says (`setCommitteeHeading`). */
-  private readonly committee: { boat: THREE.Object3D; n: number; e: number; heading: number; flag?: THREE.Object3D }[] = [];
+  private readonly committee: { boat: THREE.Object3D; n: number; e: number; heading: number; flag?: THREE.Object3D; ride: WaveRide; rideStarted: boolean }[] = [];
   /** The pin ends' flags: their marks' positions (local n, e) and the flag pivots. */
   private readonly pinFlags: { n: number; e: number; pivot: THREE.Object3D }[] = [];
   /** The wind the marks and flags answer: the one wind, and the true wind at a point (flagMotion.ts). */
@@ -46,7 +48,7 @@ export class CourseScene {
         const boat = samaritanModel();
         boat.name = 'committee-boat';
         g.add(boat);
-        this.committee.push({ boat, n: p.n, e: p.e, heading: 0, flag: boat.getObjectByName('committee-flag') });
+        this.committee.push({ boat, n: p.n, e: p.e, heading: 0, flag: boat.getObjectByName('committee-flag'), ride: { heave: 0, pitch: 0, roll: 0 }, rideStarted: false });
       } else if (m.kind === 'virtual') {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2, 10), yellow);
         post.position.y = 0.4;
@@ -90,7 +92,12 @@ export class CourseScene {
     this.group.add(this.ring);
   }
 
-  update(nextLeg: number, phase: string, showLabels: boolean, time: number): void {
+  /**
+   * `waves` (optional): the drawn sea's surface height at a Three.js (x, z), and the frame's length (s). With it the
+   * committee boats ride the waves as the boats do (owner, 18 Nov 2026: "The committee boat is not moving up and down
+   * with the motion of the wave").
+   */
+  update(nextLeg: number, phase: string, showLabels: boolean, time: number, waves?: { height: (x: number, z: number) => number; dt: number }): void {
     const leg = this.r.legs[nextLeg];
     this.ring.visible = phase === 'racing' && !!leg;
     if (leg) {
@@ -111,6 +118,17 @@ export class CourseScene {
       const { yaw, aws } = flagYaw(w.fromDir, w.speed, this.wind.fromDir, 0);
       f.pivot.rotation.set(0, yaw + flagSwing(aws, time, f.e), 0);
       f.pivot.children[0]!.rotation.z = -flagDroop(aws);
+    }
+    // The committee boats float on the drawn sea: heave, pitch and roll from the surface over their waterplane (eased
+    // for a hull's inertia), visual only. Her waterplane is sampled over her own length, so short chop pitches her less
+    // than a Squib (SAMARITAN is 10.8 m; the samples are a Squib's 5.8 m: E).
+    for (const c of this.committee) {
+      if (waves) {
+        easeRide(c.ride, rideWaves(waves.height, c.e, -c.n, c.heading, RIDE_SCRATCH, SAMARITAN.loa / 5.8), waves.dt, !c.rideStarted);
+        c.rideStarted = true;
+      }
+      c.boat.position.y = c.ride.heave;
+      orientBoat(c.boat, c.heading, c.ride.roll, c.ride.pitch);
     }
     for (const c of this.committee) {
       if (!c.flag) continue;
@@ -138,7 +156,9 @@ export class CourseScene {
   setCommitteeHeading(headingAt: (n: number, e: number) => number): void {
     for (const c of this.committee) {
       c.heading = headingAt(c.n, c.e);
-      c.boat.rotation.y = -c.heading;
+      orientBoat(c.boat, c.heading, c.ride.roll, c.ride.pitch);
     }
   }
 }
+
+const RIDE_SCRATCH: WaveRide = { heave: 0, pitch: 0, roll: 0 };

@@ -387,10 +387,21 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 29.1 | Sail (or look with the drone camera) up the river from off Dart Haven Marina to the Higher Ferry | The moored boats lie in rows along the river, nose to tail, a buoy off each end, all pointing up the river; they stay that way when the wind or the tide turns | |
 | 29.2 | Go on above the Higher Ferry to the Noss and Distins moorings | The boats there lie to single buoys and swing with the wind and the stream, as before | |
 | 29.3 | Sail into the side of a boat on a trot | She is solid: you meet her and stay out | |
-| 29.4 | Look at Mosaique's stern in daylight | The club's ensign on its staff at the stern, and the RDYC burgee on its own staff at the port quarter; nothing at her masthead. Both lowered at night | |
+| 29.4 | Look at Mosaique's stern in daylight | ~~The club's ensign on its staff at the stern, and the RDYC burgee on its own staff at the port quarter; nothing at her masthead. Both lowered at night~~ Superseded by 30.4 (18 Nov 2026: the burgee on her mast) | |
 | 29.5 | Change the wind direction (Options) and watch the flags: your burgee, an AI boat's, Mosaique's, the club's flagstaff, a ferry's ensign, the committee boat's and the pin end's flags, the vanes on the moored boats | Each flies downwind (the vanes point into the wind); on a moving ferry the ensign follows the wind she feels, swung towards her stern | |
 | 29.6 | Compare a calm with a fresh breeze; then turn on the system's "reduce motion" | In a calm the flags hang limp and still; in a breeze they stream out and flutter, faster as it blows harder. With reduced motion they still point downwind but barely flutter | |
 | 29.7 | Tell us where the trots really are and which way their boats lie | The rows' places and bearings are our estimates | |
+
+## 30. The screen blink; the RDYC burgee; the hut in the quay wall; Mosaique's burgee; the committee boat (18 Nov 2026) (15 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 30.1 | Sail for five minutes on the device where the screen blinked, in the river and at sea, turning the camera about | No blink. (The resolution may still drop a little, and rise again, on a busy view; that is the "lower the graphics" setting at work, now without blanking the screen) | |
+| 30.2 | Look at the RDYC flagstaff, before 09:00 and later in the day | The club burgee at the top of the staff at any time, streaming with the wind; the ensign on the gaff only from colours (08:00, or 09:00 in winter) to sunset | |
+| 30.3 | Look at the quay wall in front of the Royal Dart, by the Kingswear Lower Ferry slip | No small building in the wall; the wall runs on unbroken | |
+| 30.4 | Look at Mosaique | The burgee at the top of her signal mast; nothing at her stern quarter; the ensign on its staff off the stern | |
+| 30.5 | Start a race and look at the committee boat in a breeze (Start Bay, a fresh wind) | She rises and falls with the waves, pitching and rolling a little, as the Squibs do | |
+| 30.6 | Look at the committee boat's stern | SAMARITAN across the transom, above the bathing platform. Tell us if it should be elsewhere or in another style | |
 
 ## Accepting the build
 

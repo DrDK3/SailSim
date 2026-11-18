@@ -72,25 +72,28 @@ describe('Mosaique and the ship buoys', () => {
     expect(bad).toBe(0);
   });
 
-  it('flies the club’s ensign from a staff off her stern and its burgee at the stern, nothing at her masthead', () => {
+  it('flies the club’s ensign from a staff off her stern and its burgee at her masthead', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
     // The ensign's staff head is aft of the transom (her frame: aft is +z), on the centre line, low (not aloft).
     expect(ensign.position.z).toBeGreaterThan(MOSAIQUE.loa / 2 + 0.8);
     expect(Math.abs(ensign.position.x)).toBeLessThan(0.01);
     expect(ensign.position.y).toBeLessThan(8);
     expect(MOSAIQUE_DRAWN.ensign.fly / MOSAIQUE_DRAWN.ensign.hoist).toBeCloseTo(2, 6);
-    // The burgee (owner, 17 Nov 2026: "The RDYC burgee is missing from the superyacht's stern") on its staff at the
-    // port quarter: at the stern, low, nowhere near the masthead (owner, 15 Nov: "it should only be on the stern").
+    // The burgee at her masthead (owner, 18 Nov 2026: "remove the triangle burgee and flagpole on the superyacht from
+    // the lower stern quarter and place the triangle burgee on the mast"): on the centre line, amidships, aloft.
     const burgee = view.yacht.getObjectByName('mosaique-burgee')!;
     expect(burgee).toBeDefined();
-    expect(burgee.position.z).toBeGreaterThan(MOSAIQUE.loa / 2 - 1.5);
-    expect(burgee.position.x).toBeLessThan(-MOSAIQUE.beam / 2 + 1.5);
-    expect(burgee.position.y).toBeLessThan(5);
+    expect(Math.abs(burgee.position.x)).toBeLessThan(0.01);
+    expect(Math.abs(burgee.position.z)).toBeLessThan(MOSAIQUE.loa / 4);
     expect(burgee.getObjectByName('burgee-flag')).toBeDefined();
-    // Its flag 1.5 m on the fly (the Squibs' drawing, hoist 3 : fly 5), the top of its staff well below the masthead.
-    const box = new THREE.Box3().setFromObject(burgee);
-    expect(box.max.y).toBeLessThan(MOSAIQUE_DRAWN.masthead - 8);
-    // Her flags: the ensign and the burgee, both aft.
+    // Its flag 1.5 m on the fly (the Squibs' drawing, hoist 3 : fly 5), flying from just above the mast's truck.
+    view.yacht.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(burgee.getObjectByName('burgee-flag')!);
+    const toYacht = new THREE.Matrix4().copy(view.yacht.matrixWorld).invert();
+    box.applyMatrix4(toYacht);
+    expect(box.max.y).toBeGreaterThan(MOSAIQUE_DRAWN.masthead);
+    expect(box.max.y).toBeLessThan(MOSAIQUE_DRAWN.masthead + 1.5);
+    // Nothing left at the stern quarter: no flag low aft but the ensign.
     const flags: string[] = [];
     view.group.traverse((o) => {
       if (o.name.endsWith('-cloth') || o.name === 'burgee-flag') flags.push(o.name);

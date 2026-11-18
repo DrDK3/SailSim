@@ -4,7 +4,7 @@ import { rdycEnsignTexture } from './clubEnsign';
 import { bakedPerson } from './crew';
 import { coloursFlying } from './colours';
 import { flagDroop, flagYaw } from './vane';
-import { Burgee, BURGEE_FLY } from './burgee';
+import { Burgee, BURGEE_FLY, BURGEE_STICK } from './burgee';
 import { flagFlutter, flagSwing, type FlagWind } from './flagMotion';
 import { buildLights, colregsLights, updateLights } from './navLights';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
@@ -13,7 +13,8 @@ import { MOORING_FAIRLEADS, MOSAIQUE, MOSAIQUE_TENDER, SHIP_BUOYS, SHIP_BUOY_SIZ
 /**
  * The main-stream ship buoys MS1–MS5 and the superyacht Mosaique moored fore and aft on MS1 and MS2, flying the Royal
  * Dart Yacht Club's defaced red ensign from a staff off her stern (owner, 14 Nov 2026, with photographs of her; the
- * ensign from the owner's drawing; 15 Nov: no burgee at her masthead, the club's flag only at her stern). Where the
+ * ensign from the owner's drawing), and the club's burgee at her masthead (owner, 18 Nov 2026: off the stern quarter and
+ * onto the mast, reversing 15 Nov's "no burgee at her masthead"). Where the
  * buoys are, and which pair she lies on, is src/sim/env/shipBuoys.ts (estimates); her mooring lines are solid there.
  *
  * Drawn from the owner's photographs (a Proteksan Turquoise 50 m of 2002): a blue displacement hull with a raked stem,
@@ -49,11 +50,11 @@ export const MOSAIQUE_DRAWN = {
   masthead: 18.8,
   ensign: { fly: 2.4, hoist: 1.2 },
   /**
-   * The club's burgee on its own staff at the port quarter (owner, 15 Nov 2026: "it should only be on the stern";
-   * 17 Nov: "The RDYC burgee is missing from the superyacht's stern"): the Squibs' burgee drawing (burgee.ts) at
-   * 1.5 m on the fly, its staff 2.6 m (E, "a large RDYC burgee").
+   * The club's burgee at her masthead (owner, 18 Nov 2026: "remove the triangle burgee and flagpole on the superyacht
+   * from the lower stern quarter and place the triangle burgee on the mast"): the Squibs' burgee drawing (burgee.ts)
+   * at 1.5 m on the fly, on its stick rising `above` m over the signal mast's truck (E).
    */
-  burgee: { fly: 1.5, staff: 2.6 },
+  burgee: { fly: 1.5, above: 1.0 },
 };
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -211,8 +212,8 @@ function tenderModel(): THREE.Group {
 interface YachtParts {
   group: THREE.Group;
   ensignAt: THREE.Vector3;
-  /** The foot of the burgee's staff at the port quarter, in her frame. */
-  burgeeAt: THREE.Vector3;
+  /** The signal mast's truck (its top), in her frame: the burgee flies above it. */
+  truckAt: THREE.Vector3;
   /** Her mooring lines' fairleads in her frame (MOORING_FAIRLEADS, at their heights), and the tender's cleats. */
   fairleads: THREE.Vector3[];
   tenderCleats: THREE.Vector3[];
@@ -487,12 +488,6 @@ function yachtModel(): YachtParts {
   kit.rod(staffBase, staffTop, 0.045, VMAT.gloss, 0x7a4b26, 10);
   kit.add(new THREE.SphereGeometry(0.075, 10, 8), VMAT.gloss, 0xd6a73a, place(staffTop.x, staffTop.y + 0.06, staffTop.z));
 
-  // ---- The burgee's staff at the port quarter, on the transom's top inside the bulwark (the staff and flag are the
-  // Burgee's own, scaled: ShipBuoysView); a steel socket for it.
-  const bz = sternZ - 0.7;
-  const burgeeAt = v(-(h.deckHalf(bz) - 0.35), h.sheer(bz) + 0.02, bz);
-  kit.add(new THREE.CylinderGeometry(0.06, 0.07, 0.25, 10), VMAT.steel, undefined, place(burgeeAt.x, burgeeAt.y + 0.08, burgeeAt.z));
-
   // ---- Fairleads for the mooring lines (either side of the stem, and at the transom's corners: the same points the
   // physics uses, src/sim/env/shipBuoys.ts); the tender's fenders and the cleats for its lines.
   const fairleads = MOORING_FAIRLEADS.map((f) => v(f.across, f.along > 0 ? h.sheer(-f.along) - 0.1 : h.sheer(sternZ) - 0.12, -f.along));
@@ -524,7 +519,7 @@ function yachtModel(): YachtParts {
     plate.position.set(0, (h.sheer(sternZ) + 2.3) / 2 + 0.05, sternZ + 0.07);
     group.add(plate);
   }
-  return { group, ensignAt: staffTop, burgeeAt, fairleads, tenderCleats, mastZ };
+  return { group, ensignAt: staffTop, truckAt: v(0, truck, mastZ), fairleads, tenderCleats, mastZ };
 }
 
 /** The buoys, the yacht on them, her tender, her mooring lines and her flags (add `group` to the floating group). */
@@ -532,7 +527,7 @@ export class ShipBuoysView {
   readonly group = new THREE.Group();
   readonly yacht: THREE.Group;
   private readonly ensign: WavingFlag;
-  /** The club's burgee on its staff at the port quarter. */
+  /** The club's burgee at her masthead. */
   readonly burgee: Burgee;
   private readonly lights: THREE.Group;
   private readonly heading: number;
@@ -565,12 +560,13 @@ export class ShipBuoysView {
     const ends = [v(t.across - 0.3, 0.95, -t.along - t.length / 2 + 0.5), v(t.across - 0.6, 0.95, -t.along + t.length / 2 - 0.4)];
     ends.forEach((e, i) => hangingLine(lines, toWorld(m.tenderCleats[i]!), toWorld(e), 0.25, 0.018));
     this.group.add(lines.build('mosaique-lines'));
-    // The club's ensign off the stern, and its burgee on a staff at the port quarter: her flags, both aft (none at
-    // her masthead: owner, 15 Nov 2026).
+    // The club's ensign off the stern, and its burgee at her masthead: on its stick above the signal mast's truck (the
+    // stick's foot runs down the mast's head, inside it).
     this.burgee = new Burgee();
     this.burgee.group.name = 'mosaique-burgee';
-    this.burgee.group.scale.setScalar(MOSAIQUE_DRAWN.burgee.fly / BURGEE_FLY);
-    this.burgee.group.position.copy(m.burgeeAt);
+    const bs = MOSAIQUE_DRAWN.burgee.fly / BURGEE_FLY;
+    this.burgee.group.scale.setScalar(bs);
+    this.burgee.group.position.copy(m.truckAt).add(new THREE.Vector3(0, MOSAIQUE_DRAWN.burgee.above - BURGEE_STICK * bs, 0));
     this.yacht.add(this.burgee.group);
     this.ensign = new WavingFlag('mosaique-ensign', MOSAIQUE_DRAWN.ensign.fly, MOSAIQUE_DRAWN.ensign.hoist, rdycEnsignTexture(), 0xd0101e);
     this.ensign.pivot.position.copy(m.ensignAt);

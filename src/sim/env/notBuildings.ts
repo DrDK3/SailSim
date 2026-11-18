@@ -17,6 +17,10 @@ export const NOT_BUILDINGS: { at: [number, number]; why: string }[] = [
     at: [-155, 659],
     why: 'On the Riverboat Pontoon in mid-river (its walls to 2.2 m below datum; solid to the physics as a building in the water): the owner, 13 Nov 2026, "is not a kiosk, please remove".',
   },
+  {
+    at: [-18, 29.6],
+    why: 'A small gabled hut (2.6 × 4.1 m, base 1.3 m above datum) in the stone quay wall in front of the Royal Dart, by the Kingswear Lower Ferry slip: the owner, 18 Nov 2026, with a screenshot, "remove the building in the wall by the lower ferry".',
+  },
 ];
 
 function inside(ring: readonly (readonly [number, number])[], e: number, n: number): boolean {

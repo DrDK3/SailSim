@@ -16,7 +16,7 @@ vi.mock('../../src/render/labels', () => ({ makeLabel: () => new THREE.Sprite() 
 const { REDUCED_FLUTTER, apparentWind, downwind, flagFlutter, setFlagMotionReduced } = await import('../../src/render/flagMotion');
 const { Burgee } = await import('../../src/render/burgee');
 const { ShipBuoysView } = await import('../../src/render/mosaique');
-const { ClubEnsign } = await import('../../src/render/clubEnsign');
+const { CLUB_BURGEE_FLY, ClubBurgee, ClubEnsign } = await import('../../src/render/clubEnsign');
 const { TrafficView } = await import('../../src/render/traffic');
 const { CourseScene } = await import('../../src/render/course');
 const { BerthedFleet } = await import('../../src/render/berthed');
@@ -122,7 +122,7 @@ describe('flags and vanes point with the wind where they are', () => {
     }
   });
 
-  it('Mosaique\'s ensign and her stern burgee (moored): downwind of the true wind at her stern', () => {
+  it('Mosaique\'s ensign and her masthead burgee (moored): downwind of the true wind where she lies', () => {
     const view = new ShipBuoysView();
     const ensign = view.yacht.getObjectByName('mosaique-ensign-cloth')!;
     const burgee = view.yacht.getObjectByName('mosaique-burgee')!.getObjectByName('burgee-flag')!;
@@ -140,6 +140,22 @@ describe('flags and vanes point with the wind where they are', () => {
       en.update(DAY, { fromDir: d * DEG, speed: s }, 7.7);
       expect(off(flyBearing(flag), downwind(d * DEG)), `${d}° ${s}`).toBeLessThan(RIGID);
     }
+  });
+
+  it('the club\'s burgee at its flagstaff\'s masthead (owner, 18 Nov 2026): downwind, by day and by night', () => {
+    const b = new ClubBurgee([10, 20], 5, 12);
+    const flag = b.group.getObjectByName('burgee-flag')!;
+    // At the top of the 12 m staff (foot at 5 m ODN): the flag hangs from just above the truck.
+    const box = new THREE.Box3().setFromObject(b.group);
+    expect(box.max.y).toBeGreaterThan(5 + 12);
+    expect(box.max.y).toBeLessThan(5 + 12 + 1);
+    expect(box.max.x - box.min.x).toBeLessThan(CLUB_BURGEE_FLY * 1.3);
+    for (const d of DIRS) for (const s of SPEEDS) {
+      b.update({ fromDir: d * DEG, speed: s }, 7.7);
+      expect(off(flyBearing(flag), downwind(d * DEG)), `${d}° ${s}`).toBeLessThan(CLOTH);
+    }
+    // Always flying (the ensign alone keeps to colours): nothing hides it.
+    expect(b.group.visible).toBe(true);
   });
 
   it('the river traffic\'s ensigns (lying still): downwind of the true wind where each boat is', () => {

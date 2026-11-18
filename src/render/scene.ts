@@ -734,17 +734,32 @@ export class SceneView {
   applyGraphics(g: GraphicsSettings, persist = false): void {
     this.graphics = g;
     if (persist) saveGraphics(g);
-    this.renderer.setPixelRatio(Math.max(0.35, pixelRatioFor(g, window.devicePixelRatio) * this.dynamicScale));
-    const size = this.renderer.getSize(new THREE.Vector2());
-    this.renderer.setSize(size.x, size.y, false);
-    this.post?.resize();
+    this.resolutionDirty = true;
     this.water.setDetail(g.water);
     this.reflection.quality = g.water === 'high' ? g.reflections : 'off';
     this.water.setReflection(this.reflection.quality === 'off' ? null : this.reflection.target.texture, this.reflection.matrix);
     this.spray.enabled = g.spray;
     this.fleet.foamOn = g.hullFoam;
-    this.spray.setViewport(size.y * this.renderer.getPixelRatio(), this.camera.fov);
     this.applyWeather();
+  }
+
+  /** The drawing resolution (the preset's, times the dynamic scale) changed and is applied at the next draw. */
+  private resolutionDirty = false;
+
+  /**
+   * Apply a changed drawing resolution, at the start of a draw. Resizing the canvas empties it, so a resize between
+   * two draws showed an empty canvas for a frame. Dynamic resolution steps came just after a frame was drawn, every
+   * few seconds on a device near its frame budget, and the screen blinked at each one (owner, 18 Nov 2026). Here the
+   * canvas is resized and drawn in the same frame.
+   */
+  private applyResolution(): void {
+    if (!this.resolutionDirty) return;
+    this.resolutionDirty = false;
+    this.renderer.setPixelRatio(Math.max(0.35, pixelRatioFor(this.graphics, window.devicePixelRatio) * this.dynamicScale));
+    const size = this.renderer.getSize(new THREE.Vector2());
+    this.renderer.setSize(size.x, size.y, false);
+    this.post?.resize();
+    this.spray.setViewport(size.y * this.renderer.getPixelRatio(), this.camera.fov);
   }
 
   /**
@@ -756,7 +771,8 @@ export class SceneView {
   setDynamicScale(f: number): void {
     if (Math.abs(f - this.dynamicScale) < 1e-6) return;
     this.dynamicScale = f;
-    this.applyGraphics(this.graphics, false);
+    // Pixels only: nothing else in the graphics settings changed, so the water, reflections and weather are left be.
+    this.resolutionDirty = true;
   }
 
   /**
@@ -805,6 +821,7 @@ export class SceneView {
 
   /** Draw one frame, interpolating between the last two physics states (alpha in [0, 1]). */
   render(prev: BoatSnapshot, curr: BoatSnapshot, alpha: number, time: number, frameDt: number, env?: SceneEnvironment): void {
+    this.applyResolution();
     const n = prev.n + (curr.n - prev.n) * alpha;
     const e = prev.e + (curr.e - prev.e) * alpha;
     const heading = lerpAngle(prev.heading, curr.heading, alpha);
@@ -900,7 +917,7 @@ export class SceneView {
     if (this.course && env?.course) {
       this.course.setWind(curr.twdGround, env.windAt, curr.twsGround);
       if (env.course.committeeHeading) this.course.setCommitteeHeading(env.course.committeeHeading);
-      this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time);
+      this.course.update(env.course.nextLeg, env.course.phase, env.course.showLabels, time, { height: (cx, cz) => this.water.heightAt(cx, cz, time), dt: frameDt });
     }
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.drawReflection();
