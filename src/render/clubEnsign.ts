@@ -233,8 +233,10 @@ const CLUB_BURGEE_ABOVE = 0.4;
 
 /**
  * The club's burgee at its flagstaff's masthead (owner, 18 Nov 2026: "The burgee is missing from the RDYC flagpole"):
- * the Squibs' burgee drawing (burgee.ts) on a stick just above the truck. Flown at all times, as the owner asked (the
- * ensign keeps to colours), streaming with the true wind where it is. Lives in the land-fixed group (m ODN).
+ * the Squibs' burgee drawing (burgee.ts) on a stick just above the truck, streaming with the true wind where it is.
+ * Raised and lowered with the ensign, at colours (0800 from 25 March to 20 September, else 0900, to sunset, local
+ * time: src/render/colours.ts). The owner, later on 18 Nov: "please revert the ensign back to the correct raising and
+ * lowering times" (it had been flown at all times). Lives in the land-fixed group (m ODN).
  */
 export class ClubBurgee {
   private readonly burgee = new Burgee();
@@ -256,8 +258,14 @@ export class ClubBurgee {
     return this.burgee.group;
   }
 
-  /** Stream it in the true wind (`wind`: from rad, compass; speed m/s). Ashore it has no heading: north is ahead. */
-  update(wind: FlagWind, time: number): void {
+  /**
+   * Show it at colours, streaming in the true wind (`wind`: from rad, compass; speed m/s). Ashore it has no heading:
+   * north is ahead.
+   */
+  update(epochMs: number, wind: FlagWind, time: number): void {
+    const up = coloursFlying(epochMs, RDYC_ORIGIN.lat, RDYC_ORIGIN.lon);
+    this.burgee.group.visible = up;
+    if (!up) return;
     const awa = Math.atan2(Math.sin(wind.fromDir), Math.cos(wind.fromDir));
     // Scaled up from a Squib's: its flutter in its own time (a larger flag's is slower), as on Mosaique.
     this.burgee.update(awa, wind.speed, time / Math.sqrt(this.scale));

@@ -142,7 +142,7 @@ describe('flags and vanes point with the wind where they are', () => {
     }
   });
 
-  it('the club\'s burgee at its flagstaff\'s masthead (owner, 18 Nov 2026): downwind, by day and by night', () => {
+  it('the club\'s burgee at its flagstaff\'s masthead (owner, 18 Nov 2026): downwind, at colours', () => {
     const b = new ClubBurgee([10, 20], 5, 12);
     const flag = b.group.getObjectByName('burgee-flag')!;
     // At the top of the 12 m staff (foot at 5 m ODN): the flag hangs from just above the truck.
@@ -151,11 +151,19 @@ describe('flags and vanes point with the wind where they are', () => {
     expect(box.max.y).toBeLessThan(5 + 12 + 1);
     expect(box.max.x - box.min.x).toBeLessThan(CLUB_BURGEE_FLY * 1.3);
     for (const d of DIRS) for (const s of SPEEDS) {
-      b.update({ fromDir: d * DEG, speed: s }, 7.7);
+      b.update(DAY, { fromDir: d * DEG, speed: s }, 7.7);
       expect(off(flyBearing(flag), downwind(d * DEG)), `${d}° ${s}`).toBeLessThan(CLOTH);
     }
-    // Always flying (the ensign alone keeps to colours): nothing hides it.
-    expect(b.group.visible).toBe(true);
+    // Raised and lowered with the ensign, at colours (owner, later on 18 Nov 2026): flying at 11:00 in July, down at
+    // 02:00, and down at 08:10 on a November morning (colours there are at 09:00), as the ensign is.
+    const en = new ClubEnsign([10, 20], 5, 12);
+    const wind = { fromDir: 250 * DEG, speed: 6 };
+    for (const [at, up] of [['2026-07-15T11:00:00Z', true], ['2026-07-15T02:00:00Z', false], ['2026-11-18T08:10:00Z', false], ['2026-11-18T12:00:00Z', true]] as const) {
+      b.update(Date.parse(at), wind, 3);
+      en.update(Date.parse(at), wind, 3);
+      expect(b.group.visible, at).toBe(up);
+      expect(en.group.visible, at).toBe(up);
+    }
   });
 
   it('the river traffic\'s ensigns (lying still): downwind of the true wind where each boat is', () => {
