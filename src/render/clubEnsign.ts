@@ -3,6 +3,7 @@ import { RDYC_ORIGIN } from '../sim/geo/projection';
 import { coloursFlying } from './colours';
 import { flagDroop, flagYaw } from './vane';
 import { flagSwing, type FlagWind } from './flagMotion';
+import { Burgee, BURGEE_FLY, BURGEE_STICK } from './burgee';
 
 let tex: THREE.Texture | undefined;
 
@@ -222,5 +223,43 @@ export class ClubEnsign {
 
   get flying(): boolean {
     return this.group.visible;
+  }
+}
+
+/** The club burgee's size on the flagstaff (m on the fly, E): the Squibs' drawing scaled up. */
+export const CLUB_BURGEE_FLY = 1.2;
+/** How far its stick rises above the flagstaff's truck (m, E). */
+const CLUB_BURGEE_ABOVE = 0.4;
+
+/**
+ * The club's burgee at its flagstaff's masthead (owner, 18 Nov 2026: "The burgee is missing from the RDYC flagpole"):
+ * the Squibs' burgee drawing (burgee.ts) on a stick just above the truck. Flown at all times, as the owner asked (the
+ * ensign keeps to colours), streaming with the true wind where it is. Lives in the land-fixed group (m ODN).
+ */
+export class ClubBurgee {
+  private readonly burgee = new Burgee();
+  private readonly scale = CLUB_BURGEE_FLY / BURGEE_FLY;
+
+  /** Where it flies (local n, e): the wind is read here. */
+  readonly at: { n: number; e: number };
+
+  constructor(at: [number, number], fromM: number, height: number) {
+    this.at = { n: at[1], e: at[0] };
+    const g = this.burgee.group;
+    g.name = 'club-burgee';
+    g.scale.setScalar(this.scale);
+    // The stick's foot sits down the staff's head (inside it): only its top shows, above the truck.
+    g.position.set(at[0], fromM + height + CLUB_BURGEE_ABOVE - BURGEE_STICK * this.scale, -at[1]);
+  }
+
+  get group(): THREE.Group {
+    return this.burgee.group;
+  }
+
+  /** Stream it in the true wind (`wind`: from rad, compass; speed m/s). Ashore it has no heading: north is ahead. */
+  update(wind: FlagWind, time: number): void {
+    const awa = Math.atan2(Math.sin(wind.fromDir), Math.cos(wind.fromDir));
+    // Scaled up from a Squib's: its flutter in its own time (a larger flag's is slower), as on Mosaique.
+    this.burgee.update(awa, wind.speed, time / Math.sqrt(this.scale));
   }
 }
