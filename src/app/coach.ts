@@ -7,6 +7,7 @@
  * measured Squib data. The advice is training advice, not an adjudication: it never decides a rules question.
  */
 import type { Polar } from '../sim/ai/polar';
+import { WindTrend } from './raceAids';
 import { SHEET_END } from './sailStatus';
 
 const DEG = Math.PI / 180;
@@ -172,7 +173,8 @@ export class RaceCoach {
   private tips: Tip[] = [];
   private lastTipT = -Infinity;
   private lastById = new Map<string, number>();
-  private meanWind?: { x: number; y: number };
+  /** The wind's recent mean (shared with the race's lifted/headed readout: src/app/raceAids.ts). */
+  private readonly trend = new WindTrend(COACH.meanWindS);
   private prev?: CoachSample;
   private history: { t: number; stw: number }[] = [];
   private manoeuvres: Manoeuvre[] = [];
@@ -215,12 +217,8 @@ export class RaceCoach {
 
   update(s: CoachSample): void {
     const dt = this.prev ? Math.max(0, Math.min(2, s.t - this.prev.t)) : 0;
-    // The mean wind direction, as a vector average with a 90 s memory.
-    const k = this.meanWind ? 1 - Math.exp(-dt / COACH.meanWindS) : 1;
-    const wx = Math.sin(s.twd);
-    const wy = Math.cos(s.twd);
-    this.meanWind = this.meanWind ? { x: this.meanWind.x + (wx - this.meanWind.x) * k, y: this.meanWind.y + (wy - this.meanWind.y) * k } : { x: wx, y: wy };
-    const shift = wrapPi(s.twd - Math.atan2(this.meanWind.x, this.meanWind.y)) / DEG;
+    // The shift against the mean wind direction (a vector average with a 90 s memory).
+    const shift = this.trend.update(dt, s.twd);
     const r = s.race;
     const leg = r.phase === 'racing' ? this.legOf(s) : undefined;
 
