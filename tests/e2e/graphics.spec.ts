@@ -37,8 +37,9 @@ test('graphics and sound: presets apply and are kept, sound mutes with U, the ph
   const s0 = await scale();
   await panel.getByRole('radio', { name: 'Ultra' }).click();
   await expect.poll(() => page.evaluate(() => window.__squib!.controller.getState().graphics?.preset)).toBe('ultra');
-  // Ultra draws at full resolution, Smooth at three quarters.
-  await expect.poll(scale).toBeGreaterThan(s0);
+  // Ultra draws at full resolution, Smooth at three quarters. The canvas is resized at the start of the next drawn frame
+  // (so it is never shown empty), and the first frame on Ultra compiles new shaders: slow on a software renderer.
+  await expect.poll(scale, { timeout: 60_000 * CI_SLOW }).toBeGreaterThan(s0);
   // Scenery and shadows need a reload: the panel says so.
   await expect(panel).toContainText('take effect when the page is reloaded');
   // A single option makes it a custom mix.
