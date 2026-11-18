@@ -45,7 +45,7 @@ function sail(c: SimController, seconds: number): void {
 describe('racing on the river with its traffic', () => {
   it('the library river race runs through its start and first beat', () => {
     const c = riverController();
-    const river = builtInScenarios([], true).find((s) => s.id === 'river-range')!;
+    const river = builtInScenarios(true).find((s) => s.id === 'river-range')!;
     expect(river.scenario).toBeDefined();
     expect(c.startSession(structuredClone(river.scenario!))).toBe(true);
     expect(c.traffic).toBeDefined();

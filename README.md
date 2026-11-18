@@ -118,7 +118,7 @@ The panels:
 - the **Scenario** panel: start position and time, wind source, gusts, tide, current, course, start sequence, and the fleet (0–20 AI boats, their level, the preparatory flag: [docs/RACING.md](docs/RACING.md));
 - the **Layers** panel: what is data and what is provisional, with sources and licences;
 - the **Courses** editor: draw, check, import and export courses ([docs/COURSES.md](docs/COURSES.md));
-- the **Library**: ready-made scenarios (light air, fresh and shifty, wind against tide, fog, rain, sunset, practice and river races, a Met Office forecast replay), your own saved scenarios, scenario export and import, and **replays**. Save a replay of the run as a file; opening it plays the run again, checks it matches bit for bit, at ×1 to ×8, and lets you take over at any point.
+- the **Library**: ready-made scenarios (light air, fresh and shifty, wind against tide, fog, rain, sunset, practice and river races), your own saved scenarios, scenario export and import, and **replays**. Save a replay of the run as a file; opening it plays the run again, checks it matches bit for bit, at ×1 to ×8, and lets you take over at any point.
 
 ## Real-time conditions
 

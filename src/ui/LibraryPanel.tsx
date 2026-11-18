@@ -34,7 +34,7 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const [title, setTitle] = useState('My scenario');
   const [replayTitle, setReplayTitle] = useState('Squib session');
   const [message, setMessage] = useState<string>();
-  const builtIn = builtInScenarios(ui.weatherSources, ui.dart.status === 'loaded');
+  const builtIn = builtInScenarios(ui.dart.status === 'loaded');
 
   const load = (s: LibraryScenario) => {
     const sc = s.scenario;
