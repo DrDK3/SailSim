@@ -223,7 +223,7 @@ export interface UiState {
    * The light (src/app/daylightView.ts): the real sun's height, whether it is down, whether this run is in real time,
    * whether the picture is drawn in the daylight view now, and whether to offer it (a dark real-time run).
    */
-  light: { sunDeg: number; dark: boolean; realTime: boolean; daylightView: boolean; offer: boolean; clock: string };
+  light: { sunDeg: number; dark: boolean; realTime: boolean; daylightView: boolean; offer: boolean; notice: boolean; clock: string };
   /** Racing a ghost: its title and how long its recording lasts; or learning its path (0–1). */
   ghost?: { title: string; endS: number };
   ghostLoading?: number;
@@ -400,6 +400,11 @@ export class SimController {
   private realTime = false;
   /** "Keep it dark": the daylight view is not offered again this visit (nor in automated tests unless &dark). */
   private darkDismissed = typeof location !== 'undefined' && new URLSearchParams(location.search).has('nowelcome') && !new URLSearchParams(location.search).has('dark');
+  /**
+   * The daylight view is on from an earlier visit and it is dark now: said once a visit (owner, 18 Nov 2026: "real
+   * time does not seem to be working … it is still daylight": the setting was on, and nothing on screen said so).
+   */
+  private daylightNoted = this.darkDismissed;
   /** Ghost racing: the recorded boat's poses every GHOST_EVERY steps, and the scenario it belongs to. */
   private ghost?: { title: string; poses: FleetPose[]; scenario: string; endS: number };
   /** Sailing the ghost's recording through to learn its path (0–1). */
@@ -2057,7 +2062,21 @@ export class SimController {
     const dark = real.elevationDeg < SUNSET_DEG;
     const daylightView = this.prefs.daylightView && real.elevationDeg < DAYLIGHT_VIEW_BELOW_DEG;
     const offer = dark && this.realTime && !this.prefs.daylightView && !this.darkDismissed && !this.tutorial && !this.replay;
-    return { sunDeg: real.elevationDeg, dark, realTime: this.realTime, daylightView, offer, clock: ukClock(epoch) };
+    const notice = dark && this.realTime && this.prefs.daylightView && !this.daylightNoted && !this.tutorial && !this.replay;
+    return { sunDeg: real.elevationDeg, dark, realTime: this.realTime, daylightView, offer, notice, clock: ukClock(epoch) };
+  }
+
+  /** "Keep the daylight view": the note that it is on has been read. */
+  acknowledgeDaylight(): void {
+    this.daylightNoted = true;
+    this.publish(true);
+  }
+
+  /** The real light again (the daylight view off), without then offering it straight back. */
+  showRealLight(): void {
+    this.darkDismissed = true;
+    this.daylightNoted = true;
+    this.setPrefs({ daylightView: false });
   }
 
   /** "Keep it dark": do not offer the daylight view again this visit. */
@@ -2454,6 +2473,8 @@ export class SimController {
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
     // The light changes at once (the sky is otherwise refreshed once a second).
     if ('daylightView' in change) this.lastWeather = -Infinity;
+    // Chosen just now: no need to be told that it is on.
+    if (change.daylightView) this.daylightNoted = true;
     this.publish(true);
   }
 

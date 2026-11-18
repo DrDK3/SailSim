@@ -1100,3 +1100,6 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   /* The debrief's Close clear of the Menu button in the corner. */
   .debrief-panel .dash-head { padding-right: 88px; }
 }
+/* The daylight view is lighting the picture: said in the instruments for as long as it is, with the way back. */
+.daylight-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-top: 6px; padding: 5px 8px; border-radius: 6px; font-size: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: color-mix(in srgb, var(--warn) 70%, white); }
+.daylight-note .link { font-size: 12px; min-height: 24px; }

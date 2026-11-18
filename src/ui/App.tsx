@@ -262,7 +262,7 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       {/* What the helmsman reads, together on the left: the instruments, and the race when there is one. */}
       <div className="hud-left">
-        <Instruments s={ui.snapshot} level={ui.level} />
+        <Instruments s={ui.snapshot} level={ui.level} light={ui.light} onRealLight={() => ctl.showRealLight()} />
         <DamageCard ctl={ctl} ui={ui} />
         {/* On a phone the race is one line (the panel covered the water); tap it for the panel and the coach. */}
         {ui.race && narrow && <RaceStrip race={ui.race} ctl={ctl} open={raceOpenNarrow} onToggle={() => setRaceOpenNarrow(!raceOpenNarrow)} />}
@@ -415,7 +415,7 @@ export function App({ ctl }: { ctl: SimController }) {
         <ResumeCard ctl={ctl} ui={ui} />
       ) : ui.gpuCard ? (
         <GpuCard ctl={ctl} ui={ui} />
-      ) : ui.light.offer ? (
+      ) : ui.light.offer || ui.light.notice ? (
         <DarkCard ctl={ctl} ui={ui} />
       ) : coachTipShowing(ui) ? (
         <CoachTip ui={ui} />

@@ -34,7 +34,18 @@ function Cell({ label, value, unit, title, tutorial, wide }: { label: string; va
   );
 }
 
-export function Instruments({ s, level }: { s: BoatSnapshot; level?: string }) {
+export function Instruments({
+  s,
+  level,
+  light,
+  onRealLight,
+}: {
+  s: BoatSnapshot;
+  level?: string;
+  /** The daylight view is lighting the picture now (the real sun is low or down), and the run's clock (UK time). */
+  light?: { daylightView: boolean; dark: boolean; clock: string };
+  onRealLight?: () => void;
+}) {
   const tack = s.mainSide === 1 ? 'Starboard' : 'Port';
   const aground = agroundText(s);
   const [more, setMore] = useState(initialMore);
@@ -97,6 +108,21 @@ export function Instruments({ s, level }: { s: BoatSnapshot; level?: string }) {
           </>
         )}
       </div>
+      {light?.daylightView && (
+        // Never a sunlit picture after dark without a word of why: the daylight view is a setting kept from one
+        // visit to the next (owner, 18 Nov 2026).
+        <div className="daylight-note" data-testid="daylight-note">
+          <span>
+            Daylight view · it is {light.clock}
+            {light.dark ? ', dark on the Dart' : ', the sun is low'}
+          </span>
+          {onRealLight && (
+            <button className="link" onClick={onRealLight} title="Turn the daylight view off: the picture is lit as it really is at this time. Settings → Daylight view when dark turns it back on">
+              Show the real light
+            </button>
+          )}
+        </div>
+      )}
       <button className="link more-toggle" aria-expanded={more} onClick={toggleMore}>
         {more ? 'Fewer instruments' : 'All instruments and conditions'}
       </button>

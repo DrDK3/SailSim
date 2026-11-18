@@ -47,3 +47,40 @@ test('dark in real time: the card offers a daylight view; the picture lights up,
   expect(await page.evaluate(() => (window.__squib!.controller as unknown as V).sceneWeather().sunElevationDeg)).toBeLessThan(-15);
   expect(errors).toEqual([]);
 });
+
+test('the daylight view kept from an earlier visit says so after dark, and the real light is one click away', async ({ page }) => {
+  // Owner, 18 Nov 2026: logged on at 20:00 GMT to a sunlit river and took it that real time was not working. The
+  // daylight view was on from an earlier evening, and nothing on screen said so.
+  test.setTimeout(240_000 * CI_SLOW);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => localStorage.setItem('squib.prefs.v1', JSON.stringify({ daylightView: true })));
+  await page.clock.setFixedTime(new Date('2026-11-18T20:00:00Z'));
+  await page.goto('/?nowelcome&dark&quality=low');
+  await expect(page.getByTestId('stw')).toBeVisible();
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 * CI_SLOW });
+  await page.evaluate(() => window.__squib!.controller.setLighting('now'));
+  type V = { sceneWeather(): { sunElevationDeg: number }; prefs: { daylightView: boolean } };
+  // The picture is lit as at midday, the run is the real evening, and the card says which is which.
+  const card = page.getByTestId('daylight-card');
+  await expect(card).toBeVisible({ timeout: 60_000 * CI_SLOW });
+  await expect(card).toContainText('It is dark on the Dart now (20:00');
+  await expect(card).toContainText('daylight view you chose before');
+  await expect(page.getByTestId('dark-card')).toHaveCount(0);
+  expect(await page.evaluate(() => (window.__squib!.controller as unknown as V).sceneWeather().sunElevationDeg)).toBeGreaterThan(15);
+  // For as long as the daylight view lights the picture, the instruments say so, with the time.
+  const note = page.getByTestId('daylight-note');
+  await expect(note).toContainText('Daylight view · it is 20:00, dark on the Dart');
+  // Keep it: the card goes, the note stays.
+  await page.getByTestId('daylight-keep').dispatchEvent('click');
+  await expect(card).toHaveCount(0);
+  await expect(note).toBeVisible();
+  // The real light: night, the note gone, and no card offering the daylight view straight back.
+  await note.getByRole('button', { name: 'Show the real light' }).dispatchEvent('click');
+  await expect.poll(() => page.evaluate(() => (window.__squib!.controller as unknown as V).prefs.daylightView), { timeout: 60_000 * CI_SLOW }).toBe(false);
+  expect(await page.evaluate(() => (window.__squib!.controller as unknown as V).sceneWeather().sunElevationDeg)).toBeLessThan(-15);
+  await expect(note).toHaveCount(0);
+  await expect(page.getByTestId('dark-card')).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
