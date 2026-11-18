@@ -3,6 +3,10 @@
  * on each course (and on each day's challenge), and the best start (the shortest time from the start signal to
  * crossing the line, after a clean start). Conditions differ from race to race, so a best is a record of what
  * you did, not a like-for-like ranking. Nothing is sent anywhere: shared tables would need a service.
+ *
+ * Like-for-like bests (juniors round §6.2): for the weekly course and the daily challenge only, whose conditions are
+ * fixed, so times compare. Each keeps the best independent time and the best assisted time apart (the assist record,
+ * src/app/assists.ts), and the last attempts for a small chart of progress. Still kept only in this browser.
  */
 
 const KEY = 'squib.bests.v1';
@@ -63,4 +67,60 @@ export function recordStart(delayS: number, now = new Date()): BestResult {
     save(b);
   }
   return { best, previousS: was?.delayS };
+}
+
+// ------------------------------------------------------------ like-for-like bests (juniors round)
+
+const LFL_KEY = 'squib.bests.likeForLike.v1';
+/** Attempts kept per course for the progress chart. */
+export const HISTORY_MAX = 20;
+
+export interface Attempt {
+  at: string;
+  timeS: number;
+  independent: boolean;
+}
+
+export interface LikeForLike {
+  label: string;
+  independent?: { timeS: number; at: string };
+  assisted?: { timeS: number; at: string };
+  /** Most recent last. */
+  history: Attempt[];
+}
+
+/** Only these keys have like-for-like bests: the weekly course and the daily challenge. */
+export const isLikeForLikeKey = (key: string): boolean => /^(weekly:\d{4}-W\d{2}|challenge:\d{4}-\d{2}-\d{2})$/.test(key);
+
+function loadAll(): Record<string, LikeForLike> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LFL_KEY) ?? 'null') as Record<string, LikeForLike> | null;
+    if (raw && typeof raw === 'object') return raw;
+  } catch {
+    // storage unavailable or unreadable
+  }
+  return {};
+}
+
+export function loadLikeForLike(key: string): LikeForLike | undefined {
+  return loadAll()[key];
+}
+
+/** Record a finished attempt; returns whether it is a new best in its category (independent or assisted). */
+export function recordAttempt(key: string, label: string, timeS: number, independent: boolean, now = new Date()): BestResult {
+  if (!isLikeForLikeKey(key) || !(timeS > 0)) return { best: false };
+  const all = loadAll();
+  const e: LikeForLike = all[key] ?? { label, history: [] };
+  const cat = independent ? 'independent' : 'assisted';
+  const was = e[cat];
+  const best = !was || timeS < was.timeS;
+  if (best) e[cat] = { timeS, at: now.toISOString() };
+  e.history = [...e.history, { at: now.toISOString(), timeS, independent }].slice(-HISTORY_MAX);
+  all[key] = e;
+  try {
+    localStorage.setItem(LFL_KEY, JSON.stringify(all));
+  } catch {
+    // storage unavailable: kept for this visit only
+  }
+  return { best, previousS: was?.timeS };
 }

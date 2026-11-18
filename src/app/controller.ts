@@ -64,6 +64,11 @@ import { WindFollower, drillVerdict, lineBias, lineReadout, scoreStart, type Dri
 import { SoundScape, type AudioSettings } from '../render/audio';
 import { presetSettings, type GraphicsPreset, type GraphicsSettings } from '../render/graphics';
 import { lightingStart, type LightingPreset } from './lighting';
+import { DEVICE_CHECK_SCENARIO, type DeviceReport } from './deviceCheck';
+import { DeviceCheckRunner, StartupMonitor } from './deviceCheckRunner';
+import { DynamicResolution } from '../render/dynamicResolution';
+import { SocialHub, type SocialUi } from './social';
+import { hapticPulse, padState, readPad, type HapticEvent, type PadState } from './gamepad';
 import { freshLiveWeather, liveNowConditions, nowStartTime } from './liveNow';
 
 /**
@@ -224,6 +229,17 @@ export interface UiState {
   /** The simulation is not keeping up with real time: the share it manages, and any preset the graphics were lowered to. */
   runningSlow?: { ratio: number; lowered?: string };
   autoLowerGraphics: boolean;
+  /** Dynamic resolution (juniors round): the share of the preset's resolution drawn now, when lowered (< 1). */
+  dynamicScale?: number;
+  /** Social goals: the weekly course, its targets, challenges, the run's assist record (src/app/social.ts). */
+  social: SocialUi;
+  /** Shaders are being prepared (the picture and the sailing wait). */
+  warming?: boolean;
+  /** A game controller is connected (src/app/gamepad.ts). */
+  gamepad?: boolean;
+  /** The device check: running (its progress 0…1) and its last report. */
+  deviceCheck?: { progress: number };
+  deviceReport?: DeviceReport;
   /** The player's preferences kept in this browser (src/app/prefs.ts). */
   prefs: Prefs;
   scenarioError?: string;
@@ -313,7 +329,7 @@ const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
 const MAX_STEPS_PER_FRAME = 12;
 /** Identifies the build in recordings (Vite's mode and the package version; a commit id when CI provides one). */
-const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
+export const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
 /** When this build was made (vite.config.ts), shown with the build id so the owner can tell which version runs. */
 const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 'unknown';
 /** Fills a partial starting input to a full one for the recording. */
@@ -350,6 +366,14 @@ export class SimController {
   private runningSlow?: { ratio: number; lowered?: GraphicsPreset };
   /** Step the graphics down when the simulation cannot keep up (a setting; on by default). */
   autoLowerGraphics = true;
+  /** Start-up timing for the device check (first frame, sailable, stalls). */
+  readonly startup = new StartupMonitor();
+  /** Dynamic resolution, before any preset step down (src/render/dynamicResolution.ts). */
+  readonly dynRes = new DynamicResolution();
+  private deviceCheck?: { runner: DeviceCheckRunner; before: AppScenario };
+  /** Shaders being compiled behind the loading state (renderer.compileAsync): no drawing and no sailing until done. */
+  private warming?: Promise<void>;
+  private deviceReport?: DeviceReport;
   /** The player's own preferences, kept in this browser (src/app/prefs.ts). */
   prefs: Prefs = loadPrefs();
   private readonly hints = new HintEngine(loadSeenHints());
@@ -369,6 +393,8 @@ export class SimController {
   private ghostLoading?: number;
   /** The tiller dragged on a touch screen: the helm it is being moved to. */
   private helmDrag?: number;
+  /** A game controller (src/app/gamepad.ts): its stick's helm target, its sheet rates, what it holds, its last state. */
+  private pad: { helm?: number; main: number; jib: number; held: Set<string>; prev?: PadState; index?: number } = { main: 0, jib: 0, held: new Set() };
   /** Battery saver: when the last frame was drawn (ms). */
   private lastDrawn = -Infinity;
   /** "Show me": the boat sails herself out of trouble until `until` (simulated time). */
@@ -591,6 +617,7 @@ export class SimController {
     this.leave = undefined;
     this.raceBest = {};
     if (this.raceTag && this.raceTag.scenario !== JSON.stringify(scenario)) this.raceTag = undefined;
+    this.social.onRestart(scenario);
     // The ghost stays for a reset of its own scenario; anything else ends it.
     if (this.ghost && this.ghost.scenario !== JSON.stringify(scenario)) this.ghost = undefined;
     // Starting anything other than the exercise's own set-up ends the exercise.
@@ -632,6 +659,8 @@ export class SimController {
       saveMilestones(this.milestones);
     }
     this.lastRecordT = -Infinity;
+    // New boats, marks or sea: their shaders compile now, behind "Preparing", not in the first frame of the run.
+    if (this.view && this.raf) this.warmShaders();
     this.publish(true);
     return true;
   }
@@ -677,6 +706,7 @@ export class SimController {
     else if (this.exercise && !this.replay && this.sim.step % 10 === 0) this.updateExercise();
     else if (!this.replay && this.prefs.hints && this.hintsAllowed && this.sim.step % 10 === 0) this.updateHints();
     if (this.coach && this.sim.step % 50 === 0) this.updateCoach();
+    if (!this.replay && this.sim.step % 10 === 0) this.noteRunAssists();
     if (this.sim.step % 6000 === 0) this.keepResumePoint();
     if (this.sim.step % (TRACK_EVERY_S * 100) === 0) this.recordTrack();
     if (this.race && !this.replay && this.sim.step % Math.round(FRAME_EVERY_S * 100) === 0) this.recordFleetFrame();
@@ -929,8 +959,10 @@ export class SimController {
     }
     if (!this.raceBest.finish && st.phase === 'finished' && st.finishTime !== undefined && st.startTime !== undefined) {
       const timeS = st.finishTime - cm.startTime;
-      const label = this.raceTag ? `Today's challenge (${this.raceTag.key.slice(10)})` : courseKey(r.course.name, r.course.laps);
-      this.raceBest.finish = { timeS, label, ...recordRaceTime(this.raceTag?.key ?? courseKey(r.course.name, r.course.laps), label, timeS) };
+      const key = this.raceTag?.key;
+      const label = key?.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : key ? `Today's challenge (${key.slice(10)})` : courseKey(r.course.name, r.course.laps);
+      this.raceBest.finish = { timeS, label, ...recordRaceTime(key ?? courseKey(r.course.name, r.course.laps), label, timeS) };
+      if (!this.replay) this.social.onFinish(key, label, timeS, st.events, cm.startTime);
       this.publish(true);
     }
   }
@@ -1163,7 +1195,13 @@ export class SimController {
   }
 
   /** The teaching overlay: the lesson's parts during a lesson, else all of them when switched on (or none). */
+  /** Gust outlines: when chosen in Settings, and in a race only if also chosen for races. */
+  private applyGustOutlines(): void {
+    if (this.view) this.view.gustOutlines.visible = this.prefs.gustOutlines && (!this.race || this.prefs.gustOutlinesInRaces);
+  }
+
   private applyTeaching(): void {
+    this.applyGustOutlines();
     const parts: OverlayPart[] = this.lesson
       ? this.lesson.overlay
       : this.exercise
@@ -1574,6 +1612,42 @@ export class SimController {
     return true;
   }
 
+  /**
+   * Race a ghost whose poses are already known (a model-sailed weekly target: src/app/targets.ts), every 0.1 s from the
+   * scenario's start. A picture only, like any ghost: no contact, no wind shadow, not in the race.
+   */
+  startPoseGhost(title: string, scenario: AppScenario, poses: FleetPose[]): boolean {
+    if (this.replay) this.takeOver();
+    if (!this.restart(scenario)) return false;
+    this.ghost = { title, poses, scenario: JSON.stringify(scenario), endS: poses.length * 0.1 };
+    this.captureFleet();
+    this.fleetPrev = this.fleetCurr;
+    this.view?.setFleet(this.fleetList());
+    if (this.paused) this.togglePause();
+    this.publish(true);
+    return true;
+  }
+
+  /** Social goals (src/app/social.ts): the weekly course, targets, challenges, the assist record. */
+  readonly social: SocialHub = new SocialHub({
+    restart: (s) => this.restart(s),
+    startGhost: (rec) => this.startGhost(rec),
+    startPoseGhost: (t, s, p) => this.startPoseGhost(t, s, p),
+    saveRecording: (t) => this.saveRecording(t),
+    tagRace: (key, s) => {
+      this.raceTag = { key, scenario: JSON.stringify(s) };
+    },
+    publish: () => this.publish(true),
+  });
+
+  /** What assists are on now, for the run's assist record (src/app/assists.ts). */
+  private noteRunAssists(): void {
+    const i = this.sim.input;
+    const overlay = !!this.lesson?.overlay.length || this.teachingOn || !!this.view?.gustOutlines.visible;
+    const liveHelp = !!this.hints.current || (this.coachOn && !!this.coach?.recent.length);
+    this.social.noteAssists({ autoMain: i.autoMain, autoJib: i.autoJib, autoCrew: i.autoCrew, overlay, liveHelp });
+  }
+
   /** Stop showing the ghost. */
   endGhost(): void {
     this.ghost = undefined;
@@ -1702,6 +1776,7 @@ export class SimController {
         this.dartScene.setLightLabels(this.prefs.lightLabels);
         this.view.setDart(this.dartScene, (n, e) => data.geo!.depth(n, e, this.sim.waterLevel()));
         this.settlePace();
+        this.warmShaders();
         // A course already drawn learns which of its marks are real buoys the harbour now draws.
         if (this.race) this.view.setCourse(this.race.resolved, this.race.course, data.features?.marks);
       } catch (err) {
@@ -1741,6 +1816,13 @@ export class SimController {
   private async openSharedLink(): Promise<void> {
     if (this.sharedOpened || typeof location === 'undefined') return;
     this.sharedOpened = true;
+    // A challenge (#challenge=…): the card asks first; the fragment is cleared so a reload does not repeat it.
+    if (/[#&]challenge=/.test(location.hash)) {
+      const hash = location.hash;
+      history.replaceState(null, '', location.pathname + location.search);
+      await this.social.openLink(hash);
+      return;
+    }
     const payload = sharedPayload(location.hash);
     if (!payload) return;
     history.replaceState(null, '', location.pathname + location.search);
@@ -1774,6 +1856,7 @@ export class SimController {
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
     this.view?.resetSea(); // and the sea's field at once
+    this.warmShaders();
     this.lastFrame = performance.now();
     this.fpsT0 = this.lastFrame;
     const loop = (now: number) => {
@@ -1961,8 +2044,14 @@ export class SimController {
       this.lastWeather = now;
       this.view?.setWeather(this.sceneWeather());
     }
+    const ev = this.cueEvents;
+    this.applyGustOutlines();
     this.view?.render(this.prevSnap, this.currSnap, alpha, this.renderTime, dt, {
       puffs: sim.env.windField?.puffs() ?? [],
+      // Read-only: the wind model's gust factor at the boat (no state is changed by sampling).
+      gustFactor: sim.env.windField ? sim.env.windField.sample(this.currSnap.n, this.currSnap.e).gustFactor : 1,
+      contact: this.cueEvents.contact,
+      grounding: this.cueEvents.grounding,
       // Flags and vanes read the true wind where each one is (read only; src/render/flagMotion.ts).
       windAt: (n, e) => sim.env.wind(sim.time, n, e),
       windAgainstTide: info?.windAgainstTide ?? false,
@@ -1984,15 +2073,21 @@ export class SimController {
         : undefined,
       fleet: this.race || this.ghost ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
     });
+    ev.contact = ev.grounding = 0;
   }
+
+  /** Contact and grounding heard since the last frame (0…1), for the next frame's cue state. */
+  private readonly cueEvents = { contact: 0, grounding: 0 };
 
   private frame(now: number): void {
     // Never backwards: a frame's timestamp can fall a little before a clock reading taken on resume.
     const rawDt = (now - this.lastFrame) / 1000;
     const dt = Math.max(0, Math.min(0.1, rawDt));
+    const cpuT0 = performance.now();
+    this.pollGamepad();
     this.lastFrame = now;
     let steps = 0;
-    if (!this.paused) {
+    if (!this.paused && this.warming === undefined) {
       const t0 = performance.now();
       this.accumulator += dt * this.timeScale;
       while (this.accumulator >= DT && steps < MAX_STEPS_PER_FRAME * this.timeScale) {
@@ -2024,7 +2119,10 @@ export class SimController {
     }
     // While a kept run or a ghost's recording is sailed through, the picture would only show it paused: skip drawing,
     // so the device spends its time on the sailing (a software renderer takes seconds a frame).
-    if (this.catchUp === undefined && this.ghostLoading === undefined) this.drawScene(now, this.paused ? 1 : clamp(this.accumulator / DT, 0, 1), dt);
+    if (this.catchUp === undefined && this.ghostLoading === undefined && this.warming === undefined) {
+      this.drawScene(now, this.paused ? 1 : clamp(this.accumulator / DT, 0, 1), dt);
+      this.afterDraw(now, rawDt * 1000, performance.now() - cpuT0);
+    }
     this.frames++;
     if (now - this.fpsT0 > 1000) {
       this.fps = (this.frames * 1000) / (now - this.fpsT0);
@@ -2077,8 +2175,14 @@ export class SimController {
       this.harbour.value = Math.max(0, 1 - Math.sqrt(best) / 180);
       this.harbour.where = at ? scenePoint(at, 0) : undefined;
     }
+    // The sound follows the frame's cue state (src/render/cues.ts) when there is a picture; else the snapshot.
+    // Only this frame's (when drawing is skipped, the last drawn frame's events must not repeat).
+    const q = this.view?.cues && this.view.cues.t === c.t ? this.view.cues : undefined;
+    if (q && q.events.gustOnset > 0) this.rumble('gust', q.events.gustOnset);
+    if (q?.events.boom) this.rumble('boom', 0.6);
     this.sound.update({
-      aws: c.aws, awa: c.awa, stw: c.stw, luffMain: c.forces.main.luff, luffJib: c.forces.jib.luff, bowDrop: this.view?.bowDrop ?? 0, boomCrossed: crossed,
+      aws: q?.wind.aws ?? c.aws, awa: q?.wind.awa ?? c.awa, stw: q?.stw ?? c.stw, luffMain: q?.main.luff ?? c.forces.main.luff, luffJib: q?.jib.luff ?? c.forces.jib.luff,
+      bowDrop: q?.bowDrop ?? 0, boomCrossed: crossed, gustOnset: q?.events.gustOnset ?? 0,
       harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended,
       listener: this.view?.listenerPose(), boat: scenePoint(c, 1.5), harbourAt: this.harbour.where,
     });
@@ -2160,13 +2264,19 @@ export class SimController {
       const e = events[i]!;
       if ((e.a === 'you' || e.b === 'you') && now - h.knockAt > 0.4 && now - e.t < 2) {
         this.sound.knock(e.speed / 3);
+        this.rumble('contact', Math.min(1, e.speed / 3));
+        this.cueEvents.contact = Math.max(this.cueEvents.contact, Math.min(1, e.speed / 3));
         h.knockAt = now;
       }
     }
     if (events.length) h.contactT = Math.max(h.contactT, events[events.length - 1]!.t);
     const g = this.sim.impacts[this.sim.impacts.length - 1];
     if (g && g.what === 'the bottom' && g.t > h.groundT) {
-      if (now - g.t < 2) this.sound.scrape(g.speed / 2);
+      if (now - g.t < 2) {
+        this.sound.scrape(g.speed / 2);
+        this.rumble('contact', Math.min(1, g.speed / 2));
+        this.cueEvents.grounding = Math.max(this.cueEvents.grounding, Math.min(1, g.speed / 2));
+      }
       h.groundT = g.t;
     }
     // Glassfibre breaking or the rig coming down: a crunch, louder the worse it is.
@@ -2193,7 +2303,118 @@ export class SimController {
 
   setAutoLowerGraphics(on: boolean): void {
     this.autoLowerGraphics = on;
+    this.dynRes.enabled = on;
+    if (!on) this.resetDynamicResolution();
     this.publish(true);
+  }
+
+  /**
+   * Compile the scene's shaders without blocking a frame (juniors round, issue 43): the river's scene compiled at its
+   * first draw in one frame of 5–7 s under software rendering. With the browser's parallel shader compile it happens
+   * off the main thread; either way the run waits (no drawing, no sailing) and says so, rather than freezing mid-sail.
+   */
+  private warmShaders(): void {
+    const v = this.view;
+    if (!v || this.warming) return;
+    this.warming = v.warmUp().catch(() => undefined).finally(() => {
+      this.warming = undefined;
+      this.lastFrame = performance.now();
+      this.settlePace();
+      this.publish(true);
+    });
+    this.publish(true);
+  }
+
+  private resetDynamicResolution(): void {
+    this.dynRes.reset(performance.now());
+    this.view?.setDynamicScale(1);
+  }
+
+  /**
+   * After each drawn frame (juniors round): start-up timing, the device check, and dynamic resolution. Dynamic
+   * resolution lowers the pixels drawn while frames are over budget and only then asks for a lower preset; it is off
+   * with "lower the graphics" (the player's override) and after the player chooses graphics.
+   */
+  private afterDraw(now: number, frameMs: number, cpuMs: number): void {
+    const v = this.view;
+    if (!v) return;
+    this.startup.frame(now, frameMs, this.dartStatus !== 'loading' && !this.warming, v.programCount);
+    const dc = this.deviceCheck;
+    if (dc) {
+      const report = dc.runner.onFrame(now, frameMs, this.currSnap.rudder, cpuMs);
+      if (report) {
+        this.deviceReport = report;
+        this.deviceCheck = undefined;
+        this.restart(dc.before);
+        this.publish(true);
+      }
+    }
+    if (this.paused || this.pace.skipFrames > 0) {
+      this.dynRes.skipWindow(now);
+      return;
+    }
+    const a = this.dynRes.frame(now, frameMs);
+    if (!a) return;
+    if (a.kind === 'scale') {
+      v.setDynamicScale(a.scale);
+      this.dynRes.skipWindow(performance.now());
+    } else {
+      const order: GraphicsPreset[] = ['ultra', 'balanced', 'performance'];
+      const g = v.graphics;
+      const at = g.preset === 'custom' ? 0 : order.indexOf(g.preset);
+      const next = order[Math.min(order.length - 1, at + 1)]!;
+      if (next === g.preset) return;
+      v.applyGraphics(presetSettings(next, g.cameraMotion), false);
+      this.resetDynamicResolution();
+      this.settlePace();
+      this.runningSlow = { ratio: this.runningSlow?.ratio ?? 1, lowered: next };
+    }
+    this.publish(true);
+  }
+
+  /**
+   * Check this device (Settings → Graphics): sail the fixed route on the fixed seed for `seconds` of wall time, then
+   * put back the scenario that was running and show the report. Nothing is sent anywhere.
+   */
+  startDeviceCheck(seconds?: number): void {
+    if (!this.view || this.deviceCheck) return;
+    if (this.replay) this.takeOver();
+    if (this.paused) this.togglePause();
+    const before = this.scenario;
+    this.restart(structuredClone(DEVICE_CHECK_SCENARIO));
+    this.view.setCameraMode('chase');
+    const v = this.view;
+    this.deviceCheck = {
+      before,
+      runner: new DeviceCheckRunner({
+        build: BUILD_ID,
+        gpuName: v.gpuName,
+        preset: () => v.graphics.preset,
+        resolution: () => Math.round(v.graphics.resolutionScale * v.dynamicScale * 100) / 100,
+        autoLowered: () => !!this.runningSlow?.lowered || v.dynamicScale < 1,
+        startup: this.startup,
+      }, performance.now(), seconds),
+    };
+    this.deviceReport = undefined;
+    this.publish(true);
+  }
+
+  cancelDeviceCheck(): void {
+    const dc = this.deviceCheck;
+    if (!dc) return;
+    dc.runner.cancel();
+    this.deviceCheck = undefined;
+    this.restart(dc.before);
+    this.publish(true);
+  }
+
+  /** Which sailing cues the picture shows now (tests: every preset keeps them all). */
+  cueAudit() {
+    return this.view?.cueAudit();
+  }
+
+  get lastDeviceReport(): DeviceReport | undefined {
+    return this.deviceReport;
   }
 
   /** Change and keep a preference (src/app/prefs.ts). */
@@ -2210,6 +2431,9 @@ export class SimController {
   setGraphics(g: GraphicsSettings): void {
     // The user's own choice wins: no automatic lowering for the rest of this visit.
     this.autoLowerGraphics = false;
+    this.dynRes.enabled = false;
+    this.dynRes.reset();
+    if (this.view) this.view.dynamicScale = 1;
     this.view?.applyGraphics(g, true);
     this.settlePace();
     this.publish(true);
@@ -2265,8 +2489,8 @@ export class SimController {
     const right = this.held.has('helmRight');
     if (left !== right) change.helm = clamp(i.helm + (right ? 1 : -1) * HELM_RATE * DT, -1, 1);
     // Dragging the tiller (touch screens): the helm follows the finger at the keys' rate.
-    else if (this.helmDrag !== undefined) {
-      const d = this.helmDrag - i.helm;
+    else if (this.helmDrag !== undefined || this.pad.helm !== undefined) {
+      const d = (this.helmDrag ?? this.pad.helm!) - i.helm;
       if (Math.abs(d) > 1e-4) change.helm = i.helm + Math.sign(d) * Math.min(Math.abs(d), HELM_RATE * DT);
     }
     else if (!this.held.has('helmHold') && i.helm !== 0) {
@@ -2274,7 +2498,9 @@ export class SimController {
       change.helm = i.helm - Math.sign(i.helm) * d;
     }
     const sheet = (name: 'main' | 'jib', inKey: string, outKey: string) => {
-      const dir = (this.held.has(outKey) ? 1 : 0) - (this.held.has(inKey) ? 1 : 0);
+      // Keys and buttons at the full rate; a game controller's trigger in proportion to how far it is pulled.
+      const keys = (this.held.has(outKey) ? 1 : 0) - (this.held.has(inKey) ? 1 : 0);
+      const dir = keys !== 0 ? keys : this.pad[name];
       if (dir === 0) return;
       const autoKey = name === 'main' ? 'autoMain' : 'autoJib';
       const sheetKey = name === 'main' ? 'mainSheet' : 'jibSheet';
@@ -2286,6 +2512,73 @@ export class SimController {
     sheet('jib', 'jibIn', 'jibOut');
     return Object.keys(change).length ? change : undefined;
   }
+
+  /**
+   * Game controllers, once a frame before the physics steps (src/app/gamepad.ts): the stick sets a helm target that
+   * the helm follows at the keys' rate (as dragging the tiller does), the triggers set the mainsheet's rate, and the
+   * buttons press the same held controls and commands as the keys. Nothing when no controller is connected.
+   */
+  private pollGamepad(): void {
+    const pads = typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+    let s: PadState | undefined;
+    let index: number | undefined;
+    for (const g of pads) {
+      s = padState(g);
+      if (s) {
+        index = g!.index;
+        break;
+      }
+    }
+    const pad = this.pad;
+    if (!s || this.replay) {
+      if (pad.prev) {
+        for (const a of pad.held) this.press(a, false);
+        this.pad = { main: 0, jib: 0, held: new Set() };
+      }
+      return;
+    }
+    const f = readPad(s, pad.prev, this.currSnap?.twa ?? 0);
+    const tiller = this.steeringMode === 'tiller';
+    pad.helm = f.helm === undefined ? undefined : tiller ? -f.helm : f.helm;
+    pad.main = f.main;
+    pad.jib = f.jib;
+    // The d-pad steers as the arrow keys do (in the steering mode chosen); tack and gybe are in the bow's sense.
+    const want = new Set<string>([...f.dpad.map((side) => helmAction(side, this.steeringMode)), ...f.held]);
+    for (const a of pad.held) if (!want.has(a)) this.press(a, false);
+    for (const a of want) if (!pad.held.has(a)) this.press(a, true);
+    pad.held = want;
+    if (f.commands.length || (!pad.prev && s)) this.sound.resume();
+    for (const c of f.commands) {
+      if (c === 'releaseSheets') this.releaseSheets();
+      else if (c === 'centreHelm') this.centreHelm();
+      else if (c === 'pause') this.togglePause();
+      else this.cycleCamera();
+    }
+    const connected = pad.index === undefined;
+    pad.prev = s;
+    pad.index = index;
+    if (connected) this.publish(true);
+  }
+
+  /** Whether a game controller is in use (for the help and the haptics setting). */
+  get gamepadConnected(): boolean {
+    return this.pad.index !== undefined;
+  }
+
+  /**
+   * A vibration pulse on the game controller, when the browser supports it and the player has not switched it off;
+   * never with reduced motion. Every event that pulses also has a picture and a sound.
+   */
+  rumble(kind: HapticEvent, size = 1): void {
+    if (!this.prefs.haptics || this.pad.index === undefined || size <= 0) return;
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const g = navigator.getGamepads?.()[this.pad.index] as (Gamepad & { vibrationActuator?: { playEffect?: (t: string, p: object) => Promise<unknown> } }) | null;
+    void g?.vibrationActuator?.playEffect?.('dual-rumble', hapticPulse(kind, size))?.catch(() => undefined);
+    this.lastRumble = { kind, size, at: performance.now() };
+  }
+
+  /** The last pulse asked for (tests). */
+  lastRumble?: { kind: HapticEvent; size: number; at: number };
 
   /** Dragging the tiller picture (touch): where the helm should go (−1 … 1), or undefined on letting go. */
   setHelmDrag(target: number | undefined): void {
@@ -2731,6 +3024,12 @@ export class SimController {
       graphicsLost: this.graphicsLost,
       runningSlow: this.paused ? undefined : this.runningSlow,
       autoLowerGraphics: this.autoLowerGraphics,
+      gamepad: this.gamepadConnected || undefined,
+      social: this.social.ui(),
+      warming: !!this.warming || undefined,
+      dynamicScale: this.view && this.view.dynamicScale < 1 ? this.view.dynamicScale : undefined,
+      deviceCheck: this.deviceCheck ? { progress: this.deviceCheck.runner.progress(performance.now()) } : undefined,
+      deviceReport: this.deviceReport,
       prefs: { ...this.prefs },
       hint: this.exercise ? undefined : this.hints.current,
       milestones: { ...this.milestones },

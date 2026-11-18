@@ -37,6 +37,23 @@ async function pipe(bytes: Uint8Array, t: CompressionStream | DecompressionStrea
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+/** Any JSON value as a compressed fragment payload with a version prefix (the challenge links use it too). */
+export async function encodeJson(prefix: string, value: unknown): Promise<string> {
+  const json = new TextEncoder().encode(JSON.stringify(value));
+  return prefix + toBase64Url(await pipe(json, new CompressionStream('deflate-raw')));
+}
+
+/** The JSON value in a payload made by encodeJson; throws with a reason a person can read. */
+export async function decodeJson(prefix: string, payload: string): Promise<unknown> {
+  if (!payload.startsWith(prefix)) throw new Error('This link is not one this version can read.');
+  try {
+    const bytes = await pipe(fromBase64Url(payload.slice(prefix.length)), new DecompressionStream('deflate-raw'));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error('The link is damaged or incomplete (was it cut short?).');
+  }
+}
+
 /** The fragment payload for a replay (without the `#ghost=`). */
 export async function encodeShare(rec: Recording): Promise<string> {
   const json = new TextEncoder().encode(JSON.stringify(rec));

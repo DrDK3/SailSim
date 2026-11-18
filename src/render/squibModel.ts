@@ -26,6 +26,8 @@ export interface SailShapeInput {
   angle: number;
   /** 0 = flogging … 1 = drawing. */
   luff: number;
+  /** 0 attached … 1 stalled (the physics' stall factor): the leeward telltales stop streaming. */
+  stall?: number;
   /**
    * Which way the air pushes the sail and so which way it bellies: +1 to port, −1 to starboard, near 0 when
    * the wind runs along it (luffing). From `sailFill`.
@@ -1184,7 +1186,12 @@ export class SquibModel {
       const b = a + 1;
       const dir = new THREE.Vector3(jp.getX(b) - jp.getX(a), 0, jp.getZ(b) - jp.getZ(a));
       const yaw = Math.atan2(-dir.z, dir.x);
-      const flick = (1 - jib.luff) * Math.sin(time * 9 + i * 1.7) * 0.8 + 0.08 * Math.sin(time * 6 + i);
+      // Windward telltales lift and spin when the jib luffs (sailed too high, or sheeted too little); leeward ones droop
+      // and twirl when the flow stalls (sheeted too hard, or sailed too low): the physics' luff and stall factors
+      // (juniors round, Workstream 2; the leeward side is the side the sail lies on).
+      const leeward = (i % 2 ? -1 : 1) === -Math.sign(jib.angle || 1); // angle > 0: the sail lies to port (−x)
+      const upset = leeward ? Math.max(1 - jib.luff, jib.stall ?? 0) : 1 - jib.luff;
+      const flick = upset * Math.sin(time * 9 + i * 1.7) * 0.8 + 0.08 * Math.sin(time * 6 + i);
       t.rotation.set(0, yaw + flick, 0);
       t.position.x += (i % 2 ? -1 : 1) * 0.01;
     }

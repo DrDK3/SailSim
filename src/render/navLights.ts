@@ -236,7 +236,10 @@ export function buildLights(lights: readonly NavLight[]): THREE.Group {
         t.name = 'light-label';
         t.position.set(l.x + (l.arc === 'port' ? -0.4 : 0.4), l.y + 0.5, l.z);
         t.scale.setScalar(SPRITE_SCALE * 1.6);
-        t.userData = { labelFor: s };
+        // The light by its index in the group, not the object: three.js copies userData through JSON when a vessel's
+        // model is cloned, and an object there was serialised whole, its canvas texture encoded as a PNG each time, a
+        // stall of seconds on the main thread (juniors round profile). An index also survives the clone correctly.
+        t.userData = { labelFor: group.children.indexOf(s) };
         t.visible = false;
         group.add(t);
       }
@@ -262,8 +265,8 @@ export function updateLights(group: THREE.Object3D, camera: THREE.Camera, lit: b
   local.copy(camera.position);
   parent.worldToLocal(local);
   for (const c of group.children) {
-    const ud = c.userData as { arc?: Arc; rangeM?: number; labelFor?: THREE.Object3D };
-    if (ud.labelFor) continue;
+    const ud = c.userData as { arc?: Arc; rangeM?: number; labelFor?: number };
+    if (ud.labelFor !== undefined) continue;
     if (!ud.arc) continue;
     v.copy(local).sub(c.position);
     // Bearing of the viewer from the bow (−z), > 0 to starboard (+x).
@@ -276,7 +279,7 @@ export function updateLights(group: THREE.Object3D, camera: THREE.Camera, lit: b
     c.scale.setScalar(SPRITE_SCALE * Math.min(1, Math.max(0.35, (range - d) / (0.2 * range))));
   }
   for (const c of group.children) {
-    const ud = c.userData as { labelFor?: THREE.Object3D };
-    if (ud.labelFor) c.visible = labels && ud.labelFor.visible;
+    const ud = c.userData as { labelFor?: number };
+    if (ud.labelFor !== undefined) c.visible = labels && !!group.children[ud.labelFor]?.visible;
   }
 }

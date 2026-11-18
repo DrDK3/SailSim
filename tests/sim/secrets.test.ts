@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scanText, scanViteEnvNames, secretEnvValues } from '../../tools/secrets';
+import { PUBLIC_BY_DESIGN, scanText, scanViteEnvNames, secretEnvValues } from '../../tools/secrets';
 
 // Fake credentials are assembled at run time so this file contains none (and trips no secret scanner).
 const j = (...p: string[]) => p.join('');
@@ -59,5 +59,16 @@ describe('secret check (Phase 6: no secrets in the bundle)', () => {
   it('flags secret-looking VITE_ variables, which Vite would put into the client', () => {
     expect(scanViteEnvNames('s.ts', 'const k = import.meta.env.VITE_UKHO_API_KEY;')[0]?.excerpt).toBe('VITE_UKHO_API_KEY');
     expect(scanViteEnvNames('s.ts', 'const u = import.meta.env.VITE_LIVE_BASE_URL;')).toEqual([]);
+  });
+
+  it('exempts only the names that are public by design (the Turnstile site key), by exact name', () => {
+    expect([...PUBLIC_BY_DESIGN]).toEqual(['VITE_TURNSTILE_SITEKEY']);
+    // The site key may be in the source and its value in the bundle: every page with the widget carries it.
+    expect(scanViteEnvNames('s.ts', 'const k = import.meta.env.VITE_TURNSTILE_SITEKEY;')).toEqual([]);
+    expect(secretEnvValues({ VITE_TURNSTILE_SITEKEY: '0x4AAAAAAAexamplesitekey' })).toEqual([]);
+    // Its private counterpart, and anything merely similar, is still caught.
+    for (const name of ['VITE_TURNSTILE_SECRET', 'VITE_TURNSTILE_SECRET_KEY', 'VITE_TURNSTILE_SITEKEY_SECRET', 'VITE_OTHER_SITEKEY'])
+      expect(scanViteEnvNames('s.ts', `const k = import.meta.env.${name};`)[0]?.excerpt, name).toBe(name);
+    expect(secretEnvValues({ TURNSTILE_SECRET: '0x4AAAAAAAexamplesecret' })).toEqual(['0x4AAAAAAAexamplesecret']);
   });
 });

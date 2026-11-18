@@ -19,6 +19,8 @@ import { SUN_THROUGH, VIEWPORT } from './materialFx';
 import { DEFAULT_CAMERA_MOTION, loadGraphics, pixelRatioFor, saveGraphics, type GraphicsSettings } from './graphics';
 import { ForceArrows } from './arrows';
 import { TeachingOverlay } from './teaching';
+import { PuffOutlines } from './puffOutlines';
+import { auditCues, type CueAudit } from './cueAudit';
 import type { OverlayPart } from '../app/lessons';
 import type { DartScene, DartUpdate } from './dart';
 import { CourseScene } from './course';
@@ -28,6 +30,7 @@ import type { Course } from '../sim/course/types';
 import type { SkyState } from '../sim/env/sky';
 import { daylight } from '../sim/env/sun';
 import { CloudDome, Rain } from './weather';
+import { CueMemory, cameraFeel, deriveCues, selectPuffsForShader, type CuePuff, type CueState } from './cues';
 import { setFlagMotionReduced, type WindAt } from './flagMotion';
 
 export type CameraMode = 'chase' | 'scenic' | 'helm' | 'orbit' | 'drone' | 'top' | 'line' | 'free';
@@ -48,6 +51,11 @@ export interface SceneEnvironment {
   course?: { nextLeg: number; phase: string; showLabels: boolean; committeeHeading?: (n: number, e: number) => number };
   /** The other boats of the fleet: poses at the last two physics states, interpolated like the user's boat. */
   fleet?: { prev: Map<string, FleetPose>; curr: Map<string, FleetPose>; showLabels: boolean };
+  /** The wind model's gust factor at the boat (speed / mean here), for the cue state (src/render/cues.ts). */
+  gustFactor?: number;
+  /** Contact and grounding since the last frame (0…1), for the cue state. */
+  contact?: number;
+  grounding?: number;
 }
 /** The camera's near plane (m): in every view but the helm's, and in the helm's (see setFov). */
 export const NEAR_M = 0.5;
@@ -88,10 +96,30 @@ function sheetEase(limit: number): number {
  * The sky's colour at the horizon (3° up) at 16 compass bearings, as it is displayed (tone-mapped, sRGB): read
  * once from the sky's light map whenever that is rebuilt (the sun has moved or the cloud changed).
  */
-function readHorizon(renderer: THREE.WebGLRenderer, env: THREE.Texture): Float32Array | null {
+/**
+ * The horizon reader's material, quad and target, kept (juniors round profile): a new material each time the sky was
+ * rebuilt was compiled afresh and deleted after one read, a stall of seconds on a software renderer at every new
+ * scenario or 3° of sun movement. Keyed by the light map's size (its defines).
+ */
+interface HorizonKit {
+  mat: THREE.ShaderMaterial;
+  scene: THREE.Scene;
+  cam: THREE.Camera;
+  rt: THREE.WebGLRenderTarget;
+}
+const horizonKits = new Map<string, HorizonKit>();
+
+function readHorizon(renderer: THREE.WebGLRenderer, env: THREE.Texture): Promise<Float32Array> | null {
   const hgt = (env.image as { height?: number } | undefined)?.height;
   if (!hgt) return null;
   const maxMip = Math.log2(hgt) - 2;
+  const key = `${hgt}`;
+  let kit = horizonKits.get(key);
+  if (kit) {
+    kit.mat.uniforms.envMap!.value = env;
+    kit.mat.uniforms.uExposure!.value = renderer.toneMappingExposure;
+    return drawHorizon(renderer, kit);
+  }
   const rt = new THREE.WebGLRenderTarget(16, 1, { type: THREE.UnsignedByteType, depthBuffer: false });
   const mat = new THREE.ShaderMaterial({
     defines: { ENVMAP_TYPE_CUBE_UV: 1, CUBEUV_TEXEL_WIDTH: 1 / (3 * Math.max(Math.pow(2, maxMip), 7 * 16)), CUBEUV_TEXEL_HEIGHT: 1 / hgt, CUBEUV_MAX_MIP: `${maxMip}.0` },
@@ -125,19 +153,30 @@ function readHorizon(renderer: THREE.WebGLRenderer, env: THREE.Texture): Float32
   quad.frustumCulled = false;
   const scene = new THREE.Scene();
   scene.add(quad);
-  const cam = new THREE.Camera();
+  kit = { mat, scene, cam: new THREE.Camera(), rt };
+  horizonKits.set(key, kit);
+  return drawHorizon(renderer, kit);
+}
+
+/**
+ * Draw the 16 horizon samples and read them back without waiting for the GPU (WebGL 2's asynchronous read, where the
+ * browser has it): a synchronous read waited for every drawing queued before it, the sky's light map included, a
+ * stall of seconds on a software renderer (juniors round profile). The colours arrive a frame or two later.
+ */
+async function drawHorizon(renderer: THREE.WebGLRenderer, kit: HorizonKit): Promise<Float32Array> {
   const prev = renderer.getRenderTarget();
   const px = new Uint8Array(16 * 4);
+  let pending: Promise<unknown> | undefined;
   try {
-    renderer.setRenderTarget(rt);
-    renderer.render(scene, cam);
-    renderer.readRenderTargetPixels(rt, 0, 0, 16, 1, px);
+    renderer.setRenderTarget(kit.rt);
+    renderer.render(kit.scene, kit.cam);
+    const r = renderer as THREE.WebGLRenderer & { readRenderTargetPixelsAsync?: (...a: unknown[]) => Promise<unknown> };
+    if (renderer.capabilities.isWebGL2 && typeof r.readRenderTargetPixelsAsync === 'function') pending = r.readRenderTargetPixelsAsync(kit.rt, 0, 0, 16, 1, px);
+    else renderer.readRenderTargetPixels(kit.rt, 0, 0, 16, 1, px);
   } finally {
     renderer.setRenderTarget(prev);
-    rt.dispose();
-    mat.dispose();
-    quad.geometry.dispose();
   }
+  if (pending) await pending;
   const out = new Float32Array(16 * 3);
   for (let i = 0; i < 16; i++) for (let c = 0; c < 3; c++) out[i * 3 + c] = px[i * 4 + c]! / 255;
   return out;
@@ -175,10 +214,20 @@ export class SceneView {
   /** The bow's height last frame (m) and how fast it is moving (m/s, < 0 falling): spray and the slap's sound. */
   private bowY = NaN;
   bowDrop = 0;
+  /** This frame's cue state (src/render/cues.ts): what the water, sails, spray, sound, camera and vibration show. */
+  cues?: CueState;
+  private readonly cueMemory = new CueMemory();
+  private readonly shaderPuffs: CuePuff[] = [];
+  /** Puffs left out of the water shader's 16 slots this frame (all further than every one drawn). */
+  puffsDropped = 0;
+  /** The chase camera's ease into a gust (m further back) and its settle after the boom crosses (m), from the cues. */
+  private feel = { gust: 0, boom: 0 };
   graphics: GraphicsSettings;
   private readonly arrows: ForceArrows;
   /** The teaching overlay (heading, course over ground, stream, winds, VMG, a lesson's buoy): src/render/teaching.ts. */
   readonly teaching = new TeachingOverlay();
+  /** Optional gust outlines on the water (teaching aid; src/render/puffOutlines.ts). */
+  readonly gustOutlines = new PuffOutlines();
   private readonly floats: THREE.InstancedMesh;
   private readonly sun: SunLight;
 
@@ -336,6 +385,7 @@ export class SceneView {
     this.boat.group.add(this.arrows.bodyGroup);
     this.scene.add(this.arrows.worldGroup);
     this.scene.add(this.teaching.group);
+    this.scene.add(this.gustOutlines.group);
 
     // Reference floats (lobster-pot buoys) on a jittered grid around the boat: visual motion cues only.
     const floatGeo = new THREE.SphereGeometry(0.22, 12, 8);
@@ -395,8 +445,18 @@ export class SceneView {
     // The water reflects the same sky (so a golden or grey sky shows in it); set before the old map goes.
     this.water?.setEnv(this.envMap);
     old?.dispose();
-    this.horizon = readHorizon(this.renderer, this.envMap);
+    const gen = ++this.horizonGen;
+    readHorizon(this.renderer, this.envMap)
+      ?.then((h) => {
+        // A later rebuild's colours win over an earlier one still in flight.
+        if (gen !== this.horizonGen) return;
+        this.horizon = h;
+        if (this.graphics.atmosphere) this.updateFogColour();
+      })
+      .catch(() => undefined);
   }
+
+  private horizonGen = 0;
 
   private applyWeather(): void {
     const fog = this.scene.fog as THREE.FogExp2;
@@ -674,7 +734,7 @@ export class SceneView {
   applyGraphics(g: GraphicsSettings, persist = false): void {
     this.graphics = g;
     if (persist) saveGraphics(g);
-    this.renderer.setPixelRatio(pixelRatioFor(g, window.devicePixelRatio));
+    this.renderer.setPixelRatio(Math.max(0.35, pixelRatioFor(g, window.devicePixelRatio) * this.dynamicScale));
     const size = this.renderer.getSize(new THREE.Vector2());
     this.renderer.setSize(size.x, size.y, false);
     this.post?.resize();
@@ -685,6 +745,47 @@ export class SceneView {
     this.fleet.foamOn = g.hullFoam;
     this.spray.setViewport(size.y * this.renderer.getPixelRatio(), this.camera.fov);
     this.applyWeather();
+  }
+
+  /**
+   * Dynamic resolution (src/render/dynamicResolution.ts): a multiplier on the preset's own resolution, set by the
+   * controller while frames are over budget. Pixels only: what is drawn is unchanged.
+   */
+  dynamicScale = 1;
+
+  setDynamicScale(f: number): void {
+    if (Math.abs(f - this.dynamicScale) < 1e-6) return;
+    this.dynamicScale = f;
+    this.applyGraphics(this.graphics, false);
+  }
+
+  /**
+   * Compile every shader the scene needs now, without blocking (the browser compiles in parallel where it can):
+   * the boat, sea, sky and, once added, the river's scene. Resolves when all are ready.
+   */
+  async warmUp(): Promise<void> {
+    if (!this.parallelCompile) return;
+    const r = this.renderer as THREE.WebGLRenderer & { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown> };
+    if (typeof r.compileAsync === 'function') await r.compileAsync(this.scene, this.camera);
+  }
+
+  /**
+   * Whether the browser compiles shaders in parallel (KHR_parallel_shader_compile). Without it, compiling the whole
+   * scene up front blocks for longer than compiling what is in view at the first draw (measured under software
+   * rendering: the river became sailable at 19.4 s instead of 10.1 s at a ×4 CPU throttle), so warming is skipped.
+   */
+  get parallelCompile(): boolean {
+    return this.renderer.extensions.has('KHR_parallel_shader_compile');
+  }
+
+  /** Which sailing cues are drawn this frame (src/render/cueAudit.ts). */
+  cueAudit(): CueAudit {
+    return auditCues(this.scene, this.water.drawnPuffs().length, this.cues?.heel ?? 0);
+  }
+
+  /** Shader programs compiled so far (a rise in a frame means it compiled new ones: a stall the device check reports). */
+  get programCount(): number {
+    return this.renderer.info.programs?.length ?? 0;
   }
 
   /** The scenery detail and shadow resolution actually drawn (chosen when the view was built). */
@@ -716,7 +817,6 @@ export class SceneView {
       this.lastWind = { tws: curr.twsGround, twd: curr.twdGround, wat };
     }
     if (env?.sea) this.water.updateField(env.sea, this.camera.position.x, this.camera.position.z, time, env.sea(n, e), curr.current);
-    if (env) this.updatePuffs(env.puffs, x, z);
 
     // Visual-only wave response: the hull floats on the surface over its waterplane (heave, pitch, roll).
     rideWaves((wx, wz) => this.water.heightAt(wx, wz, time), x, z, heading, this.rideTarget);
@@ -737,8 +837,8 @@ export class SceneView {
     const jibAngle = lerpAngle(prev.boomJib, curr.boomJib, alpha);
     const f = curr.forces;
     this.boat.update({
-      main: { angle: mainAngle, luff: f.main.luff, fill: sailFill(f.main.aws > 0 ? f.main.awa : curr.awa, mainAngle) },
-      jib: { angle: jibAngle, luff: f.jib.luff, fill: sailFill(f.jib.aws > 0 ? f.jib.awa : curr.awa, jibAngle) },
+      main: { angle: mainAngle, luff: f.main.luff, stall: f.main.stall, fill: sailFill(f.main.aws > 0 ? f.main.awa : curr.awa, mainAngle) },
+      jib: { angle: jibAngle, luff: f.jib.luff, stall: f.jib.stall, fill: sailFill(f.jib.aws > 0 ? f.jib.awa : curr.awa, jibAngle) },
       rudder: curr.rudder,
       crewY: curr.crewY,
       crewTo: curr.crewTo,
@@ -763,6 +863,13 @@ export class SceneView {
     const bowY = this.ride.heave + Math.sin(this.ride.pitch) * 2.4;
     this.bowDrop = Number.isFinite(this.bowY) && frameDt > 0 ? (bowY - this.bowY) / frameDt : 0;
     this.bowY = bowY;
+    // The cue state for this frame, from the snapshots (src/render/cues.ts); the water's puffs come from it.
+    const seaHere = env?.sea ? env.sea(n, e) : undefined;
+    this.cues = deriveCues(prev, curr, alpha, {
+      puffs: env?.puffs ?? [], gustFactor: env?.gustFactor ?? 1, waveHeight: seaHere ? seaHere.hs : 0, bowDrop: this.bowDrop,
+      contact: env?.contact, grounding: env?.grounding,
+    }, this.cueMemory, this.cues);
+    this.updatePuffs(this.cues.puffs, n, e);
     {
       const to = curr.twdGround + Math.PI;
       this.spray.update(this.boatRoot, curr.stw, this.bowDrop, Math.sin(to) * curr.twsGround, -Math.cos(to) * curr.twsGround, frameDt);
@@ -770,6 +877,7 @@ export class SceneView {
     this.arrows.visible = this.showForces;
     if (this.showForces) this.arrows.update(curr, this.boat.anchors, this.boatRoot.position);
     this.teaching.update(curr, this.boatRoot.position, 0);
+    this.gustOutlines.update(this.cues.puffs, n, e, 0);
     this.updateFloats(x, z, time);
     this.updateCamera(heading, frameDt, moved, heel);
 
@@ -847,6 +955,8 @@ export class SceneView {
   }
 
   /** Swap every plain PBR material without a texture for its Lambert copy (shared materials share one copy). */
+  private readonly lambertOriginal = new WeakMap<THREE.Material, THREE.Material>();
+
   private simplifyMaterials(root: THREE.Object3D): void {
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -856,7 +966,8 @@ export class SceneView {
       let l = this.lambertCache.get(m);
       if (!l) {
         l = lambertOf(m);
-        l.userData.original = m;
+        // Kept out of userData: three.js copies userData through JSON when a material is cloned.
+        this.lambertOriginal.set(l, m);
         this.lambertCache.set(m, l);
       }
       mesh.material = l;
@@ -867,7 +978,7 @@ export class SceneView {
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || Array.isArray(mesh.material)) return;
-      const orig = (mesh.material as THREE.Material).userData?.original as THREE.Material | undefined;
+      const orig = this.lambertOriginal.get(mesh.material as THREE.Material);
       if (orig) mesh.material = orig;
     });
   }
@@ -929,9 +1040,13 @@ export class SceneView {
     const reduced = this.reducedMotion;
     const motion = reduced ? 0 : this.graphics.cameraMotion;
     const y = followHeave(this.camHeave, b.y, motion);
+    // Feel (juniors round): the chase camera eases back a little as a gust arrives and settles a little as the boom
+    // crosses, each from the cue state's event and its size, scaled by the camera-motion setting (none at 0 or with
+    // reduced motion). At most 1.2 m and 0.25 m (E).
+    const fe = cameraFeel(this.feel, this.cues, dt, motion);
     if (this.mode === 'chase') {
       const back = new THREE.Vector3(-Math.sin(this.chaseHeading), 0, Math.cos(this.chaseHeading));
-      this.camera.position.set(b.x, y, b.z).addScaledVector(back, this.chaseDist).add(new THREE.Vector3(0, chaseHeight(this.chaseDist), 0));
+      this.camera.position.set(b.x, y - fe.drop, b.z).addScaledVector(back, this.chaseDist + fe.back).add(new THREE.Vector3(0, chaseHeight(this.chaseDist), 0));
       // A little of the heel in the horizon with more camera motion (none at 0: a level horizon).
       const fwd = new THREE.Vector3(Math.sin(this.chaseHeading), 0, -Math.cos(this.chaseHeading));
       this.camera.up.set(0, 1, 0).applyAxisAngle(fwd, -heel * 0.12 * motion);
@@ -1030,16 +1145,14 @@ export class SceneView {
   }
 
   /** The 16 puffs nearest the boat, with their life envelope, as water-shader uniforms. */
-  private updatePuffs(puffs: readonly Puff[], bx: number, bz: number): void {
-    const list = puffs
-      .map((p) => {
-        const [x, , z] = nedToThree(p.n, p.e);
-        const life = Math.min(1, p.age / (0.2 * p.life)) * Math.min(1, Math.max(0, (p.life - p.age) / (0.3 * p.life)));
-        return { x, z, radius: p.radius, strength: p.strength * life, d: (x - bx) ** 2 + (z - bz) ** 2 };
-      })
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 16);
-    this.water.setPuffs(list);
+  /**
+   * The water's cat's paws, from the cue state: every live puff with the wind model's own envelope and strength; when
+   * there are more than the shader's 16 slots, the nearest to the boat by the edge are drawn (never a near one dropped
+   * for a far one). Positions in Three.js world coordinates.
+   */
+  private updatePuffs(puffs: readonly CuePuff[], bn: number, be: number): void {
+    this.puffsDropped = selectPuffsForShader(puffs, bn, be, 16, this.shaderPuffs);
+    this.water.setPuffsNE(this.shaderPuffs);
   }
 
   private updateFloats(bx: number, bz: number, time: number): void {

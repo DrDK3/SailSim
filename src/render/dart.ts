@@ -1687,19 +1687,34 @@ export const WALK_DRY_ODN = 2.3;
 
 /** The deck height (m ODN) at (e, n) on a fixed jetty as drawn (src/render/pontoons.ts), else undefined. */
 export function fixedDeckAt(f: DartFeatures): (e: number, n: number) => number | undefined {
-  const decks = f.piers.flatMap((p) => passengerPierAsDrawn(p)).filter((p) => !p.floating);
+  // Each deck with its bounding box (plus its half-width), so a point far from every jetty is answered at once: the
+  // walkers ask this every frame (juniors round profile: it was the largest allocator in the frame loop).
+  const decks = f.piers.flatMap((p) => passengerPierAsDrawn(p)).filter((p) => !p.floating).map((p) => {
+    const pts = (p.poly ?? p.line ?? []) as readonly (readonly [number, number])[];
+    const pad = p.line ? (p.width ?? 2.4) / 2 : 0;
+    let e0 = Infinity, e1 = -Infinity, n0 = Infinity, n1 = -Infinity;
+    for (const q of pts) {
+      e0 = Math.min(e0, q[0]); e1 = Math.max(e1, q[0]); n0 = Math.min(n0, q[1]); n1 = Math.max(n1, q[1]);
+    }
+    return { p, e0: e0 - pad, e1: e1 + pad, n0: n0 - pad, n1: n1 + pad };
+  });
   return (e, n) => {
-    for (const p of decks) {
+    for (const d of decks) {
+      if (e < d.e0 || e > d.e1 || n < d.n0 || n > d.n1) continue;
+      const p = d.p;
       if (p.poly && insideRing(p.poly as [number, number][], e, n)) return PONTOON.fixedDeck;
       if (p.line) {
         const half = (p.width ?? 2.4) / 2;
         for (let i = 1; i < p.line.length; i++) {
-          const [ae, an] = p.line[i - 1]!;
-          const [be, bn] = p.line[i]!;
-          const de = be - ae;
-          const dn = bn - an;
+          const a = p.line[i - 1]!;
+          const b = p.line[i]!;
+          const ae = a[0], an = a[1];
+          const de = b[0] - ae;
+          const dn = b[1] - an;
           const t = Math.max(0, Math.min(1, ((e - ae) * de + (n - an) * dn) / (de * de + dn * dn || 1)));
-          if (Math.hypot(e - (ae + de * t), n - (an + dn * t)) <= half) return PONTOON.fixedDeck;
+          const x = e - (ae + de * t);
+          const y = n - (an + dn * t);
+          if (x * x + y * y <= half * half) return PONTOON.fixedDeck;
         }
       }
     }

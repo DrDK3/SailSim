@@ -997,3 +997,16 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 @media (max-width: 700px) {
   .hud-left .panel.damage { width: auto; }
 }
+
+/* Juniors round: the weekly course, targets, challenges (src/ui/Social.tsx), the device check. */
+.quick-race .weekly { align-items: flex-start; }
+.quick-race .weekly .terms { margin: 4px 0; padding-left: 18px; }
+.quick-race .weekly .targets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.progress-chart { margin: 4px 0; }
+.progress-chart svg { display: block; color: var(--text, currentColor); }
+.social-result { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); z-index: 30; }
+.social-result .splits { width: 100%; border-collapse: collapse; margin: 4px 0; }
+.social-result .splits td, .social-result .splits th { padding: 2px 6px; text-align: left; }
+.name-chooser { gap: 6px; align-items: center; margin: 6px 0; }
+.challenge-card { max-width: min(480px, calc(100vw - 32px)); }
+.device-check ul { margin: 4px 0; padding-left: 18px; }

@@ -100,7 +100,7 @@ All thresholds are estimates (E), chosen for sessions of about an hour.
 
 | Check | Where |
 |---|---|
-| **No secrets in the bundle.** `tools/check-secrets.ts` runs at the end of `npm run build` and scans every file in `dist/`, source maps included, for: <ul><li>known credential formats (AWS, GitHub, Google, Slack, Stripe, private keys, JWTs);</li><li>API-key headers with a value (the UKHO `Ocp-Apim-Subscription-Key`, `apikey`);</li><li>credential-looking values assigned to key, token, secret or password names;</li><li>**the exact values of secret-named environment variables present during the build** (in CI, any secret given to the job).</li></ul>It also refuses `VITE_*KEY/TOKEN/SECRET*` variables, which Vite would put into the client. Unit-tested in `tests/sim/secrets.test.ts` | `npm run build`, CI, Deploy |
+| **No secrets in the bundle.** `tools/check-secrets.ts` runs at the end of `npm run build` and scans every file in `dist/`, source maps included, for: <ul><li>known credential formats (AWS, GitHub, Google, Slack, Stripe, private keys, JWTs);</li><li>API-key headers with a value (the UKHO `Ocp-Apim-Subscription-Key`, `apikey`);</li><li>credential-looking values assigned to key, token, secret or password names;</li><li>**the exact values of secret-named environment variables present during the build** (in CI, any secret given to the job).</li></ul>It also refuses `VITE_*KEY/TOKEN/SECRET*` variables, which Vite would put into the client. One name is exempt from both rules, by exact name and with the owner's approval: `VITE_TURNSTILE_SITEKEY`, a Cloudflare Turnstile site key, which is public by design (its secret key, `TURNSTILE_SECRET`, stays in the club-table Worker). The list is `PUBLIC_BY_DESIGN` in `tools/secrets.ts`. Unit-tested in `tests/sim/secrets.test.ts` | `npm run build`, CI, Deploy |
 | **The production build under a sub-path.** Assets, River Dart data, physics, controls, the polar worker, no fallback routing; live data present, stale, expired, corrupt, missing; live tide (`tests/e2e/deploy.spec.ts`, served by `tools/pages-server.mjs`) | `npm run test:e2e` |
 | **Ingest parsing and validation.** <ul><li>EA and UKHO response shapes (synthetic fixtures);</li><li>the history CSVs;</li><li>the harmonic pipeline on a synthetic record;</li><li>weather range checks;</li><li>the index.</li></ul>The TypeScript tests read the same example `tide.json` the Python tests write | `python -I -m unittest discover -s tools/ingest -p 'test_*.py'`, `npm test` |
 
@@ -157,6 +157,44 @@ The checks, for this or a later run:
 | Any of the above | A privacy notice saying what is collected and kept, why and for how long, and how to have it removed (UK GDPR); moderation of names; someone to run and pay for it |
 
 These are paid or quota-limited services (a hosted database or serverless functions, a real-time service, or a small server), whose prices change: check the provider's current pricing before choosing. GitHub Pages alone cannot do any of them, since it serves fixed files only.
+
+## 6b. Weekly course targets (juniors round; no server)
+
+`.github/workflows/weekly-targets.yml` runs early every Monday (02:23 UTC, after midnight in London in summer and in winter) and again at 14:23 UTC, or by hand. It builds the headless tools (`npm run tools:build`: Vite bundles `tools/weekly-targets.ts` with the app's own code into `dist-tools/`), sails the week's course with the AI at the club, good and expert levels over three seeds, and writes `weekly/<week>.json` (bronze, silver and gold target times with a ghost track each) on `gh-pages`, next to `live/`, with the same temporary-file-and-rename and squashed-commit pattern (`tools/ci/push-site-data.sh`). A deploy keeps `weekly/` and `club/` (`tools/ci/publish-pages.sh`). Four weeks of files are kept.
+
+- No secrets, no cost beyond GitHub Actions minutes (about 1 minute for a practice course, about 1–2 minutes for an RDYC course: the AI takes about 52 minutes of simulated time to sail RDYC C1, which the headless sim does in under 15 s per run).
+- If it fails or has not run, the app builds the week's course itself (`src/app/weekly.ts`) and says "targets not available this week".
+- Run it locally: `npm run weekly:targets -- out/weekly [--at 2026-11-17T12:00:00Z] [--seeds 1,2,3]`.
+- Optional: `data/weekly/season.json` (`{ "weeks": { "2026-W48": "rdyc-2026-c1", "2026-W49": "practice:triangle" } }`) sets the courses of chosen weeks; other weeks follow the rotation. Nothing needs editing weekly.
+
+## 6c. Club table (optional, off by default)
+
+The club table (juniors round §6.4) is the **one** server-side piece this project allows: a single small endpoint on a free hosting tier, extending decision D8. **It is not deployed and no account was created.** Until the owner does the steps below, the app shows no club table, makes no request for one, and the scheduled job does nothing.
+
+**Recommended provider: Cloudflare Workers with Workers KV** (free limits checked 17 Nov 2026 on Cloudflare's pages, and re-check them when you set it up):
+
+| | Cloudflare Workers + KV (recommended) | Supabase (compared) |
+|---|---|---|
+| Free allowance | Workers: 100,000 requests a day. KV: 100,000 reads, 1,000 writes, 1,000 deletes and 1,000 lists a day, 1 GB stored; limits reset at 00:00 UTC | 500 MB database per project, 2 active projects |
+| What happens at a limit | That day's further writes (submissions) fail with an error until 00:00 UTC; the app says the table could not be reached; nothing else is affected | Projects on the free plan are **paused after a week without activity** and must be restarted by hand from the dashboard: wrong for a weekly table that may be quiet in winter |
+| Bot check | Cloudflare Turnstile, free (up to 20 widgets an account; its Privacy Addendum must be referred to in the privacy notice) | Would need a separate provider |
+| Fits the code | `server/club-table/worker.js` as written (one file, no framework, no build step) | Would need an adapter (Postgres via its REST API) |
+
+A club's juniors submitting a few runs a week use well under 1% of these allowances. **Expected cost: £0 a month within the free limits.**
+
+**What the owner sets up, once (about 30 minutes):**
+
+1. Create a Cloudflare account (the owner's or the club's; not a junior's). In Workers & Pages create a KV namespace, for example `sailsim-club`.
+2. Create a Worker from `server/club-table/worker.js` (paste the file in the dashboard editor, or `npx wrangler deploy server/club-table/worker.js` with a `wrangler.toml` naming the KV binding). Bind the namespace as **`CLUB`**. Add the variable `ALLOWED_ORIGIN` = the site's origin (`https://drdk3.github.io`).
+3. Add two **secrets** to the Worker: `ADMIN_TOKEN` (a long random string: `openssl rand -hex 32`) and, for the bot check, `TURNSTILE_SECRET` (from a Turnstile widget created for the site's hostname; its site key is public).
+4. In the GitHub repository: **Settings → Secrets and variables → Actions**: secrets `CLUB_TABLE_URL` (the Worker's address) and `CLUB_ADMIN_TOKEN` (the same admin token); variables `CLUB_TABLE_ENABLED` = `true`, optionally `CLUB_SEASON_WEEKS` (default 26), and for the build `VITE_CLUB_TABLE_URL` (the Worker's address) and `VITE_TURNSTILE_SITEKEY` (the public site key). Then add these two to the build step's `env:` in `deploy.yml` (`VITE_CLUB_TABLE_URL: ${{ vars.VITE_CLUB_TABLE_URL }}`, `VITE_TURNSTILE_SITEKEY: ${{ vars.VITE_TURNSTILE_SITEKEY }}`): the agent did not change `deploy.yml`.
+5. Read and finish the draft notes ([docs/club-table/DATA_PROTECTION.md](club-table/DATA_PROTECTION.md), [docs/club-table/PARENTS.md](club-table/PARENTS.md)) and link the parents' note from the club's website before switching it on.
+
+**What then runs with no person involved:** `.github/workflows/club-table.yml` every 30 minutes (minutes 7 and 37, as the live data): fetch pending runs → re-sail each with the simulator → verdict stored where the submitter's token can read it → replay deleted (the week's top three kept as ghosts) → removals applied → entries older than the season deleted → `club/weekly-<week>.json` and its ghosts published on `gh-pages`. The verifiers of the last five builds are kept on the branch `club-verifiers`, so a run recorded just before a deploy is still checked by the build that recorded it; older ones are marked "unverifiable" with that reason.
+
+**Switching it off:** set `CLUB_TABLE_ENABLED` to `false` (the job stops) and remove `VITE_CLUB_TABLE_URL` (the next deploy hides the table). Deleting the Worker and the KV namespace removes everything stored.
+
+**Locally:** `npm run club:mock` (the same handler over memory, http://localhost:8787, admin token `local-admin-token`), and `CLUB_TABLE_URL=http://localhost:8787 CLUB_ADMIN_TOKEN=local-admin-token npm run club:verify -- --site out/site`.
 
 ## 7. How this was tested without GitHub
 
