@@ -21,6 +21,13 @@ async function ready(page: Page): Promise<string[]> {
 
 const hub = (page: Page) => page.getByRole('dialog', { name: 'Squib sailing simulator' });
 
+/**
+ * A door's panel is loaded when first asked for. In software rendering each drawn frame holds the page for seconds,
+ * and the load takes a few turns between frames: allow for it, as the other tests of such panels do (the default
+ * wait ran out on a slow CI runner, 18 Nov 2026, with the panel on its way).
+ */
+const PANEL = { timeout: 30_000 * CI_SLOW };
+
 test('the activity button opens the hub; each door opens the feature it names, and the button follows', async ({ page }) => {
   test.setTimeout(180_000 * CI_SLOW);
   const errors = await ready(page);
@@ -34,18 +41,18 @@ test('the activity button opens the hub; each door opens the feature it names, a
   await expect(page.getByTestId('hub-now')).toContainText('Free sailing');
   await hub(page).getByRole('button', { name: 'Scenarios' }).click();
   await expect(hub(page)).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Library' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Library' })).toBeVisible(PANEL);
 
   // Race against AI: the race set-up.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Race against AI' }).click();
-  await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible(PANEL);
   await expect(page.getByRole('region', { name: 'Library' })).toHaveCount(0);
 
   // Learn to sail: the next lesson, and the button says so.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Learn to sail' }).click();
-  await expect(page.getByTestId('tutorial')).toBeVisible();
+  await expect(page.getByTestId('tutorial')).toBeVisible(PANEL);
   await expect(chip).toContainText('Lesson 1');
 
   // Free sailing from the lesson: it ends, the boat sails on (no restart).
