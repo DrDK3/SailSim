@@ -420,6 +420,14 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 31.10 | From the results press "Your sail" | "The race from above" opens: every boat's track over the course. Play runs the race through; the slider moves the moment; pointing at a boat names her. "Your track" still shows your own track by speed | |
 | 31.11 | Open the site in a private window (a first visit) | One question and a large "Sail now", nothing else to read. "More ways to sail" shows the four ways in; "About this simulator" has what it is and how far to trust it. Settings → About this simulator opens the same page later | |
 
+## 32. The resolution notice; the daylight view after dark (18 Nov 2026, evening) (5 min)
+
+| # | Do | Expect | Pass / Fail / Note |
+|---|---|---|---|
+| 32.1 | Sail until "Resolution lowered to …% to keep it smooth" shows under the toolbar | "Keep full quality" can be clicked (the resolution comes back and the notice goes); the "×" dismisses it; left alone it goes by itself in about 15 s and does not return this visit. Settings → All settings → Graphics tells the resolution in use | |
+| 32.2 | Open the site after sunset, as on the evening of 18 Nov | If the picture is sunlit, a card says that it is dark on the Dart, with the time, and that you are seeing the daylight view you chose before; the instruments carry the line "Daylight view · it is hh:mm, dark on the Dart". **If the picture is sunlit and neither shows, tell us: the cause is then something else** | |
+| 32.3 | Press "Show the night" on the card, or "Show the real light" in the instruments | The picture goes dark, as it is on the river at that time; Settings → "Daylight view when dark" brings the daylight view back | |
+
 ## Accepting the build
 
 - **Accepted** if every row passes or has only notes the owner is content to carry (OUTSTANDING_ISSUES.md lists the known ones).
