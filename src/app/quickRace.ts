@@ -17,6 +17,7 @@ import type { AppScenario, DataSource } from './controller';
 import type { PrepFlag } from '../sim/race/committee';
 import { RIVER_STREAM, liveNowConditions, nowStartTime } from './liveNow';
 import { sunPosition } from '../sim/env/sun';
+import { ruleKey } from './bests';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
 
 export type QuickConditions = 'random' | 'live' | 'as-set';
@@ -262,9 +263,11 @@ function builtInOrUserCourse(id: string): LibraryEntry | undefined {
 export function dailyChallenge(now = new Date()): { key: string; day: string; options: QuickRaceOptions } {
   const day = now.toISOString().slice(0, 10);
   const seed = (Number(day.replace(/-/g, '')) % 9973) + 1;
+  // Kept under the current rules (§3.2): a time from before the spinnaker came to the challenge is "earlier rules".
+  const key = ruleKey(`challenge:${day}`);
   return {
-    key: `challenge:${day}`,
+    key,
     day,
-    options: { competitors: 3, level: 'good', venue: 'start-bay', course: 'short', conditions: 'random', wind: 'medium', seed, sequence: 'one-minute', challenge: `challenge:${day}` },
+    options: { competitors: 3, level: 'good', venue: 'start-bay', course: 'short', conditions: 'random', wind: 'medium', seed, sequence: 'one-minute', challenge: key },
   };
 }

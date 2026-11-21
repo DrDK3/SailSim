@@ -89,8 +89,39 @@ export interface LikeForLike {
   history: Attempt[];
 }
 
-/** Only these keys have like-for-like bests: the weekly course and the daily challenge. */
-export const isLikeForLikeKey = (key: string): boolean => /^(weekly:\d{4}-W\d{2}(:long)?|challenge:\d{4}-\d{2}-\d{2})$/.test(key);
+/**
+ * The rules a time was sailed under, in the like-for-like keys of the weekly course and today's challenge (fixes of
+ * 21 Nov 2026, §3.2), so that times sailed under different rules are never compared. r1: the keys without a suffix,
+ * until this release (week 47's course changed mid-week, from the RDYC's C1 to the rounding drill; today's challenge
+ * gained the spinnaker on 21 Nov 2026). r2: from this release (rule 18 advisory; the spinnaker on the weekly course
+ * from 2026-W48). A time kept under another ruleset stays where it is and is shown as "earlier rules".
+ */
+export const RULESET = 'r2';
+/** A course's key under the current rules: "weekly:2026-W48:r2". */
+export const ruleKey = (base: string): string => `${base}:${RULESET}`;
+/** A key without its ruleset: "weekly:2026-W48". */
+export const keyBase = (key: string): string => key.replace(/:r\d+$/, '');
+
+/** Only these keys have like-for-like bests: the weekly course and the daily challenge, under any ruleset. */
+export const isLikeForLikeKey = (key: string): boolean => /^(weekly:\d{4}-W\d{2}(:long)?|challenge:\d{4}-\d{2}-\d{2})(:r\d+)?$/.test(key);
+
+/**
+ * The best kept for the same course under earlier rules (the same key with no ruleset or another), shown apart as
+ * "earlier rules" and never compared with times under the current ones (§3.2).
+ */
+export function earlierRulesLikeForLike(key: string): LikeForLike | undefined {
+  const base = keyBase(key);
+  const all = loadAll();
+  const older = Object.keys(all).filter((k) => k !== key && keyBase(k) === base);
+  return older.length ? all[older.sort().at(-1)!] : undefined;
+}
+
+/** The same for the plain bests (today's challenge's time): the best under earlier rules, if any (§3.2). */
+export function earlierRulesRace(b: Bests, key: string): { timeS: number; at: string; label: string } | undefined {
+  const base = keyBase(key);
+  const older = Object.keys(b.races).filter((k) => k !== key && keyBase(k) === base);
+  return older.length ? b.races[older.sort().at(-1)!] : undefined;
+}
 
 function loadAll(): Record<string, LikeForLike> {
   try {

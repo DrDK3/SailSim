@@ -64,7 +64,9 @@ describe('the weekly course', () => {
     // The long course leaves the short course's conditions as they were (its own seed stream).
     const w = weeks[0]!;
     expect((w.long!.scenario.conditions.weather as { twsKn: number }).twsKn).toBe((w.scenario.conditions.weather as { twsKn: number }).twsKn);
-    expect(weeklyLongKey(w.week)).toBe(`${weeklyKey(w.week)}:long`);
+    // Its own key, beside the short course's; the ruleset at the end of both (fixes of 21 Nov 2026, §3.2).
+    expect(weeklyLongKey(w.week)).toBe(`weekly:${w.week.key}:long:r2`);
+    expect(weeklyKey(w.week)).toBe(`weekly:${w.week.key}:r2`);
   });
 
   it('a season plan, when given, sets the week; other weeks follow the rotation', () => {

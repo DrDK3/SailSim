@@ -16,6 +16,7 @@ import type { AppScenario } from './controller';
 import { builtInCourses, type LibraryEntry } from './courseLibrary';
 import { createRng } from '../sim/math/rng';
 import type { PracticeKind } from '../sim/course/practice';
+import { ruleKey } from './bests';
 import { DEFAULT_SQUIB_TYPE } from '../sim/boat/squib';
 
 export const WEEK_TZ = 'Europe/London';
@@ -240,6 +241,6 @@ export function aiSpinPolarFor(w: WeekId): boolean {
 }
 
 /** The best-time key for a week (kept apart from every other best). */
-export const weeklyKey = (w: WeekId): string => `weekly:${w.key}`;
+export const weeklyKey = (w: WeekId): string => ruleKey(`weekly:${w.key}`);
 /** The best-time key for a week's long course. */
-export const weeklyLongKey = (w: WeekId): string => `weekly:${w.key}:long`;
+export const weeklyLongKey = (w: WeekId): string => ruleKey(`weekly:${w.key}:long`);
