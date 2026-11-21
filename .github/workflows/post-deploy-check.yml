@@ -1,0 +1,66 @@
+# Check the live site from outside after each deploy, and every Monday at 06:00 London time (fixes of 21 Nov 2026,
+# §3.7; docs/DEPLOYMENT.md §3): the app reaches a sailable state, the social card and the manifest return 200,
+# landing.html loads, and on Mondays weekly/ holds this week's targets. It only reads: it writes nothing to gh-pages
+# or anywhere else. A failed check fails this workflow's run (GitHub notifies as for any failed workflow).
+name: Post-deploy check
+on:
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  schedule:
+    # 06:00 in London is 05:00 UTC in summer (BST) and 06:00 UTC in winter (GMT). Both are scheduled; the job goes
+    # on only for the one that is 06:00 in London that Monday. (GitHub may start a scheduled run some minutes late.)
+    - cron: '0 5 * * 1'
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      weekly:
+        description: Also check that weekly/ holds this week's targets
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: post-deploy-check
+  cancel-in-progress: false
+jobs:
+  check:
+    # After a deploy only when it succeeded (a failed deploy is already a failed run).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Is this 06:00 in London?
+        id: when
+        env:
+          EVENT: ${{ github.event_name }}
+          CRON: ${{ github.event.schedule }}
+        run: |
+          go=yes
+          if [ "$EVENT" = schedule ]; then
+            want='0 6 * * 1'
+            [ "$(TZ=Europe/London date +%z)" = "+0100" ] && want='0 5 * * 1'
+            [ "$CRON" = "$want" ] || go=no
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "event $EVENT, schedule '$CRON', London $(TZ=Europe/London date '+%a %H:%M %z'): go=$go"
+      - if: steps.when.outputs.go == 'yes'
+        uses: actions/checkout@v5
+      - if: steps.when.outputs.go == 'yes'
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.when.outputs.go == 'yes'
+        run: npm ci
+      - if: steps.when.outputs.go == 'yes'
+        run: npx playwright install --with-deps chromium
+      - name: Check the live site
+        if: steps.when.outputs.go == 'yes'
+        env:
+          # The repository's Pages address unless the variable SITE_URL is set (Settings → Variables).
+          SITE_URL: ${{ vars.SITE_URL }}
+          # After a deploy: wait until the site serves that commit's build (Pages publishes a minute or two later).
+          EXPECT_BUILD: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+          CHECK_WEEKLY: ${{ (github.event_name == 'schedule' || inputs.weekly) && '1' || '0' }}
+        run: node tools/post-deploy-check.mjs

@@ -58,6 +58,7 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
 | `deploy.yml` | Push to `main`, or by hand | Build and test, then `tools/ci/publish-pages.sh`: replace the site on `gh-pages`, keep the live-data files, rebuild `live/index.json` |
 | `live-data.yml` | :07 and :37 past each hour, 06–20 UTC; hourly 21–05 UTC | Runs `tools/ingest/weather.py`, `tide.py` and `index.py`, then `tools/ci/push-live-data.sh` |
 | `tide-harmonics.yml` | Mondays 03:23 UTC, or by hand | `tools/ingest/harmonics.py`: derive the constants, validate them, write a year of HW/LW events |
+| `post-deploy-check.yml` | After each successful deploy, every Monday at 06:00 London time, or by hand | `tools/post-deploy-check.mjs` in Playwright against the live site: it reaches a sailable state, the social card and the manifest return 200, `landing.html` loads; on Mondays `weekly/` holds this week's targets. Reads only (below) |
 
 **Why the browser tests run in five shards:**
 - **No GPU:** GitHub's hosted runners have no GPU, so Chromium draws the 3D scene in software.
@@ -76,6 +77,28 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
   - **Exit 3:** no new data; the job carries on.
   - **Exit 1:** an error; the job is marked failed.
   - **What users see:** the app judges the old file by its age (§4).
+
+### The post-deploy check (fixes of 21 Nov 2026, §3.7)
+
+`post-deploy-check.yml` looks at the published site from outside, as a visitor's browser would. It writes nothing to `gh-pages` or anywhere else (its token can only read the repository); a failed check fails the workflow run, so GitHub notifies the owner as it does for any failed workflow, and the run's summary lists each check.
+
+- **When:** after each deploy that succeeded (`workflow_run` on Deploy); every Monday at 06:00 in London; or by hand (Actions → Post-deploy check → Run workflow, with "also check weekly/" if wanted).
+  - GitHub's schedules are in UTC, so two are set, 05:00 and 06:00 UTC on Mondays, and the job goes on only for the one that is 06:00 in London that day (05:00 UTC in summer time, 06:00 UTC in winter).
+  - GitHub may start a scheduled run some minutes late. The Monday run comes after the weekly-targets job (02:23 UTC).
+  - `workflow_run` and `schedule` workflows run only from the default branch: the check starts working once this file is on `main`.
+- **After a deploy it waits for the new build:** GitHub Pages publishes a minute or two after the deploy job ends. The check reads the build the site serves (the commit the app names in its graphics report) and reloads once a minute, for up to 15 minutes, until it is the deployed commit; then it checks.
+- **What it checks:**
+  1. The app loads at `?nowelcome&quality=low`, the instruments show, the River Dart data loads, and 3 s of sailing (`window.__squib.advance`) move the boat, with no page errors.
+  2. `social-card.jpg` returns 200 as a JPEG; `manifest.webmanifest` returns 200 as JSON, and each icon it lists returns 200 as an image.
+  3. `landing.html` returns 200 and its hero image is drawn.
+  4. Mondays (and by hand when asked): `weekly/<this week>.json` returns 200 and is that week's targets. The week is the ISO week of the date in London, as the app and the weekly-targets job reckon it (`tools/post-deploy-week.mjs`, held to `src/app/weekly.ts` by `tests/sim/postDeployWeek.test.ts`).
+- **Which site:** the repository's Pages address (`https://<owner>.github.io/<repo>/`), or the repository variable `SITE_URL` if set (Settings → Secrets and variables → Actions → Variables), for a custom address.
+- **Run it locally:** `SITE_URL=https://drdk3.github.io/SailSim/ CHECK_WEEKLY=1 node tools/post-deploy-check.mjs` (or against `npx vite preview`).
+- **Cost:** free (GitHub Actions minutes; about 3–5 minutes a run: installing Chromium, then one page load in software).
+
+### Videos: GitHub Releases, not the repository
+
+The trailer (`public/media/trailer.mp4`, 0.9 MB) is in the repository already and stays (history is not rewritten). Future videos go to a GitHub Release as release assets (free, kept out of every clone) and are linked from the landing page by the release's download address; still images stay in `public/media/`.
 
 ## 4. What the app does with live data, and the automatic checks
 
