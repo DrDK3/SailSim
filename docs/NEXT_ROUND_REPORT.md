@@ -211,7 +211,7 @@ docs/PARAMETERS.md, docs/PHYSICS.md §23.
 | New envelope rows (B-SP-1…4) | On a run at TWA 150°: 2.78 → 3.38 kn at 6 kn, 4.28 → 4.88 at 10 kn, 5.61 → 6.16 at 16 kn (+0.54 to +0.60 kn); hoist 9.4 s, drop 7 s at this start step; after a gybe the pole is across in 12–16 s and the sail full a second later; no broach at 16 and 20 kn, TWA 100–140°; heel up to 25° at 20 kn, TWA 100°. Model output from estimated coefficients |
 | `npm run exploits` | The earlier table unchanged; under the spinnaker no pattern beats steady sailing: sheet pumping −3.6 to −10.7 %, repeated hoist and drop −6.3 to −6.7 %, repeated pole gybes −7.9 to −8.5 %, helm rocking −0.4 to −2.7 %. The trim acts instantly (issue 259), so pumping loses the same at every period |
 | AI parity | Holds with spinnakers (an AI boat hoisted and dropped over a windward-leeward race; its inputs replay to the same track) |
-| `npm run perf` | See §B.8 |
+| `npm run perf` (quiet container) | 21 boats physics only 0.45 ms mean / 1.21 ms p99; full race pre-start 1.05 / 2.94; racing 0.85 / 2.32; **with spinnakers on the run (12–17 of 20 set) 0.90 / 2.68**: within the 3 ms budget. Under load (browser tests alongside) the leeward-mark window measured 4.01 ms p99 without spinnakers and 3.76 with them (issue 262) |
 
 ### B.4 Evidence (software rendering)
 
@@ -234,8 +234,28 @@ controls are a labelled dialog with labelled sliders.
 - The coefficients need a source (issue 258): the ORC documentation from an environment that can reach it, and the
   validation session (#28) with the B6 questions.
 - The trim has no sheet dynamics (issue 259); the AI polar does not know the spinnaker (issue 261).
-- Twenty boats at the leeward mark exceed the 3 ms p99 budget with or without spinnakers (issue 262).
+- Little frame-time margin with twenty boats at a mark, with or without spinnakers (issue 262).
 - Weekly targets with the spinnaker need the scheduled job to run for 2026-W48 after merging (issue 263).
+
+### B.8 Checks
+
+Locally (cloud container, software rendering): typecheck, lint, 876 unit tests (130 files), the build with the
+secret scan, the hash, the golden traces (7), `npm run envelope` (earlier rows identical), `npm run exploits`,
+`npm run perf` (§B.3). Browser tests run locally one file at a time: `spinnaker.spec.ts` (new), the console widths
+at every size (`immersive.spec.ts`), the phones' 44 px controls (`console.spec.ts`), the 24 px / 12 px floor
+(`a11y.spec.ts`), touch on a tablet (`juniors.spec.ts`), the masthead and look-up (`wind.spec.ts`), layout, phone.
+The first local run caught the new buttons overflowing the console's crew module at 360 px; they moved to a tab on
+the console's top edge (left on a laptop, right on a phone). The cue test caught a "collapsed" sound firing during a
+drop; it now fires only for a set spinnaker. CI runs the whole suite and is the authority; its result is on the pull
+request (§B.9).
+
+Screens added this package (`docs/img/next-b/`): the spinnaker's states (§B.4), the console's tab on a laptop and a
+phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail controls (`sail-controls-expert.jpg`).
+
+### B.9 Pull request
+
+Draft, stacked on package A (base `next-a-wind`): linked from the pull request list once open (see the commit that
+adds it).
 
 ### B.7 Estimates introduced (E)
 
