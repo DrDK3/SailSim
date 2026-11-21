@@ -25,6 +25,8 @@ const BED_MIN = -12;
 const BED_MAX = 12;
 /** Wind-ripple trains drawn per pixel: all of them with detailed water, the first few (coarser) with simple. */
 const N_RIP = 13;
+/** The trains simple water draws: every other one of the detailed spectrum, from the finest to the longest. */
+export const LOW_RIPPLES = [0, 2, 4, 6, 8, 10, 12];
 const G = 9.81;
 
 /** The sea's wave trains and sea-state field (GLSL), shared with everything that lies on the surface (foam). */
@@ -161,16 +163,31 @@ uniform float uRipCount;
 vec2 ripples(vec2 xz, vec2 dx, vec2 dy, float strength, out float lostVar) {
   vec2 g = vec2(0.0);
   lostVar = 0.0;
+#ifndef WATER_HIGH
+  // Simple water draws fewer trains, which would run in step over the whole bay: two slow noise fields (patches
+  // some 30-60 m across) vary them in alternate groups, as the wind's ripples are patchy (package C).
+  float patchA = 0.45 + 0.55 * noise(xz * 0.021 + vec2(3.1, 7.7));
+  float patchB = 0.45 + 0.55 * noise(xz * 0.033 + vec2(11.3, 1.9));
+#endif
   for (int i = 0; i < NR; i++) {
     if (float(i) >= uRipCount) break;
     vec4 a = uRipA[i];
     float slope = strength * a.w;
+#ifdef WATER_HIGH
     float vis = 1.0 - smoothstep(a.z * 0.2, a.z * 0.7, reach(a.xy, dx, dy));
+#else
+    // Simple water (the lowest preset draws at three-quarters resolution): each train gone before the pixel reaches
+    // half its wavelength (the Nyquist limit), so the distance shows no moiré bands (package C).
+    float vis = 1.0 - smoothstep(a.z * 0.12, a.z * 0.45, reach(a.xy, dx, dy));
+#endif
     lostVar += 0.5 * slope * slope * (1.0 - vis);
     // A train finer than the pixel costs nothing more.
     if (vis <= 0.0) continue;
     vec4 b = uRipB[i];
     float ph = b.x * dot(a.xy, xz) - b.y * uTime + b.z;
+#ifndef WATER_HIGH
+    vis *= mod(float(i), 2.0) < 0.5 ? patchA : patchB;
+#endif
     g += a.xy * slope * cos(ph) * vis;
   }
   return g;
@@ -525,15 +542,20 @@ export class Water {
     const A = u.uRipA!.value as THREE.Vector4[];
     const B = u.uRipB!.value as THREE.Vector4[];
     const frac = (x: number) => x - Math.floor(x);
-    const count = high ? N_RIP : 5;
-    for (let i = 0; i < N_RIP; i++) {
-      const lambda = high ? 0.12 * Math.pow(1.3, i) * (0.85 + 0.3 * frac(Math.sin(i * 78.233) * 43758.5453)) : 0.12 * Math.pow(2.2, i);
+    // Simple water draws every other train of the detailed spectrum (seven of thirteen, the same jittered wavelengths
+    // and spread of directions). It drew five at regular steps (0.12 m × 2.2ⁿ, no jitter) before: the longest train
+    // then showed as parallel stripes across Start Bay at the lowest preset (package C, 21 Nov 2026).
+    const pick = high ? Array.from({ length: N_RIP }, (_, i) => i) : LOW_RIPPLES;
+    const count = pick.length;
+    for (let j = 0; j < N_RIP; j++) {
+      const i = pick[j] ?? j;
+      const lambda = 0.12 * Math.pow(1.3, i) * (0.85 + 0.3 * frac(Math.sin(i * 78.233) * 43758.5453));
       const ang = (frac(Math.sin(i * 12.9898 + 4.1) * 43758.5453) - 0.5) * 2.8;
       const ca = Math.cos(ang);
       const sa = Math.sin(ang);
       const k = (2 * Math.PI) / lambda;
-      A[i]!.set(w.x * ca - w.y * sa, w.x * sa + w.y * ca, lambda, 0.075 * Math.pow(lambda / 3, 0.2));
-      B[i]!.set(k, Math.sqrt(G * k + 7.4e-5 * k * k * k), i * 1.7, 0);
+      A[j]!.set(w.x * ca - w.y * sa, w.x * sa + w.y * ca, lambda, 0.075 * Math.pow(lambda / 3, 0.2));
+      B[j]!.set(k, Math.sqrt(G * k + 7.4e-5 * k * k * k), i * 1.7, 0);
     }
     u.uRipCount!.value = count;
   }

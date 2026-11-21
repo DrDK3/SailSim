@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { recordingLog } from '../app/replay';
 import type { SimController, UiState } from '../app/controller';
 import {
   builtInScenarios,
@@ -65,7 +66,7 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
     const t = replayTitle.trim() || 'Squib session';
     const rec = ctl.saveRecording(t);
     download(`${fileSlug(t)}.replay.json`, rec);
-    setMessage(`Saved a replay of ${minutes(rec.endStep * DT)} (${rec.inputs.length} input changes, ${rec.checkpoints.length} checkpoints).`);
+    setMessage(`Saved a replay of ${minutes(rec.endStep * DT)} (${recordingLog(rec).length} input changes, ${rec.checkpoints.length} checkpoints).`);
   };
   const openReplay = async (file: File) => {
     let json: unknown;

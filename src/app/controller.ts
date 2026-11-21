@@ -50,7 +50,7 @@ import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
-import { CHECKPOINT_STEPS, decodeInputs, encodeInputs, parseRecording, recordingSchema, type Recording, type ReplayStatus } from './replay';
+import { CHECKPOINT_STEPS, encodeInputs, encodeInputsCompact, parseRecording, quantiseInput, recordingLog, recordingSchema, replacingInput, REPLAY_SCHEMA_COMPACT, INPUT_GRID, type Recording, type ReplayStatus } from './replay';
 import { Tutorial, type TutorialState } from './tutorial';
 import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
@@ -641,8 +641,9 @@ export class SimController {
     this.coach = race ? this.makeCoach(race, built, scenario) : undefined;
     this.debrief = undefined;
     // Start with sensible manual sheet settings for the starting point of sail.
-    if (!startInput) this.sim.setInput(optimalSheets(this.sim));
+    if (!startInput) this.sim.setInput(quantiseInput(optimalSheets(this.sim)));
     this.initialInput = startInput ? { ...DEFAULT_INPUT_FOR_RECORD, ...startInput } : null;
+    this.sheetHeld = {};
     this.checkpoints = [];
     if (!opts.keepReplay) {
       this.replay = undefined;
@@ -1258,7 +1259,7 @@ export class SimController {
   private applyTutorialInput(): void {
     const t = this.tutorial;
     if (!t?.pendingInput) return;
-    this.sim.setInput(this.handOver(t.pendingInput));
+    this.sim.setInput(quantiseInput(this.handOver(t.pendingInput)));
     t.pendingInput = undefined;
   }
 
@@ -1489,9 +1490,11 @@ export class SimController {
     if (this.race) sc.course = { source: 'inline', course: structuredClone(this.race.course) };
     const checkpoints = this.checkpoints.filter((c) => c[0] <= this.sim.step);
     if (!checkpoints.length || checkpoints[checkpoints.length - 1]![0] !== this.sim.step) checkpoints.push([this.sim.step, this.stateHash()]);
-    const inputs = encodeInputs(this.sim.inputLog);
+    // The compact form when every input is on the player's grid (package C); else the rows, as before.
+    const compact = encodeInputsCompact(this.sim.inputLog);
+    const inputs = compact ? undefined : encodeInputs(this.sim.inputLog);
     return {
-      schema: recordingSchema(inputs, this.dartFromStep),
+      schema: compact ? REPLAY_SCHEMA_COMPACT : recordingSchema(inputs!, this.dartFromStep),
       created: new Date().toISOString(),
       title,
       build: BUILD_ID,
@@ -1500,7 +1503,7 @@ export class SimController {
       // What this run sailed on (river data that arrived and waits for the next start is not part of it).
       dart: this.sim.seabed ? 'loaded' : 'none',
       ...(this.dartFromStep === undefined ? {} : { dartFromStep: this.dartFromStep }),
-      inputs,
+      ...(compact ? { inputsQ: compact } : { inputs }),
       checkpoints,
       endStep: this.sim.step,
     };
@@ -1522,7 +1525,7 @@ export class SimController {
     if (rec.build !== BUILD_ID) notes.push(`Recorded with build ${rec.build}; this is ${BUILD_ID}. A different build may not reproduce it exactly.`);
     if (rec.dartFromStep !== undefined && dartNow === 'loaded') notes.push(`The River Dart joined this run ${Math.round(rec.dartFromStep / 100)} s in; it joins the replay there too.`);
     if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined })) return false;
-    this.replay = { rec, inputs: decodeInputs(rec.inputs), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
+    this.replay = { rec, inputs: recordingLog(rec), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
     this.held.clear();
     this.paused = false;
     this.publish(true);
@@ -2702,6 +2705,9 @@ export class SimController {
 
   // --------------------------------------------------------------- inputs
 
+  /** Sheets being moved by a held key or trigger: their exact positions (the input is each on the grid). */
+  private sheetHeld: { main?: number; jib?: number } = {};
+
   /** Called by the simulation at the start of every step (deterministic sampling of held controls). */
   private sampleInputs(): Partial<ControlInput> | void {
     const r = this.replay;
@@ -2712,7 +2718,7 @@ export class SimController {
       const e = r.inputs[r.next];
       if (e && e.step === step) {
         r.next++;
-        return { ...e.input };
+        return replacingInput(e.input);
       }
       return undefined;
     }
@@ -2726,9 +2732,9 @@ export class SimController {
       if (sm.action.kind === 'bear-away') change.helm = autopilotHelm(this.sim, { mode: 'twa', target: (sm.side * sm.action.twaDeg * Math.PI) / 180 });
       else if (sm.action.kind === 'ease-main') {
         change.autoMain = false;
-        change.mainSheet = clamp(this.sim.currentSheet('main') + SHEET_RATE * DT, 0, 1);
+        change.mainSheet = this.heldSheet('main', 1);
       }
-      return change;
+      return quantiseInput(change);
     }
     const left = this.held.has('helmLeft');
     const right = this.held.has('helmRight');
@@ -2749,13 +2755,27 @@ export class SimController {
       if (dir === 0) return;
       const autoKey = name === 'main' ? 'autoMain' : 'autoJib';
       const sheetKey = name === 'main' ? 'mainSheet' : 'jibSheet';
-      const current = this.sim.currentSheet(name);
       change[autoKey] = false;
-      change[sheetKey] = clamp(current + dir * SHEET_RATE * DT, 0, 1);
+      change[sheetKey] = this.heldSheet(name, dir);
     };
     sheet('main', 'mainIn', 'mainOut');
     sheet('jib', 'jibIn', 'jibOut');
-    return Object.keys(change).length ? change : undefined;
+    return Object.keys(change).length ? quantiseInput(change) : undefined;
+  }
+
+  /**
+   * A sheet moved by a held key, a trigger or "show me": its position advanced at the exact rate here, the input being
+   * that position on the grid of thousandths (package C). Rounding each step's move instead would make a key 14 %
+   * fast (0.0035 a step rounds to 0.004) and leave a lightly pulled trigger still.
+   */
+  private heldSheet(name: 'main' | 'jib', dir: number): number {
+    const current = this.sim.currentSheet(name);
+    const held = this.sheetHeld[name];
+    // Start from the sheet itself if anything else moved it (a slider, auto-trim, a restart).
+    const base = held !== undefined && Math.abs(held - current) < 1 / INPUT_GRID ? held : current;
+    const next = clamp(base + dir * SHEET_RATE * DT, 0, 1);
+    this.sheetHeld[name] = next;
+    return next;
   }
 
   /**
@@ -3020,7 +3040,8 @@ export class SimController {
 
   setInput(change: Partial<ControlInput>): void {
     if (this.replay) return; // playing back: the recording drives the boat
-    this.sim.setInput(this.handOver(change));
+    // The player's controls on a grid of thousandths, so a replay stores them exactly and compactly (package C).
+    this.sim.setInput(quantiseInput(this.handOver(change)));
     // Auto-trim or auto-crew switched on in an exercise counts for the attempt at once (even while paused).
     this.exercise?.engine.noteAssists({ autoMain: change.autoMain, autoJib: change.autoJib, autoCrew: change.autoCrew });
     this.publish(true);

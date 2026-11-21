@@ -1,3 +1,4 @@
+import { recordingLog } from '../../src/app/replay';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CURVE, DEAD_ZONE, PAD, hapticPulse, readPad, shapeAxis, shapeTrigger, type PadState } from '../../src/app/gamepad';
 import { SimController, type AppScenario } from '../../src/app/controller';
@@ -97,7 +98,8 @@ describe('gamepad through the controller (mocked navigator.getGamepads)', () => 
     state = withButtons({}, [0.5, 0, 0, 0]);
     poll();
     c.advance(2);
-    expect(c.sim.input.helm).toBeCloseTo(shapeAxis(0.5), 5); // proportional
+    // Proportional, on the grid of thousandths the player's controls are kept on (package C, compact replays).
+    expect(c.sim.input.helm).toBe(Math.round(shapeAxis(0.5) * 1000) / 1000);
     state = withButtons({ [PAD.RT]: 1 });
     poll();
     const before = c.sim.currentSheet('main');
@@ -105,7 +107,7 @@ describe('gamepad through the controller (mocked navigator.getGamepads)', () => 
     expect(c.sim.currentSheet('main')).toBeLessThan(before);
     expect(c.sim.input.autoMain).toBe(false);
     // Recorded like any other input.
-    expect(c.saveRecording('pad').inputs.length).toBeGreaterThan(10);
+    expect(recordingLog(c.saveRecording('pad')).length).toBeGreaterThan(10);
     // Disconnected: everything let go.
     nav.getGamepads = () => [];
     poll();

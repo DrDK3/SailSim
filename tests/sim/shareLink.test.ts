@@ -12,7 +12,7 @@ const rec = (rows: number): Recording => ({
   scenario: DEFAULT_SCENARIO,
   initialInput: null,
   dart: 'loaded',
-  inputs: Array.from({ length: rows }, (_, i) => [i, Math.sin(i / 50) * 0.7, 0.23, 0.46, 0.6, 6, 0] as Recording['inputs'][number]),
+  inputs: Array.from({ length: rows }, (_, i) => [i, Math.sin(i / 50) * 0.7, 0.23, 0.46, 0.6, 6, 0] as NonNullable<Recording['inputs']>[number]),
   checkpoints: [[1000, 'abcdef0123456789']],
   endStep: rows,
 });

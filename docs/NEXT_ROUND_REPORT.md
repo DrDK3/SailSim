@@ -253,6 +253,10 @@ controls are a labelled dialog with labelled sliders.
 - Little frame-time margin with twenty boats at a mark, with or without spinnakers (issue 262).
 - Weekly targets with the spinnaker need the scheduled job to run for 2026-W48 after merging (issue 263).
 
+### B.7 Estimates introduced (E)
+
+Every figure in docs/PARAMETERS.md "The spinnaker and the sail controls" except the area and the pole.
+
 ### B.8 Checks
 
 Locally (cloud container, software rendering): typecheck, lint, 876 unit tests (130 files), the build with the
@@ -276,10 +280,6 @@ phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail control
 
 Draft pull request: https://github.com/DrDK3/SailSim/pull/40 (branch `next-b-spinnaker`, base `next-a-wind`, so its
 diff shows package B alone; it follows package A, https://github.com/DrDK3/SailSim/pull/39).
-
-### B.7 Estimates introduced (E)
-
-Every figure in docs/PARAMETERS.md "The spinnaker and the sail controls" except the area and the pole.
 
 ## Needs people (this round does not do these)
 
