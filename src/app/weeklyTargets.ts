@@ -46,6 +46,8 @@ export function sailOnce(w: WeeklyCourse, level: 'club' | 'good' | 'expert', see
     aiCount: 1,
     level,
     seed,
+    // A course with the spinnaker is sailed with it: the targets account for the downwind legs (package B).
+    spinnaker: !!sc.spinnaker,
     committee: { startAt: sc.race!.startInS, sequence: sc.race!.sequence, prepFlag: sc.fleet?.prepFlag ?? 'P' },
   });
   const boat = session.fleet.boats[0]!;

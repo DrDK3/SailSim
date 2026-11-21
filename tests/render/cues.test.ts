@@ -331,3 +331,42 @@ describe('the WebAudio settings follow the cues (no listening test was done)', (
     expect(small).toBeGreaterThan(0);
   });
 });
+
+describe('the spinnaker in the cue pipeline (package B)', () => {
+  it('hoist, filled and collapsed are each one frame’s event, from the physics state; none without a spinnaker', async () => {
+    const { Simulation, squibParams, uniformEnvironment } = await import('../../src/sim/index');
+    const { withSpinnaker } = await import('../../src/sim/boat/spinnaker');
+    const { autopilotHelm } = await import('../../src/sim/control/autopilot');
+    const D = Math.PI / 180;
+    const run = (spinOn: boolean) => {
+      const sim = new Simulation({
+        params: spinOn ? withSpinnaker(squibParams()) : squibParams(),
+        env: uniformEnvironment({ twsKn: 10, twdDeg: 0 }),
+        initial: { headingDeg: -150, speedKn: 4 },
+        input: { autoMain: true, autoJib: true, autoCrew: true },
+        controller: (s) => ({ helm: autopilotHelm(s, { mode: 'twa', target: 150 * D }), spin: s.time > 2 && s.time < 40 ? 1 : 0, ...(s.time > 25 && s.time < 30 ? { autoSpin: false, spinSheet: 1 } : { autoSpin: true }) }),
+      });
+      const mem = new CueMemory();
+      const ev = { hoist: 0, filled: 0, collapsed: 0 };
+      let prev = sim.snapshot(false);
+      for (let i = 0; i < 6000; i++) {
+        sim.stepOnce();
+        if (i % 5) continue;
+        const cur = sim.snapshot(false);
+        const q = deriveCues(prev, cur, 1, { puffs: [], gustFactor: 1, waveHeight: 0, bowDrop: 0 }, mem);
+        ev.hoist += q.events.spinHoist ? 1 : 0;
+        ev.filled += q.events.spinFilled ? 1 : 0;
+        ev.collapsed += q.events.spinCollapsed ? 1 : 0;
+        prev = cur;
+      }
+      return ev;
+    };
+    const on = run(true);
+    expect(on.hoist).toBe(1);
+    // Filled after the hoist and again after the collapse; collapsed once (eased right out by hand).
+    expect(on.filled).toBe(2);
+    expect(on.collapsed).toBe(1);
+    expect(run(false)).toEqual({ hoist: 0, filled: 0, collapsed: 0 });
+  });
+});
+

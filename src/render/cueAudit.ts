@@ -23,6 +23,9 @@ export interface CueAudit {
   marks: number;
   /** Other boats drawn (when there is a fleet). */
   otherBoats: number;
+  /** Spinnakers drawn (package B): the player's, and how many of the other boats'. */
+  spinnaker: boolean;
+  otherSpinnakers: number;
 }
 
 /** Visible all the way up to the scene. */
@@ -39,6 +42,12 @@ export function auditCues(scene: THREE.Scene, puffsDrawn: number, heelDrawn: num
   let vane = false;
   let marks = 0;
   let otherBoats = 0;
+  let spinnaker = false;
+  let otherSpinnakers = 0;
+  const inFleet = (o: THREE.Object3D) => {
+    for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.name.startsWith('fleet-boat-')) return true;
+    return false;
+  };
   scene.traverse((o) => {
     switch (o.name) {
       case 'mainsail':
@@ -60,9 +69,15 @@ export function auditCues(scene: THREE.Scene, puffsDrawn: number, heelDrawn: num
       case 'course-mark':
         if (shown(o)) marks++;
         break;
+      case 'spinnaker-sail':
+        if (shown(o)) {
+          if (inFleet(o)) otherSpinnakers++;
+          else spinnaker = true;
+        }
+        break;
       default:
         if (o.name.startsWith('fleet-boat-') && shown(o)) otherBoats++;
     }
   });
-  return { sails: sails >= 2, telltales, heelDrawn, wake, bowWave, puffsDrawn, vane, marks, otherBoats };
+  return { sails: sails >= 2, telltales, heelDrawn, wake, bowWave, puffsDrawn, vane, marks, otherBoats, spinnaker, otherSpinnakers };
 }

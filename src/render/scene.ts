@@ -1,5 +1,6 @@
 import { lambertOf, loadFix, measureMaterials, saveFix, type MaterialCheck, type MaterialFix } from './gpuCheck';
 import * as THREE from 'three';
+import { DEFAULT_SPINNAKER_COLOURS, SPINNAKER_COLOURS, type SpinnakerColourId } from './spinnakerView';
 import { disposeObject } from './dispose';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -439,6 +440,15 @@ export class SceneView {
     this.boatRoot.add(this.boat.group);
     this.boat.group.add(this.arrows.bodyGroup);
     this.boat.setIndicator(this.indicator.type, this.indicator.tabDeg);
+    this.boat.setSpinnakerColours(SPINNAKER_COLOURS[this.spinColours].panels);
+  }
+
+  private spinColours: SpinnakerColourId = DEFAULT_SPINNAKER_COLOURS;
+
+  /** The player's spinnaker colours (Settings). */
+  setSpinnakerColours(id: SpinnakerColourId): void {
+    this.spinColours = id;
+    this.boat.setSpinnakerColours(SPINNAKER_COLOURS[id].panels);
   }
 
   /** What flies at the masthead of the player's boat: the RDYC burgee or a masthead vane (review #4). */

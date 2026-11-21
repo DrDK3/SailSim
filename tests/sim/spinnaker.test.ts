@@ -184,3 +184,21 @@ describe('replays (schema /3)', () => {
     expect(decodeInputs(rows)[0]!.input.plug).toBe(1);
   });
 });
+
+describe('where the spinnaker is carried (package B5)', () => {
+  it('the weekly course: from 2026-W48 (published weeks keep their course and targets)', async () => {
+    const { weeklyCourse } = await import('../../src/app/weekly');
+    expect(weeklyCourse(new Date('2026-11-21T12:00:00Z')).scenario.spinnaker).toBeUndefined();
+    expect(weeklyCourse(new Date('2026-11-24T12:00:00Z')).scenario.spinnaker).toBe(true);
+    expect(weeklyCourse(new Date('2026-11-24T12:00:00Z')).long?.scenario.spinnaker).toBe(true);
+  });
+
+  it('quick races carry it unless switched off; a lesson does not', async () => {
+    const { quickRaceScenario, DEFAULT_QUICK_RACE } = await import('../../src/app/quickRace');
+    const { DEFAULT_SCENARIO } = await import('../../src/app/controller');
+    expect(quickRaceScenario(DEFAULT_QUICK_RACE, DEFAULT_SCENARIO).scenario.spinnaker).toBe(true);
+    expect(quickRaceScenario({ ...DEFAULT_QUICK_RACE, spinnaker: false }, DEFAULT_SCENARIO).scenario.spinnaker).toBe(false);
+    const { LESSONS } = await import('../../src/app/lessons');
+    for (const l of LESSONS) expect(l.scenario.spinnaker, l.id).toBeFalsy();
+  });
+});

@@ -27,16 +27,8 @@ export interface SpinnakerPose {
   progress: number;
 }
 
-/** Ready-made colour sets for the player's spinnaker (Settings); the names are plain words. */
-export const SPINNAKER_COLOURS = {
-  'red-white-blue': { label: 'Red, white and blue', panels: ['#c8102e', '#f5f5f2', '#1f4e79'] },
-  'yellow-black': { label: 'Yellow and black', panels: ['#f2c14e', '#1b1b1b', '#f2c14e'] },
-  'green-white': { label: 'Green and white', panels: ['#1e7a46', '#f5f5f2', '#1e7a46'] },
-  'all-white': { label: 'White', panels: ['#f5f5f2', '#e8e8e4', '#f5f5f2'] },
-} as const;
-export type SpinnakerColourId = keyof typeof SPINNAKER_COLOURS;
-export const DEFAULT_SPINNAKER_COLOURS: SpinnakerColourId = 'red-white-blue';
-export const isSpinnakerColour = (x: unknown): x is SpinnakerColourId => typeof x === 'string' && x in SPINNAKER_COLOURS;
+export { DEFAULT_SPINNAKER_COLOURS, SPINNAKER_COLOURS, isSpinnakerColour, type SpinnakerColourId } from '../app/spinnakerColours';
+import { DEFAULT_SPINNAKER_COLOURS, SPINNAKER_COLOURS } from '../app/spinnakerColours';
 
 /** Rig geometry for the spinnaker (model frame, m; E where the class rules give no figure). */
 export interface SpinRig {
@@ -160,17 +152,17 @@ export class SpinnakerView {
     const fill = s.fill * smoothstep(0.6, 1, dep);
     // The head goes up the halyard as it is hoisted (and comes down as it is dropped).
     const headY = R.deckY + 0.5 + (R.headY - R.deckY - 0.5) * dep;
-    const fwd = 0.6 + 1.1 * fill;
-    const head = new THREE.Vector3(side * 0.15 * (1 - run) * fill, headY, R.mastZ - fwd * 0.45);
-    // The clew: across the bow on the leeward side when full, at the tack when gathered.
-    const spread = (0.9 + 1.4 * run) * fill;
-    const clewFull = new THREE.Vector3(-side * (0.35 + spread * 0.75), R.poleY - 0.05, R.mastZ - 0.3 - 0.9 * run);
+    // The head flies well forward of the mast once it fills (the halyard block is at the hounds).
+    const head = new THREE.Vector3(side * 0.2 * (1 - run) * fill, headY, R.mastZ - (0.5 + 1.0 * fill));
+    // The clew: out on the leeward side, about a foot's length (some 3.5 m) from the pole's end when full, its sheet
+    // led aft to the leeward quarter; at the tack when gathered.
+    const clewFull = new THREE.Vector3(-side * (0.7 + 0.9 * run) * fill, R.poleY - 0.1, R.mastZ - 0.9 - 0.9 * run + 0.9 * (1 - run));
     // Collapsed: hanging behind the forestay, the clew drawn in to leeward of the mast.
     const clewLimp = new THREE.Vector3(-side * 0.35, R.deckY + 0.9, R.mastZ - 0.4);
     const clew = clewLimp.clone().lerp(clewFull, fill);
     if (s.phase === 'hoisting' || s.phase === 'dropping') clew.lerp(tack, 0.6 * (1 - fill));
     // The belly: forward and down-wind of the chord between luff and leech; flogging, ripples instead.
-    const depth = (0.35 + 0.65 * fill) * 1.1 * fill;
+    const depth = (0.35 + 0.65 * fill) * 1.6 * fill;
     const flog = (1 - s.fill) * dep * Math.min(1, s.aws / 5);
     const pos = this.geo.getAttribute('position') as THREE.BufferAttribute;
     const a = new THREE.Vector3();
@@ -183,9 +175,12 @@ export class SpinnakerView {
       // Luff: tack → head, bowed forward; leech: clew → head, bowed forward.
       a.copy(tack).lerp(head, v);
       b.copy(clew).lerp(head, v);
-      const bow = Math.sin(Math.PI * v) * (0.25 + 0.55 * fill);
-      a.z -= bow * 0.8;
-      b.z -= bow * 0.6;
+      const bow = Math.sin(Math.PI * v) * (0.25 + 0.8 * fill);
+      a.z -= bow * 0.9;
+      b.z -= bow * 0.7;
+      // Luff and leech curve out to their sides (a spinnaker's shoulders), most at mid-height.
+      a.x += side * Math.sin(Math.PI * v) * 0.45 * fill;
+      b.x -= side * Math.sin(Math.PI * v) * 0.45 * fill;
       // A gathered sail (hoisting, dropping, flogging) is narrower.
       const width = 0.12 + 0.88 * Math.max(fill, 0.25 * (1 - flog));
       for (let iu = 0; iu <= NU; iu++) {
