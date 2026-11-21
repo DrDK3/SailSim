@@ -103,6 +103,8 @@ export class RaceSession implements AiWorld {
   readonly polar: Polar;
   /** The user's boat's target speeds, for the coach and the laylines: with the spinnaker table if she carries one. */
   readonly humanPolar: Polar;
+  /** The fleet's table without the spinnaker set (before the start, or in more wind than it is hoisted in; §2.3). */
+  readonly plainPolar: Polar;
   readonly seabed?: Seabed;
   readonly draft: number;
   readonly mooringAreas: MooringArea[];
@@ -128,6 +130,7 @@ export class RaceSession implements AiWorld {
     this.course = opts.resolved;
     this.courseDef = opts.course;
     this.polar = polarFor(opts.params, opts.aiSpinPolar !== false);
+    this.plainPolar = polarFor(opts.params, false);
     this.humanPolar = polarFor(opts.humanParams ?? opts.params);
     this.seabed = opts.seabed;
     this.draft = opts.params.draft;

@@ -170,3 +170,29 @@ describe('in the app: the coach and the laylines of a race with the spinnaker ab
     expect((c as unknown as { coach: { polar: Polar } }).coach.polar.data).toBe(AI_POLAR);
   });
 });
+
+describe('the AI uses the spinnaker table only while it can fly the spinnaker', () => {
+  const Pof = (session: ReturnType<typeof race>) =>
+    [...session.skippers.values()].map((sk) => (sk as unknown as { polarNow(w: number): Polar }).polarNow(8 * KN).data);
+
+  it('before the start the table without it (the spinnaker is never hoisted then); racing, the spinnaker table', () => {
+    const s = race({ spinnaker: true });
+    expect(s.plainPolar.data).toBe(AI_POLAR);
+    expect(Pof(s).every((d) => d === AI_POLAR)).toBe(true);
+    s.advance(s.committee.startTime + 20 - s.time);
+    const racing = [...s.skippers.keys()].filter((id) => s.judgeOf(id).phase === 'racing');
+    expect(racing.length).toBeGreaterThan(0);
+    for (const id of racing) expect((s.skippers.get(id) as unknown as { polarNow(w: number): Polar }).polarNow(8 * KN).data).toBe(AI_POLAR_SPIN);
+  });
+
+  it('racing in more wind than the AI hoists it in (20 kn): the table without it', () => {
+    const s = race({ spinnaker: true });
+    s.advance(s.committee.startTime + 20 - s.time);
+    const id = [...s.skippers.keys()].find((x) => s.judgeOf(x).phase === 'racing')!;
+    expect((s.skippers.get(id) as unknown as { polarNow(w: number): Polar }).polarNow(22 * KN).data).toBe(AI_POLAR);
+  });
+
+  it('a fleet without spinnakers: the table without one, always', () => {
+    expect(Pof(race({ spinnaker: false })).every((d) => d === AI_POLAR)).toBe(true);
+  });
+});
