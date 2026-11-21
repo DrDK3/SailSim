@@ -567,7 +567,24 @@ Simulator", stays.
 
 ### E.5 Evidence
 
-EEVIDENCE
+Made by `npm run media` (and `npm run icons`) from this build, headless in Chromium's software renderer
+(SwiftShader); every picture is the simulator's own frame with the caption "Squib sailing simulator · simulator
+output, not a photograph". The scenes are fixed in `tools/media.mjs` (place, time, wind, seconds sailed, camera); the
+gusts are set to steady, so the same build draws the same pictures. `public/media/media.json` records each one.
+
+| File | Size | Scene |
+|---|---|---|
+| `public/social-card.jpg` (the card the sharing tags point at) | 1200 × 630, 92 kB | The river off the RDYC, 15 Jul 11:00, 12 kn from 225°, chase camera, the high preset |
+| `public/media/hero.jpg` (the landing page's picture and the trailer's poster) | 1600 × 900, 155 kB | The same scene |
+| `public/media/social-evening.jpg` | 1200 × 630, 96 kB | The river at 18:30, 10 kn from 250° |
+| `public/media/social-harbour.jpg` | 1200 × 630, 93 kB | The harbour from above (drone camera), 11:00, 12 kn from 225° |
+| `public/media/social-bay.jpg` | 1200 × 630, 56 kB | Start Bay's practice area, 13:00, 14 kn from 225° |
+| `public/media/trailer.mp4` | 960 × 540, 24 s at 24 fps, TRAILERSIZE | One sail on the river: chase camera, the harbour from above (from 8 s), chase again (from 16 s). Drawn at the lowest preset (each frame takes seconds in software; the high preset would take hours). H.264 (libx264, `-preset veryfast`, CRF 24), no audio track |
+| `public/media/trailer.vtt` | captions | Each third of the trailer described, each line starting "[No sound]" |
+
+The trailer is a picture of the simulator, not a demonstration of how to sail. A social card of a race was tried
+and dropped: at the fixed time the chase camera had no other boat in view; the Start Bay card replaced it. No
+results, records or people's names appear in any picture.
 
 ### E.6 What is left from package E
 
