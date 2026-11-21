@@ -89,7 +89,9 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
 
   // A changed input row (helm nudged before the first checkpoint) is caught at that checkpoint.
   const i = rec.inputs.findIndex((r) => r[0]! > 100 && r[0]! < 1000);
-  rec.inputs[i]![1]! += 0.05;
+  // Towards the centre: a helm already hard over (±1) nudged outwards is clamped back to the same input and nothing
+  // diverges (a flake seen on CI, 21 Nov 2026, when the sampled row had the helm right over).
+  rec.inputs[i]![1]! += rec.inputs[i]![1]! > 0 ? -0.05 : 0.05;
   await page.getByRole('button', { name: 'Scenarios and replays' }).click(); // the panel closed when the replay opened
   await library(page).getByLabel('Open replay file').setInputFiles({ name: 'changed.replay.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(rec)) });
   await expect(bar).toBeVisible(); // the file is read asynchronously
