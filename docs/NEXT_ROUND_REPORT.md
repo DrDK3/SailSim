@@ -164,6 +164,22 @@ real time).
 
 `daylight.spec.ts` (issue 202) passed in this run, both tests, first time.
 
+**Second CI run (99746f4, five shards):** shards 2–5 and the checks green. Shard 1: the phone-on-its-side test
+(`console.spec.ts`, 844×390) found 92 px of water between the 12 px instrument strip and the console against the
+100 px it asks for (CI's fonts are taller than this container's: 104 px here). Fixed with a tighter strip on short
+touch screens (9f7d09b: 120 px here). One flaky test, passed on its retry: `phase6.spec.ts`'s changed replay row did
+not always diverge, because a helm already hard over, nudged outwards, is clamped back to the same input. The test now
+nudges it towards the centre (bb36098). The hub's race door (`experience.spec.ts`) passed in this run and the next:
+the first run's failure was not reproduced; its diagnostic stays in the test.
+
+**Third CI run (bb36098):** shards 1, 3, 4, 5 and the checks green. Shard 2: the helm-view test (`helmView.spec.ts`,
+A6) waited four drawn frames after each restart, and on CI's slow renderer the helm figure was still crossing to the
+new windward deck (its eye 0.34 m from the centreline). The test now waits until the figure has settled (dce09fe);
+settled, a hiking helm's eye reaches 1.006 m out, so its bound is 1.3 m rather than 1.0 m, the half-beam being
+0.92 m (fac1f44). Test-only changes; the app is as in the third run.
+
+**Fourth CI run (fac1f44):** on the pull request.
+
 ### A.9 Pull request
 
 Draft pull request: https://github.com/DrDK3/SailSim/pull/39 (branch `next-a-wind`, base `main`).
