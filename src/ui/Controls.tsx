@@ -128,7 +128,23 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
  * Look up at the masthead while held (review #1): the T key's button. Pointer or keyboard (Space, Enter): the view
  * eases up the mast to the burgee or vane, and back on release. A view change only, never a sailing input.
  */
-function LookUp({ ctl }: { ctl: SimController }) {
+function LookUp({ ctl, toggle }: { ctl: SimController; toggle: boolean }) {
+  // The toggle setting (§3.3): a plain button that switches looking up on and off, its state announced (aria-pressed).
+  if (toggle)
+    return (
+      <button
+        className={`hold look-up${ctl.lookingUp ? ' on' : ''}`}
+        title={ctl.lookingUp ? 'Look back down (T)' : 'Look up at the masthead (T): the burgee (or vane) shows the wind you sail by; press again to look back'}
+        aria-pressed={ctl.lookingUp}
+        onClick={() => ctl.lookUpPress(true)}
+        data-testid="look-up"
+      >
+        <span className="hold-face" aria-hidden="true">
+          ⇡ <Key k="T" />
+        </span>
+        <span className="sr-only">Look up at the masthead (T to switch)</span>
+      </button>
+    );
   const on = (e: ReactPointerEvent) => {
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -385,7 +401,7 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
         <div className="mod-row">
           <span className="helm-readout" aria-hidden="true">{helmReadout(s.rudder)}</span>
           <button onClick={() => ctl.centreHelm()} title="Centre the helm (Space)">Centre</button>
-          <LookUp ctl={ctl} />
+          <LookUp ctl={ctl} toggle={ui.prefs.lookUpToggle} />
         </div>
       </div>
       <div className="mod boat-mod" role="group" aria-label="Crew and sails">

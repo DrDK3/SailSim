@@ -2336,7 +2336,24 @@ export class SimController {
 
   /** Hold (true) or let go of (false) "look up" at the masthead (review #1: the T key, or the console's button). */
   setLookUp(on: boolean): void {
+    this.lookingUpNow = on;
     this.view?.setLookUp(on);
+  }
+
+  private lookingUpNow = false;
+  /** Whether the view is (or is going) looking up at the masthead now. */
+  get lookingUp(): boolean {
+    return this.lookingUpNow;
+  }
+
+  /**
+   * The T key or the console's button pressed (`down`) or released: held, look up while held; with the toggle setting
+   * (§3.3), each press switches between looking up and back, and a release does nothing.
+   */
+  lookUpPress(down: boolean): void {
+    if (this.prefs.lookUpToggle) {
+      if (down) this.setLookUp(!this.lookingUpNow);
+    } else this.setLookUp(down);
   }
 
   /** The part of the screen the interface leaves clear, top and bottom (CSS px): the chase view frames within it. */
@@ -2693,6 +2710,8 @@ export class SimController {
     savePrefs(this.prefs);
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
     if ('helmFovDeg' in change) this.view?.setHelmFov(this.prefs.helmFovDeg);
+    // Changing how look-up works brings the view back down (§3.3).
+    if ('lookUpToggle' in change) this.setLookUp(false);
     if ('spinnakerColours' in change) this.view?.setSpinnakerColours(this.prefs.spinnakerColours);
     if ('windIndicator' in change || 'vaneTabDeg' in change) {
       this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
@@ -3367,7 +3386,7 @@ export class SimController {
     }
     // Look up at the masthead while T is held (review #1). Not a sailing input: nothing is recorded in a replay.
     if (ev.code === 'KeyT') {
-      if (!ev.repeat) this.setLookUp(true);
+      if (!ev.repeat) this.lookUpPress(true);
       ev.preventDefault();
       return;
     }
@@ -3398,14 +3417,15 @@ export class SimController {
   };
 
   private onKeyUp = (ev: KeyboardEvent) => {
-    if (ev.code === 'KeyT') this.setLookUp(false);
+    if (ev.code === 'KeyT') this.lookUpPress(false);
     const held = this.keyAction(ev.code);
     if (held) this.press(held, false);
   };
 
   private onBlur = () => {
     this.held.clear();
-    this.setLookUp(false);
+    // A held look-up ends when the window loses the keys (the release would never come); a toggled one stays (§3.3).
+    if (!this.prefs.lookUpToggle) this.setLookUp(false);
   };
 
   // ------------------------------------------------------------ UI store

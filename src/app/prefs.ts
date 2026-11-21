@@ -39,6 +39,11 @@ export interface Prefs {
    * trust this" link: moved, not deleted.
    */
   instructorView: boolean;
+  /**
+   * Look up at the masthead as a toggle (fixes of 21 Nov 2026, §3.3): T and the console's button look up with one press
+   * and back with the next, for players who cannot hold a key. Off (the default): held, as before.
+   */
+  lookUpToggle: boolean;
 }
 
 /** The helm view's field of view (deg): its range in Settings and the default (as before, E). */
@@ -71,6 +76,7 @@ export const DEFAULT_PREFS: Prefs = {
   mastheadInset: true,
   helmFovDeg: DEFAULT_HELM_FOV,
   instructorView: false,
+  lookUpToggle: false,
 };
 
 function defaults(): Prefs {
@@ -100,6 +106,7 @@ export function loadPrefs(): Prefs {
       mastheadInset: typeof p.mastheadInset === 'boolean' ? p.mastheadInset : d.mastheadInset,
       helmFovDeg: typeof p.helmFovDeg === 'number' && Number.isFinite(p.helmFovDeg) ? clampHelmFov(p.helmFovDeg) : d.helmFovDeg,
       instructorView: typeof p.instructorView === 'boolean' ? p.instructorView : d.instructorView,
+      lookUpToggle: typeof p.lookUpToggle === 'boolean' ? p.lookUpToggle : d.lookUpToggle,
     };
   } catch {
     return defaults();

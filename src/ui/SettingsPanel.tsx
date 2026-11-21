@@ -241,6 +241,10 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           attempt&apos;s assist record, where they apply. Off, they are gathered in About (&ldquo;How far to trust this&rdquo;)
         </label>
         <label className="check">
+          <input type="checkbox" checked={ui.prefs.lookUpToggle} onChange={(e) => ctl.setPrefs({ lookUpToggle: e.target.checked })} data-testid="pref-lookup-toggle" />
+          Look up at the masthead with one press: T (or the Look up button) looks up, and a second press looks back, instead of holding the key
+        </label>
+        <label className="check">
           <input type="checkbox" checked={ui.prefs.lightLabels} onChange={(e) => ctl.setPrefs({ lightLabels: e.target.checked })} data-testid="pref-light-labels" />
           Name the ships' sidelights at night (P port, red; S starboard, green), for anyone who finds red and green hard to tell apart
         </label>

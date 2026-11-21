@@ -132,3 +132,27 @@ for (const on of [true, false]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('§3.3: the look-up button as a toggle: pressed and announced, back on the next press; with reduced motion it cuts', async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const errors = await ready(page);
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ lookUpToggle: true }));
+  const b = page.getByTestId('look-up');
+  await expect(b).toHaveAttribute('aria-pressed', 'false');
+  const press = () => page.evaluate(() => (document.querySelector('[data-testid="look-up"]') as HTMLButtonElement).click());
+  await press();
+  await expect(b).toHaveAttribute('aria-pressed', 'true');
+  // Reduced motion: all the way up at the next frame (no easing).
+  const amount = () =>
+    page.evaluate(() => {
+      const c = window.__squib!.controller as unknown as { frame(t: number): void; view: { lookUpAmount: number } };
+      c.frame(performance.now());
+      return c.view.lookUpAmount;
+    });
+  expect(await amount()).toBe(1);
+  await press();
+  await expect(b).toHaveAttribute('aria-pressed', 'false');
+  expect(await amount()).toBe(0);
+  expect(errors).toEqual([]);
+});
