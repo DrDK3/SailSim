@@ -43,7 +43,7 @@ test('the built page: a current description, sharing tags with absolute image UR
   expect(await page.evaluate(async () => ('serviceWorker' in navigator ? (await navigator.serviceWorker.getRegistrations()).length : 0))).toBe(0);
 });
 
-test('the landing page: beside the app, which keeps its address; accessible; no sideways scroll on a phone', async ({ page }) => {
+test('the landing page: beside the app, which keeps its address; accessible; no sideways scroll on a phone', async ({ page, request }) => {
   test.setTimeout(120_000 * CI_SLOW);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -54,6 +54,12 @@ test('the landing page: beside the app, which keeps its address; accessible; no 
   // Every picture has its text alternative; the video says what it is and has no sound.
   for (const img of await page.locator('img').all()) expect(await img.getAttribute('alt')).not.toBeNull();
   await expect(page.locator('video')).toHaveAttribute('muted', '');
+  // The trailer, its poster and its captions are in the build.
+  for (const [path, type] of [['media/trailer.mp4', 'video/mp4'], ['media/hero.jpg', 'image/jpeg'], ['media/trailer.vtt', 'text/vtt']]) {
+    const res = await request.get(path!);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()['content-type'], path).toContain(type!);
+  }
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   // The way in is the app at the site's own address.

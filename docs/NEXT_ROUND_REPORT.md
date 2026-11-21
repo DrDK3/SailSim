@@ -579,7 +579,7 @@ gusts are set to steady, so the same build draws the same pictures. `public/medi
 | `public/media/social-evening.jpg` | 1200 × 630, 96 kB | The river at 18:30, 10 kn from 250° |
 | `public/media/social-harbour.jpg` | 1200 × 630, 93 kB | The harbour from above (drone camera), 11:00, 12 kn from 225° |
 | `public/media/social-bay.jpg` | 1200 × 630, 56 kB | Start Bay's practice area, 13:00, 14 kn from 225° |
-| `public/media/trailer.mp4` | 960 × 540, 24 s at 24 fps, TRAILERSIZE | One sail on the river: chase camera, the harbour from above (from 8 s), chase again (from 16 s). Drawn at the lowest preset (each frame takes seconds in software; the high preset would take hours). H.264 (libx264, `-preset veryfast`, CRF 24), no audio track |
+| `public/media/trailer.mp4` | 960 × 540, 24 s at 24 fps, 866 kB | One sail on the river: chase camera, the harbour from above (from 8 s), chase again (from 16 s). Drawn at the lowest preset (each frame takes seconds in software; the high preset would take hours). H.264 (libx264, `-preset veryfast`, CRF 24), no audio track |
 | `public/media/trailer.vtt` | captions | Each third of the trailer described, each line starting "[No sound]" |
 
 The trailer is a picture of the simulator, not a demonstration of how to sail. A social card of a race was tried
@@ -595,7 +595,25 @@ results, records or people's names appear in any picture.
 
 ### E.7 Checks
 
-ECHECKS
+Locally (cloud container, software rendering):
+
+- typecheck, lint, the build with the secret scan (48 files, 12.5 MB in `dist/`, no secret found); unit tests **904 in
+  136 files, all passing** (package E adds no unit test: what it changes is pages and files, tested in the browser);
+- **the reference race hash** (`tools/race-hash.ts`): `8f30a5cf5c450344`, identical to `main` and package D; the
+  seven golden traces identical (with the date field removed); `npm run envelope` identical to package D's, every row;
+- browser tests, against the production build: `share.spec.ts` (new: the built page's description and sharing tags,
+  their absolute image URLs, the card, the manifest and every icon it lists, no service worker; the landing page's
+  axe-core check (WCAG 2 A/AA rules: no violations), text alternatives, a muted video, the trailer, its poster and
+  captions served with their types, 44 px buttons and no sideways scroll on a phone, and "Start sailing" opening the
+  app), `learnMap.spec.ts` and `welcome.spec.ts` (both open About, which now leads with what you can do): **all
+  passing**. The welcome's first-visit test ran out of time at the local allowances while the AI trials were using
+  the processor, and passed with CI's (`CI=1`, the trials paused): it is slow here, not failing. CI runs the whole
+  suite and is the authority (§E.9);
+- the grep for RYA, "validated", "realistic", accreditation and "open source" in what package E adds: one match, the
+  landing page's "Nothing in it has been validated against a real Squib".
+
+**CI on the earlier packages, recorded here:** package D's pull request (371da2d) is green, the checks job and all
+five browser shards.
 
 ### E.8 Assets and licences
 
@@ -604,7 +622,9 @@ this repository); the icons draw the simulator's own mark. No third-party asset 
 
 ### E.9 Pull request
 
-EPR
+Draft pull request: https://github.com/DrDK3/SailSim/pull/43 (branch `next-e-share`, base `next-d-learn`, so its
+diff shows package E alone; it follows package D, https://github.com/DrDK3/SailSim/pull/42). CI's result is recorded
+in the next package's report.
 
 ---
 
