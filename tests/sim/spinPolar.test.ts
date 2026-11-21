@@ -196,3 +196,43 @@ describe('the AI uses the spinnaker table only while it can fly the spinnaker', 
     expect(Pof(race({ spinnaker: false })).every((d) => d === AI_POLAR)).toBe(true);
   });
 });
+
+describe('a recorded race re-sails by the table its AI sailed by (old recordings as recorded)', () => {
+  const memory = new Map<string, string>();
+  beforeEach(() => {
+    memory.clear();
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => memory.get(k) ?? null,
+      setItem: (k: string, v: string) => void memory.set(k, v),
+      removeItem: (k: string) => void memory.delete(k),
+    };
+  });
+  const recorded = (spinnaker: boolean) => {
+    const c = new SimController();
+    expect(c.startQuickRace({ ...DEFAULT_QUICK_RACE, competitors: 2, conditions: 'as-set', spinnaker })).toBeDefined();
+    c.advance(3);
+    return c.saveRecording('race');
+  };
+
+  it('a race with spinnakers says its AI steered by the spinnaker table, and its replay does the same', () => {
+    const rec = recorded(true);
+    expect(rec.aiSpinPolar).toBe(true);
+    const r = new SimController();
+    expect(r.startReplay(rec)).toBe(true);
+    expect(r.race!.session.polar.data).toBe(AI_POLAR_SPIN);
+  });
+
+  it('a recording from before (no flag) replays with the AI on the table without one, as it was sailed', () => {
+    const rec = recorded(true);
+    delete rec.aiSpinPolar;
+    const r = new SimController();
+    expect(r.startReplay(rec)).toBe(true);
+    expect(r.race!.session.polar.data).toBe(AI_POLAR);
+    // The player's own coach still judges a boat carrying the spinnaker by the spinnaker table (it is not the AI).
+    expect(r.race!.session.humanPolar.data).toBe(AI_POLAR_SPIN);
+  });
+
+  it('a race without spinnakers writes no flag (its recordings are as before)', () => {
+    expect(recorded(false).aiSpinPolar).toBeUndefined();
+  });
+});

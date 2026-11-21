@@ -459,6 +459,8 @@ export class SimController {
   private initialInput: ControlInput | null = null;
   /** Whether this run's race gives rule 18 penalties (Settings → Advanced, or as its recording says; §2.2). */
   private runMarkRoomPenalties = false;
+  /** Whether this run's AI fleet steers by its spinnaker table downwind (§2.3; false only for an older replay). */
+  private runAiSpinPolar = true;
   private checkpoints: [number, string][] = [];
   /** Replay in progress: the recording, its decoded inputs and how far it has been checked. */
   private replay?: { rec: Recording; inputs: InputLogEntry[]; next: number; matched: number; total: number; verifiedTo: number; divergedAt?: number; ended: boolean; notes: string[] };
@@ -560,7 +562,7 @@ export class SimController {
    * Start (or restart) a run. `initialInput` overrides the input the user's boat is built with (a replay
    * passes the recorded one; by default the previous run's input carries over with the helm centred).
    */
-  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean; openWater?: boolean; markRoomPenalties?: boolean } = {}): boolean {
+  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean; openWater?: boolean; markRoomPenalties?: boolean; aiSpinPolar?: boolean } = {}): boolean {
     // The exercise's own scenario, restarted from outside the exercise while an attempt (or the warm-up) runs: the
     // attempt starts again through the exercise, so its measurements start again with the boat. In a review or the
     // result the exercise is not measuring, so the boat simply restarts.
@@ -588,6 +590,8 @@ export class SimController {
     const loc = START_LOCATIONS.find((l) => l.id === scenario.startLocation) ?? START_LOCATIONS[0];
     // Rule 18's penalties as switched in Settings → Advanced (off by default), or as a replay was recorded (§2.2).
     const runMarkRoomPenalties = opts.markRoomPenalties ?? featureOn('markRoomPenalties');
+    // The AI fleet steers by its spinnaker table downwind (§2.3), unless a replay recorded before that says otherwise.
+    const runAiSpinPolar = opts.aiSpinPolar ?? true;
     const prevInput = this.sim?.input;
     const startInput: ControlInput | undefined =
       opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? carriedInput(prevInput) : undefined;
@@ -619,6 +623,7 @@ export class SimController {
           seed: scenario.conditions.gusts.seed,
           spinnaker: spinAboard,
           markRoomPenalties: runMarkRoomPenalties,
+          aiSpinPolar: runAiSpinPolar,
           human: {
             controller: () => this.sampleInputs(),
             input: startInput,
@@ -660,6 +665,7 @@ export class SimController {
     this.built = built;
     this.race = race;
     this.runMarkRoomPenalties = runMarkRoomPenalties;
+    this.runAiSpinPolar = runAiSpinPolar;
     this.sim = sim;
     this.coach = race ? this.makeCoach(race, built, scenario) : undefined;
     this.debrief = undefined;
@@ -1531,6 +1537,8 @@ export class SimController {
       ...(this.dartFromStep === undefined ? {} : { dartFromStep: this.dartFromStep }),
       // A race sailed with rule 18's penalties on says so (its replay rules the same way); absent: off (§2.2).
       ...(this.race && this.runMarkRoomPenalties ? { markRoomPenalties: true } : {}),
+      // A race with spinnakers whose AI steered by its spinnaker table says so; absent: the table without one (§2.3).
+      ...(this.race && this.runAiSpinPolar && this.race.session.fleet.boats.some((b) => b.kind === 'ai' && !!b.sim.params.spin) ? { aiSpinPolar: true } : {}),
       ...(compact ? { inputsQ: compact } : { inputs }),
       checkpoints,
       endStep: this.sim.step,
@@ -1552,7 +1560,7 @@ export class SimController {
     if (rec.dart !== dartNow) notes.push(`Recorded ${rec.dart === 'loaded' ? 'with' : 'without'} the River Dart data, played ${dartNow === 'loaded' ? 'with' : 'without'} it: it will not match.`);
     if (rec.build !== BUILD_ID) notes.push(`Recorded with build ${rec.build}; this is ${BUILD_ID}. A different build may not reproduce it exactly.`);
     if (rec.dartFromStep !== undefined && dartNow === 'loaded') notes.push(`The River Dart joined this run ${Math.round(rec.dartFromStep / 100)} s in; it joins the replay there too.`);
-    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined, markRoomPenalties: rec.markRoomPenalties === true })) return false;
+    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined, markRoomPenalties: rec.markRoomPenalties === true, aiSpinPolar: rec.aiSpinPolar === true })) return false;
     this.replay = { rec, inputs: recordingLog(rec), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
     this.held.clear();
     this.paused = false;
