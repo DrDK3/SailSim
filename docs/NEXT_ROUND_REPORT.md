@@ -412,8 +412,8 @@ not measured against anything.
 ### C.9 Pull request
 
 Draft pull request: https://github.com/DrDK3/SailSim/pull/41 (branch `next-c-graphics`, base `next-b-spinnaker`, so
-its diff shows package C alone; it follows package B, https://github.com/DrDK3/SailSim/pull/40). CI's result is
-recorded in the next package's report.
+its diff shows package C alone; it follows package B, https://github.com/DrDK3/SailSim/pull/40). **CI on 0a06dcd:
+green**, the checks job and all five browser shards.
 
 ---
 
@@ -435,7 +435,12 @@ the player's screens is kept in About and shown again, where it applies, in the 
 
 ### D.2 Evidence (software rendering)
 
-DEVIDENCE
+Screens at fixed settings (`docs/img/next-d/`): the player view's link beside the instruments
+(`player-view-link.jpg`); About opened from it at the labels (`about-trust-labels.jpg`); Conditions in the player view
+(`conditions-player-view.jpg`, no fine print) and in the instructor view (`conditions-instructor-view.jpg`, the
+labels where they apply); the Learn map on a laptop (`learn-map-laptop.jpg`) and on a phone (`learn-map-phone.jpg`).
+On a laptop the link wraps to its own line under "All instruments and conditions", so the instruments panel is about
+24 px taller in the player view.
 
 ### D.3 Accessibility
 
@@ -459,7 +464,26 @@ and exercises' existing estimates.
 
 ### D.6 Checks
 
-DCHECKS
+Locally (cloud container, software rendering):
+
+- typecheck, lint, the build with the secret scan; unit tests **904 in 136 files, all passing** (new:
+  `learnMap.test.ts`, 7 tests: the order, done from each store, the next step, storage that throws);
+- **the reference race hash**: `8f30a5cf5c450344` on `main` (before this round) and on this branch, identical. The
+  reference race was a scratch script in earlier rounds (quoted as `11824f89f479d0f4`); the container was restarted
+  during this package and the script was lost, so the reference race is now a committed tool,
+  `tools/race-hash.ts` (7 AI boats, 400 s, the River Dart data, the channel-following stream), run on both commits;
+- the seven golden traces identical (with the date field removed); `npm run envelope` identical to package C's,
+  every row;
+- browser tests run locally: `learnMap.spec.ts` (new: the player and instructor views, About at the labels, the Learn
+  map started and noted, a touch phone's 44 px targets, axe-core on About and the Learn map), all passing; a run of the
+  other suites the package touches (accessibility, the welcome, the phone console, the tablet, the exercises) was
+  stopped by the container restart at 10 of 19 tests, none failed up to then. `smoke.spec.ts` and
+  `training.spec.ts` now turn the instructor view on where they check the labels, and check the player view first.
+  CI runs the whole suite and is the authority (§D.8);
+- the grep for RYA, "validated" and "realistic" claims: none added.
+
+**CI on the earlier packages, recorded here:** package C's pull request (0a06dcd) is green, the checks job and all
+five browser shards.
 
 ### D.7 Under-18 safeguards
 
@@ -468,7 +492,9 @@ reminders or rewards for coming back.
 
 ### D.8 Pull request
 
-DPR
+Draft pull request: https://github.com/DrDK3/SailSim/pull/42 (branch `next-d-learn`, base `next-c-graphics`, so its
+diff shows package D alone; it follows package C, https://github.com/DrDK3/SailSim/pull/41). CI's result is recorded
+in the next package's report.
 
 ---
 
