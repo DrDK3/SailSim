@@ -303,7 +303,7 @@ through the app's controls.
 |---|---|---|
 | Low preset: water | **Start Bay's stripes at the lowest preset** (Smooth draws "simple" water). Simple water drew five ripple trains at regular wavelengths (0.12 m × 2.2ⁿ, the longest 2.8 m, no jitter), which ran in step across the bay as parallel bands. It now draws every other train of the detailed water's spectrum (seven of thirteen: the same jittered wavelengths and spread of directions), fades each train before the pixel reaches half its wavelength (the preset draws at three-quarters resolution), and varies alternate trains in patches some 30–60 m across. Detailed water (Balanced and Ultra) is unchanged | `src/render/water.ts` (`LOW_RIPPLES`, `ripples()`) |
 | Low preset: sky | **The sky and horizon at the lowest preset**: compared with Balanced in the same conditions they are the same (the same dome, gradient and haze; the two presets differ in the water, not the sky). Nothing needed changing, so nothing was changed | — |
-| Low preset: lighter | **Impostors for far trees**: beyond 1,400 m, at the lowest scenery detail (the Performance preset), each tree is two crossed quads with a silhouette drawn in code (4 triangles against about 30), casting no shadow. Kept on the evidence of §C.3: fewer triangles and draw calls, no measurable change in frame time. **Not done**, because they would not help here: merged geometry (the trees are already one instanced mesh per chunk and shape; the buildings are already merged into one mesh per map tile), texture atlases (the scene uses 35–48 textures, no draw-call problem from them), and density by distance (the woods already end at 2.7 km and coarsen beyond 850 m) | `src/render/trees.ts`, `src/render/dart.ts` |
+| Low preset: lighter | **Impostors for far trees**: beyond 1,400 m, at the lowest scenery detail (the Performance preset), each tree is two crossed quads with a silhouette drawn in code (4 triangles against about 30), casting no shadow. Kept on the evidence of §C.3: fewer triangles and draw calls than without them, no measurable change in frame time. **Not done**, because they would not help here: merged geometry (the trees are already one instanced mesh per chunk and shape; the buildings are already merged into one mesh per map tile), texture atlases (the scene uses 35–48 textures, no draw-call problem from them), and density by distance (the woods already end at 2.7 km and coarsen beyond 850 m) | `src/render/trees.ts`, `src/render/dart.ts` |
 | #35 | **Trees in several shapes**: three broadleaf crowns (round, tall and narrow, broad and flat-topped) and two conifers (a cone, and a pine with a bare trunk and a flat crown), each one instanced mesh per chunk. The shape comes from a hash of the tree's position, so every tree stands where it stood and none is added (tested: the same positions and count whichever band draws them). Billboards: the impostors above | `src/render/trees.ts` |
 | #12 (issue 214) | **Compact replay inputs**: a new schema, **`squib-replay/4`**, stores the input log as small integers, one row per change: the steps since the last change, a mask of the controls that changed, and only their new values. To make every value a whole number, the player's controls are kept on a grid of thousandths of their travel (`quantiseInput`; E: below anything a person can set or feel); the file decodes to the very inputs sailed (a seeded property test over every control). A held sheet key keeps its exact rate (its position is accumulated, only the input is on the grid; rounding each step would have made it 14 % fast). Written whenever every input is on the grid (any run of this build); otherwise the recording is written as before. **Every older schema (/1, /2, /3) still reads and replays**, as do share links and saved runs (they carry the same recordings): tested by converting this build's recordings to the row form and replaying them bit for bit, and by the earlier files' tests. An older build refuses a /4 file rather than replaying it wrongly | `src/app/replay.ts`, `src/app/controller.ts` |
 | Issue 264 (found here) | **A control handed back did not replay as handed back** (package B's /3 rows; fixed): the replay fed each recorded input to the simulation as a change, and the simulation merges changes, so a kicker or jib lead handed back to the Flat control (recorded as "not set") kept its last value in the replay, which then diverged. A recorded input now replaces the whole input. Regression test: a kicker set and handed back replays bit for bit in the compact and in the row form | `src/app/replay.ts` (`replacingInput`), `src/app/controller.ts` |
@@ -324,25 +324,28 @@ through the app's controls.
 
 ### C.3 Graphics figures (`tools/gfx-bench.mjs`, the lowest preset, software rendering, relative)
 
-Eight fixed views; render time is one frame under SwiftShader at 1280 × 720 (relative only).
+Eight fixed views; each cell is render time (ms, one frame under SwiftShader at 1280 × 720) / draw calls / triangles
+(M). The last column is what this package ships: five shapes near (inside 850 m), one shape a family beyond,
+impostors beyond 1,400 m.
 
-| View | Before: render ms / calls / triangles (M) | Shapes, no impostors | Shapes + impostors (run 1) | Shapes + impostors (run 2) |
+| View | Before | Five shapes everywhere, no impostors | Five shapes everywhere + impostors (run 1 / run 2 ms) | **Shipped** |
 |---|---|---|---|---|
-| chase-river | 3003 / 350 / 2.83 | 2673 / 433 / 2.82 | 2619 / 394 / 2.65 | 2522 / 394 / 2.65 |
-| helm-river | 2994 / 366 / 3.08 | 2821 / 463 / 3.04 | 3704 / 417 / 2.85 | 2838 / 417 / 2.85 |
-| sail-close | 3935 / 675 / 3.50 | 4083 / 762 / 3.45 | 3676 / 710 / 3.23 | 3956 / 710 / 3.23 |
-| wake-stern | 798 / 131 / 0.96 | 825 / 131 / 0.96 | 754 / 131 / 0.96 | 797 / 131 / 0.96 |
-| chase-sea | 774 / 131 / 0.96 | 726 / 131 / 0.96 | 997 / 131 / 0.96 | 702 / 131 / 0.96 |
-| golden-river | 2801 / 337 / 2.66 | 2656 / 414 / 2.62 | 2908 / 377 / 2.54 | 2628 / 377 / 2.54 |
-| backlit-sails | 3478 / 375 / 3.27 | 3426 / 483 / 3.29 | 3015 / 426 / 2.80 | 2889 / 426 / 2.80 |
-| drone-harbour | 2171 / 388 / 3.16 | 2848 / 465 / 3.07 | 2293 / 435 / 2.91 | 1986 / 435 / 2.91 |
-| **Total** | **19953 / 2753 / 20.41** | **20058 / 3282 / 20.20** | **19966 / 3021 / 18.89** | **18320 / 3021 / 18.89** |
+| chase-river | 3003 / 350 / 2.83 | 2673 / 433 / 2.82 | 2619, 2522 / 394 / 2.65 | 3350 / 370 / 2.65 |
+| helm-river | 2994 / 366 / 3.08 | 2821 / 463 / 3.04 | 3704, 2838 / 417 / 2.85 | 2893 / 393 / 2.85 |
+| sail-close | 3935 / 675 / 3.50 | 4083 / 762 / 3.45 | 3676, 3956 / 710 / 3.23 | 3806 / 692 / 3.23 |
+| wake-stern | 798 / 131 / 0.96 | 825 / 131 / 0.96 | 754, 797 / 131 / 0.96 | 779 / 131 / 0.96 |
+| chase-sea | 774 / 131 / 0.96 | 726 / 131 / 0.96 | 997, 702 / 131 / 0.96 | 733 / 131 / 0.96 |
+| golden-river | 2801 / 337 / 2.66 | 2656 / 414 / 2.62 | 2908, 2628 / 377 / 2.54 | 2796 / 356 / 2.53 |
+| backlit-sails | 3478 / 375 / 3.27 | 3426 / 483 / 3.29 | 3015, 2889 / 426 / 2.80 | 3229 / 399 / 2.79 |
+| drone-harbour | 2171 / 388 / 3.16 | 2848 / 465 / 3.07 | 2293, 1986 / 435 / 2.91 | 2050 / 414 / 2.91 |
+| **Total** | **19953 / 2753 / 20.41** | **20058 / 3282 / 20.20** | **19966, 18320 / 3021 / 18.89** | **19636 / 2886 / 18.87** |
 
-The five tree shapes cost draw calls (+19 %: each chunk draws up to five meshes instead of two) and no triangles.
-The impostors then take 6.5 % of the triangles and 8 % of the draw calls off. Frame time: the same build measured
-19966 and 18320 ms in two runs, so the run-to-run noise is as large as any difference; **no measurable change**
-claimed. All views stay inside the Smooth budget proposed in JUNIORS_REPORT §2.4 (≤ 700 calls except sail-close's
-710, which was 675 before; ≤ 3.5 M triangles).
+Five shapes everywhere cost 19 % more draw calls (each chunk drew up to five meshes instead of two) and pushed
+sail-close past the Smooth budget of 700 calls proposed in JUNIORS_REPORT §2.4. Far off a crown is a few pixels and
+its shape does not show, so the shipped version keeps the shapes near only: **7.5 % fewer triangles and 4.8 % more
+draw calls than before**, every view inside the proposed Smooth budget (≤ 700 calls, ≤ 3.5 M triangles).
+Frame time: the same build measured 19966 and 18320 ms in two runs (and the shipped build was measured while other
+tests ran), so the run-to-run noise is as large as any difference; **no change in frame time is claimed**.
 
 ### C.4 Replay sizes (measured)
 
@@ -393,8 +396,8 @@ CI runs the whole browser suite and is the authority; its result is on the pull 
 ### C.7 What is left from package C
 
 - Whether Smooth now looks better, and the tree shapes, need the owner's eye (and a real GPU, #32).
-- The extra draw calls of the tree shapes (+19 % at the lowest preset) could be won back by drawing every shape of a
-  chunk in one call (a shape attribute per instance); not needed within the budget measured here.
+- The near trees' shapes still cost some draw calls (+4.8 % in total at the lowest preset); drawing every shape of a
+  chunk in one call (a shape attribute per instance) would win them back. Not needed within the budget measured here.
 - Recordings of a run sailed with an older build's inputs (off the grid) are still written in the row form.
 
 ### C.8 Estimates introduced (E)
@@ -405,7 +408,9 @@ not measured against anything.
 
 ### C.9 Pull request
 
-PR_TEXT
+Draft pull request: https://github.com/DrDK3/SailSim/pull/41 (branch `next-c-graphics`, base `next-b-spinnaker`, so
+its diff shows package C alone; it follows package B, https://github.com/DrDK3/SailSim/pull/40). CI's result is
+recorded in the next package's report.
 
 ---
 
