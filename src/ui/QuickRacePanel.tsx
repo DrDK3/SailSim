@@ -110,6 +110,10 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
           <option value="expert">Expert</option>
         </select>
       </label>
+      <label className="toggle" title="Every boat carries a spinnaker; call for yours with O (or Hoist) once the wind is behind the beam.">
+        <input type="checkbox" checked={o.spinnaker !== false} onChange={(e) => set({ spinnaker: e.target.checked })} data-testid="race-spinnaker" />
+        Spinnakers
+      </label>
       <div className="field venue-field">
         <span id="race-where">Where</span>
         <div className="segmented" role="radiogroup" aria-labelledby="race-where" data-testid="race-venue">

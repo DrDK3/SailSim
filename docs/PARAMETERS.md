@@ -226,3 +226,32 @@ Rondar hull with the 2024 sail designs: a flatter foot lets the jib and main she
 | sinking | 0.35 m/s | - | E | estimate | Once nothing can carry her |
 | wreck drag | Cd·A 1.3 m² (side 1.6 m out), list 450 N m | - | E | estimate | A fallen rig in the water |
 | awash drag | Cd·A 1.4 m² | - | E | estimate | A drowned hull and deck |
+
+## The spinnaker and the sail controls (`src/sim/boat/spinnaker.ts`, `src/sim/boat/flatten.ts`; package B, 21 Nov 2026)
+
+The free published spinnaker coefficient tables (the ORC VPP documentation) could not be read from this environment
+(the host refused the connection, 21 Nov 2026): every figure below except the class figures is an estimate (E). No
+Squib spinnaker target or measurement was found or invented. docs/PHYSICS.md §23 explains how they are used.
+
+| Parameter | Value | Unit | Tag | Source | Note |
+|---|---|---|---|---|---|
+| `SPIN_PARAMS.area` | 13.5 | m² | S(p) | C4 (class-spec `spinnakerArea`) | The symmetric spinnaker |
+| pole length | 2.14 | m | V | C16 (class-spec `spinnakerPoleLength`) | Drawn; sets how far forward the sail flies (picture only) |
+| `ceHeight` | 3.6 | m | E | estimate | Centre of effort above the waterline (head at the 6.49 m hoist, luff 4.9 m: C16) |
+| `ceX` | 2.6 | m | E | estimate | Centre of effort forward of the centre of gravity (on the pole, ahead of the forestay) |
+| `table` | 12 rows, 0–180° | – | E | the general shape of published VPP spinnaker curves, not values read from a source | Lift highest on a reach (1.35 at 90°), drag rising to a run (1.0 at 180°) |
+| `collapseAwaDeg`, `collapseWidthDeg` | 62, 14 | deg | E | estimate | Cannot be held forward of 48–62° apparent |
+| `byLeeCollapseDeg` | 12 | deg | E | estimate | By the lee on the wrong side of the pole, the main blankets it |
+| `fillRate`, `collapseRate` | 0.8, 2.5 | 1/s | E | estimate | It fills over about a second, collapses faster |
+| `flogDrag` | 0.15 | – | E | estimate | Share of the run's drag a flogging sail still has |
+| `hoistS`, `dropS`, `gybeS` | 9, 7, 8 | s | E | estimate | The crew's tasks, each varied by up to ±20 % (`taskVary`) from the step it starts on |
+| `reactS` | 1.5 | s | E | estimate | Crew trimming: they gybe the pole this long after seeing the main across |
+| `gybeDeployed` | 0.35 | – | E | estimate | The sail flown on its sheets alone while the pole is gybed |
+| `jibBlanket` | 0.55 | – | E | estimate; how Squibs carry the jib with the spinnaker up is question B6 | The jib's effectiveness × (1 − 0.55 × fill) behind a full spinnaker |
+| `trimWidth` | 0.18 | – | E | estimate | Manual trim (Expert): within this of the best sheet it draws; well over-eased it collapses |
+| crew busy | half the hiking weight | – | E | estimate | One of the crew hoisting, dropping or gybing the pole cannot hike |
+| AI calls | hoist above 120° TWA, drop below 100°, none above 20 kn; drop lead = drop time + 6 s | – | E | estimate | A cautious crew, the same calls and timings as the player's |
+| `SPLIT.outhaul` | clMax 0.15, cd0 0.10, CE 0 | – | E | estimate | Share of FLATTEN's drops |
+| `SPLIT.cunningham` | clMax 0.10, cd0 0.05, CE 0 | – | E | estimate | Share of FLATTEN's drops |
+| `SPLIT.kicker` | clMax 0.05, cd0 0.05, CE 0.10 | – | E | estimate | Share of FLATTEN's drops (the three add up to FLATTEN exactly) |
+| `SPLIT.jibLead` | clMax ∓0.06, CE ∓0.06 per unit | – | E | estimate | Aft (+1) twists the jib open; forward (−1) closes it |

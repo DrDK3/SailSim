@@ -131,6 +131,8 @@ const BUILT_IN: { id: string; title: string; description: string; needsDart?: bo
       course: { source: 'practice', kind: 'windward-leeward' },
       race: { sequence: 'five-minute', startInS: 330 },
       fleet: { aiCount: 5, level: 'good', prepFlag: 'P' },
+      // Races carry the spinnaker (package B).
+      spinnaker: true,
     },
   },
   {
@@ -146,6 +148,8 @@ const BUILT_IN: { id: string; title: string; description: string; needsDart?: bo
       course: { source: 'library', id: 'sim-river-range' },
       race: { sequence: 'three-minute', startInS: 210 },
       fleet: { aiCount: 3, level: 'good', prepFlag: 'P' },
+      // Races carry the spinnaker (package B).
+      spinnaker: true,
     },
   },
 ];

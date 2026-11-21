@@ -22,6 +22,7 @@ import {
 } from './forces';
 import type { BoatParams, SailParams } from './params';
 import { groundContact, NO_CONTACT, type ContactForce, type GroundContext } from './contact';
+import { spinForce } from './spinnaker';
 import { waterHeelMoment } from './cockpit';
 
 /**
@@ -58,6 +59,8 @@ export interface Actuators {
   water: number;
   /** Damage from collisions and groundings (src/sim/boat/damage.ts); none when absent. */
   damage?: Damage;
+  /** The spinnaker as the crew have it now (src/sim/boat/spinnaker.ts); absent or deployed 0: no force at all. */
+  spin?: { deployed: number; fill: number; trim: number };
 }
 
 export interface Fluids {
@@ -70,6 +73,8 @@ export interface ForceBreakdown {
   groundVelocity: NE;
   main: SailForce;
   jib: SailForce;
+  /** The spinnaker's force (zero when it is not up). */
+  spin: SailForce;
   jibEffectiveness: number;
   windage: BodyForce;
   lateral: FoilForce;
@@ -124,6 +129,7 @@ export function newForceBreakdown(): ForceBreakdown {
     groundVelocity: { n: 0, e: 0 },
     main: sail(),
     jib: sail(),
+    spin: sail(),
     jibEffectiveness: 0,
     windage: { x: 0, y: 0, n: 0 },
     lateral: foil(),
@@ -180,6 +186,22 @@ export function computeForces(
     sf.n *= rig;
     sf.boomTorque *= rig;
   }
+  // The spinnaker (package B): one more sail in the same sums, only while some of it is up. It blankets the jib.
+  const spinOn = !!p.spin && !!a.spin && a.spin.deployed > 0;
+  const spin = o.spin;
+  if (spinOn) {
+    spinForce(p.spin!, aw, s.phi, fluids.rhoAir, a.spin!.deployed, a.spin!.fill, a.spin!.trim, spin);
+    const k = rig;
+    spin.x *= k;
+    spin.y *= k;
+    spin.yPlane *= k;
+    spin.n *= k;
+    const blanket = 1 - p.spin!.jibBlanket * a.spin!.deployed * a.spin!.fill;
+    jib.x *= blanket;
+    jib.y *= blanket;
+    jib.yPlane *= blanket;
+    jib.n *= blanket;
+  } else spin.x = spin.y = spin.yPlane = spin.n = spin.cl = spin.cd = spin.luff = 0;
   const windage = windageForce(p, aw, s.phi, fluids.rhoAir, o.windage);
   const above = rigAboveWater(s.phi);
   if (above < 1) {
@@ -217,6 +239,11 @@ export function computeForces(
   total.x = main.x + jib.x + windage.x + lateral.x + rudder.x + hull.x + contact.x;
   total.y = main.y + jib.y + windage.y + lateral.y + rudder.y + crossFlow.y + contact.y;
   total.n = main.n + jib.n + windage.n + lateral.n + rudder.n + crossFlow.n + yawDamping + contact.n;
+  if (spinOn) {
+    total.x += spin.x;
+    total.y += spin.y;
+    total.n += spin.n;
+  }
   // A fallen rig dragging in the water, and a drowned hull (src/sim/boat/flooding.ts).
   const dmg = a.damage;
   const wreck = dmg && (dmg.rigParts.down || dmg.state === 'awash' || dmg.state === 'sinking') ? wreckForces(dmg, s.u, s.v, s.r, fluids.rhoWater) : undefined;
@@ -228,6 +255,7 @@ export function computeForces(
   // Roll about the waterline: sail-plane side forces act above it, keel and rudder forces below it.
   const r = o.roll;
   r.sails = main.yPlane * p.main.ceHeight + jib.yPlane * p.jib.ceHeight + windage.y * p.windageHeight;
+  if (spinOn) r.sails += spin.yPlane * p.spin!.ceHeight;
   r.hydro = -lateral.yPlane * p.clrDepth - rudder.yPlane * p.rudderDepth;
   r.crew = p.crewMass * G * a.crewY * Math.cos(s.phi);
   r.righting = -p.weight * rightingArm(p, s.phi);
@@ -344,7 +372,7 @@ function bisect(f: (x: number) => number, lo: number, hi: number): number | unde
 // Scratch records for aeroHeelMoment (it returns a number, so nothing it fills escapes).
 const HEEL_WORK = (() => {
   const f = newForceBreakdown();
-  return { ground: { n: 0, e: 0 }, aw: f.aw, pair: { main: f.main, jib: f.jib, jibEffectiveness: 0 }, windage: f.windage };
+  return { ground: { n: 0, e: 0 }, aw: f.aw, pair: { main: f.main, jib: f.jib, jibEffectiveness: 0 }, windage: f.windage, spin: f.spin };
 })();
 
 /**
@@ -367,11 +395,12 @@ export function aeroHeelMoment(
   const aw = apparentWind(wind, ground, s.psi, HEEL_WORK.aw);
   const { main, jib } = sailPairForces(p, a.boomMain, a.boomJib, aw, phi, fluids.rhoAir, undefined, undefined, a.mainInverted, HEEL_WORK.pair);
   const windage = windageForce(p, aw, phi, fluids.rhoAir, HEEL_WORK.windage);
-  return (
-    main.yPlane * (p.main.ceHeight + p.clrDepth) +
-    jib.yPlane * (p.jib.ceHeight + p.clrDepth) +
-    windage.y * (p.windageHeight + p.clrDepth)
-  );
+  const m = main.yPlane * (p.main.ceHeight + p.clrDepth) + jib.yPlane * (p.jib.ceHeight + p.clrDepth) + windage.y * (p.windageHeight + p.clrDepth);
+  // The spinnaker heels her too (the crew's balance counts it), only while it is up.
+  if (!p.spin || !a.spin || a.spin.deployed <= 0) return m;
+  const sp = spinForce(p.spin, aw, phi, fluids.rhoAir, a.spin.deployed, a.spin.fill, a.spin.trim, HEEL_WORK.spin);
+  const blanket = 1 - p.spin.jibBlanket * a.spin.deployed * a.spin.fill;
+  return m - jib.yPlane * (1 - blanket) * (p.jib.ceHeight + p.clrDepth) + sp.yPlane * (p.spin.ceHeight + p.clrDepth);
 }
 
 /**

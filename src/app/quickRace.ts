@@ -64,6 +64,8 @@ export interface QuickRaceOptions {
   stream?: boolean;
   /** Today's challenge: its key ("challenge:2026-11-04"), so its best time is kept apart. */
   challenge?: string;
+  /** The fleet carries spinnakers (package B): on unless switched off here. */
+  spinnaker?: boolean;
 }
 
 export const DEFAULT_QUICK_RACE: QuickRaceOptions = {
@@ -217,6 +219,7 @@ export function quickRaceScenario(o: QuickRaceOptions, current: AppScenario, liv
     fleet: { aiCount: competitors, level: o.level, prepFlag: o.prepFlag ?? 'P' },
     boat: current.boat,
     helm: current.helm,
+    spinnaker: o.spinnaker !== false,
   };
   const who = competitors === 0 ? 'alone' : `against ${competitors} AI boat${competitors === 1 ? '' : 's'} (${o.level})`;
   const where = river

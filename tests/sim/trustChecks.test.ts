@@ -20,6 +20,7 @@ import { buildConditions } from '../../src/sim/env/conditions';
 import { createRace } from '../../src/sim/race/setup';
 import { practiceCourse } from '../../src/sim/course/practice';
 import { DT } from '../../src/sim/simulation';
+import { withSpinnaker } from '../../src/sim/boat/spinnaker';
 
 const KN = 1852 / 3600;
 const R2D = 180 / Math.PI;
@@ -201,5 +202,34 @@ describe('5. AI parity', () => {
     expect(Math.abs(plain.state.n - ai.sim.state.n)).toBeLessThan(1e-6);
     expect(Math.abs(plain.state.e - ai.sim.state.e)).toBeLessThan(1e-6);
     expect(ai.sim.params).toEqual(squibParams());
+  });
+
+  it('with spinnakers (package B): the AI calls for it through the same input as the player, and its inputs give the same track', () => {
+    const course = practiceCourse({ kind: 'windward-leeward', centre: { n: 0, e: 0 }, windFromDeg: 225, startLineM: 120 });
+    const conditions = { ...DEFAULT_SCENARIO.conditions, weather: { source: 'manual' as const, twsKn: 10, twdDeg: 225 }, gusts: { preset: 'steady' as const, seed: 3 }, current: { mode: 'none' as const } };
+    const { session } = createRace({ conditions, course, aiCount: 1, level: 'good', seed: 3, spinnaker: true, committee: { startAt: 60, sequence: 'one-minute' } });
+    const ai = session.fleet.boats[0]!;
+    const inputs: ControlInput[] = [];
+    const phases = new Set<string>();
+    const own = ai.sim.controller!;
+    ai.sim.controller = (s) => {
+      const out = own(s);
+      inputs.push({ ...s.input, ...(out ?? {}) });
+      phases.add(s.spin.phase);
+      return out;
+    };
+    const init = { n: ai.sim.state.n, e: ai.sim.state.e, headingDeg: ai.sim.state.psi * R2D, speedKn: ai.sim.state.u / KN };
+    const { env } = buildConditions(conditions);
+    // Through the start, the beat and the run (about 12 minutes).
+    for (let i = 0; i < 72_000 && session.judgeOf(ai.id).phase !== 'finished'; i++) session.step();
+    // It hoisted on the run and dropped before the leeward mark.
+    expect([...phases]).toEqual(expect.arrayContaining(['down', 'hoisting', 'up', 'dropping']));
+    let k = 0;
+    const plain = new Simulation({ params: withSpinnaker(squibParams()), env, initial: init, input: ai.sim.input, controller: () => inputs[k++] });
+    for (let i = 0; i < inputs.length; i++) plain.stepOnce();
+    expect(Math.abs(plain.state.n - ai.sim.state.n)).toBeLessThan(1e-6);
+    expect(Math.abs(plain.state.e - ai.sim.state.e)).toBeLessThan(1e-6);
+    // The same boat as the player's with the spinnaker aboard.
+    expect(ai.sim.params).toEqual(withSpinnaker(squibParams()));
   });
 });

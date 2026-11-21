@@ -54,6 +54,13 @@ describe('gamepad mapping', () => {
     expect(readPad(down, down, 0).commands).toEqual([]);
   });
 
+  it('the spinnaker (package B): d-pad up calls it up or down, d-pad down gybes the pole, once on the press', () => {
+    const up = withButtons({ [PAD.UP]: 1 });
+    expect(readPad(up, rest(), 0).commands).toEqual(['spinnaker']);
+    expect(readPad(up, up, 0).commands).toEqual([]);
+    expect(readPad(withButtons({ [PAD.DOWN]: 1 }), rest(), 0).commands).toEqual(['gybePole']);
+  });
+
   it('haptic pulses scale with the event and are zero for a zero event', () => {
     expect(hapticPulse('gust', 0)).toMatchObject({ strongMagnitude: 0, weakMagnitude: 0 });
     expect(hapticPulse('contact', 1).strongMagnitude).toBeGreaterThan(hapticPulse('contact', 0.3).strongMagnitude);

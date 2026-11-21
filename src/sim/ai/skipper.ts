@@ -123,6 +123,16 @@ interface Goal {
 }
 
 const DECIDE_EVERY = 20; // steps (0.2 s)
+/**
+ * Spinnaker calls (package B): hoist on a run or a broad reach with room before the next mark, drop in good time
+ * before it, and none in more wind than this (E: a cautious crew, not a measured limit). The crew carry the calls out
+ * and gybe the pole as they do for the player with the crew trimming (src/sim/boat/spinnaker.ts).
+ */
+const SPIN_HOIST_TWA = 120 * DEG;
+const SPIN_DROP_TWA = 100 * DEG;
+const SPIN_MAX_TWS = 20 * (1852 / 3600);
+/** Sailing on under it after the hoist before the next mark, at the least (s). */
+const SPIN_MIN_LEG_S = 20;
 
 /** A Squib hull as two circles along the centreline: [body x (m), radius (m)] (from the 5.79 m × 1.87 m outline). */
 const HULL_CIRCLES: [number, number][] = [[1.45, 1.3], [-1.35, 1.25]];
@@ -172,6 +182,8 @@ export class AiSkipper {
   private turningTo: 0 | 1 | -1 = 0;
   /** Where the boat waits before its run at the line (its starting slot). */
   holdPoint: LocalPoint;
+  /** The spinnaker call: up (true) or down (package B; only for a boat that carries one). */
+  private spinWant = false;
 
   get command(): Readonly<{ mode: string; target?: number; depower: number }> {
     return this.cmd as { mode: string; target?: number; depower: number };
@@ -225,7 +237,27 @@ export class AiSkipper {
       helm = this.reflex.helm;
       depower = Math.max(depower, this.reflex.depower);
     }
-    return { helm, ...aiSheetInput(sim, this.sheets, depower) };
+    const sheets = aiSheetInput(sim, this.sheets, depower);
+    // The spinnaker call goes through the same input as the player's (a boat without one is left exactly as before).
+    return sim.params.spin ? { helm, ...sheets, spin: this.spinWant ? 1 : 0 } : { helm, ...sheets };
+  }
+
+  /**
+   * Up or down: on a broad reach or a run (with hysteresis), not before the start, not in penalty turns or out of the
+   * race, not in more wind than SPIN_MAX_TWS; down in time for the drop and a few lengths before the goal point (a
+   * mark's rounding apex), and hoisted only with room to sail under it a while after the hoist.
+   */
+  private spinnakerCall(sim: Simulation, me: LocalPoint, goal: Goal, windSpeed: number, twaNow: number): boolean {
+    const sp = sim.params.spin;
+    if (!sp || goal.hold || goal.arriveAt !== undefined || goal.lineWall || this.irons || this.penaltyDir !== 0 || this.world.outOfRace(this.id)) return false;
+    if (windSpeed > SPIN_MAX_TWS) return false;
+    const stw = hypot2(sim.state.u, sim.state.v);
+    const dist = hypot2(goal.p.n - me.n, goal.p.e - me.e);
+    const lead = Math.max(25, stw * (sp.dropS * (1 + sp.taskVary) + 6));
+    if (dist < lead) return false;
+    const a = Math.abs(twaNow);
+    if (this.spinWant) return a > SPIN_DROP_TWA;
+    return a > SPIN_HOIST_TWA && dist > lead + stw * (sp.hoistS * (1 + sp.taskVary) + SPIN_MIN_LEG_S);
   }
 
   /**
@@ -331,6 +363,8 @@ export class AiSkipper {
     // Penalty turns: once well clear of other boats and marks, turn until the judge counts them.
     const owed = W.owesPenalty(this.id);
     if (owed > 0 && !W.outOfRace(this.id)) {
+      // No spinnaker for penalty turns.
+      this.spinWant = false;
       if (this.penaltyDir !== 0 || this.wellClear(me)) {
         if (this.penaltyDir === 0) this.penaltyDir = twaNow >= 0 ? 1 : -1; // turn towards the wind first
         // Keep the wanted heading 60° ahead in the direction of the turn.
@@ -370,6 +404,7 @@ export class AiSkipper {
     if (!goal.hold && !yielding) depower = Math.min(depower, clamp((wind.speed / 0.5144 - 5) / 6, 0.3, 0.8));
     nav.depower = depower;
     this.cmd = nav;
+    if (sim.params.spin) this.spinWant = this.spinnakerCall(sim, me, goal, wind.speed, twaNow);
   }
 
   /**

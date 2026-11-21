@@ -74,7 +74,13 @@ export interface CueState {
     /** Contact with another boat or object (bottom contact counts as grounding): 0 none … 1 hard. */
     contact: number;
     grounding: number;
+    /** The spinnaker (package B): the crew started hoisting it, it filled, it collapsed, in this frame. */
+    spinHoist?: boolean;
+    spinFilled?: boolean;
+    spinCollapsed?: boolean;
   };
+  /** The spinnaker as the physics has it, for a boat that carries one: how much is up and how full. */
+  spin?: { deployed: number; fill: number; phase: string };
   /** A tack or gybe in progress (the 3 s after the boom crossed), and how far through (0…1). */
   manoeuvre: Manoeuvre;
   manoeuvreProgress: number;
@@ -111,7 +117,12 @@ export class CueMemory {
   lastGroundT = -1;
   /** |TWA| a little before the crossing (to tell a tack from a gybe): kept over the last second. */
   twaHistory: { t: number; twa: number }[] = [];
+  /** The spinnaker last frame: its phase, and whether it was full (with hysteresis: full above 0.8, collapsed below 0.4). */
+  spinPhase = 'down';
+  spinFull = false;
   reset(): void {
+    this.spinPhase = 'down';
+    this.spinFull = false;
     this.gustLow = [];
     this.lastGustEvent = -Infinity;
     this.lastBoomT = -1;
@@ -198,6 +209,19 @@ export function deriveCues(prev: BoatSnapshot, curr: BoatSnapshot, alpha: number
   o.bowDrop = bowDrop;
   o.sprayRate = sprayRate(stw, bowDrop);
   o.events = { boom, gustOnset, contact: inp.contact ?? 0, grounding: inp.grounding ?? 0 };
+  // The spinnaker's moments, from the physics' state of it (package B).
+  const sp = curr.spin;
+  if (sp) {
+    o.events.spinHoist = sp.phase === 'hoisting' && mem.spinPhase !== 'hoisting';
+    // Full or collapsed only while it is set (up, or flying on its sheets in a pole gybe): a drop is not a collapse.
+    const set = sp.phase === 'up' || sp.phase === 'gybing';
+    const full = set && (mem.spinFull ? sp.fill > 0.4 : sp.fill > 0.8 && sp.deployed > 0.9);
+    o.events.spinFilled = full && !mem.spinFull;
+    o.events.spinCollapsed = set && !full && mem.spinFull;
+    mem.spinFull = full;
+    mem.spinPhase = sp.phase;
+    o.spin = { deployed: sp.deployed, fill: sp.fill, phase: sp.phase };
+  } else o.spin = undefined;
   o.manoeuvre = mem.manoeuvre;
   o.manoeuvreProgress = mem.manoeuvre === 'none' ? 0 : Math.min(1, (t - mem.manoeuvreAt) / MANOEUVRE_S);
   return o;

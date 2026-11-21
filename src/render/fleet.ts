@@ -6,6 +6,8 @@ import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
 import { SquibModel, sailFill } from './squibModel';
+import { makeGhost } from './ghostLook';
+import type { SpinnakerPose } from './spinnakerView';
 import type { DamageLook } from './damageView';
 import { HullFoam, WakeTrail, type SeaUniforms } from './boatWater';
 
@@ -37,6 +39,8 @@ export interface FleetPose {
   stw?: number;
   /** Her damage, when she has any (marks, rig, rudder, water inside, sinkage and trim). */
   damage?: DamageLook;
+  /** Her spinnaker, when she carries one (package B): the physics' state of it. */
+  spin?: Omit<SpinnakerPose, 'aws'>;
 }
 
 interface Entry {
@@ -51,25 +55,7 @@ interface Entry {
 
 const RIDE_SCRATCH: WaveRide = { heave: 0, pitch: 0, roll: 0 };
 
-/** See-through (a ghost: only a picture of an earlier run): its own copies of the materials, no shadows. */
-export const GHOST_OPACITY = 0.35;
-function makeGhost(group: THREE.Object3D): void {
-  group.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.castShadow = false;
-    m.receiveShadow = false;
-    const one = (x: THREE.Material) => {
-      const c = x.clone();
-      c.transparent = true;
-      c.opacity = GHOST_OPACITY * (x.opacity ?? 1);
-      c.depthWrite = false;
-      return c;
-    };
-    m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material);
-  });
-  group.userData.ghost = true;
-}
+export { GHOST_OPACITY } from './ghostLook';
 const POSE = new THREE.Object3D();
 
 /** A boat's hull pose in the world (position and orientation of her model) for the wake. */
@@ -141,6 +127,9 @@ export class FleetView {
       });
       if (club) model.setHullPaint(club.paint);
       else model.setHullColour(b.colour);
+      // Her spinnaker in her club's colours with white (or her own colour).
+      const c = club ? club.paint.topsides : `#${b.colour.toString(16).padStart(6, '0')}`;
+      model.setSpinnakerColours([c, '#f5f5f2', club ? club.paint.boot : c]);
       if (b.ghost) makeGhost(model.group);
       root.add(model.group);
       const label = makeLabel(b.label, b.ghost ? '#cfe8ff' : '#ffe9a8');
@@ -204,6 +193,8 @@ export class FleetView {
         heel,
         water: b.water,
         sailsDown: b.sailsDown,
+        spin: b.spin ? { ...b.spin, aws: b.aws } : undefined,
+        dt: frameDt,
       });
       e.label.visible = showLabels;
       const stw = b.stw ?? 0;

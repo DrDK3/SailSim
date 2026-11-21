@@ -79,3 +79,23 @@ function measure(label: string, stepOnce: () => void, frames: number, warm = 60)
   measure(`1 + ${boats - 1} AI boats, full race (racing, next ${seconds} s)`, () => session.step(), seconds * 60, 0);
   console.log(`(contacts so far: ${session.incidents.length})`);
 }
+
+// 3. Package B: the full race with spinnakers, measured on the run with them up.
+{
+  const twd = 225;
+  const course = practiceCourse({ kind: 'windward-leeward', centre: { n: -3500, e: 1200 }, windFromDeg: twd, startLineM: practiceLineLength(boats) });
+  const { session } = createRace({
+    conditions: { startTime: '2026-07-15T13:00:00Z', weather: { source: 'manual', twsKn: 12, twdDeg: twd }, gusts: { preset: 'shifty', seed: 5 }, current: { mode: 'none' } },
+    geo, features, course, aiCount: boats - 1, level: 'good', seed: 5, spinnaker: true,
+    human: { controller: (s) => ({ helm: Math.sin(s.time / 7) * 0.3, autoMain: true, autoJib: true }) },
+    committee: { startAt: 60, sequence: 'one-minute' },
+  });
+  const ai = session.fleet.boats.filter((b) => b.kind === 'ai');
+  const up = () => ai.filter((b) => b.sim.spin.phase !== 'down').length;
+  // Sail on (unmeasured) until most of the fleet has its spinnaker up, or 20 minutes.
+  for (let i = 0; i < 120_000 && up() < ai.length * 0.6; i++) session.step();
+  const t0 = session.fleet.boats[0]!.sim.time;
+  const before = up();
+  measure(`1 + ${boats - 1} AI boats with spinnakers, on the run (${before} of ${ai.length} spinnakers set or being handled at ${Math.round(t0)} s), ${seconds} s`, () => session.step(), seconds * 60, 0);
+  console.log(`(spinnakers set or being handled at the end: ${up()} of ${ai.length}; contacts so far: ${session.incidents.length})`);
+}

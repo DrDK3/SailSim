@@ -370,3 +370,22 @@ The owner's chart pictures (a chart app's view of the river and Start Bay; Admir
 
 The character Iso WRG 3s agrees with the Dart Harbour guide (K6). **Not established:** Bayard's Cove light's position; the cliffs' heights (OUTSTANDING 187–191). The red sector's colour is inferred from the character (KL2).
 
+## The spinnaker and the sail controls (package B, 21 Nov 2026)
+
+Evidence levels as in docs/COMPREHENSIVE_REVIEW.md (L1 verified specification … L6 unsupported assumption).
+
+| ID | Source | URL | Date | Access | What it gives | Level |
+|---|---|---|---|---|---|---|
+| C4 (used again) | Squib class rules: spinnaker area 13.5 m² (data/boats/squib/class-spec.json `spinnakerArea`, S(p)) | as C4 | – | As before | The spinnaker's area | L1 |
+| C16 (used again) | Squib class rules: spinnaker pole 2.14 m, hoist height 6.49 m, luff 4.9 m at most | as C16 | – | As before | The pole's length (drawn), the head's height and the luff (the centre of effort's estimate) | L1 |
+| SP1 | ORC, *VPP Documentation* (the free published description of the ORC velocity prediction program, with its sail force coefficient tables) | https://orc.org/ (documentation pages) | – | **Not reached: the host (orc.org and www.orc.org) was refused from this environment (HTTP 403 from the network proxy), 21 Nov 2026.** No values were taken from it | – | – |
+| SP2 | The general shape of published VPP spinnaker lift and drag curves (lift highest on a reach, drag rising to a run) | – | – | From general knowledge, not read from a document here | The form of `SPIN_PARAMS.table` only; every number in it is an estimate (E) | L5 |
+| SP3 | The crew's task times, the collapse limits, the trim width, the jib behind the spinnaker and the AI's calls | – | – | Estimates | docs/PARAMETERS.md, "The spinnaker and the sail controls" | L6 (E) |
+| SP4 | The split of the Flat control's drops between the outhaul, cunningham and kicker, and the jib lead's effect | – | – | Estimates | docs/PHYSICS.md §23 | L5 (E) |
+
+**Not established:** any Squib spinnaker measurement or target speed (none was found, none invented); how Squib crews carry
+the jib with the spinnaker up and whether the class's spinnaker is handled as modelled (questions B6 in README, for the
+validation session #28). The spinnaker's colours and panels are the simulator's own (src/app/spinnakerColours.ts),
+drawn in code: no third-party image or pattern. The hoist, fill and collapse sounds are synthesised in code
+(src/render/audio.ts): no recording was added (public/audio/manifest.json is unchanged).
+

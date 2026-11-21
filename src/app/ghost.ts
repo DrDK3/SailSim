@@ -15,6 +15,7 @@ export function poseOf(id: string, sn: BoatSnapshot): FleetPose {
     mainAwa: sn.forces.main.aws > 0 ? sn.forces.main.awa : sn.awa, jibAwa: sn.forces.jib.aws > 0 ? sn.forces.jib.awa : sn.awa,
     rudder: sn.rudder, crewY: sn.crewY, crewTo: sn.crewTo, sailsDown: sn.damage.rig >= 1, awa: sn.awa, aws: sn.aws, water: sn.cockpitWater, stw: sn.stw,
     damage: sn.damage.version > 0 || sn.damage.state !== 'afloat' ? sn.damage : undefined,
+    ...(sn.spin ? { spin: { ...sn.spin } } : {}),
   };
 }
 

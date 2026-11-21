@@ -21,7 +21,8 @@ import {
   type RigidState,
 } from './boat/dynamics';
 import type { BoatParams } from './boat/params';
-import { FLATTEN, flattenedParams } from './boat/flatten';
+import { FLATTEN, splitParams } from './boat/flatten';
+import { bestSpinSheet, newSpinState, spinCanFill, spinTrimFactor, taskVariation, type SpinState } from './boat/spinnaker';
 import { greenWaterInflow, sprayInflow, stepWater } from './boat/cockpit';
 import { DAMAGE, HULL, applyImpact, checkRigFall, cloneDamage, impactEnergy, newDamage, type Damage, type Impact, type ImpactPoint, type ImpactRegion } from './boat/damage';
 import { damageReport, startPlugging, stepFlooding, type DamageReport } from './boat/flooding';
@@ -60,7 +61,29 @@ export interface ControlInput {
    * (an input, so replays repeat it). Optional so that older replays still load.
    */
   plug?: number;
+  /**
+   * The spinnaker call (package B): 1 = hoist it and keep it up, 0 = drop it. The crew carry the call out as a
+   * timed task (src/sim/boat/spinnaker.ts). Ignored by a boat without a spinnaker. Optional (older replays: 0).
+   */
+  spin?: number;
+  /** Calls to gybe the spinnaker pole: each increase is one call. Optional. */
+  spinGybe?: number;
+  /** The crew trim the spinnaker (the default); off: `spinSheet` sets it (Expert). */
+  autoSpin?: boolean;
+  /** The spinnaker sheet by hand, 0 = trimmed in … 1 = eased (Expert, with autoSpin off). */
+  spinSheet?: number;
+  /**
+   * The flattening controls one by one (Expert, review #25), 0…1; each absent follows `flatten` exactly, so the
+   * "Flat" control stays what it was (src/sim/boat/flatten.ts, splitParams).
+   */
+  kicker?: number;
+  cunningham?: number;
+  outhaul?: number;
+  /** The jib lead, −1 forward … 0 as set … +1 aft (Expert). */
+  jibLead?: number;
 }
+
+const SPIN_PHASES = ['down', 'hoisting', 'up', 'gybing', 'dropping'] as const;
 
 export const DEFAULT_INPUT: ControlInput = {
   helm: 0,
@@ -237,6 +260,13 @@ export interface BoatSnapshot {
   waterLevel: number;
   depthAtKeel: number;
   grounded: boolean;
+  /**
+   * The spinnaker as the crew have it (package B), for a boat that carries one: what they are doing, how much is up,
+   * how full it is, the pole's side, and its apparent wind angle (rad) for the picture. Absent without a spinnaker.
+   */
+  spin?: { phase: SpinState['phase']; deployed: number; fill: number; poleSide: 1 | -1; awa: number; progress: number };
+  /** The flattening controls one by one and the jib lead as set now (review #25), when they differ from Flat. */
+  sailControls?: { kicker: number; cunningham: number; outhaul: number; jibLead: number };
   contactPoints: ContactPointState[];
 }
 
@@ -264,6 +294,14 @@ export class Simulation {
   private knockedDown = false;
   /** How flat the sails are now (0…1): follows `input.flatten` at the crew's pace. */
   private flat = 0;
+  /** The flattening controls one by one and the jib lead, as the crew have set them (review #25). */
+  private kick = 0;
+  private cunn = 0;
+  private outh = 0;
+  private lead = 0;
+  /** The spinnaker as the crew have it (package B); `spinUsed` once it has ever been called for. */
+  private spinState: SpinState = newSpinState();
+  private spinUsed = false;
   readonly ownsEnvironment: boolean;
   /** The bed under the boat (none: open water). Set at construction; changed only by joinRiver. */
   seabed?: Seabed;
@@ -315,6 +353,10 @@ export class Simulation {
   /** Place sails, crew and heel at their steady positions for the initial state (no start-up transient). */
   private settleActuators(): void {
     this.flat = clamp(this.input.flatten ?? 0, 0, 1);
+    this.kick = clamp(this.input.kicker ?? this.flat, 0, 1);
+    this.cunn = clamp(this.input.cunningham ?? this.flat, 0, 1);
+    this.outh = clamp(this.input.outhaul ?? this.flat, 0, 1);
+    this.lead = clamp(this.input.jibLead ?? 0, -1, 1);
     const awa = this.effectiveAwa();
     const side: 1 | -1 = awa >= 0 ? 1 : -1;
     this.act.mainSide = side;
@@ -415,7 +457,7 @@ export class Simulation {
 
   /** The parameters the forces are computed with: the boat's, with the sails flattened as set now. */
   get forceParams(): BoatParams {
-    return flattenedParams(this.params, this.flat);
+    return splitParams(this.params, this.flat, this.kick, this.cunn, this.outh, this.lead);
   }
 
   /** How flat the sails are now (0 = full power … 1 = fully flattened); follows the flatten input. */
@@ -464,6 +506,8 @@ export class Simulation {
     next.jibSheet = clamp(next.jibSheet, 0, 1);
     next.crewHike = clamp(next.crewHike, 0, 1);
     next.flatten = clamp(next.flatten ?? 0, 0, 1);
+    for (const k of ['spinSheet', 'kicker', 'cunningham', 'outhaul'] as const) if (next[k] !== undefined) next[k] = clamp(next[k]!, 0, 1);
+    if (next.jibLead !== undefined) next.jibLead = clamp(next.jibLead, -1, 1);
     const changed = (Object.keys(next) as (keyof ControlInput)[]).some((k) => next[k] !== this.input[k]);
     if (!changed) return;
     this.input = next;
@@ -487,6 +531,8 @@ export class Simulation {
       let v = change[key];
       if (key === 'helm') v = clamp(v as number, -1, 1);
       else if (key === 'mainSheet' || key === 'jibSheet' || key === 'crewHike' || key === 'flatten') v = clamp((v as number) ?? 0, 0, 1);
+      else if ((key === 'spinSheet' || key === 'kicker' || key === 'cunningham' || key === 'outhaul') && v !== undefined) v = clamp(v as number, 0, 1);
+      else if (key === 'jibLead' && v !== undefined) v = clamp(v as number, -1, 1);
       if (v !== cur[key]) return false;
     }
     return true;
@@ -511,7 +557,14 @@ export class Simulation {
 
     // Sails flattened or powered up at the crew's pace; the forces this step use the result.
     const flatTarget = clamp(this.input.flatten ?? 0, 0, 1);
-    this.flat += clamp(flatTarget - this.flat, -FLATTEN.ratePerS * dt, FLATTEN.ratePerS * dt);
+    const fr = FLATTEN.ratePerS * dt;
+    this.flat += clamp(flatTarget - this.flat, -fr, fr);
+    // The controls one by one (Expert): each absent follows the Flat control, by the same arithmetic, so it stays equal.
+    this.kick += clamp(clamp(this.input.kicker ?? flatTarget, 0, 1) - this.kick, -fr, fr);
+    this.cunn += clamp(clamp(this.input.cunningham ?? flatTarget, 0, 1) - this.cunn, -fr, fr);
+    this.outh += clamp(clamp(this.input.outhaul ?? flatTarget, 0, 1) - this.outh, -fr, fr);
+    if (this.input.jibLead !== undefined || this.lead !== 0) this.lead += clamp(clamp(this.input.jibLead ?? 0, -1, 1) - this.lead, -2 * fr, 2 * fr);
+    if (this.params.spin) this.stepSpinnaker(dt, wind, cur);
     const p = this.forceParams;
 
     // Helm: tiller moves at a finite rate towards the demanded angle.
@@ -568,6 +621,9 @@ export class Simulation {
     let crewTarget = this.input.autoCrew ? this.autoCrewTarget(wind, cur) : a.mainSide * this.crewOffset();
     // One of them bailing cannot hike: half the weight out.
     if (this.damage.bailing) crewTarget *= 0.5;
+    // One of them hoisting, dropping or gybing the spinnaker cannot hike either (E).
+    const sph = this.spinState.phase;
+    if (sph === 'hoisting' || sph === 'dropping' || sph === 'gybing') crewTarget *= 0.5;
     a.crewY += clamp(crewTarget - a.crewY, -p.crewSpeed * dt, p.crewSpeed * dt);
     this.crewTo = crewTarget;
 
@@ -779,6 +835,10 @@ export class Simulation {
       depthAtKeel: forces.contact.depthAtKeel,
       grounded: forces.contact.grounded,
       contactPoints: forces.contact.points,
+      ...(this.params.spin
+        ? { spin: { phase: this.spinState.phase, deployed: this.spinState.deployed, fill: this.spinState.fill, poleSide: this.spinState.poleSide, awa: forces.spin.awa || forces.aw.awa, progress: this.spinState.dur > 0 ? Math.min(1, this.spinState.t / this.spinState.dur) : 1 } }
+        : {}),
+      ...(this.kick !== this.flat || this.cunn !== this.flat || this.outh !== this.flat || this.lead !== 0 ? { sailControls: this.sailControls } : {}),
     };
   }
 
@@ -805,6 +865,90 @@ export class Simulation {
     return awa >= 0 ? -delta : delta;
   }
 
+  /** The spinnaker as the crew have it (package B). */
+  get spin(): Readonly<SpinState> {
+    return this.spinState;
+  }
+
+  /** The flattening controls as set now (review #25): the kicker, cunningham, outhaul (0…1) and jib lead (−1…1). */
+  get sailControls(): { kicker: number; cunningham: number; outhaul: number; jibLead: number } {
+    return { kicker: this.kick, cunningham: this.cunn, outhaul: this.outh, jibLead: this.lead };
+  }
+
+  /**
+   * The crew and the spinnaker this step (package B, src/sim/boat/spinnaker.ts): the calls (hoist or drop, gybe the
+   * pole) started as timed tasks, each a little longer or shorter by the step it starts on; how much is up; how full
+   * it can be in this apparent wind and trim. The result is an actuator, held through the step like the booms.
+   */
+  private stepSpinnaker(dt: number, wind: NE, cur: NE): void {
+    const sp = this.params.spin!;
+    const st = this.spinState;
+    const inp = this.input;
+    const want = (inp.spin ?? 0) >= 0.5;
+    if (want) this.spinUsed = true;
+    if (!this.spinUsed) return;
+    const awa = this.effectiveAwa(wind, cur);
+    const task = (base: number, salt: number) => base * (1 + sp.taskVary * taskVariation(this.step, salt));
+    if (want && (st.phase === 'down' || st.phase === 'dropping')) {
+      if (st.phase === 'down') st.poleSide = this.act.mainSide;
+      st.phase = 'hoisting';
+      st.t = 0;
+      st.dur = task(sp.hoistS, 1);
+    } else if (!want && (st.phase === 'hoisting' || st.phase === 'up' || st.phase === 'gybing')) {
+      st.phase = 'dropping';
+      st.t = 0;
+      st.dur = task(sp.dropS, 2);
+    }
+    const auto = inp.autoSpin !== false;
+    const startGybe = () => {
+      st.phase = 'gybing';
+      st.t = 0;
+      st.dur = task(sp.gybeS, 3);
+      st.react = -1;
+    };
+    const calls = inp.spinGybe ?? 0;
+    if (calls > st.gybesDone) {
+      st.gybesDone = calls;
+      if (st.phase === 'up') startGybe();
+    }
+    // A gybe nobody called: with the crew trimming, they gybe the pole once they see the main across.
+    if (auto && st.phase === 'up' && st.poleSide !== this.act.mainSide) {
+      if (st.react < 0) st.react = sp.reactS;
+      else if ((st.react -= dt) <= 0) startGybe();
+    } else if (st.phase !== 'gybing') st.react = -1;
+    st.t += dt;
+    switch (st.phase) {
+      case 'hoisting':
+        st.deployed = Math.min(1, st.deployed + dt / st.dur);
+        if (st.deployed >= 1) st.phase = 'up';
+        break;
+      case 'dropping':
+        st.deployed = Math.max(0, st.deployed - dt / st.dur);
+        if (st.deployed <= 0) {
+          st.phase = 'down';
+          st.fill = 0;
+        }
+        break;
+      case 'gybing':
+        st.deployed += clamp(sp.gybeDeployed - st.deployed, -2 * dt, 2 * dt);
+        if (st.t >= st.dur) {
+          st.poleSide = st.poleSide === 1 ? -1 : 1;
+          st.phase = 'up';
+        }
+        break;
+      case 'up':
+        st.deployed = Math.min(1, st.deployed + dt / 2);
+        break;
+      case 'down':
+        break;
+    }
+    const sheet = auto ? undefined : clamp(inp.spinSheet ?? bestSpinSheet(awa), 0, 1);
+    const can = st.phase === 'down' ? 0 : spinCanFill(sp, awa, st.poleSide, sheet);
+    st.fill += clamp(can - st.fill, -sp.collapseRate * dt, sp.fillRate * dt);
+    const trim = sheet === undefined ? 1 : spinTrimFactor(sp, awa, sheet);
+    this.act.spin = st.deployed > 0 ? { deployed: st.deployed, fill: st.fill, trim } : undefined;
+  }
+
   /** Bit-exact hash of the full simulation state, for reproducibility checks. */
   stateHash(): string {
     const s = this.state;
@@ -819,6 +963,13 @@ export class Simulation {
     if (this.flat !== 0) values.push(this.flat);
     if (this.overEase !== 0) values.push(this.overEase);
     if (this.knockEase !== 0) values.push(this.knockEase);
+    // The split controls once they differ from Flat, the spinnaker once it has been called for (older runs keep
+    // their hashes).
+    if (this.kick !== this.flat || this.cunn !== this.flat || this.outh !== this.flat || this.lead !== 0) values.push(this.kick, this.cunn, this.outh, this.lead);
+    if (this.spinUsed) {
+      const st = this.spinState;
+      values.push(SPIN_PHASES.indexOf(st.phase), st.t, st.dur, st.deployed, st.fill, st.poleSide, st.gybesDone, st.react);
+    }
     return hashNumbers(values);
   }
 }

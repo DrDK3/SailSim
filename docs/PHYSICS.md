@@ -511,3 +511,50 @@ Results (`tests/sim/terrain.test.ts`, and a table of places): cross-river winds 
 
 **Determinism and cost.** The reference race (7 boats, 400 s, Start Bay, the channel-following stream) hashed to `93d1b0dea2bfcf14` after this change (was `df0d92d410cf27e9`), deliberately, because the coastal stream and the depth weighting now act where it sails. The robotic marks of the pre-UAT round (contact radius 0.9 m, RACING.md) moved it again, to `11824f89f479d0f4`, because the AI keeps clear of marks by their radius. The quay walls of the photo round leave it unchanged (the race is in Start Bay). It runs about 20 % slower (13 s for 400 s of seven boats), mostly from the AI's planning, which samples the wind and stream at many points; still about thirty times faster than real time.
 
+## 23. The spinnaker and the sail controls (package B, `boat/spinnaker.ts`, `boat/flatten.ts`, `simulation.ts`)
+
+**What it is.** The Squib's symmetric spinnaker: 13.5 m² (C4) on a 2.14 m pole (C16). Decisions D2 and D3 of the
+review: the player calls for it (hoist, drop, gybe the pole) and the simulated crew carry each call out and trim it;
+Expert may trim it by hand. **Every coefficient is an estimate (E):** the free published coefficient tables (the ORC
+VPP documentation) could not be read from this environment, and no Squib spinnaker data exist (docs/SOURCES.md,
+docs/PARAMETERS.md). Nothing is scripted: the sail is one more force in the sums the main and the jib are in.
+
+**The force** (`spinForce`). Lift perpendicular to the apparent wind and drag along it, in the heeled sail plane like
+the other sails, `q = ½ ρ aws² A × deployed`, with the coefficients from a 0–180° table (lift highest on a reach,
+drag rising to a run) times how full it is and, by hand, the trim factor. A flogging sail still drags (0.15 of the
+run's drag). It acts at its centre of effort (3.6 m up, 2.6 m forward of the centre of gravity), so it adds drive,
+side force, a yaw moment (a bear-away moment from forward of the centre of lateral resistance) and a heeling moment:
+heel, weather helm and a broach come out of the existing roll and yaw dynamics. Behind a full spinnaker the jib draws
+less (× (1 − 0.55 × fill), E: how Squibs carry the jib is question B6).
+
+**When it can fill** (`spinCanFill`). Not forward of 48–62° apparent; not by the lee more than about 12° on the side
+away from the pole (the main blankets it); by hand, not when eased well past the best sheet for the angle. It fills at
+0.8 a second and collapses at 2.5 a second towards what it can hold.
+
+**The crew** (`Simulation.stepSpinnaker`). Each call is a timed task: hoist 9 s, drop 7 s, pole gybe 8 s, each
+longer or shorter by up to 20 % from a hash of the step it starts on (repeatable; no random numbers in the state).
+While a task runs, half the crew's hiking weight is lost. With the crew trimming (the default), they gybe the pole
+1.5 s after they see the main across; by hand the player calls it (I). During a pole gybe the sail flies on its
+sheets alone (0.35 deployed). The calls are inputs (`spin`, `spinGybe`, `autoSpin`, `spinSheet`), recorded in
+replays (schema /3); the AI uses the same inputs with the same timings (`ai/skipper.ts`, hoist above 120° TWA, drop
+below 100° or in time before the mark, none above 20 kn: E).
+
+**Measured (model output, not validation; `npm run envelope`, B-SP-1…4).** On a run at TWA 150° it adds about 0.6 kn
+at 6 and 10 kn and 0.55 kn at 16 kn; the pole is across 12–16 s after a gybe with the crew trimming, the sail full
+again a second later; dropped in 7 s; no broach in the sweep up to 20 kn and TWA 100–140°, heel up to 25° at 20 kn on
+a broad reach. No control pattern beats steady sailing under it (`npm run exploits`): sheet pumping loses 3.6–10.7 %,
+repeated hoist and drop 6–7 %, repeated pole gybes 8 %, helm rocking 0.4–2.7 %. The trim factor acts instantly (no
+sheet dynamics), so pumping loses the same at every period: a limit, not a finding.
+
+**The sail controls one by one** (review #25, `splitParams`). At Expert, the kicker, cunningham and outhaul can be set
+apart, and the jib lead moved. Their shares of the Flat control's drops (E) add up to it exactly: the outhaul 0.15 of
+maximum lift and 0.10 of profile drag, the cunningham 0.10 and 0.05, the kicker 0.05 and 0.05 and the 0.10 lower
+centre of effort. Each control absent follows Flat by the same arithmetic, and all three at the Flat setting return
+the Flat parameters themselves, so Flat is the macro it was and every run without them is bit-identical (tested). The
+jib flattens with the mean of the three; its lead aft opens it (−0.06 lift and centre of effort per unit, E).
+
+**Determinism.** With the spinnaker down and the new controls at their defaults the golden traces, the envelope's
+earlier rows and the hash (`11824f89f479d0f4`) are identical: the spinnaker joins the state hash only once it has been
+called for, the split controls only once they differ from Flat. New golden traces (`scenarios/spinnaker-6kn.json`,
+`-10kn`, `-16kn`: hoisted, gybed and dropped) add its state as three columns.
+
