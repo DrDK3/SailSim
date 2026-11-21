@@ -235,5 +235,6 @@ describe('5. AI parity', () => {
     expect(Math.abs(plain.state.e - ai.sim.state.e)).toBeLessThan(1e-6);
     // The same boat as the player's with the spinnaker aboard.
     expect(ai.sim.params).toEqual(withSpinnaker(squibParams()));
-  });
+    // A whole race in the AI's hands (about 2.5 s alone; past the 5 s default under the full suite on a CI runner).
+  }, 60_000);
 });

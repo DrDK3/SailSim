@@ -127,5 +127,6 @@ describe('§2.1: the river card’s Restart starts with the spinnaker calls clea
     expect(c.getState().dart.ask).toBe(true);
     c.riverRestart();
     cleared(c);
-  });
+    // The River Dart data joins the run (about 1.2 s alone): headroom for a loaded CI runner.
+  }, 30_000);
 });

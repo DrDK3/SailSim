@@ -141,7 +141,8 @@ describe('riverHotSwap: off, the river data arriving restarts the run (as before
     vi.mocked(loadDartData).mockResolvedValueOnce({ ...data, issues: [] });
     await c.loadDart();
     expect(c.sim.time).toBeGreaterThan(4);
-  });
+    // The River Dart data joins the run (about 1.1 s alone): headroom for a loaded CI runner.
+  }, 30_000);
 
   it('off: the same free sail restarts with the river', async () => {
     setFeatureFlag('riverHotSwap', false);
@@ -152,5 +153,5 @@ describe('riverHotSwap: off, the river data arriving restarts the run (as before
     expect(c.sim.time).toBe(0);
     expect(c.sim.seabed).toBe(data.geo);
     expect(c.getState().dart.ask).toBe(false);
-  });
+  }, 30_000);
 });
