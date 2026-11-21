@@ -36,8 +36,26 @@ test('the helm view: at the helm’s eye on the windward deck, head and torso hi
       ctl.setCamera('helm');
       window.__squib!.advance(8);
     }, { heading: c.heading, wind: WIND_FROM });
-    // A few frames, so the figure is posed and the camera placed for this boat.
-    await page.evaluate(() => new Promise<void>((done) => { let i = 0; const f = () => (++i > 4 ? done() : requestAnimationFrame(f)); requestAnimationFrame(f); }));
+    // Frames until the figure has settled where the crew's weight is (it moves across the deck over drawn frames,
+    // so on a slow renderer four frames were not enough after a tack: CI, 21 Nov 2026), and the camera with it.
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          const view = (window.__squib!.controller as unknown as { view: { helmEyeLocal: { x: number } } }).view;
+          let last = Number.NaN;
+          let frames = 0;
+          const f = () => {
+            frames++;
+            const x = view.helmEyeLocal.x;
+            if (frames > 4 && (Math.abs(x - last) < 0.005 || frames > 240)) done();
+            else {
+              last = x;
+              requestAnimationFrame(f);
+            }
+          };
+          requestAnimationFrame(f);
+        }),
+    );
     const m = await page.evaluate(() => {
       type V3 = { x: number; y: number; z: number };
       const view = (window.__squib!.controller as unknown as { view: { helmEyeLocal: V3; boat: { group: { getObjectByName(n: string): { visible: boolean; children: { name: string; position: V3; scale: V3 }[] } } } } }).view;
