@@ -12,7 +12,7 @@ measured means measured in the model, not against a Squib on the water.
 | A (no physics): wind visibility and quick wins | `next-a-wind` | draft (link in §A.9) | Built; checks in §A.8 |
 | B (physics): spinnaker and sail controls | `next-b-spinnaker` | draft (link in §B.9) | Built; checks in §B.8 |
 | C (no physics): the low preset, trees, compact replays | `next-c-graphics` | draft (link in §C.9) | Built; checks in §C.6 |
-| D (no physics): Learn map and instructor view | `next-d-learn` | — | Not started |
+| D (no physics): Learn map and instructor view | `next-d-learn` | draft (link in §D.8) | Built; checks in §D.6 |
 | E (no physics): metadata, media, manifest, landing page | `next-e-share` | — | Not started |
 | F: simplified rule 18 and AI fleet safety | `next-f-rules` | — | Not started |
 | G: STATUS.md and issue hygiene | `next-g-status` | — | Not started |
@@ -180,8 +180,9 @@ settled, a hiking helm's eye reaches 1.006 m out, so its bound is 1.3 m rather t
 
 **Fourth CI run (fac1f44, then c7e2259): the checks job failed, my mistake.** Commit dce09fe had swept in
 `dist-a/`, a build made only to compare screenshots before and after, and ESLint read its minified files. Removed in
-bb7b1e2 (a new commit, no history rewritten), with `dist-*/` added to `.gitignore`; on the next run the checks job
-passed.
+bb7b1e2 (a new commit, no history rewritten), with `dist-*/` added to `.gitignore`.
+
+**Fifth CI run (bb7b1e2): green**, the checks job and all five browser shards.
 
 ### A.9 Pull request
 
@@ -282,6 +283,8 @@ package A's committed preview build (§A.8). Shard 1: `ghost.spec.ts` found a gh
 rest of the ghost had been made see-through, were drawn solid. The ghost's spinnaker is now see-through too, and keeps
 its see-through copy when its colours change (`src/render/ghostLook.ts`, `src/render/squibModel.ts`); regression test
 `tests/render/ghostSpinnaker.test.ts` (fails before: `spinnaker-sail` and `spinnaker-pole` solid). Issue 265.
+
+**Third CI run (a463eda, the fix): green**, the checks job and all five browser shards.
 
 Screens added this package (`docs/img/next-b/`): the spinnaker's states (§B.4), the console's tab on a laptop and a
 phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail controls (`sail-controls-expert.jpg`).
@@ -411,6 +414,61 @@ not measured against anything.
 Draft pull request: https://github.com/DrDK3/SailSim/pull/41 (branch `next-c-graphics`, base `next-b-spinnaker`, so
 its diff shows package C alone; it follows package B, https://github.com/DrDK3/SailSim/pull/40). CI's result is
 recorded in the next package's report.
+
+---
+
+## Package D: the Learn map and the instructor view (no physics)
+
+**No physics.** Nothing in the simulation changed; the hash, the golden traces and the envelope are identical
+(§D.6). Nothing was removed: every lesson, exercise and challenge is where it was, and every honesty label that left
+the player's screens is kept in About and shown again, where it applies, in the instructor view.
+
+### D.1 What changed, by review number
+
+| # | Change | Where |
+|---|---|---|
+| #13 | **The Learn map** (Settings → Learn map; on later visits also "Learn map: what to do next" in the welcome): one ordered path through the six basic lessons, the three seamanship lessons, the two exercises and four challenges (today's challenge, a start drill, a race against the AI, this week's course). Each step is marked done, started or not yet, with a fact where there is one (a best time, attempts completed), and the next step is suggested with a Start (or Carry on) button: the first step not done; once all are done, today's challenge. **Done** is read from what the app already keeps in this browser: a finished lesson, a completed exercise attempt, a time today in today's challenge, a best start, a best on any other course, a time on this week's course. The map's own record (the steps started from it) is kept in this browser too, every read and write wrapped so a private window or blocked storage never breaks it. It removes nothing: the lessons and exercises are still in Settings → Lessons, the races, today's challenge and the weekly course in Race. No streaks, rewards or reminders (under-18 safeguards) | `src/app/learnMap.ts`, `src/ui/LearnMap.tsx`, `src/ui/App.tsx`, `src/ui/Welcome.tsx` |
+| #14 | **The instructor view** (Settings → Instructor view, or the Settings menu; kept in this browser). On, the screens show where each figure comes from and its evidence label, the exercises' content status and provisional thresholds, the attempt-by-attempt assist record and the instructor tools (thresholds and records as files), and, in the Learn map, each exercise's assist record (attempts on the learner's own and assisted, and whether the thresholds were changed). Off (the player view, the default), those labels are gathered in About | `src/ui/trust.tsx`, `src/app/prefs.ts`, `src/ui/SettingsPanel.tsx` |
+| #14 | **The labels moved** from the player's screens to About (and the instructor view): the Squib types' provenance column (S, E); "appearance only: the crew weight is an estimate"; both illustrative-stream notes; the short course's "(model output)"; "the effects are estimates (E)" under Expert's sail controls; the coach's "rules of thumb (estimates)"; damage's "thresholds, sizes and rates are estimates (E)"; the results' finishing-window estimate; the exercises' "Content: … Thresholds provisional (E)", attempts table and instructor tools. **Kept in the player view**, as safety or understanding rather than provenance: "Not for navigation" (depth, minimap, About, the welcome), the results' "Simplified rules, not an authoritative adjudication", "pending club check" on the RDYC courses, the weekly targets' "the simulator's expert AI (not people)", the option labels themselves ("Illustrative tidal stream"), the tooltips, and Settings → Layers and sources | the panels named, `src/ui/About.tsx` |
+| #14 | **One "How far to trust this" link** in the player view, beside "All instruments and conditions": it opens About at "How far to trust this: the labels, one by one", which lists every label above in the same words and says where the instructor view shows them. On a phone's one-row instrument strip the link is not shown; About is in the Settings menu there | `src/ui/Instruments.tsx`, `src/ui/About.tsx` |
+| Found here | **The close button of the welcome, About and the Learn map** was 34 × 34 px on touch screens (the 44 px rule): now 44 px on touch screens | `src/ui/styles.css` |
+
+### D.2 Evidence (software rendering)
+
+DEVIDENCE
+
+### D.3 Accessibility
+
+The Learn map is a labelled dialog (Escape closes it, focus returns) with a heading per group and an ordered list;
+each step's state is in words (done, started, next), not colour alone; on a touch phone every button is at least 44 ×
+44 px and nothing scrolls sideways (`tests/e2e/learnMap.spec.ts`). About opened from the link moves focus to the
+labels' heading. axe-core (WCAG 2 A/AA rules) finds no violations in the Learn map or About.
+
+### D.4 What is left from package D
+
+- Which labels instructors want inline, and whether a junior needs more or less in the player view: for the
+  validation session (#28) and the club's instructors (needs people).
+- The Learn map counts a challenge done from the bests the app keeps: a race abandoned before the finish leaves no
+  best, so it does not count; a lesson finished on another device does not count (nothing leaves the browser).
+- The link is not on the phone's instrument strip (About is in the Settings menu there).
+
+### D.5 Estimates introduced (E)
+
+None: the Learn map's order follows the existing lessons and exercises; its "about N min" figures are the lessons'
+and exercises' existing estimates.
+
+### D.6 Checks
+
+DCHECKS
+
+### D.7 Under-18 safeguards
+
+No free text, accounts or personal data were added; the Learn map keeps only step ids in this browser; no streaks,
+reminders or rewards for coming back.
+
+### D.8 Pull request
+
+DPR
 
 ---
 

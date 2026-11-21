@@ -386,6 +386,10 @@ kbd { font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 .key-hint { margin: 0 2px; }
 button.link { background: none; border: none; padding: 2px 0; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .more-toggle { margin-top: 6px; font-size: 12px; }
+/* The instruments' footer links: all instruments, and (player view) how far to trust this, on one row. */
+.instr-links { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; }
+.trust-link { margin-top: 6px; font-size: 12px; }
+.trust-note { border-left: 3px solid var(--accent, #6aa9d8); padding-left: 6px; }
 .status { width: 250px; overflow: hidden; text-overflow: ellipsis; }
 .status .advice { font-weight: 500; }
 .status .detail { opacity: 0.75; }
@@ -671,6 +675,12 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
 .hub-sub { margin: 4px 0 0; color: var(--muted); }
 .hub-close { width: 34px; min-height: 34px; padding: 0; border-radius: 50%; font-size: 20px; line-height: 1; background: transparent; border-color: transparent; color: var(--muted); }
 .hub-close:hover { color: var(--text); background: var(--surface-control); }
+/* A 44 px close on touch screens (the welcome, About, the Learn map: package D). */
+@media (pointer: coarse) { .hub-close { width: 44px; min-height: 44px; } }
+.learn-next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
+.learn-next p { margin: 0; flex: 1 1 220px; }
+.learn-group { margin: 12px 0 2px; font-size: var(--fs-md, 15px); }
+.learn-status { font-size: 12px; opacity: 0.85; }
 .hub-intro { margin: var(--s3) 0 0; line-height: 1.5; max-width: 64ch; }
 .hub-now { margin: var(--s3) 0 0; display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
 .hub-now .link { margin-left: auto; }
@@ -1151,6 +1161,8 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
    wind speed, VMG and depth in one row; the heading is on the compass, the heel in "All instruments"). */
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .panel.instruments.compact { padding: 6px 8px; }
+  /* The strip stays one row: About (and its "How far to trust this") is in the Settings menu on a phone. */
+  .panel.instruments.compact .trust-link { display: none; }
   .panel.instruments.compact .compass { width: 64px; height: 64px; }
   .panel.instruments.compact .big-value { font-size: 26px; }
   .panel.instruments.compact .big .cell-label { font-size: 12px; }

@@ -5,6 +5,7 @@ import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
 import { useRef, useState } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
 import { spinnakerWords } from '../app/spinnakerWords';
+import { TrustNote } from './trust';
 
 /**
  * The helm console (owner review, 5 Nov 2026, third: "not looking good … too much white space … lacks the
@@ -349,7 +350,8 @@ function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; o
           </label>
         </label>
       )}
-      <p className="fine">The effects are estimates (E). Flat moves all three together, as before.</p>
+      <p className="fine">Flat moves all three together, as before.</p>
+      <TrustNote>The effects are estimates (E).</TrustNote>
     </div>
   );
 }

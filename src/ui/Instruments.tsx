@@ -5,6 +5,7 @@ import { describeSky } from '../sim/env/sky';
 import { Compass } from './Compass';
 import { agroundText } from './aground';
 import { bearing, deg, kn, sideAngle, vmgShown, windFromWords } from './format';
+import { TrustLink } from './trust';
 
 const MORE_KEY = 'squib.instruments.more';
 
@@ -128,9 +129,13 @@ export function Instruments({
           )}
         </div>
       )}
-      <button className="link more-toggle" aria-expanded={more} onClick={toggleMore}>
-        {more ? 'Fewer instruments' : 'All instruments and conditions'}
-      </button>
+      <div className="instr-links">
+        <button className="link more-toggle" aria-expanded={more} onClick={toggleMore}>
+          {more ? 'Fewer instruments' : 'All instruments and conditions'}
+        </button>
+        {/* The player view's one link to the honesty labels (review #14): About, "How far to trust this". */}
+        <TrustLink />
+      </div>
       {aground && (
         <div className="chip bad" role="alert" data-testid="aground" title={aground.title}>
           {aground.text}

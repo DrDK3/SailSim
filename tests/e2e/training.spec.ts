@@ -92,6 +92,9 @@ test('beginner exercise: an instructor link opens it; warm-up, attempts with gra
   const panel = page.getByTestId('exercise');
   await expect(panel).toBeVisible({ timeout: 90_000 * CI_SLOW });
   await expect(page.getByTestId('exercise-title')).toHaveText('Try the controls (not scored)');
+  // The player view keeps the content status and thresholds in About (package D); the instructor view shows them here.
+  await expect(page.getByTestId('exercise-status')).toHaveCount(0);
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ instructorView: true }));
   await expect(page.getByTestId('exercise-status')).toContainText('Content: draft');
   await expect(page.getByTestId('exercise-status')).toContainText('provisional (E)');
   await panel.getByRole('button', { name: 'Start' }).click();
@@ -266,6 +269,8 @@ test('accessibility (axe-core, WCAG 2 A/AA rules): the exercise card in each sta
   await page.goto('/?nowelcome&quality=low&exercise=tack-recover');
   const panel = page.getByTestId('exercise');
   await expect(panel).toBeVisible({ timeout: 90_000 * CI_SLOW });
+  // Scanned in the instructor view, which shows the most (the status, the attempts table, the instructor tools).
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ instructorView: true }));
   const scan = async (what: string, selector: string) => {
     const r = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(r.violations.map((v) => `${what}: ${v.id} (${v.nodes.length}) ${v.help}`)).toEqual([]);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import type { ExerciseId } from '../app/exercises/index';
 import type { AttemptRecord, ReviewChart } from '../app/exercises/engine';
+import { InstructorOnly } from './trust';
 
 /**
  * An exercise's card (training slice §7–§8): the phase and its goal, the help on show with its level in words
@@ -79,7 +80,10 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           <strong>Next:</strong> {r.nextAction.replace(/^Next( time)?: /, '')}
         </p>
         {s.extras?.chart && <TrackChart chart={s.extras.chart} />}
-        <AttemptTable records={s.records} />
+        {/* The assist record, attempt by attempt: the instructor view (review #14). */}
+        <InstructorOnly>
+          <AttemptTable records={s.records} />
+        </InstructorOnly>
         {r.notes.map((n) => (
           <p key={n} className="fine">
             {n}
@@ -219,7 +223,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           <span>Overlay</span>
         </label>
       </div>
-      {status}
+      <InstructorOnly>{status}</InstructorOnly>
     </section>
   );
 }
@@ -377,7 +381,11 @@ export function ExerciseList({ ui, onStart, ctl }: { ui: UiState; onStart: (id: 
         </li>
       ))}
     </ol>
-    {ctl && <InstructorTools ctl={ctl} />}
+    {ctl && (
+      <InstructorOnly>
+        <InstructorTools ctl={ctl} />
+      </InstructorOnly>
+    )}
     </>
   );
 }
