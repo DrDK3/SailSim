@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording } from '../../src/app/replay';
+import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, recordingLog, rowRecording } from '../../src/app/replay';
 import { SimController, type AppScenario } from '../../src/app/controller';
 import { builtInScenarios, parseScenarioFile, scenarioFile, SCENARIO_SCHEMA } from '../../src/app/scenarioLibrary';
 import { buildConditions } from '../../src/sim/env/conditions';
@@ -62,7 +62,7 @@ describe('replay in the app controller', () => {
     sail(rec1);
     const rec = rec1.saveRecording('test');
     expect(rec.endStep).toBe(Math.round(25.87 / 0.01));
-    expect(rec.inputs.length).toBeGreaterThan(100);
+    expect(recordingLog(rec).length).toBeGreaterThan(100);
     // Checkpoints every CHECKPOINT_STEPS steps plus the end.
     expect(rec.checkpoints.map((c) => c[0])).toEqual([1000, 2000, rec.endStep]);
 
@@ -85,10 +85,12 @@ describe('replay in the app controller', () => {
     const c = new SimController();
     c.restart(FREE);
     sail(c);
-    const rec = c.saveRecording('tampered');
-    // Nudge the helm of one row before the first checkpoint.
-    const i = rec.inputs.findIndex((r) => r[0] > 50 && r[0] < CHECKPOINT_STEPS);
-    rec.inputs[i]![1] += 0.05;
+    // In the row form, to edit one row by hand.
+    const rec = rowRecording(c.saveRecording('tampered'));
+    const rows = rec.inputs!;
+    // Nudge the helm of one row before the first checkpoint (towards the centre, so it is not clamped back).
+    const i = rows.findIndex((r) => r[0]! > 50 && r[0]! < CHECKPOINT_STEPS);
+    rows[i]![1]! += rows[i]![1]! > 0 ? -0.05 : 0.05;
     const play = new SimController();
     expect(play.startReplay(rec)).toBe(true);
     play.advance(rec.endStep * 0.01 + 1);

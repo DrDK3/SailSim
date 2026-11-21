@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectSessionSummary } from './helpers/sessionSummary';
 import { readFileSync } from 'node:fs';
+import { recordingLog, rowRecording, type Recording } from '../../src/app/replay';
 
 /** CI runners draw the scene in software, several times slower (playwright.config.ts). */
 const CI_SLOW = process.env.CI ? 2 : 1;
@@ -49,15 +50,19 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
   expect(download.suggestedFilename()).toBe('e2e-race.replay.json');
   const file = info.outputPath('race.replay.json');
   await download.saveAs(file);
-  const rec = JSON.parse(readFileSync(file, 'utf8')) as { schema: string; endStep: number; inputs: number[][]; checkpoints: [number, string][] };
+  const saved = JSON.parse(readFileSync(file, 'utf8')) as Recording;
+  // Written compact (package C, issue 214): the inputs as small integers, deltas of what changed.
+  expect(saved.schema).toBe('squib-replay/4');
+  expect(saved.inputs).toBeUndefined();
+  expect(recordingLog(saved).length).toBeGreaterThan(50);
+  // The same run in the row form (schema /1, as older builds wrote it): to edit one row by hand below.
+  const rec = rowRecording(saved);
   expect(rec.schema).toBe('squib-replay/1');
   const end = s0 + 2300;
   expect(rec.endStep).toBe(end);
   // A state hash every 1000 steps, and one where it was saved.
   const marks = [1000, 2000, 3000].filter((x) => x < end).concat(end);
   expect(rec.checkpoints.map((c) => c[0])).toEqual(marks);
-  expect(rec.inputs.length).toBeGreaterThan(50);
-
   // Something else first, then open the replay: the fleet, course and inputs are rebuilt from the file.
   await page.getByRole('button', { name: 'Reset' }).click();
   await page.evaluate(() => window.__squib!.advance(4));
@@ -88,10 +93,12 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
   expect(await page.evaluate(() => window.__squib!.controller.sim.step)).toBeGreaterThanOrEqual(end + 100);
 
   // A changed input row (helm nudged before the first checkpoint) is caught at that checkpoint.
-  const i = rec.inputs.findIndex((r) => r[0]! > 100 && r[0]! < 1000);
+  // Read in the row form, so this also shows an older (/1) file is still played.
+  const rows = rec.inputs!;
+  const i = rows.findIndex((r) => r[0]! > 100 && r[0]! < 1000);
   // Towards the centre: a helm already hard over (±1) nudged outwards is clamped back to the same input and nothing
   // diverges (a flake seen on CI, 21 Nov 2026, when the sampled row had the helm right over).
-  rec.inputs[i]![1]! += rec.inputs[i]![1]! > 0 ? -0.05 : 0.05;
+  rows[i]![1]! += rows[i]![1]! > 0 ? -0.05 : 0.05;
   await page.getByRole('button', { name: 'Scenarios and replays' }).click(); // the panel closed when the replay opened
   await library(page).getByLabel('Open replay file').setInputFiles({ name: 'changed.replay.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(rec)) });
   await expect(bar).toBeVisible(); // the file is read asynchronously

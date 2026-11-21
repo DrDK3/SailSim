@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BUMP_GLSL, bumpBlock } from './bump';
 
 /**
@@ -33,6 +34,8 @@ const CHUNK = 400;
 const SPACING = 8.5;
 const NEAR_M = 850;
 const FAR_M = 2300;
+/** Beyond this the trees are crossed-quad impostors (package C), when they are on. */
+const IMPOSTOR_M = 1400;
 const DROP_M = 2700;
 /** Ground below this (m ODN) is foreshore or water: no trees (about high water springs, E). */
 const SHORE_ODN = 3.2;
@@ -48,8 +51,11 @@ function hash(x: number, y: number, k: number): number {
  * crown's centre, so the crown shades softly as a whole; it is darker towards its underside where the leaves
  * shade each other.
  */
-function broadleaf(detail: number): THREE.BufferGeometry {
-  const centre = new THREE.Vector3(0, 0.62, 0);
+function broadleaf(detail: number, kind = 0): THREE.BufferGeometry {
+  // Kind (package C, review #35): 0 a round crown (oak), 1 tall and narrow (ash, lime), 2 broad and flat-topped
+  // (a spreading oak or sycamore in the open). All in the unit box the instance scales to the tree's size.
+  const shape = BROAD_SHAPES[kind] ?? BROAD_SHAPES[0]!;
+  const centre = new THREE.Vector3(0, 0.62 * shape.lift, 0);
   // Lobes: centre (x, y, z) and radius; one ball when far.
   const lobes: [number, number, number, number][] = detail >= 1
     ? [[0, 0.62, 0, 0.34], [0.2, 0.56, 0.07, 0.27], [-0.18, 0.58, 0.11, 0.26], [0.04, 0.55, -0.21, 0.27], [-0.1, 0.78, -0.06, 0.24], [0.12, 0.76, 0.12, 0.22]]
@@ -65,8 +71,8 @@ function broadleaf(detail: number): THREE.BufferGeometry {
     for (let i = 0; i < p.count; i++) {
       const v = new THREE.Vector3().fromBufferAttribute(p, i);
       const bump = 1 + 0.25 * (hash(Math.round(v.x * 50) + li * 7, Math.round(v.y * 50), Math.round(v.z * 50)) - 0.5);
-      v.multiplyScalar(bump).multiply(new THREE.Vector3(1, detail >= 1 ? 0.9 : 0.8, 1));
-      v.add(new THREE.Vector3(lx, ly - (detail >= 1 ? 0 : 0.02), lz));
+      v.multiplyScalar(bump).multiply(new THREE.Vector3(shape.wide, (detail >= 1 ? 0.9 : 0.8) * shape.tall, shape.wide));
+      v.add(new THREE.Vector3(lx * shape.wide, (ly - (detail >= 1 ? 0 : 0.02)) * shape.lift, lz * shape.wide));
       const dir = v.clone().sub(centre).normalize();
       // Lobes vary a little in tone (sunlit and shaded clumps).
       const tone = 0.9 + 0.2 * hash(li, 3, 9);
@@ -76,7 +82,7 @@ function broadleaf(detail: number): THREE.BufferGeometry {
       col.push(leaf.r * shade, leaf.g * shade, leaf.b * shade);
     }
   });
-  const trunk = new THREE.CylinderGeometry(0.035, 0.05, 0.42, 5).translate(0, 0.21, 0).toNonIndexed();
+  const trunk = new THREE.CylinderGeometry(0.035, 0.05, 0.42 * shape.lift, 5).translate(0, 0.21 * shape.lift, 0).toNonIndexed();
   const bark = new THREE.Color().setHex(0x45372a, THREE.SRGBColorSpace);
   const tp = trunk.getAttribute('position');
   const tn = trunk.getAttribute('normal');
@@ -97,7 +103,18 @@ function broadleaf(detail: number): THREE.BufferGeometry {
   return g;
 }
 
-function conifer(sides: number): THREE.BufferGeometry {
+function conifer(sides: number, kind = 0): THREE.BufferGeometry {
+  if (kind === 1) {
+    // A pine: a tall bare trunk and a flattish crown at the top (Scots and Monterey pines on the headlands, E).
+    const top = new THREE.SphereGeometry(0.5, Math.max(5, sides), 4);
+    top.scale(1, 0.45, 1).translate(0, 0.78, 0);
+    const trunk = new THREE.CylinderGeometry(0.03, 0.05, 0.7, 5);
+    trunk.translate(0, 0.35, 0);
+    return coloured([
+      [top, 0x2f4a2a],
+      [trunk, 0x5a4532],
+    ]);
+  }
   const crown = new THREE.ConeGeometry(0.42, 0.85, sides);
   crown.translate(0, 0.58, 0);
   const lower = new THREE.ConeGeometry(0.5, 0.5, sides);
@@ -134,6 +151,67 @@ function coloured(parts: [THREE.BufferGeometry, number][]): THREE.BufferGeometry
   return out;
 }
 
+/** Crown proportions of the broadleaf kinds (E: an eye for the woods in the owner's photographs, not a survey). */
+const BROAD_SHAPES = [
+  { wide: 1, tall: 1, lift: 1 },
+  { wide: 0.72, tall: 1.25, lift: 1.06 },
+  { wide: 1.22, tall: 0.72, lift: 0.94 },
+];
+/** How many shapes of each, and the share of each (a stable hash of the tree's position picks it). */
+const BROAD_KINDS = 3;
+const CONIFER_KINDS = 2;
+const kindOf = (x: number, y: number, kinds: number) => Math.min(kinds - 1, Math.floor(hash(x, y, 11) * kinds));
+
+/**
+ * A far tree as an impostor: two crossed upright quads with the tree's silhouette (drawn in code), 4 triangles
+ * against about 30 for the far crown. Alpha-tested so it sorts and shades with the scene.
+ */
+function crossedQuads(): THREE.BufferGeometry {
+  const a = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+  const b = a.clone().rotateY(Math.PI / 2);
+  const g = mergeGeometries([a.toNonIndexed(), b.toNonIndexed()])!;
+  // Normals pointing up and out, so the quads light like a crown rather than a sheet.
+  const n = g.getAttribute('normal') as THREE.BufferAttribute;
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < n.count; i++) {
+    const v = new THREE.Vector3(p.getX(i), p.getY(i) - 0.35, p.getZ(i)).normalize();
+    n.setXYZ(i, v.x, Math.max(0.3, v.y + 0.4), v.z);
+  }
+  const col = new Float32Array(p.count * 3).fill(1);
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+
+/** The silhouette for the impostors: a broadleaf crown on a trunk, or a cone, in leaf and bark colours. */
+function silhouette(kind: 'broad' | 'conifer'): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#45372a';
+  g.fillRect(29, 34, 6, 30);
+  g.fillStyle = kind === 'broad' ? '#42552c' : '#2a4529';
+  if (kind === 'broad') {
+    for (const [x, y, r] of [[32, 26, 18], [20, 30, 12], [44, 30, 12], [26, 16, 11], [40, 17, 10]] as const) {
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+  } else {
+    g.beginPath();
+    g.moveTo(32, 2);
+    g.lineTo(54, 50);
+    g.lineTo(10, 50);
+    g.closePath();
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 interface TreeList {
   broad: Float32Array; // e, n, y, crown, height, yaw, tint
   conifer: Float32Array;
@@ -144,7 +222,7 @@ interface Chunk {
   ce: number;
   cn: number;
   trees: TreeList;
-  meshes?: { near: boolean; broad: THREE.InstancedMesh; conifer: THREE.InstancedMesh };
+  meshes?: { near: boolean; band: Band; list: THREE.InstancedMesh[] };
 }
 
 const STRIDE = 7;
@@ -153,7 +231,20 @@ export class Woodland {
   readonly group = new THREE.Group();
   private readonly chunks = new Map<string, Chunk>();
   private readonly material = leafMaterial();
-  private readonly geo = { broadNear: broadleaf(1), broadFar: broadleaf(0), coniferNear: conifer(8), coniferFar: conifer(5) };
+  private readonly geo = {
+    broadNear: Array.from({ length: BROAD_KINDS }, (_, k) => broadleaf(1, k)),
+    broadFar: Array.from({ length: BROAD_KINDS }, (_, k) => broadleaf(0, k)),
+    coniferNear: Array.from({ length: CONIFER_KINDS }, (_, k) => conifer(8, k)),
+    coniferFar: Array.from({ length: CONIFER_KINDS }, (_, k) => conifer(5, k)),
+    impostor: crossedQuads(),
+  };
+  /**
+   * Far trees as crossed-quad impostors (beyond IMPOSTOR_M) when on; the far crowns otherwise. On at the lowest
+   * scenery detail (the Performance preset; src/render/dart.ts): with them the benchmark's views drew 7.5 % fewer
+   * triangles than before the tree shapes, with no measurable change in frame time under software rendering (package C).
+   */
+  impostors = false;
+  private readonly impostorMat = { broad: impostorMaterial('broad'), conifer: impostorMaterial('conifer') };
   private readonly built = new Set<Chunk>();
   private readonly occupied: Set<number>;
   /** 24 m cells with a building within about one cell: gardens there, not woods. */
@@ -272,9 +363,9 @@ export class Woodland {
     return { broad: Float32Array.from(broad), conifer: Float32Array.from(con) };
   }
 
-  private mesh(list: Float32Array, geo: THREE.BufferGeometry): THREE.InstancedMesh {
+  private mesh(list: Float32Array, geo: THREE.BufferGeometry, material: THREE.Material = this.material): THREE.InstancedMesh {
     const count = list.length / STRIDE;
-    const m = new THREE.InstancedMesh(geo, this.material, Math.max(1, count));
+    const m = new THREE.InstancedMesh(geo, material, Math.max(1, count));
     m.count = count;
     const mat = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -333,16 +424,29 @@ export class Woodland {
       wanted.push([d, c]);
     }
     for (const [d, c] of wanted) {
-      const near = d < NEAR_M;
-      if (c.meshes && c.meshes.near === near) continue;
+      const band: Band = d < NEAR_M ? 'near' : this.impostors && d > IMPOSTOR_M ? 'impostor' : 'far';
+      if (c.meshes && c.meshes.band === band) continue;
       if (c.meshes) this.dropMeshes(c);
       if (!c.trees.broad.length && !c.trees.conifer.length) continue;
-      c.meshes = {
-        near,
-        broad: this.mesh(c.trees.broad, near ? this.geo.broadNear : this.geo.broadFar),
-        conifer: this.mesh(c.trees.conifer, near ? this.geo.coniferNear : this.geo.coniferFar),
+      const list: THREE.InstancedMesh[] = [];
+      const add = (trees: Float32Array, kinds: number, geos: THREE.BufferGeometry[], impostor: THREE.Material) => {
+        for (let k = 0; k < kinds; k++) {
+          const sub = byKind(trees, kinds, k);
+          if (!sub.length) continue;
+          const m = band === 'impostor' ? this.mesh(sub, this.geo.impostor, impostor) : this.mesh(sub, geos[k]!);
+          if (band === 'impostor') m.castShadow = false;
+          list.push(m);
+          if (band === 'impostor') break;
+        }
       };
-      this.group.add(c.meshes.broad, c.meshes.conifer);
+      // The shapes near only (inside 850 m, where they show): far crowns and impostors draw each family in one shape,
+      // so the far chunks cost the draw calls they did before the shapes (package C: sail-close stayed within the
+      // Smooth budget of 700 calls).
+      const near = band === 'near';
+      add(c.trees.broad, near ? BROAD_KINDS : 1, near ? this.geo.broadNear : this.geo.broadFar, this.impostorMat.broad);
+      add(c.trees.conifer, near ? CONIFER_KINDS : 1, near ? this.geo.coniferNear : this.geo.coniferFar, this.impostorMat.conifer);
+      c.meshes = { near: band === 'near', band, list };
+      if (list.length) this.group.add(...list);
       this.built.add(c);
     }
     for (const c of [...this.built]) {
@@ -355,14 +459,32 @@ export class Woodland {
 
   private dropMeshes(c: Chunk): void {
     if (!c.meshes) return;
-    this.group.remove(c.meshes.broad, c.meshes.conifer);
-    c.meshes.broad.dispose();
-    c.meshes.conifer.dispose();
+    for (const m of c.meshes.list) {
+      this.group.remove(m);
+      m.dispose();
+    }
     c.meshes = undefined;
   }
 }
 
 const Y = new THREE.Vector3(0, 1, 0);
+
+type Band = 'near' | 'far' | 'impostor';
+
+/** The trees of one kind from a list (the kind from a hash of each tree's position: the same tree, the same kind). */
+function byKind(list: Float32Array, kinds: number, k: number): Float32Array {
+  if (kinds <= 1) return list;
+  const out: number[] = [];
+  for (let o = 0; o < list.length; o += STRIDE) if (kindOf(list[o]!, list[o + 1]!, kinds) === k) for (let i = 0; i < STRIDE; i++) out.push(list[o + i]!);
+  return Float32Array.from(out);
+}
+
+function impostorMaterial(kind: 'broad' | 'conifer'): THREE.MeshStandardMaterial {
+  const map = silhouette(kind);
+  const m = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true, roughness: 0.95, metalness: 0, envMapIntensity: 0.35 });
+  if (!map) m.color.set(kind === 'broad' ? 0x42552c : 0x2a4529);
+  return m;
+}
 
 /** Foliage: clumps of light and shade over each crown (noise in the tree's own frame, offset per tree). */
 function leafMaterial(): THREE.MeshStandardMaterial {

@@ -23,7 +23,173 @@ export const REPLAY_SCHEMA_RIVER_JOINED = 'squib-replay/2';
  * them; it may also carry `dartFromStep` as /2 does. Older builds refuse it rather than replaying it wrongly.
  */
 export const REPLAY_SCHEMA_SAIL_CONTROLS = 'squib-replay/3';
-const SCHEMAS = [REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED, REPLAY_SCHEMA_SAIL_CONTROLS];
+/**
+ * Compact inputs (package C, review #12, issue 214): `inputsQ` in place of `inputs`, a flat list of small integers,
+ * one row per change: [step delta, mask of the fields that changed, then those fields' values]. The player's
+ * controls are kept on a grid of thousandths (`quantiseInput`), so every value is a whole number of grid steps and
+ * the file decodes to the very inputs sailed. Written whenever every input is on the grid (any run
+ * of this build sailed by a person); a recording with a value off the grid is written as before. It may carry
+ * `dartFromStep` as /2 does. Older builds refuse it rather than replaying it wrongly; every older schema still reads.
+ */
+export const REPLAY_SCHEMA_COMPACT = 'squib-replay/4';
+const SCHEMAS = [REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED, REPLAY_SCHEMA_SAIL_CONTROLS, REPLAY_SCHEMA_COMPACT];
+
+/**
+ * The grid the player's controls are kept on: thousandths (of the sheets' and the crew's travel, of the helm either
+ * side; E, imperceptible). Decimal, so the app's own settings (a crew position of 0.6, a sheet of 0.3) lie on it.
+ */
+export const INPUT_GRID = 1000;
+const GRID_FIELDS = ['helm', 'mainSheet', 'jibSheet', 'crewHike', 'flatten', 'spinSheet', 'kicker', 'cunningham', 'outhaul', 'jibLead'] as const;
+
+/** A change of input with every control value on the grid (the player's inputs: keys, buttons, sliders, stick, touch). */
+export function quantiseInput<T extends Partial<ControlInput>>(change: T): T {
+  let out: T | undefined;
+  for (const k of GRID_FIELDS) {
+    const v = change[k];
+    if (typeof v !== 'number') continue;
+    const q = Math.round(v * INPUT_GRID) / INPUT_GRID;
+    if (q !== v) (out ??= { ...change })[k] = q as T[typeof k];
+  }
+  return out ?? change;
+}
+
+/** The compact row's fields, in mask-bit order. */
+const Q_FIELDS = ['helm', 'mainSheet', 'jibSheet', 'crewHike', 'flags', 'flatten', 'spin', 'spinGybe', 'spinSheet', 'kicker', 'cunningham', 'outhaul', 'jibLead', 'plug'] as const;
+type QField = (typeof Q_FIELDS)[number];
+/** A control not set (spinSheet, kicker, cunningham, outhaul, jibLead follow their defaults; flatten absent). */
+const Q_UNSET = 4096;
+const OPTIONAL_Q: ReadonlySet<QField> = new Set(['flatten', 'spinSheet', 'kicker', 'cunningham', 'outhaul', 'jibLead']);
+/** Counts (spinnaker calls and pole gybes, plug requests) and the flags: −1 when not set. */
+const COUNT_Q: ReadonlySet<QField> = new Set(['spin', 'spinGybe', 'plug']);
+const COUNT_UNSET = -1;
+
+function qValues(i: ControlInput): number[] | undefined {
+  const out: number[] = [];
+  for (const f of Q_FIELDS) {
+    if (f === 'flags') {
+      // autoSpin has three states (not set, on, off), so two bits.
+      out.push((i.autoMain ? 1 : 0) | (i.autoJib ? 2 : 0) | (i.autoCrew ? 4 : 0) | (i.autoSpin === false ? 8 : 0) | (i.autoSpin === true ? 16 : 0));
+      continue;
+    }
+    const v = i[f] as number | undefined;
+    if (v === undefined) {
+      if (OPTIONAL_Q.has(f)) out.push(Q_UNSET);
+      else if (COUNT_Q.has(f)) out.push(COUNT_UNSET);
+      else return undefined;
+      continue;
+    }
+    if (COUNT_Q.has(f)) {
+      if (!Number.isInteger(v) || v < 0 || v > 1e6) return undefined;
+      out.push(v);
+      continue;
+    }
+    // On the grid exactly when the decoder's division gives this very value back.
+    const t = Math.round(v * INPUT_GRID);
+    if (t / INPUT_GRID !== v || Math.abs(t) > INPUT_GRID) return undefined;
+    out.push(t);
+  }
+  return out;
+}
+
+/** The rows the compact form starts from (the defaults), so the first row holds only what differs. */
+const Q_START: readonly number[] = qValues({ helm: 0, mainSheet: 0, jibSheet: 0, crewHike: 0, autoMain: false, autoJib: false, autoCrew: false })!;
+
+/** The input log in the compact form, or undefined when a value is off the grid (then the recording is written as before). */
+export function encodeInputsCompact(log: readonly InputLogEntry[]): number[] | undefined {
+  const out: number[] = [];
+  let prevStep = 0;
+  let prev = Q_START;
+  for (const { step, input } of log) {
+    const v = qValues(input);
+    if (!v) return undefined;
+    let mask = 0;
+    const vals: number[] = [];
+    v.forEach((x, k) => {
+      if (x !== prev[k]) {
+        mask |= 1 << k;
+        vals.push(x);
+      }
+    });
+    out.push(step - prevStep, mask, ...vals);
+    prevStep = step;
+    prev = v;
+  }
+  return out;
+}
+
+/** The compact form back to the input log (exactly the inputs sailed). Throws on a malformed list. */
+export function decodeInputsCompact(q: readonly number[]): InputLogEntry[] {
+  const out: InputLogEntry[] = [];
+  let step = 0;
+  const cur = [...Q_START];
+  let i = 0;
+  while (i < q.length) {
+    const d = q[i++]!;
+    const mask = q[i++];
+    if (!Number.isInteger(d) || d < 0 || mask === undefined || !Number.isInteger(mask) || mask < 0 || mask >= 1 << Q_FIELDS.length) throw new Error('replay: bad compact input row');
+    step += d;
+    for (let k = 0; k < Q_FIELDS.length; k++) {
+      if (!(mask & (1 << k))) continue;
+      const x = q[i++];
+      if (x === undefined || !Number.isInteger(x)) throw new Error('replay: bad compact input value');
+      cur[k] = x;
+    }
+    const input: ControlInput = { helm: 0, mainSheet: 0, jibSheet: 0, crewHike: 0, autoMain: false, autoJib: false, autoCrew: false };
+    const set = input as unknown as Record<string, number>;
+    Q_FIELDS.forEach((f, k) => {
+      const x = cur[k]!;
+      if (f === 'flags') {
+        input.autoMain = (x & 1) !== 0;
+        input.autoJib = (x & 2) !== 0;
+        input.autoCrew = (x & 4) !== 0;
+        if (x & 8) input.autoSpin = false;
+        else if (x & 16) input.autoSpin = true;
+      } else if (OPTIONAL_Q.has(f)) {
+        if (x !== Q_UNSET) set[f] = x / INPUT_GRID;
+      } else if (COUNT_Q.has(f)) {
+        if (x !== COUNT_UNSET) set[f] = x;
+      } else set[f] = x / INPUT_GRID;
+    });
+    out.push({ step, input });
+  }
+  return out;
+}
+
+/** The optional controls: a recorded input without one had it unset (handed back to its default). */
+const OPTIONAL_INPUTS = ['flatten', 'spin', 'spinGybe', 'autoSpin', 'spinSheet', 'kicker', 'cunningham', 'outhaul', 'jibLead', 'plug'] as const;
+
+/**
+ * A recorded input as a change that replaces the whole input (the simulation merges changes): a control the recording
+ * has unset is set to undefined explicitly, so a replay hands it back as the run did (a kicker returned to the Flat
+ * control, say) instead of keeping its last value.
+ */
+export function replacingInput(input: ControlInput): Partial<ControlInput> {
+  const out: Partial<ControlInput> = { ...input };
+  for (const k of OPTIONAL_INPUTS) if (!(k in out)) (out as Record<string, unknown>)[k] = undefined;
+  return out;
+}
+
+/** A recording's input log, whichever form it was written in. */
+export function recordingLog(rec: Pick<Recording, 'inputs' | 'inputsQ'>): InputLogEntry[] {
+  return rec.inputsQ ? decodeInputsCompact(rec.inputsQ) : decodeInputs(rec.inputs ?? []);
+}
+
+/** A recording's input rows (the /1–/3 shape), whichever form it was written in (plausibility and assist checks). */
+export function recordingRows(rec: Pick<Recording, 'inputs' | 'inputsQ'>): InputRow[] {
+  return rec.inputs ?? encodeInputs(decodeInputsCompact(rec.inputsQ ?? []));
+}
+/**
+ * The same recording in the row form older builds read (/1–/3): for tools and tests (an older reader, a hand edit of
+ * one row). It replays identically.
+ */
+export function rowRecording(rec: Recording): Recording {
+  if (!rec.inputsQ) return rec;
+  const inputs = encodeInputs(decodeInputsCompact(rec.inputsQ));
+  const out: Recording = { ...rec, schema: recordingSchema(inputs, rec.dartFromStep), inputs };
+  delete out.inputsQ;
+  return out;
+}
+
 /** Hash the state every 1000 steps (10 s simulated). */
 export const CHECKPOINT_STEPS = 1000;
 
@@ -65,7 +231,10 @@ export interface Recording {
    * with the river's depths, stream and obstacles from this step). `dart` is then 'loaded'.
    */
   dartFromStep?: number;
-  inputs: InputRow[];
+  /** The input log (schemas /1–/3); schema /4 has `inputsQ` instead (read both with `recordingLog`). */
+  inputs?: InputRow[];
+  /** Schema /4: the input log in the compact form (`encodeInputsCompact`). */
+  inputsQ?: number[];
   /** [step, state hash] every CHECKPOINT_STEPS steps, and at the end. */
   checkpoints: [number, string][];
   endStep: number;
@@ -118,12 +287,15 @@ export function parseRecording(json: unknown): Recording {
   const r = json as Partial<Recording>;
   if (!r || typeof r !== 'object') throw new Error('replay: not a JSON object');
   if (!SCHEMAS.includes(r.schema ?? '')) throw new Error(`replay: expected schema ${REPLAY_SCHEMA}, found ${String(r.schema)}`);
-  const joined = r.schema === REPLAY_SCHEMA_RIVER_JOINED || (r.schema === REPLAY_SCHEMA_SAIL_CONTROLS && r.dartFromStep !== undefined);
+  const joined = r.schema === REPLAY_SCHEMA_RIVER_JOINED || ((r.schema === REPLAY_SCHEMA_SAIL_CONTROLS || r.schema === REPLAY_SCHEMA_COMPACT) && r.dartFromStep !== undefined);
   if (joined ? !isNum(r.dartFromStep) || r.dartFromStep < 0 || r.dart !== 'loaded' : r.dartFromStep !== undefined) throw new Error('replay: bad river-joined step');
   if (!r.scenario || typeof r.scenario !== 'object' || !r.scenario.conditions) throw new Error('replay: missing scenario');
-  if (!Array.isArray(r.inputs)) throw new Error('replay: missing inputs');
+  if (r.schema === REPLAY_SCHEMA_COMPACT) {
+    if (!Array.isArray(r.inputsQ) || !r.inputsQ.every((x) => Number.isInteger(x))) throw new Error('replay: missing compact inputs');
+    decodeInputsCompact(r.inputsQ);
+  } else if (!Array.isArray(r.inputs)) throw new Error('replay: missing inputs');
   let prev = -1;
-  for (const row of r.inputs) {
+  for (const row of r.inputs ?? []) {
     const wide = r.schema === REPLAY_SCHEMA_SAIL_CONTROLS && Array.isArray(row) && row.length === ROW_COLUMNS_SAIL_CONTROLS;
     if (!Array.isArray(row) || (row.length !== 6 && row.length !== 7 && !wide) || !row.every(isNum)) throw new Error('replay: bad input row');
     if (row[0] <= prev && !(row[0] === 0 && prev === -1)) throw new Error('replay: input steps must increase');

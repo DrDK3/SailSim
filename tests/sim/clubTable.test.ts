@@ -14,7 +14,7 @@ import { OTHER_ENGINE_TOLERANCE_S, identicalTiming, plausibility, verifySubmissi
 import { weeklyCourse, rotation } from '../../src/app/weekly';
 import { AiSkipper, aiSkill } from '../../src/sim/ai/skipper';
 import { submissionRequest } from '../../src/app/clubTable';
-import type { Recording } from '../../src/app/replay';
+import { rowRecording, type Recording } from '../../src/app/replay';
 
 const TOKEN = 'a'.repeat(64);
 
@@ -134,9 +134,11 @@ describe('the verifier', () => {
   }, 120_000);
 
   it('rejects altered runs: time, assists, conditions, boat, name', () => {
-    const alt = (f: (r: Recording) => void) => {
-      const r = structuredClone(rec);
-      f(r);
+    // A change may hand back a replacement recording (the row form, to edit one input row).
+    const alt = (f: (r: Recording) => unknown) => {
+      let r = structuredClone(rec);
+      const out = f(r);
+      if (out && typeof out === 'object') r = out as Recording;
       return verifySubmission(sub({}, r), undefined, BUILD).reason;
     };
     expect(alt((r) => (r.claimed!.finishS -= 10))).toBe('time-not-as-claimed');
@@ -144,7 +146,13 @@ describe('the verifier', () => {
     expect(alt((r) => ((r.scenario.conditions.weather as { twsKn: number }).twsKn += 2))).toBe('conditions-changed');
     expect(alt((r) => (r.scenario.boat = 'classic'))).toBe('boat-changed');
     // Changed inputs: the run is re-sailed as it now is; its claim no longer matches unless the change made no difference.
-    expect(alt((r) => (r.inputs[Math.floor(r.inputs.length / 2)]![1] += 0.2))).toMatch(/time-not-as-claimed|recomputed-within-tolerance/);
+    expect(
+      alt((r) => {
+        const t = rowRecording(r);
+        t.inputs![Math.floor(t.inputs!.length / 2)]![1]! += 0.2;
+        return t;
+      }),
+    ).toMatch(/time-not-as-claimed|recomputed-within-tolerance/);
     expect(verifySubmission(sub({ name: 'Sam Smith 3' }), undefined, BUILD).reason).toBe('name-not-on-word-list');
     expect(verifySubmission(sub({ build: 'production-older' }), undefined, BUILD)).toMatchObject({ status: 'unverifiable', reason: 'built-by-another-version' });
     expect(verifySubmission(sub({ receivedAt: new Date(at.getTime() + 8 * 86400e3).toISOString() }), undefined, BUILD).reason).toBe('not-this-weeks-course');
@@ -153,9 +161,9 @@ describe('the verifier', () => {
   it('not bit for bit (any browser against Node): within the tolerance accepted with the re-sailed time; beyond it, Chromium rejected, other engines listed apart', () => {
     expect(verifySubmission(sub({ engine: 'gecko' }), undefined, BUILD)).toMatchObject({ status: 'accepted', exact: true });
     // A run whose last input differs slightly (as a different engine's arithmetic might): it diverges, finishes close.
-    const near = structuredClone(rec);
-    const k = near.inputs.findIndex((r) => r[0] > near.endStep - 1500);
-    near.inputs[k]![1] += 0.01;
+    const near = rowRecording(structuredClone(rec));
+    const k = near.inputs!.findIndex((r) => r[0]! > near.endStep - 1500);
+    near.inputs![k]![1]! += 0.01;
     const v = verifySubmission(sub({ engine: 'webkit' }, near), undefined, BUILD);
     expect(v.exact).toBe(false);
     expect(Math.abs(v.timeS! - timeS)).toBeLessThanOrEqual(OTHER_ENGINE_TOLERANCE_S);
@@ -171,11 +179,11 @@ describe('the verifier', () => {
 
   it('plausibility: perfectly periodic input and identical timing across runs are flagged', () => {
     expect(plausibility(rec)).toEqual([]);
-    const bot = structuredClone(rec);
-    bot.inputs = Array.from({ length: 300 }, (_, i) => [i * 50, i % 2 ? 0.2 : -0.2, 0.3, 0.3, 0.6, 0] as Recording['inputs'][number]);
+    const bot = rowRecording(structuredClone(rec));
+    bot.inputs = Array.from({ length: 300 }, (_, i) => [i * 50, i % 2 ? 0.2 : -0.2, 0.3, 0.3, 0.6, 0] as NonNullable<Recording['inputs']>[number]);
     expect(plausibility(bot)).toContain('perfectly-periodic-input');
-    const fast = structuredClone(rec);
-    fast.inputs = Array.from({ length: 400 }, (_, i) => [i * 7 + (i % 3), 0, 0.3, 0.3, 0.6, 0] as Recording['inputs'][number]);
+    const fast = rowRecording(structuredClone(rec));
+    fast.inputs = Array.from({ length: 400 }, (_, i) => [i * 7 + (i % 3), 0, 0.3, 0.3, 0.6, 0] as NonNullable<Recording['inputs']>[number]);
     expect(plausibility(fast)).toContain('input-rate-beyond-human');
     expect([...identicalTiming([{ id: 'a', rec }, { id: 'b', rec: structuredClone(rec) }])].sort()).toEqual(['a', 'b']);
   });
