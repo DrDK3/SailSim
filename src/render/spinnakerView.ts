@@ -113,10 +113,12 @@ export class SpinnakerView {
   }
 
   setColours(panels: readonly string[]): void {
-    this.mat.map?.dispose();
-    this.mat.map = panelTexture(panels);
-    this.mat.color.set(this.mat.map ? '#ffffff' : panels[0]!);
-    this.mat.needsUpdate = true;
+    // The material drawn (a ghost draws its own see-through copy: src/render/ghostLook.ts).
+    const m = this.sail.material as THREE.MeshStandardMaterial;
+    m.map?.dispose();
+    m.map = panelTexture(panels);
+    m.color.set(m.map ? '#ffffff' : panels[0]!);
+    m.needsUpdate = true;
   }
 
   /** Shape it for this frame. `dt` (s) smooths the pole's swing. */
@@ -204,8 +206,10 @@ export class SpinnakerView {
 
   dispose(): void {
     this.geo.dispose();
-    this.mat.map?.dispose();
-    this.mat.dispose();
+    for (const m of new Set([this.mat, this.sail.material as THREE.MeshStandardMaterial])) {
+      m.map?.dispose();
+      m.dispose();
+    }
     (this.pole.geometry as THREE.BufferGeometry).dispose();
     (this.pole.material as THREE.Material).dispose();
   }

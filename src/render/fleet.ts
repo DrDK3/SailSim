@@ -6,6 +6,7 @@ import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
 import { SquibModel, sailFill } from './squibModel';
+import { makeGhost } from './ghostLook';
 import type { SpinnakerPose } from './spinnakerView';
 import type { DamageLook } from './damageView';
 import { HullFoam, WakeTrail, type SeaUniforms } from './boatWater';
@@ -54,25 +55,7 @@ interface Entry {
 
 const RIDE_SCRATCH: WaveRide = { heave: 0, pitch: 0, roll: 0 };
 
-/** See-through (a ghost: only a picture of an earlier run): its own copies of the materials, no shadows. */
-export const GHOST_OPACITY = 0.35;
-function makeGhost(group: THREE.Object3D): void {
-  group.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.castShadow = false;
-    m.receiveShadow = false;
-    const one = (x: THREE.Material) => {
-      const c = x.clone();
-      c.transparent = true;
-      c.opacity = GHOST_OPACITY * (x.opacity ?? 1);
-      c.depthWrite = false;
-      return c;
-    };
-    m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material);
-  });
-  group.userData.ghost = true;
-}
+export { GHOST_OPACITY } from './ghostLook';
 const POSE = new THREE.Object3D();
 
 /** A boat's hull pose in the world (position and orientation of her model) for the wake. */

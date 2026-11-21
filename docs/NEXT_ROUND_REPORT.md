@@ -178,7 +178,10 @@ new windward deck (its eye 0.34 m from the centreline). The test now waits until
 settled, a hiking helm's eye reaches 1.006 m out, so its bound is 1.3 m rather than 1.0 m, the half-beam being
 0.92 m (fac1f44). Test-only changes; the app is as in the third run.
 
-**Fourth CI run (fac1f44):** on the pull request.
+**Fourth CI run (fac1f44, then c7e2259): the checks job failed, my mistake.** Commit dce09fe had swept in
+`dist-a/`, a build made only to compare screenshots before and after, and ESLint read its minified files. Removed in
+bb7b1e2 (a new commit, no history rewritten), with `dist-*/` added to `.gitignore`; on the next run the checks job
+passed.
 
 ### A.9 Pull request
 
@@ -268,6 +271,13 @@ request (§B.9).
 **First CI run on the pull request (269d5a8): green.** The checks job (typecheck, lint, unit tests, build with the
 secret scan, the envelope) and all five browser shards passed, the new `spinnaker.spec.ts` included. Later commits
 on this branch only merge package A's test fixes (§A.8).
+
+**Second CI run (22abcc9, merging package A's test fixes): one defect found and fixed.** The checks job failed on
+package A's committed preview build (§A.8). Shard 1: `ghost.spec.ts` found a ghost boat (ghost racing) with 42 of its
+44 meshes see-through: the spinnaker and its pole, made the first time the ghost's recording carried one, after the
+rest of the ghost had been made see-through, were drawn solid. The ghost's spinnaker is now see-through too, and keeps
+its see-through copy when its colours change (`src/render/ghostLook.ts`, `src/render/squibModel.ts`); regression test
+`tests/render/ghostSpinnaker.test.ts` (fails before: `spinnaker-sail` and `spinnaker-pole` solid). Issue 265.
 
 Screens added this package (`docs/img/next-b/`): the spinnaker's states (§B.4), the console's tab on a laptop and a
 phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail controls (`sail-controls-expert.jpg`).
