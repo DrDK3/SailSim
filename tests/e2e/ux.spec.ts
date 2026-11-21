@@ -102,15 +102,16 @@ test('toolbar: the Settings menu (sections, toggles), Escape closes menus and pa
   const errors = await ready(page);
   // The physics tools are in the Settings menu at the Expert level or with the developer tools on.
   await page.evaluate(() => window.__squib!.controller.setPrefs({ devTools: true }));
-  // Few controls in view: the activity button (the way to the main menu), playback, camera, Race, Library and Options, Settings and Help.
+  // Few controls in view: the activity button (the way to the main menu), playback, camera, Race, Scenarios and replays (was Library) and Conditions (was Options), Settings and Help.
   await expect(page.getByRole('navigation', { name: 'Simulation' }).getByRole('button')).toHaveCount(8);
   const view = page.getByRole('button', { name: 'Settings', exact: true });
   await view.click();
   const labels = page.getByRole('menuitemcheckbox', { name: /Place labels/ });
-  await expect(labels).toHaveAttribute('aria-checked', 'true');
+  // Review #20: off at the Club level (the default here), on at Expert; the menu turns them on.
+  await expect(labels).toHaveAttribute('aria-checked', 'false');
   await labels.click();
   await expect(page.getByRole('menu')).toHaveCount(0); // choosing closes the menu
-  expect(await page.evaluate(() => window.__squib!.controller.getState().showLabels)).toBe(false);
+  expect(await page.evaluate(() => window.__squib!.controller.getState().showLabels)).toBe(true);
   await view.click();
   await expect(page.getByRole('menu', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('menu', { name: 'Settings' })).toContainText('Physics tools');
@@ -121,13 +122,13 @@ test('toolbar: the Settings menu (sections, toggles), Escape closes menus and pa
   await page.getByRole('menuitemcheckbox', { name: /Polar sweep/ }).click();
   await expect(page.getByRole('region', { name: /polar/i })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Library' })).toBeVisible();
-  await page.getByRole('button', { name: 'Options', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Options' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Library' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Scenarios and replays', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toBeVisible();
+  await page.getByRole('button', { name: 'Conditions', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Conditions' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('region', { name: 'Options' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Conditions' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: /polar/i })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -254,9 +255,9 @@ test.describe('on a phone', () => {
     const fits = () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && [...document.querySelectorAll('.panel')].every((p) => p.getBoundingClientRect().right <= window.innerWidth + 1));
     expect(await fits()).toBe(true);
-    await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Scenarios and replays', exact: true })).toBeHidden();
     await page.getByRole('button', { name: 'Menu' }).click();
-    await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Scenarios and replays', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close menu' }).click();
     await expect(page.getByRole('button', { name: 'All instruments and conditions' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Steer to starboard/ })).toBeInViewport();

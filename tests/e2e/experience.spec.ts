@@ -41,13 +41,13 @@ test('the activity button opens the hub; each door opens the feature it names, a
   await expect(page.getByTestId('hub-now')).toContainText('Free sailing');
   await hub(page).getByRole('button', { name: 'Scenarios' }).click();
   await expect(hub(page)).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Library' })).toBeVisible(PANEL);
+  await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toBeVisible(PANEL);
 
   // Race against AI: the race set-up.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Race against AI' }).click();
   await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible(PANEL);
-  await expect(page.getByRole('region', { name: 'Library' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toHaveCount(0);
 
   // Learn to sail: the next lesson, and the button says so.
   await chip.click();
@@ -85,8 +85,8 @@ test('leaving a race that has started asks first: keep racing loses nothing; lea
   await expect(chip).toContainText('3 AI');
 
   // From the library, during the race: asked.
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  const lib = page.getByRole('region', { name: 'Library' });
+  await page.getByRole('button', { name: 'Scenarios and replays', exact: true }).click();
+  const lib = page.getByRole('region', { name: 'Scenarios and replays' });
   await lib.getByRole('button', { name: 'Load Fog in the harbour' }).click();
   const ask = page.getByTestId('confirm-leave');
   await expect(ask).toBeVisible();

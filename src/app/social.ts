@@ -11,7 +11,7 @@ import { isLikeForLikeKey, loadLikeForLike, recordAttempt, type LikeForLike, typ
 import { challengePayload, challengeResult, challengeUrl, decodeChallenge, encodeChallenge, splitsFrom, type Challenge, type Split } from './challenge';
 import { loadName, randomName, saveName } from './safeNames';
 import { targetsStatus, trackPoses, type Medal, type TargetsStatus } from './targets';
-import { weeklyCourse, weeklyKey, type WeeklyCourse } from './weekly';
+import { weeklyCourse, weeklyKey, weeklyLongKey, type WeeklyCourse } from './weekly';
 import type { AppScenario } from './controller';
 import type { Recording } from './replay';
 import type { RaceEvent } from '../sim/course/judge';
@@ -41,7 +41,17 @@ export interface FinishInfo {
 
 export interface SocialUi {
   name: string;
-  weekly: { key: string; week: string; name: string; status?: string; summary: string; terms: WeeklyCourse['terms']; best?: LikeForLike };
+  weekly: {
+    key: string;
+    week: string;
+    name: string;
+    status?: string;
+    summary: string;
+    terms: WeeklyCourse['terms'];
+    best?: LikeForLike;
+    /** The optional long course (review #10): an RDYC course at full length, its own best, no targets. */
+    long?: { key: string; name: string; status: string; summary: string; best?: LikeForLike };
+  };
   targets: TargetsStatus | { state: 'loading' };
   /** The last finish of a like-for-like course in this session (for "Challenge a friend"). */
   finish?: FinishInfo;
@@ -104,6 +114,14 @@ export class SocialHub {
     return true;
   }
 
+  /** Sail this week's optional long course: an RDYC course at full length (alone; no targets). */
+  sailLong(): boolean {
+    const w = this.weekly();
+    if (!w.long || !this.host.restart(structuredClone(w.long.scenario))) return false;
+    this.host.tagRace(weeklyLongKey(w.week), w.long.scenario);
+    return true;
+  }
+
   /** Read this week's targets from the site (once a week per visit). Missing or stale: "not available". */
   async loadTargets(fetchFn: typeof fetch = fetch): Promise<void> {
     const w = this.weekly();
@@ -124,7 +142,8 @@ export class SocialHub {
     const t = this.targets.file.targets.find((x) => x.medal === medal);
     if (!t) return false;
     const w = this.weekly();
-    if (!this.host.startPoseGhost(`${medal[0]!.toUpperCase()}${medal.slice(1)} target (model-sailed, ${t.level} AI)`, structuredClone(w.scenario), trackPoses(t.track))) return false;
+    const label = `${medal[0]!.toUpperCase()}${medal.slice(1)} target (model-sailed: ${t.slowedBy ? `the ${t.level} AI's ghost ${Math.round(t.slowedBy * 100)}% slower` : `the ${t.level} AI`})`;
+    if (!this.host.startPoseGhost(label, structuredClone(w.scenario), trackPoses(t.track))) return false;
     this.host.tagRace(weeklyKey(w.week), w.scenario);
     return true;
   }
@@ -190,7 +209,10 @@ export class SocialHub {
     const key = weeklyKey(w.week);
     return {
       name: this.name,
-      weekly: { key, week: w.week.key, name: w.name, status: w.status, summary: w.summary, terms: w.terms, best: typeof localStorage === 'undefined' ? undefined : loadLikeForLike(key) },
+      weekly: {
+        key, week: w.week.key, name: w.name, status: w.status, summary: w.summary, terms: w.terms, best: typeof localStorage === 'undefined' ? undefined : loadLikeForLike(key),
+        long: w.long ? { key: weeklyLongKey(w.week), name: w.long.name, status: w.long.status, summary: w.long.summary, best: typeof localStorage === 'undefined' ? undefined : loadLikeForLike(weeklyLongKey(w.week)) } : undefined,
+      },
       targets: this.targets,
       finish: this.finish,
       invite: this.invite ? { name: this.invite.name, course: this.invite.course, finishS: this.invite.finishS, independent: this.invite.independent } : undefined,

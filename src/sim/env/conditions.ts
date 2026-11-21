@@ -67,6 +67,8 @@ export interface ConditionsGeo extends StreamPattern {
 
 export interface BuiltConditions {
   env: Environment;
+  /** The gusts and shifts (the environment's only state, stepped once a step by its owner). */
+  wind: WindField;
   weather: WeatherInfo;
   tide?: TideSource;
   current: CurrentModel;
@@ -74,7 +76,11 @@ export interface BuiltConditions {
   sky: SkySource;
 }
 
-export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): BuiltConditions {
+/**
+ * Build a run's conditions. `reuse.wind`: carry on with this wind field (its gusts as they are now) rather than a new
+ * one from the start: the River Dart data joining a run already under way (review #9), so the wind does not jump.
+ */
+export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo, reuse?: { wind?: WindField }): BuiltConditions {
   const startEpochMs = Date.parse(c.startTime);
   if (Number.isNaN(startEpochMs)) throw new Error(`conditions: bad start time "${c.startTime}"`);
 
@@ -108,7 +114,7 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
   const preset = c.gusts.preset === 'from-data' ? (dataGusts?.gusts ?? GUST_PRESETS.moderate) : GUST_PRESETS[c.gusts.preset];
   const gusts: GustSettings = { ...preset, ...c.gusts.overrides, seed: c.gusts.seed };
   if (c.gusts.preset !== 'steady') weather.notes = [...weather.notes, 'Gusts and shifts: seeded statistical model (estimated parameters).'];
-  const wind = new WindField(base, gusts, { n: 0, e: 0, radius: 2500 });
+  const wind = reuse?.wind ?? new WindField(base, gusts, { n: 0, e: 0, radius: 2500 });
 
   let tide: TideSource | undefined;
   if (c.tide?.mode === 'manual') tide = manualTide(Date.parse(c.tide.hwTime), c.tide.hwHeightM, c.tide.lwHeightM);
@@ -144,5 +150,5 @@ export function buildConditions(c: ConditionsSettings, geo?: ConditionsGeo): Bui
     : undefined;
   if (terrainWind) weather.notes = [...weather.notes, 'Shaped by the land: shelter in the lee of the hills and the valley turning the wind along the river (estimated, docs/PHYSICS.md).'];
   const env = composeEnvironment({ wind, weather, current, tide, startEpochMs, datum, sky, terrain, terrainWind });
-  return { env, weather, tide, current, gusts, sky };
+  return { env, wind, weather, tide, current, gusts, sky };
 }

@@ -173,4 +173,5 @@ Closed class rules: "if these rules do not say that you can – then you can not
 
 | Date | Statement | Provenance | Used for |
 |---|---|---|---|
+| 20 Nov 2026 | **"The RDYC has approved use of the club's name and burgee (owner, 20 Nov 2026)."** | The owner (O), recorded exactly as stated; no document seen | The club's name and its burgee as the simulator already shows them (the masthead burgee, the flagstaff, the club's fleet). It is an approval of the name and the burgee and nothing more: it does **not** mean the club has checked the RDYC courses, which keep their "pending club check" labels (§1; status "pending-check" in data/courses/club/; the weekly long course), nor the clubhouse or anything else drawn of the club |
 | 10 Nov 2026 | **RDYC is an accredited RYA Training Centre.** | The owner (O); no document seen | The review's RYA recommendations (a skills log mapped to the courses RDYC runs, checked by its instructors; an instructor mode). Which courses RDYC runs, and the course criteria, are still to come from the club. The simulator does not carry RYA approval or the RYA's marks: the accreditation is the club's, not the software's |

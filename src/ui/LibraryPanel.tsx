@@ -34,7 +34,7 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   const [title, setTitle] = useState('My scenario');
   const [replayTitle, setReplayTitle] = useState('Squib session');
   const [message, setMessage] = useState<string>();
-  const builtIn = builtInScenarios(ui.dart.status === 'loaded');
+  const builtIn = builtInScenarios(ui.dart.status === 'loaded' || ui.dart.status === 'ready');
 
   const load = (s: LibraryScenario) => {
     const sc = s.scenario;
@@ -148,9 +148,9 @@ export function LibraryPanel({ ctl, ui, onClose }: { ctl: SimController; ui: UiS
   );
 
   return (
-    <section className="panel library" aria-label="Library">
+    <section className="panel library" aria-label="Scenarios and replays">
       <div className="race-head">
-        <h3>Library</h3>
+        <h3>Scenarios and replays</h3>
         <button onClick={onClose} aria-label="Close library">Close</button>
       </div>
       <h4>Scenarios</h4>

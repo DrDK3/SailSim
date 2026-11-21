@@ -1,7 +1,8 @@
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
-import { sailAdvice, sailState } from '../app/sailStatus';
+import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
+import { useRef } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
 
 /**
@@ -120,6 +121,47 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
   );
 }
 
+/**
+ * Look up at the masthead while held (review #1): the T key's button. Pointer or keyboard (Space, Enter): the view
+ * eases up the mast to the burgee or vane, and back on release. A view change only, never a sailing input.
+ */
+function LookUp({ ctl }: { ctl: SimController }) {
+  const on = (e: ReactPointerEvent) => {
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Synthetic events have no capturable pointer.
+    }
+    ctl.setLookUp(true);
+  };
+  const off = () => ctl.setLookUp(false);
+  const key = (down: boolean) => (e: ReactKeyboardEvent) => {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!e.repeat) ctl.setLookUp(down);
+  };
+  return (
+    <button
+      className="hold look-up"
+      title="Look up at the masthead while held (T): the burgee (or vane) shows the wind you sail by"
+      onPointerDown={on}
+      onPointerUp={off}
+      onPointerCancel={off}
+      onPointerLeave={off}
+      onKeyDown={key(true)}
+      onKeyUp={key(false)}
+      onBlur={off}
+      onContextMenu={(e) => e.preventDefault()}
+      data-testid="look-up"
+    >
+      <span className="hold-face" aria-hidden="true">
+        ⇡ <Key k="T" />
+      </span>
+      <span className="sr-only">Look up at the masthead (hold T)</span>
+    </button>
+  );
+}
+
 /** A key name shown on a button, for recognition rather than recall. */
 const Key = ({ k }: { k: string }) => <kbd className="key-hint" aria-hidden="true">{k}</kbd>;
 
@@ -137,9 +179,18 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
   const angle = sail === 'main' ? s.boomMain : s.boomJib;
   const keys = sail === 'main' ? { trim: 'W', ease: 'S' } : { trim: 'E', ease: 'Q' };
   const state = sailState(f, angle);
-  const st = sailAdvice(state, keys, { sail, sheet, auto });
+  // The sail inside the angle its sheet allows: a slack sheet (review #23: easing it moves nothing, and the advice says so).
+  const limit = sail === 'main' ? s.mainSheetLimit : s.jibSheetLimit;
+  const slack = Math.abs(angle) < limit - SLACK_RAD;
+  const st = sailAdvice(state, keys, { sail, sheet, auto, slack, angle, plain: ui.level === 'learn' });
   const ok = st.cls === 'good';
   const name = sail === 'main' ? 'Main' : 'Jib';
+  // Which way the sheet is going now (review #23, #24): an arrow on the bar while it moves, whoever works it.
+  const move = useRef({ v: sheet, t: 0, dir: 0 });
+  const now = performance.now();
+  if (Math.abs(sheet - move.current.v) > 0.0015) move.current = { v: sheet, t: now, dir: Math.sign(sheet - move.current.v) };
+  const moving = now - move.current.t < 600 ? move.current.dir : 0;
+  const moveWord = moving > 0 ? 'easing' : moving < 0 ? 'trimming' : '';
   return (
     <div className={`mod sail-mod is-${st.cls}`} data-tutorial={sail} role="group" aria-label={`${name} sheet`}>
       <div className="mod-top">
@@ -154,11 +205,24 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
           <strong>{st.text}</strong>
           {!ok && <span className="sr-only"> · {st.advice}</span>}
         </span>
-        <label className="toggle" title={`Auto-trim: the crew trims this sheet for you (${sail === 'main' ? 'M' : 'J'})`}>
-          <input type="checkbox" checked={auto} onChange={(e) => ctl.setInput(sail === 'main' ? { autoMain: e.target.checked } : { autoJib: e.target.checked })} />
-          <span>
-            Auto<span className="label-more">-trim</span>
-          </span>
+        {/* Auto-trim at work (review #24): the toggle reads "Crew trimming" while the crew works the sheet, and the
+            arrow on the sheet's bar shows which way. Its name for assistive technology stays "Auto-trim". */}
+        <label
+          className="toggle"
+          title={auto ? `Auto-trim is on: the crew is trimming this sheet; the arrow on the bar shows which way (${sail === 'main' ? 'M' : 'J'} to take it back)` : `Auto-trim: the crew trims this sheet for you (${sail === 'main' ? 'M' : 'J'})`}
+          data-word={auto ? 'Crew' : 'Auto'}
+          data-testid={`${sail}-auto`}
+        >
+          <input type="checkbox" checked={auto} aria-label={`Auto-trim, ${name.toLowerCase()}`} onChange={(e) => ctl.setInput(sail === 'main' ? { autoMain: e.target.checked } : { autoJib: e.target.checked })} />
+          {auto ? (
+            <span data-testid={`${sail}-crew`}>
+              Crew<span className="label-more"> trimming</span>
+            </span>
+          ) : (
+            <span>
+              Auto<span className="label-more">-trim</span>
+            </span>
+          )}
         </label>
       </div>
       <div className="mod-row">
@@ -170,10 +234,17 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(sheet * 100)}
-          title={`Sheet eased ${pct(sheet)}`}
+          aria-valuetext={`${pct(sheet)} eased${moveWord ? `, ${auto ? 'the crew is ' : ''}${moveWord}` : ''}${slack ? ', slack' : ''}`}
+          title={`Sheet eased ${pct(sheet)}${moveWord ? ` (${auto ? 'crew ' : ''}${moveWord})` : ''}${slack ? ': slack, the wind holds the sail inside the sheet' : ''}`}
           data-testid={`${sail}-sheet`}
+          data-moving={moving}
         >
           <div className="sheet-fill" style={{ width: pct(sheet) }} />
+          {moving !== 0 && (
+            <span className={`sheet-move ${moving > 0 ? 'out' : 'in'}`} style={{ left: `clamp(7px, ${pct(sheet)}, calc(100% - 7px))` }} aria-hidden="true" data-testid={`${sail}-sheet-move`}>
+              {moving > 0 ? '▸' : '◂'}
+            </span>
+          )}
           <span className="sheet-value">
             {pct(sheet)}
             <span className="sheet-word"> eased</span>
@@ -212,6 +283,7 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
         <div className="mod-row">
           <span className="helm-readout" aria-hidden="true">{helmReadout(s.rudder)}</span>
           <button onClick={() => ctl.centreHelm()} title="Centre the helm (Space)">Centre</button>
+          <LookUp ctl={ctl} />
         </div>
       </div>
       <div className="mod boat-mod" role="group" aria-label="Crew and sails">

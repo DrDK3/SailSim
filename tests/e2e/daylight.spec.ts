@@ -5,6 +5,9 @@ import { expect, test } from '@playwright/test';
  * after sunset offers it; the picture is then lit as at midday while the run stays real.
  */
 const CI_SLOW = process.env.CI ? 2 : 1;
+// Issue 202 (review #30): this file failed in some CI runs and passed in others on the same code, and the failures left
+// no trace. Keep a trace of any failing run so the cause can be read from it (no retries added for it).
+test.use({ trace: 'retain-on-failure' });
 
 test('dark in real time: the card offers a daylight view; the picture lights up, the run is unchanged', async ({ page }) => {
   // Software rendering of the night scene keeps the page busy: each step waits for a frame or two.

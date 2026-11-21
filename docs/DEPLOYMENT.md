@@ -145,7 +145,7 @@ The checks, for this or a later run:
 
 ## 6a. Racing other people: what works now, and what would need a server
 
-**Works now, at no cost (no server):** a run shared as a link (Library → "Copy a link to race this run", or "Challenge a friend" in the race results; `src/app/shareLink.ts`). The whole replay is compressed into the link after the `#`, which browsers do not send to the web server, so GitHub Pages never sees it. Whoever opens the link races that run as a ghost in their own browser, in the same scenario (today's challenge included). A ten-minute race makes a link of a few tens of thousands of characters: fine to copy, paste and email; some messaging apps may cut very long links, and then the replay file (Library → Save replay) does the same job.
+**Works now, at no cost (no server):** a run shared as a link (Scenarios and replays → "Copy a link to race this run", or "Challenge a friend" in the race results; `src/app/shareLink.ts`). The whole replay is compressed into the link after the `#`, which browsers do not send to the web server, so GitHub Pages never sees it. Whoever opens the link races that run as a ghost in their own browser, in the same scenario (today's challenge included). A ten-minute race makes a link of a few tens of thousands of characters: fine to copy, paste and email; some messaging apps may cut very long links, and then the replay file (Scenarios and replays → Save replay) does the same job.
 
 **Would need a server (not built; an owner decision):**
 

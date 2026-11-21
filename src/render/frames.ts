@@ -124,3 +124,74 @@ export function scenicPose(t: number): { bearing: number; distance: number; heig
     height: 2.6 + 1.2 * (0.5 + 0.5 * Math.sin(t * 0.013 + 1)),
   };
 }
+
+/**
+ * Chase framing that keeps the masthead clear of the interface (review #1–#3, 20 Nov 2026: the burgee at the masthead
+ * is the sailor's wind indicator, and the toolbar, notices and labels were covering it). The chase camera sits `dist`
+ * behind the boat at `chaseHeight(dist)` and looks at a point `lookH` above the water at the boat. In a view `viewH`
+ * px tall with a vertical field of view `fovDeg`, a point at height z and horizontal distance d appears at
+ * y = viewH/2 · (1 − tan(a − p) / tan(fov/2)) from the top, where a is the point's elevation from the camera and p the
+ * camera's pitch.
+ *
+ * Returns the look-at height and distance to use: the natural framing (`lookH` as given) when the masthead already
+ * lies at least `topPx` from the top and the hull's nearest point no lower than `bottomPx`; else the pitch is raised just enough to bring the masthead down to `topPx`, but never so far
+ * that the hull drops below `bottomPx`; if no pitch does both, the camera draws back (the boat smaller) until one
+ * does, up to three times the distance. Geometry only: the boat's motion is unchanged.
+ */
+export function chaseFraming(o: {
+  dist: number;
+  lookH: number;
+  /** Height of the masthead above the water (m). */
+  mastH: number;
+  fovDeg: number;
+  viewH: number;
+  /** The masthead must appear at least this far from the top (px). */
+  topPx: number;
+  /** The hull's nearest point must appear no lower than this (px from the top). */
+  bottomPx: number;
+  /** How much nearer the camera the hull's nearest point is than the mast (m): the stern, about 3 m. */
+  hullNearer?: number;
+}): { lookH: number; dist: number; fits: boolean } {
+  const T = Math.tan(((o.fovDeg / 2) * Math.PI) / 180);
+  const H = o.viewH;
+  const near = o.hullNearer ?? 3;
+  const sTop = (1 - (2 * o.topPx) / H) * T;
+  const sBot = (1 - (2 * o.bottomPx) / H) * T;
+  for (let k = 0, d = o.dist; k < 16; k++, d = Math.min(o.dist * 3, d * 1.08)) {
+    const h = chaseHeight(d);
+    const p0 = Math.atan2(o.lookH - h, d);
+    const aMast = Math.atan2(o.mastH - h, d);
+    const aHull = Math.atan2(0.3 - h, Math.max(1, d - near));
+    // Pitch at least pMin keeps the masthead below topPx; at most pMax keeps the hull above bottomPx.
+    const pMin = aMast - Math.atan(sTop);
+    const pMax = aHull - Math.atan(sBot);
+    if (pMin <= pMax || d >= o.dist * 3) {
+      const p = pMin <= pMax ? Math.min(pMax, Math.max(pMin, p0)) : (pMin + pMax) / 2;
+      return { lookH: h + d * Math.tan(p), dist: d, fits: pMin <= pMax };
+    }
+  }
+  return { lookH: o.lookH, dist: o.dist, fits: false };
+}
+
+/** Screen position (px from the top) of a point at height `z` (m), horizontal distance `d` (m), for the chase camera. */
+export function chaseScreenY(z: number, d: number, lookH: number, fovDeg: number, viewH: number): number {
+  const h = chaseHeight(d);
+  const T = Math.tan(((fovDeg / 2) * Math.PI) / 180);
+  const r = Math.atan2(z - h, d) - Math.atan2(lookH - h, d);
+  return (viewH / 2) * (1 - Math.tan(r) / T);
+}
+
+/**
+ * Look up at the masthead (review #1): how far the view has moved towards the masthead (0 … 1) after `dt` seconds of
+ * holding (`on`) or letting go. It eases over about 0.35 s; with reduced motion it cuts.
+ */
+export function lookUpBlend(u: number, on: boolean, dt: number, reduced: boolean): number {
+  if (reduced) return on ? 1 : 0;
+  const to = on ? 1 : 0;
+  return to + (u - to) * Math.exp(-dt / 0.12);
+}
+
+/** Two screen boxes (px: left, top, right, bottom) overlap, each grown by `pad`. */
+export function boxesOverlap(a: { l: number; t: number; r: number; b: number }, b: { l: number; t: number; r: number; b: number }, pad = 0): boolean {
+  return a.l - pad < b.r && a.r + pad > b.l && a.t - pad < b.b && a.b + pad > b.t;
+}

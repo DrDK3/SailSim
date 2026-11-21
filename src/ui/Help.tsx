@@ -17,6 +17,7 @@ const KEYS: [string, string][] = [
   ['P', 'Pause / resume'],
   ['R', 'Reset to the scenario start'],
   ['C', 'Cycle camera: chase (the wheel zooms), scenic, helm (drag to look around), orbit, drone, top'],
+  ['T (hold)', 'Look up at the masthead: the burgee (or vane) there shows the wind you sail by; let go to look back (chase, helm and orbit views)'],
   ['U', 'Sound on or off (levels: Settings → All settings → Sound)'],
   ['B', 'Drone view: fly back to the boat'],
   ['F', 'Show physics force arrows'],
@@ -48,7 +49,7 @@ export function Help({ onClose, onTutorial, build }: { onClose: () => void; onTu
         </table>
         <h3>Your Squib</h3>
         <p>
-          In Options → Boat, choose a Rondar (the modern standard: its cockpit drains itself), a classic Hunter or Parker
+          In Conditions → Boat, choose a Rondar (the modern standard: its cockpit drains itself), a classic Hunter or Parker
           hull (water that comes over the rail stays until your crew bails it, so keep the rail out of the water), or the
           new Hyde B3 / Batt sails. The burgee at the masthead shows the apparent wind. With wind against tide, as in the
           harbour entrance on the ebb, expect short, steep waves; More instruments shows the waves.

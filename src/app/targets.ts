@@ -14,8 +14,17 @@ import type { FleetPose } from '../render/fleet';
 export const TARGETS_SCHEMA = 'squib-weekly-targets/1';
 export const MEDALS = ['bronze', 'silver', 'gold'] as const;
 export type Medal = (typeof MEDALS)[number];
-/** Which AI level sails each target. */
-export const MEDAL_LEVEL: Record<Medal, 'club' | 'good' | 'expert'> = { bronze: 'club', silver: 'good', gold: 'expert' };
+/**
+ * The medal targets (review #11, 20 Nov 2026): gold is the expert AI's time; silver and bronze are that time slower by
+ * these fractions (E, L5: a spread chosen so a junior sees steps within reach, not the AI levels' own gaps, which were
+ * uneven from course to course; configurable here). Their ghosts are the gold ghost slowed by the same fraction after
+ * the start signal, and are labelled so.
+ */
+export const TARGET_SPREAD: Record<Medal, number> = { bronze: 0.25, silver: 0.1, gold: 0 };
+/** The AI level that sails the targets (gold; silver and bronze follow from it). */
+export const TARGET_LEVEL = 'expert' as const;
+/** Medals as people read them: the best first. */
+export const MEDALS_BEST_FIRST: readonly Medal[] = ['gold', 'silver', 'bronze'];
 
 /**
  * A ghost track: the boat's pose once a second (n, e, heading, heel, main and jib boom angles, luff factors, rudder,
@@ -30,8 +39,13 @@ export interface Track {
 export interface Target {
   medal: Medal;
   level: 'club' | 'good' | 'expert';
-  /** Seconds from the start signal to the finish: the median over the seeds that finished. */
+  /**
+   * Seconds from the start signal to the finish: the median over the seeds that finished (gold), or the gold time
+   * slower by `slowedBy` (silver, bronze).
+   */
   timeS: number;
+  /** Silver and bronze (since review #11): the fraction slower than gold; its ghost is the gold ghost slowed so. */
+  slowedBy?: number;
   /** Each seed's time (null: did not finish). */
   runs: (number | null)[];
   /** The ghost: the run nearest the median. */
@@ -49,7 +63,31 @@ export interface TargetsFile {
   /** The scenario's JSON, so the app can check the targets are for the course it built. */
   scenario: string;
   targets: Target[];
+  /** The good AI's median time on the course: a check that the course is a 5–10 minute junior course (review #10). */
+  sizing?: { level: 'good'; timeS: number | null; runs: (number | null)[] };
   note: string;
+}
+
+/** Minutes and seconds (6:40). */
+export const mmss = (s: number): string => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
+
+/** The targets in one line, best first: "gold 6:40 · silver 7:20 · bronze 8:20". */
+export function targetsLine(targets: readonly Pick<Target, 'medal' | 'timeS'>[]): string {
+  return MEDALS_BEST_FIRST.map((m) => targets.find((t) => t.medal === m)).filter((t): t is Pick<Target, 'medal' | 'timeS'> => !!t).map((t) => `${t.medal} ${mmss(t.timeS)}`).join(' · ');
+}
+
+/**
+ * A ghost track slowed after the start signal (`startS`, s from the track's start) by `factor` (1.1: 10% slower): the
+ * pre-start as sailed, then every pose reached that much later. For the silver and bronze ghosts (review #11).
+ */
+export function slowTrack(tr: Track, startS: number, factor: number): Track {
+  return {
+    everyS: tr.everyS,
+    rows: tr.rows.map((r) => {
+      const t = r[0]!;
+      return t <= startS ? r : [Math.round((startS + (t - startS) * factor) * 10) / 10, ...r.slice(1)];
+    }),
+  };
 }
 
 const r3 = (x: number) => Math.round(x * 1000) / 1000;

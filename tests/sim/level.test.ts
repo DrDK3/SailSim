@@ -39,3 +39,20 @@ describe('interface level', () => {
     expect(c.getState().level).toBe('expert');
   });
 });
+
+describe('review #20: place labels by level', () => {
+  it('off at Learn and Club, on at Expert; changing the level sets them; the menu toggle still works', async () => {
+    const { levelDefaults } = await import('../../src/app/level');
+    const { SimController } = await import('../../src/app/controller');
+    expect([levelDefaults('learn').labels, levelDefaults('club').labels, levelDefaults('expert').labels]).toEqual([false, false, true]);
+    const c = new SimController();
+    c.setLevel('expert');
+    expect(c.getState().showLabels).toBe(true);
+    c.setLevel('club');
+    expect(c.getState().showLabels).toBe(false);
+    c.toggleLabels();
+    expect(c.getState().showLabels).toBe(true);
+    c.setLevel('learn');
+    expect(c.getState().showLabels).toBe(false);
+  });
+});

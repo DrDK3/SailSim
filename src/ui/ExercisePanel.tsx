@@ -125,7 +125,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           <button onClick={() => ctl.exerciseRestartAttempt()}>Try this attempt again</button>
           <button
             onClick={() => downloadText(JSON.stringify(ctl.saveRecording(`${x.info.title}: attempt ${s.attempt}`)), `squib-exercise-attempt-${s.attempt}.replay.json`)}
-            title="This attempt as a replay file (from its start): open it in Library to watch it or race it as a ghost"
+            title="This attempt as a replay file (from its start): open it in Scenarios and replays to watch it or race it as a ghost"
             data-testid="exercise-save-replay"
           >
             Save this attempt (replay)

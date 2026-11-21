@@ -90,7 +90,7 @@ export interface LikeForLike {
 }
 
 /** Only these keys have like-for-like bests: the weekly course and the daily challenge. */
-export const isLikeForLikeKey = (key: string): boolean => /^(weekly:\d{4}-W\d{2}|challenge:\d{4}-\d{2}-\d{2})$/.test(key);
+export const isLikeForLikeKey = (key: string): boolean => /^(weekly:\d{4}-W\d{2}(:long)?|challenge:\d{4}-\d{2}-\d{2})$/.test(key);
 
 function loadAll(): Record<string, LikeForLike> {
   try {

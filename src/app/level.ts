@@ -46,7 +46,7 @@ export function saveLevel(l: InterfaceLevel): void {
 }
 
 /** What each level turns on by default. */
-export function levelDefaults(l: InterfaceLevel): { teaching: boolean; coach: boolean; raceAids: boolean; allInstruments: boolean; advancedDock: boolean } {
+export function levelDefaults(l: InterfaceLevel): { teaching: boolean; coach: boolean; raceAids: boolean; allInstruments: boolean; advancedDock: boolean; labels: boolean } {
   return {
     teaching: l === 'learn',
     coach: l !== 'expert',
@@ -54,5 +54,7 @@ export function levelDefaults(l: InterfaceLevel): { teaching: boolean; coach: bo
     raceAids: l !== 'expert',
     allInstruments: l === 'expert',
     advancedDock: l !== 'learn',
+    // Place (chart) labels: on at Expert only (review #20); a hover or tap shows one, the menu shows them all.
+    labels: l === 'expert',
   };
 }
