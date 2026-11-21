@@ -115,8 +115,8 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
   };
 
   return (
-    <section className="panel scenario" aria-label="Options">
-      <h3>Options</h3>
+    <section className="panel scenario" aria-label="Conditions">
+      <h3>Conditions</h3>
       <BoatChoice value={draft.boat ?? DEFAULT_SQUIB_TYPE} onChange={(boat) => setDraft({ ...draft, boat })} />
       <label className="field select-field">
         <span>Helm</span>
@@ -242,7 +242,7 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
       {ui.tideSources.length === 0 && (
         <p className="fine">No live tide file is published next to this copy of the app (needs the EA and UKHO hosts: docs/LIVE_TIDES.md).</p>
       )}
-      {!c.tide && ui.dart.status === 'loaded' && (
+      {!c.tide && (ui.dart.status === 'loaded' || ui.dart.status === 'ready') && (
         <p className="fine">No tide set: the water stays at about mean level ({'≈'}2.7 m above chart datum).</p>
       )}
       {manual && (
@@ -272,8 +272,8 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
         >
           <option value="none">None</option>
           <option value="uniform">Uniform (steady)</option>
-          <option value="dart" disabled={!c.tide || ui.dart.status !== 'loaded'}>
-            Channel-following tidal stream{!c.tide ? ' (set a tide first)' : ui.dart.status !== 'loaded' ? ' (needs the River Dart data)' : ''}
+          <option value="dart" disabled={!c.tide || (ui.dart.status !== 'loaded' && ui.dart.status !== 'ready')}>
+            Channel-following tidal stream{!c.tide ? ' (set a tide first)' : ui.dart.status !== 'loaded' && ui.dart.status !== 'ready' ? ' (needs the River Dart data)' : ''}
           </option>
           <option value="tidal" disabled={!c.tide}>Uniform tidal stream from tide timing{c.tide ? '' : ' (set a tide first)'}</option>
         </select>

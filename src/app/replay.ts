@@ -10,6 +10,12 @@ import type { ControlInput, InputLogEntry } from '../sim/simulation';
 import type { AppScenario } from './controller';
 
 export const REPLAY_SCHEMA = 'squib-replay/1';
+/**
+ * A recording in which the River Dart data joined the run part-way (review #9): the same as /1 with `dartFromStep`.
+ * Written only for such runs, so every other recording stays /1 and older builds (and the club table's verifier) read
+ * it as before; an older build refuses a /2 file rather than replaying it wrongly.
+ */
+export const REPLAY_SCHEMA_RIVER_JOINED = 'squib-replay/2';
 /** Hash the state every 1000 steps (10 s simulated). */
 export const CHECKPOINT_STEPS = 1000;
 
@@ -31,6 +37,11 @@ export interface Recording {
   initialInput: ControlInput | null;
   /** Whether the River Dart data was loaded (it changes depths, the stream and the obstacles). */
   dart: 'loaded' | 'none';
+  /**
+   * Schema /2 only: the step at which the River Dart data joined the run (the run began in open water and sailed on
+   * with the river's depths, stream and obstacles from this step). `dart` is then 'loaded'.
+   */
+  dartFromStep?: number;
   inputs: InputRow[];
   /** [step, state hash] every CHECKPOINT_STEPS steps, and at the end. */
   checkpoints: [number, string][];
@@ -62,7 +73,8 @@ const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFin
 export function parseRecording(json: unknown): Recording {
   const r = json as Partial<Recording>;
   if (!r || typeof r !== 'object') throw new Error('replay: not a JSON object');
-  if (r.schema !== REPLAY_SCHEMA) throw new Error(`replay: expected schema ${REPLAY_SCHEMA}, found ${String(r.schema)}`);
+  if (r.schema !== REPLAY_SCHEMA && r.schema !== REPLAY_SCHEMA_RIVER_JOINED) throw new Error(`replay: expected schema ${REPLAY_SCHEMA}, found ${String(r.schema)}`);
+  if (r.schema === REPLAY_SCHEMA_RIVER_JOINED ? !isNum(r.dartFromStep) || r.dartFromStep < 0 || r.dart !== 'loaded' : r.dartFromStep !== undefined) throw new Error('replay: bad river-joined step');
   if (!r.scenario || typeof r.scenario !== 'object' || !r.scenario.conditions) throw new Error('replay: missing scenario');
   if (!Array.isArray(r.inputs)) throw new Error('replay: missing inputs');
   let prev = -1;

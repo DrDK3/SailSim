@@ -85,3 +85,38 @@ describe('masthead vanes', () => {
     expect(Math.atan2(a2.x, -a2.z) / DEG + 360).toBeCloseTo(210, 4);
   });
 });
+
+describe('the player\'s masthead vane and the indicator in words (review #1–#4)', () => {
+  it('points into the apparent wind, with tacking tabs either side of dead aft', async () => {
+    const { MastheadVane } = await import('../../src/render/mastheadVane');
+    const THREE = await import('three');
+    const v = new MastheadVane(30);
+    // Wind from 40° to starboard: the arrow (built along −z, ahead) turns to point there, i.e. to +x and −z.
+    v.update((40 * Math.PI) / 180);
+    const tip = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), v.yaw);
+    expect(tip.x).toBeCloseTo(Math.sin((40 * Math.PI) / 180), 6);
+    expect(tip.z).toBeCloseTo(-Math.cos((40 * Math.PI) / 180), 6);
+    const tabs = v.group.children.filter((c) => c.name === 'masthead-vane-tab');
+    expect(tabs.map((t) => Math.round((t.rotation.y * 180) / Math.PI)).sort((a, b) => a - b)).toEqual([-30, 30]);
+    v.setTabs(42);
+    expect(tabs.map((t) => Math.round((Math.abs(t.rotation.y) * 180) / Math.PI))).toEqual([42, 42]);
+  });
+
+  it('the text alternative says where the wind comes from, rounded to 5°', async () => {
+    const { indicatorText, clampTabDeg, indicatorPose } = await import('../../src/app/windIndicator');
+    const D = Math.PI / 180;
+    expect(indicatorText(41 * D, 5)).toBe('Wind indicator: wind from 40° to starboard of the bow');
+    expect(indicatorText(-118 * D, 5)).toBe('Wind indicator: wind from 120° to port of the bow');
+    expect(indicatorText(1 * D, 5)).toBe('Wind indicator: wind from dead ahead');
+    expect(indicatorText(179.5 * D, 5)).toBe('Wind indicator: wind from dead astern');
+    expect(indicatorText(40 * D, 0.1)).toMatch(/limp/);
+    expect(clampTabDeg(10)).toBe(20);
+    expect(clampTabDeg(60)).toBe(45);
+    expect(clampTabDeg(Number.NaN)).toBe(30);
+    // The 2D drawing: the fly streams downwind (opposite where the wind comes from) and hangs shorter in light air.
+    const p = indicatorPose(40 * D, 6);
+    expect(p.flyDeg).toBeCloseTo(220, 6);
+    expect(p.arrowDeg).toBeCloseTo(40, 6);
+    expect(indicatorPose(40 * D, 0.5).flyLen).toBeLessThan(p.flyLen);
+  });
+});

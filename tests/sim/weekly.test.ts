@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isoWeekOf, rotation, weekOf, weekSeed, weeklyCourse } from '../../src/app/weekly';
+import { JUNIOR_GOOD_AI_S, JUNIOR_SLOTS, isoWeekOf, longRotation, rotation, weekOf, weekSeed, weeklyCourse, weeklyKey, weeklyLongKey, type WeeklyCourse } from '../../src/app/weekly';
+import { sailOnce } from '../../src/app/weeklyTargets';
 import { SimController } from '../../src/app/controller';
 
 /**
@@ -44,14 +45,26 @@ describe('the weekly course', () => {
     expect(a.scenario.fleet?.aiCount).toBe(0);
   });
 
-  it('the rotation covers the RDYC courses and practice courses, a different course next week', () => {
+  it('the rotation is short practice courses, a different course next week; the RDYC courses are the optional long course (review #10)', () => {
     const r = rotation();
-    expect(r.filter((s) => s.kind === 'club')).toHaveLength(8);
-    expect(r.filter((s) => s.kind === 'practice').length).toBeGreaterThanOrEqual(4);
-    const weeks = Array.from({ length: r.length }, (_, i) => weeklyCourse(new Date(Date.UTC(2026, 0, 5 + 7 * i, 12))));
+    expect(r.every((s) => s.kind === 'practice')).toBe(true);
+    expect(r.length).toBeGreaterThanOrEqual(4);
+    const weeks = Array.from({ length: 8 * r.length }, (_, i) => weeklyCourse(new Date(Date.UTC(2026, 0, 5 + 7 * i, 12))));
     for (let i = 1; i < weeks.length; i++) expect(JSON.stringify(weeks[i]!.slot)).not.toBe(JSON.stringify(weeks[i - 1]!.slot));
-    expect(new Set(weeks.filter((w) => w.slot.kind === 'club').map((w) => JSON.stringify(w.slot))).size).toBe(8);
-    for (const w of weeks) if (w.slot.kind === 'club') expect(w.status).toBe('pending club check');
+    for (const w of weeks) {
+      expect(w.slot.kind).toBe('practice');
+      expect(w.status).toBeUndefined();
+      // Each week also offers an RDYC course at full length, still labelled as pending the club's check.
+      expect(w.long?.status).toBe('pending club check');
+      expect(w.long?.scenario.course).toEqual({ source: 'library', id: w.long!.id });
+      expect(w.long?.summary).toMatch(/full length/);
+    }
+    expect(longRotation()).toHaveLength(8);
+    expect(new Set(weeks.map((w) => w.long!.id)).size).toBe(8);
+    // The long course leaves the short course's conditions as they were (its own seed stream).
+    const w = weeks[0]!;
+    expect((w.long!.scenario.conditions.weather as { twsKn: number }).twsKn).toBe((w.scenario.conditions.weather as { twsKn: number }).twsKn);
+    expect(weeklyLongKey(w.week)).toBe(`${weeklyKey(w.week)}:long`);
   });
 
   it('a season plan, when given, sets the week; other weeks follow the rotation', () => {
@@ -76,4 +89,25 @@ describe('the weekly course', () => {
       expect(c.restart(w.scenario), w.name).toBe(true);
     }
   });
+});
+
+describe('a junior course (review #10)', () => {
+  it('every slot of the rotation: the good AI finishes in 5 to 10 minutes in the lightest and strongest weekly winds (8 and 14 kn)', () => {
+    const base = weeklyCourse(new Date('2026-11-17T12:00:00Z'));
+    const out: string[] = [];
+    for (const slot of JUNIOR_SLOTS) {
+      if (slot.kind !== 'practice') continue;
+      for (const tws of [8, 14]) {
+        const w: WeeklyCourse = structuredClone(base);
+        (w.scenario.conditions.weather as { twsKn: number }).twsKn = tws;
+        w.scenario.course = { source: 'practice', kind: slot.practice, ...(slot.legM ? { legM: slot.legM } : {}), laps: slot.laps ?? 1 };
+        const t = sailOnce(w, 'good', 1, {}, 1800).timeS;
+        out.push(`${slot.practice} ${slot.legM} m ×${slot.laps ?? 1} at ${tws} kn: ${t} s`);
+        expect(t, `${slot.practice} ${slot.legM} at ${tws} kn`).not.toBeNull();
+        expect(t!, out.at(-1)).toBeGreaterThanOrEqual(JUNIOR_GOOD_AI_S[0]);
+        expect(t!, out.at(-1)).toBeLessThanOrEqual(JUNIOR_GOOD_AI_S[1]);
+      }
+    }
+    console.log(out.join('\n'));
+  }, 240_000);
 });

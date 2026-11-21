@@ -7,7 +7,9 @@ import type { BoatSnapshot } from '../sim/simulation';
 import type { BoatParams } from '../sim/boat/params';
 import type { Puff } from '../sim/env/wind';
 import { SunLight, rendererName, shadowQuality } from './sunlight';
-import { cameraFloor, chaseHeight, clampHelmLook, easeRide, followHeave, helmLookDir, lerpAngle, nedToThree, orientBoat, rideWaves, scenicPose, type WaveRide } from './frames';
+import { boxesOverlap, cameraFloor, chaseFraming, chaseHeight, clampHelmLook, easeRide, followHeave, helmLookDir, lerpAngle, lookUpBlend, nedToThree, orientBoat, rideWaves, scenicPose, type WaveRide } from './frames';
+import { LABEL_SPRITES, labelScreenBox } from './labels';
+import type { IndicatorType } from '../app/windIndicator';
 import { SquibModel, sailFill } from './squibModel';
 import type { CrewBuild } from './crew';
 import type { SquibTypeId } from '../sim/boat/squib';
@@ -71,6 +73,8 @@ const HELM_HEEL_FRACTION = 0.5;
 const FOV = 55;
 /** The scenic camera's narrower lens, and how long a change of camera takes to blend (s). */
 const SCENIC_FOV = 38;
+/** The field of view while looking up at the masthead (deg, E). */
+const LOOK_UP_FOV = 30;
 const BLEND_S = 0.7;
 const HELM_FOV = 68;
 const HELM_FOV_MIN = 20;
@@ -289,7 +293,13 @@ export class SceneView {
   private dart?: DartScene;
   /** Helm view: where the head is turned (rad, yaw > 0 to starboard, pitch > 0 up) and the zoom. */
   private helmLook = { yaw: 0, pitch: 0 };
+  /** The helm's eye in the boat's frame at the last frame (review #15; tests read it). */
+  readonly helmEyeLocal = new THREE.Vector3();
+  /** The eye as the reduced-motion helm view holds it (it follows helmEyeLocal smoothly). */
+  private helmEyeSteady?: THREE.Vector3;
   private helmFov = HELM_FOV;
+  /** The widest the helm view zooms out to (deg): Settings → helm view (review #15). */
+  private helmFovMax = HELM_FOV;
   private dragLook?: { x: number; y: number };
   /** Drone: carry the view along with the boat (otherwise it stays where it was flown). */
   droneFollow = false;
@@ -298,6 +308,27 @@ export class SceneView {
   private depthAt?: (n: number, e: number) => number;
   private readonly fleet: FleetView;
   showForces = false;
+  /** What flies at the player's masthead (review #4: a setting), kept across a rebuild of the boat. */
+  private indicator: { type: IndicatorType; tabDeg: number } = { type: 'burgee', tabDeg: 30 };
+  /**
+   * Look up at the masthead (review #1): held (`lookUpOn`) the view eases to look up the mast from the cockpit, and back
+   * on release; `lookUp` is how far it has gone (0 … 1). The pose the view had before is restored at the next frame,
+   * so the orbit view's own controls never see the borrowed pose.
+   */
+  private lookUpOn = false;
+  private lookUp = 0;
+  private lookUpBase?: { p: THREE.Vector3; q: THREE.Quaternion; fov: number };
+  /**
+   * The part of the screen the interface leaves clear (CSS px from the top): the masthead is kept below `top` and the
+   * hull above `bottom` in the chase view (review #3). Set by the interface as its layout changes.
+   */
+  private safe = { top: 0, bottom: Infinity };
+  /** The chase framing in use (eased): the look-at height above the water and the distance behind. */
+  private chaseFrame?: { lookH: number; dist: number };
+  /** Labels hidden this frame because they lay over the masthead, and the masthead's box on screen (CSS px). */
+  private labelsHidden: THREE.Sprite[] = [];
+  private mastBox?: { l: number; t: number; r: number; b: number; x: number; y: number };
+  private readonly mastScratch = new THREE.Vector3();
 
   constructor(container: HTMLElement, params: BoatParams) {
     this.onMotionPref();
@@ -330,6 +361,7 @@ export class SceneView {
     // Drone panning moves across the map (not the screen), as a map does.
     this.controls.screenSpacePanning = false;
     this.listenForHelmLook(this.renderer.domElement);
+    this.listenForLabelReveal(this.renderer.domElement);
 
     // Sky and lighting (setWeather moves the sun and changes them with the weather)
     const sunDir = this.sunDir;
@@ -406,6 +438,38 @@ export class SceneView {
     this.boat = new SquibModel(params, { type, helm });
     this.boatRoot.add(this.boat.group);
     this.boat.group.add(this.arrows.bodyGroup);
+    this.boat.setIndicator(this.indicator.type, this.indicator.tabDeg);
+  }
+
+  /** What flies at the masthead of the player's boat: the RDYC burgee or a masthead vane (review #4). */
+  setIndicator(type: IndicatorType, tabDeg: number): void {
+    this.indicator = { type, tabDeg };
+    this.boat.setIndicator(type, tabDeg);
+  }
+
+  /** Hold (true) or let go of (false) "look up" at the masthead (review #1). */
+  setLookUp(on: boolean): void {
+    this.lookUpOn = on;
+  }
+
+  /** How far the view is looking up at the masthead (0 … 1; tests). */
+  get lookUpAmount(): number {
+    return this.lookUp;
+  }
+
+  /** The part of the screen the interface leaves clear (CSS px from the top): see `safe`. */
+  setSafeArea(top: number, bottom: number): void {
+    this.safe = { top: Math.max(0, top), bottom: bottom > 0 ? bottom : Infinity };
+  }
+
+  /** Where the masthead was drawn last frame (CSS px), with the box kept clear round it; undefined behind the camera. */
+  get mastheadScreen(): { x: number; y: number; l: number; t: number; r: number; b: number } | undefined {
+    return this.mastBox;
+  }
+
+  /** Labels hidden at the last frame because they lay over the masthead (tests). */
+  get labelsHiddenForMasthead(): number {
+    return this.labelsHidden.length;
   }
 
   /** Show the River Dart (or remove it with undefined). `depthAt` keeps the motion-cue floats in the water. */
@@ -626,7 +690,7 @@ export class SceneView {
     }
     if (mode !== 'helm') {
       this.helmLook = { yaw: 0, pitch: 0 };
-      this.helmFov = HELM_FOV;
+      this.helmFov = this.helmFovMax;
     }
     this.lastBoat.copy(this.boatRoot.position);
     this.setFov(mode === 'helm' ? this.helmFov : mode === 'scenic' ? SCENIC_FOV : FOV);
@@ -644,13 +708,20 @@ export class SceneView {
   /** Helm view: look straight ahead again (also a double-click on the view). */
   resetHelmLook(): void {
     this.helmLook = { yaw: 0, pitch: 0 };
-    this.helmFov = HELM_FOV;
+    this.helmFov = this.helmFovMax;
     if (this.mode === 'helm') this.setFov(this.helmFov);
   }
 
   /** Helm view: turn the head by (yaw, pitch) radians, as a drag does. */
   turnHelmLook(dYaw: number, dPitch: number): void {
     this.helmLook = clampHelmLook(this.helmLook.yaw + dYaw, this.helmLook.pitch + dPitch);
+  }
+
+  /** The helm view's widest field of view (deg; Settings, review #15): the view opens at it, the wheel zooms in from it. */
+  setHelmFov(deg: number): void {
+    this.helmFovMax = deg;
+    this.helmFov = deg;
+    if (this.mode === 'helm') this.setFov(this.helmFov);
   }
 
   /** Where the helm is looking (rad) and the field of view (deg). */
@@ -675,6 +746,35 @@ export class SceneView {
     this.camera.near = near;
     this.camera.updateProjectionMatrix();
     this.sun?.resize();
+  }
+
+  /** The place label the last hover or tap revealed (review #20; tests read it). */
+  revealedLabel?: string;
+
+  /** With the place labels off, a mouse resting on a place, or a tap on it, labels it for a few seconds (review #20). */
+  private listenForLabelReveal(el: HTMLElement): void {
+    let last = 0;
+    let down: { x: number; y: number; t: number } | undefined;
+    const reveal = (x: number, y: number) => {
+      const r = el.getBoundingClientRect();
+      const t = this.dart?.revealNear(x - r.left, y - r.top, this.camera, r.width, r.height);
+      if (t) this.revealedLabel = t;
+    };
+    el.addEventListener('pointermove', (ev) => {
+      if (ev.pointerType !== 'mouse' || ev.buttons !== 0) return;
+      const now = performance.now();
+      if (now - last < 120) return;
+      last = now;
+      reveal(ev.clientX, ev.clientY);
+    });
+    el.addEventListener('pointerdown', (ev) => {
+      down = { x: ev.clientX, y: ev.clientY, t: performance.now() };
+    });
+    el.addEventListener('pointerup', (ev) => {
+      // A tap (a short press that does not drag), from a finger, a pen or a click.
+      if (down && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 10 && performance.now() - down.t < 400) reveal(ev.clientX, ev.clientY);
+      down = undefined;
+    });
   }
 
   /** Helm view: drag to turn the head, double-click to look ahead, the wheel zooms (binoculars). */
@@ -710,7 +810,7 @@ export class SceneView {
         }
         if (this.mode !== 'helm') return;
         ev.preventDefault();
-        this.helmFov = Math.max(HELM_FOV_MIN, Math.min(HELM_FOV, this.helmFov * Math.exp(ev.deltaY * 0.001)));
+        this.helmFov = Math.max(HELM_FOV_MIN, Math.min(this.helmFovMax, this.helmFov * Math.exp(ev.deltaY * 0.001)));
         this.setFov(this.helmFov);
       },
       { passive: false },
@@ -940,10 +1040,57 @@ export class SceneView {
     if (env?.fleet && this.fleet.count) this.fleet.update(env.fleet.prev, env.fleet.curr, alpha, time, frameDt, (fx, fz) => this.water.heightAt(fx, fz, time), env.fleet.showLabels);
     this.drawReflection();
     VIEWPORT.uViewportH.value = this.renderer.getDrawingBufferSize(this.bufferSize).y;
+    this.clearMasthead();
     if (this.graphics.ambientOcclusion) {
       this.post ??= new PostPipeline(this.renderer, this.scene, this.camera);
       this.post.render(frameDt);
     } else this.renderer.render(this.scene, this.camera);
+    // Labels hidden for this draw only: each part of the scene sets its labels' visibility again next frame.
+    for (const l of this.labelsHidden) l.visible = true;
+  }
+
+  /**
+   * Keep the masthead clear of labels (review #3): find where it is on the screen and hide, for this draw only, any
+   * label whose box comes within a few pixels of it. Labels taken out of the scene are dropped from the registry.
+   */
+  private clearMasthead(): void {
+    this.labelsHidden = [];
+    const el = this.renderer.domElement;
+    const w = el.clientWidth || this.renderer.getSize(this.bufferSize).x;
+    const h = el.clientHeight || this.renderer.getSize(this.bufferSize).y;
+    const m = this.boatRoot.localToWorld(this.mastScratch.copy(this.boat.anchors.masthead));
+    const v = m.clone().applyMatrix4(this.camera.matrixWorldInverse);
+    if (v.z >= 0) {
+      this.mastBox = undefined;
+      return;
+    }
+    m.project(this.camera);
+    const x = ((m.x + 1) / 2) * w;
+    const y = ((1 - m.y) / 2) * h;
+    // The burgee or vane streams up to about 0.4 m from the stick in any direction: a box of at least 24 px round it.
+    const r = Math.max(24, (0.6 * this.camera.projectionMatrix.elements[5] * h) / 2 / Math.max(1, -v.z));
+    this.mastBox = { x, y, l: x - r, t: y - r, r: x + r, b: y + r };
+    const scratch = new THREE.Vector3();
+    for (const sp of LABEL_SPRITES) {
+      if (!sp.parent) {
+        if (sp.userData.seenInScene) LABEL_SPRITES.delete(sp);
+        continue;
+      }
+      let o: THREE.Object3D | null = sp;
+      let shown = true;
+      while (o && o !== this.scene) {
+        if (!o.visible) shown = false;
+        o = o.parent;
+      }
+      if (o !== this.scene) continue;
+      sp.userData.seenInScene = true;
+      if (!shown) continue;
+      const box = labelScreenBox(sp, this.camera, w, h, scratch);
+      if (box && boxesOverlap(box, this.mastBox, 4)) {
+        sp.visible = false;
+        this.labelsHidden.push(sp);
+      }
+    }
   }
 
   /** The scene mirrored in calm water (reflection.ts), when the settings and the wind allow it. */
@@ -1064,6 +1211,15 @@ export class SceneView {
   }
 
   private updateCamera(heading: number, dt: number, moved: number, heel = 0): void {
+    // The pose borrowed for "look up" last frame is given back first: the views (the orbit's controls above all)
+    // carry on from their own.
+    if (this.lookUpBase) {
+      this.camera.position.copy(this.lookUpBase.p);
+      this.camera.quaternion.copy(this.lookUpBase.q);
+      this.camera.fov = this.lookUpBase.fov;
+      this.camera.updateProjectionMatrix();
+      this.lookUpBase = undefined;
+    }
     // Follow the boat, but not down when she sinks: never more than half a metre under the sea's surface.
     const b = this.boatRoot.position.clone();
     b.y = Math.max(b.y, this.ride.heave - 0.5);
@@ -1080,12 +1236,30 @@ export class SceneView {
     // reduced motion). At most 1.2 m and 0.25 m (E).
     const fe = cameraFeel(this.feel, this.cues, dt, motion);
     if (this.mode === 'chase') {
+      // Framed so the masthead (the wind indicator) lies below the interface at the top and the hull above the
+      // console (review #3): tilted up a little, or drawn back, only when the natural framing would hide either.
+      const el = this.renderer.domElement;
+      const viewH = el.clientHeight || this.renderer.getSize(this.bufferSize).y;
+      const want = chaseFraming({
+        dist: this.chaseDist,
+        lookH: 2.5,
+        mastH: this.boat.anchors.masthead.y,
+        fovDeg: this.camera.fov,
+        viewH,
+        topPx: this.safe.top + 30,
+        bottomPx: Math.min(viewH - 6, this.safe.bottom - 10),
+      });
+      const fk = this.chaseFrame && moved < 50 ? 1 - Math.exp(-dt * 3) : 1;
+      this.chaseFrame ??= { lookH: want.lookH, dist: want.dist };
+      this.chaseFrame.lookH += (want.lookH - this.chaseFrame.lookH) * fk;
+      this.chaseFrame.dist += (want.dist - this.chaseFrame.dist) * fk;
+      const cf = this.chaseFrame;
       const back = new THREE.Vector3(-Math.sin(this.chaseHeading), 0, Math.cos(this.chaseHeading));
-      this.camera.position.set(b.x, y - fe.drop, b.z).addScaledVector(back, this.chaseDist + fe.back).add(new THREE.Vector3(0, chaseHeight(this.chaseDist), 0));
+      this.camera.position.set(b.x, y - fe.drop, b.z).addScaledVector(back, cf.dist + fe.back).add(new THREE.Vector3(0, chaseHeight(cf.dist), 0));
       // A little of the heel in the horizon with more camera motion (none at 0: a level horizon).
       const fwd = new THREE.Vector3(Math.sin(this.chaseHeading), 0, -Math.cos(this.chaseHeading));
       this.camera.up.set(0, 1, 0).applyAxisAngle(fwd, -heel * 0.12 * motion);
-      this.camera.lookAt(b.x, y + 2.5, b.z);
+      this.camera.lookAt(b.x, y + cf.lookH, b.z);
       this.camera.up.set(0, 1, 0);
     } else if (this.mode === 'scenic') {
       // Low and well off, circling slowly: the boat in her setting. Never below the hills' or the water's floor.
@@ -1108,12 +1282,22 @@ export class SceneView {
       this.camera.position.set(cx, cy, cz);
       this.camera.lookAt(b.x, y + 2.8, b.z);
     } else if (this.mode === 'helm') {
-      // The helmsman's eye, sitting on the windward side deck aft (that figure is hidden in this view).
+      // The helm's own eye, sitting on the windward side deck aft (review #15): where the helm figure's head is, which
+      // is not drawn in this view (the hands, the tiller and the legs are), ducking under the boom as it comes over.
       const side = this.crewSide;
       // With reduced motion the eye follows the heading only: no heel, pitch or wave heave.
       const frame = reduced ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -heading) : this.boatRoot.quaternion;
       const base = reduced ? new THREE.Vector3(b.x, y, b.z) : this.boatRoot.position;
-      const eye = new THREE.Vector3(side * 0.8, 1.5, 2.15).applyQuaternion(frame).add(base);
+      this.boat.helmEye(this.helmEyeLocal);
+      // With reduced motion the eye also moves smoothly as the helm shifts on the deck (hiking, tacking): at most
+      // 0.5 m/s and under 1 cm a frame, so it never jumps however slowly frames come (review GR-4).
+      if (reduced && this.helmEyeSteady) {
+        const d = this.helmEyeLocal.clone().sub(this.helmEyeSteady);
+        const step = Math.min(0.5 * dt, 0.009);
+        if (d.length() > step) d.setLength(step);
+        this.helmEyeSteady.add(d);
+      } else this.helmEyeSteady = this.helmEyeLocal.clone();
+      const eye = this.helmEyeSteady.clone().applyQuaternion(frame).add(base);
       // Awash or sinking, the helm's head stays above the water.
       eye.y = Math.max(eye.y, this.ride.heave + 0.45);
       this.camera.position.copy(eye);
@@ -1176,7 +1360,34 @@ export class SceneView {
       this.camera.quaternion.slerpQuaternions(this.blend.q, this.camera.quaternion.clone(), e);
       if (t >= 1) this.blend = undefined;
     }
+    this.applyLookUp(dt);
     this.lastBoat.copy(b);
+  }
+
+  /**
+   * Look up at the masthead (review #1): while held, the view eases from wherever it is to the view up the mast from
+   * the cockpit (just to windward of the centreline, near the tiller), and back on release; a cut with reduced motion.
+   * In the chase, helm and orbit views. The pose before is kept and given back at the next frame.
+   */
+  private applyLookUp(dt: number): void {
+    const allowed = this.mode === 'chase' || this.mode === 'helm' || this.mode === 'orbit';
+    this.lookUp = lookUpBlend(this.lookUp, this.lookUpOn && allowed, dt, this.reducedMotion);
+    if (this.lookUp < 0.002 || !allowed) {
+      if (!this.lookUpOn) this.lookUp = this.lookUp < 0.002 ? 0 : this.lookUp;
+      return;
+    }
+    this.lookUpBase = { p: this.camera.position.clone(), q: this.camera.quaternion.clone(), fov: this.camera.fov };
+    const eye = this.boatRoot.localToWorld(new THREE.Vector3(this.crewSide * 0.25, 1.55, 2.7));
+    const top = this.boatRoot.localToWorld(this.mastScratch.copy(this.boat.anchors.masthead));
+    eye.y = Math.max(eye.y, this.ride.heave + 0.45);
+    const look = new THREE.Matrix4().lookAt(eye, top, new THREE.Vector3(0, 1, 0));
+    const q = new THREE.Quaternion().setFromRotationMatrix(look);
+    const u = this.lookUp;
+    this.camera.position.lerpVectors(this.lookUpBase.p, eye, u);
+    this.camera.quaternion.slerpQuaternions(this.lookUpBase.q, q, u);
+    // A narrower view up the mast, as a sailor's eye picks out the flag (E: 30°).
+    this.camera.fov = this.lookUpBase.fov + (LOOK_UP_FOV - this.lookUpBase.fov) * u;
+    this.camera.updateProjectionMatrix();
   }
 
   /** The 16 puffs nearest the boat, with their life envelope, as water-shader uniforms. */

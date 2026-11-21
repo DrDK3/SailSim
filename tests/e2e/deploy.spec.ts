@@ -120,8 +120,8 @@ type LiveUi = { weatherSources: { kind: string; label: string; freshness?: { sta
 const liveUi = (page: Page) => page.evaluate(() => window.__squib!.controller.getState() as unknown as LiveUi);
 
 async function openScenario(page: Page) {
-  await page.getByRole('button', { name: 'Options', exact: true }).click();
-  return page.getByRole('region', { name: 'Options' });
+  await page.getByRole('button', { name: 'Conditions', exact: true }).click();
+  return page.getByRole('region', { name: 'Conditions' });
 }
 
 test('live data: a current forecast is offered as live; choosing it follows the forecast and its sky', async ({ page, baseURL }) => {

@@ -1,4 +1,6 @@
 import { LEVELS } from '../app/level';
+import { INDICATOR_LABEL, TAB_DEG_RANGE, clampTabDeg } from '../app/windIndicator';
+import { HELM_FOV_RANGE, clampHelmFov } from '../app/prefs';
 import { useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { ReportProblem } from './ReportProblem';
@@ -151,6 +153,51 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
           </label>
         </div>
+        <h5>Wind indicator</h5>
+        <div className="row left wrap" role="radiogroup" aria-label="Wind indicator at the masthead" data-testid="pref-indicator">
+          {(['burgee', 'vane'] as const).map((t) => (
+            <label key={t} className="check">
+              <input type="radio" name="indicator" checked={ui.prefs.windIndicator === t} onChange={() => ctl.setPrefs({ windIndicator: t })} /> {INDICATOR_LABEL[t]}
+            </label>
+          ))}
+        </div>
+        {ui.prefs.windIndicator === 'vane' && (
+          <label className="slider">
+            <span>Tacking tabs {ui.prefs.vaneTabDeg}° either side of dead aft</span>
+            <input
+              type="range"
+              min={TAB_DEG_RANGE[0]}
+              max={TAB_DEG_RANGE[1]}
+              step={1}
+              value={ui.prefs.vaneTabDeg}
+              onChange={(e) => ctl.setPrefs({ vaneTabDeg: clampTabDeg(Number(e.target.value)) })}
+              aria-label="Tacking tab angle (degrees either side of dead aft)"
+              data-testid="pref-tab-deg"
+            />
+          </label>
+        )}
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.mastheadInset} onChange={(e) => ctl.setPrefs({ mastheadInset: e.target.checked })} data-testid="pref-inset" />
+          The masthead in a small picture by the compass. Hold T (or ⇡ on the console) to look up at it
+        </label>
+        <p className="fine">
+          Both fly in the apparent wind the simulation gives (one value for the whole rig). Which of the two Squib sailors use is still to be asked; the
+          tabs' angle is an estimate (E) to set to suit.
+        </p>
+        <h5>Helm view</h5>
+        <label className="slider">
+          <span>Field of view {ui.prefs.helmFovDeg}° (the wheel or a pinch zooms in from it)</span>
+          <input
+            type="range"
+            min={HELM_FOV_RANGE[0]}
+            max={HELM_FOV_RANGE[1]}
+            step={1}
+            value={ui.prefs.helmFovDeg}
+            onChange={(e) => ctl.setPrefs({ helmFovDeg: clampHelmFov(Number(e.target.value)) })}
+            aria-label="Helm view field of view (degrees)"
+            data-testid="pref-helm-fov"
+          />
+        </label>
         <h5>Game controller</h5>
         <p className="fine" data-testid="gamepad-help">
           {ui.gamepad ? 'A game controller is connected. ' : 'Connect a game controller (and press a button) to use it. '}

@@ -54,7 +54,7 @@ test('keyboard helm and sheet controls change the boat', async ({ page }) => {
   expect(input.mainSheet).toBeGreaterThan(sheetBefore);
 });
 
-test('on-screen buttons, pause, help and Options panel work', async ({ page }) => {
+test('on-screen buttons, pause, help and Conditions panel work', async ({ page }) => {
   // Opens Layers and sources to read the session summary: slow in software rendering.
   test.slow();
   await open(page);
@@ -75,7 +75,7 @@ test('on-screen buttons, pause, help and Options panel work', async ({ page }) =
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Help' })).toBeHidden();
 
-  await page.getByRole('button', { name: 'Options', exact: true }).click();
+  await page.getByRole('button', { name: 'Conditions', exact: true }).click();
   const tws = page.locator('.scenario .field', { hasText: 'True wind speed' }).locator('input[type="number"]');
   await tws.fill('15');
   await page.getByRole('button', { name: 'Apply and restart' }).click();
@@ -140,12 +140,12 @@ test('validation dashboard: eight live charts, table view, CSV export', async ({
   expect(errors).toEqual([]);
 });
 
-test('Options panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
+test('Conditions panel: replay weather, manual tide and tidal stream appear, labelled, in the instruments', async ({ page }) => {
   // Opens Layers and sources to read the session summary: slow in software rendering.
   test.slow();
   const errors = await open(page);
-  await page.getByRole('button', { name: 'Options', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Options' });
+  await page.getByRole('button', { name: 'Conditions', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Conditions' });
   const source = panel.locator('.field', { hasText: 'Source' }).locator('select');
   // Two bundled replays (22 Oct 07:15 and 23 Oct 14:00 UTC); no live forecast is published here.
   await expect(source.locator('option', { hasText: 'Replay' })).toHaveCount(2);
@@ -201,7 +201,8 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
     (c as unknown as { view: { scene: { traverse: (f: (o: { name: string }) => void) => void } } }).view.scene.traverse((o) => names.add(o.name));
     return { dart: c.getState().dart, names: [...names] };
   });
-  expect(state.dart).toEqual({ status: 'loaded', issues: [] });
+  // `ask`: no card asking to restart with the river (it loaded before anything was sailed; review #9).
+  expect(state.dart).toEqual({ status: 'loaded', issues: [], ask: false });
   for (const n of ['terrain', 'buildings', 'pontoons', 'moorings', 'traffic', 'mark', 'club-ensign', 'berthed-vanes', 'walkers']) expect(state.names).toContain(n);
   await expect(page.getByTestId('minimap')).toBeVisible();
   await expectSessionSummary(page, 'River Dart (depths and stream provisional)');
@@ -217,8 +218,8 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   await expect(page.getByRole('dialog', { name: 'Map layers and sources' })).toContainText('Contains modified Copernicus Sentinel data 2025');
   await page.keyboard.press('Escape');
   // The channel-following stream is labelled provisional where it is chosen.
-  await page.getByRole('button', { name: 'Options', exact: true }).click();
-  const panel = page.getByRole('region', { name: 'Options' });
+  await page.getByRole('button', { name: 'Conditions', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Conditions' });
   await panel.locator('.field', { hasText: /^Tide/ }).locator('select').selectOption('manual');
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('dart');
   await expect(panel).toContainText('Illustrative only: the pattern follows the channel');
@@ -278,11 +279,11 @@ test('Phase 3: without the River Dart data the app falls back to open water and 
   await expect.poll(async () => (await snap(page)).t, { timeout: 20_000 }).toBeGreaterThan(t0);
 });
 
-test('Phase 4: a practice course from the race set-up (the Options panel points there): countdown, start signal, and a start when the boat crosses', async ({ page }) => {
+test('Phase 4: a practice course from the race set-up (the Conditions panel (was Options) points there): countdown, start signal, and a start when the boat crosses', async ({ page }) => {
   const errors = await open(page);
-  // One race set-up (review U4): the Options panel no longer has its own course and fleet options.
-  await page.getByRole('button', { name: 'Options', exact: true }).click();
-  const scenario = page.getByRole('region', { name: 'Options' });
+  // One race set-up (review U4): the Conditions panel (was Options) no longer has its own course and fleet options.
+  await page.getByRole('button', { name: 'Conditions', exact: true }).click();
+  const scenario = page.getByRole('region', { name: 'Conditions' });
   await expect(scenario.getByTestId('scenario-course')).toContainText('set in Race');
   await scenario.getByRole('button', { name: 'Race set-up…' }).click();
   const panel = page.getByRole('region', { name: 'Race set-up' });

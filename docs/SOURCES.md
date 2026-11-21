@@ -137,6 +137,12 @@ No photograph of either vessel could be viewed (the image and operator hosts are
 | P3 | The owner's photograph of MV Cardiff Castle under way, and two screenshots of the app showing the faults (supplied in the conversation, 29 Oct 2026) | n/a | Oct 2026 | Direct | Her livery and layout (`cruiserModel` in src/render/traffic.ts): a dark navy hull with a white crest on the bow and a white band at the gunwale; a long main saloon with large windows; the upper deck behind a solid white bulwark, lined with passengers; a raised wheelhouse forward; a tall white mast with a radar and flags; no funnel to be seen. The photograph is small: sizes and the crest's shape are estimates (E) |
 | N1 | Wikipedia, "HMS Cromer (M103)" and "Britannia Royal Naval College" (via search excerpts) | https://en.wikipedia.org/wiki/HMS_Cromer_(M103) ; https://en.wikipedia.org/wiki/Britannia_Royal_Naval_College | n.d. | Excerpt (en.wikipedia.org blocked) | The Hindostan, the college's static training ship moored off Sandquay, is the former Sandown-class minehunter HMS Cromer (M103), 52.5 m by 10.5 m, renamed for the role. OSM maps her as a building; she is drawn as a minehunter on OSM's outline (src/render/traffic.ts `minehunterModel`). Her appearance follows the class in outline only: no photograph or drawing of her was viewed (E) |
 
+## The club's approval (20 Nov 2026)
+
+| Id | Source | Where | Date | Read | Used for |
+|---|---|---|---|---|---|
+| RA1 | The owner: "The RDYC has approved use of the club's name and burgee (owner, 20 Nov 2026)." | Owner statement in the next-round request (no document seen) | 20 Nov 2026 | Statement (O) | Use of the club's name and burgee, exactly as stated, and no wider. The RDYC courses are still pending the club's check (docs/CLUB_DOCUMENTS.md §4) |
+
 ## Documents supplied by the owner (3 Nov 2026)
 
 Read in full; not stored in the repository (the publishers' copyright). What each says, rule by rule, is in [CLUB_DOCUMENTS.md](CLUB_DOCUMENTS.md).

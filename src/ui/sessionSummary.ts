@@ -20,6 +20,6 @@ export function conditionsText(sc: AppScenario): string {
 }
 
 export function sessionSummary(ui: Pick<UiState, 'dart' | 'scenario'>): string {
-  const where = ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : 'open water';
+  const where = ui.dart.status === 'loaded' ? 'River Dart (depths and stream provisional)' : ui.dart.status === 'loading' ? 'loading the River Dart…' : ui.dart.status === 'ready' ? 'open water (the River Dart joins at the next start)' : 'open water';
   return `${where} · ${conditionsText(ui.scenario)} · physics estimated · not for navigation`;
 }

@@ -18,7 +18,7 @@ test('race this run as a ghost: the same scenario from the start, with a see-thr
     c.press('helmLeft', false);
     window.__squib!.advance(20);
   });
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'Scenarios and replays', exact: true }).click();
   await page.getByTestId('ghost-this-run').click();
   await expect(page.getByTestId('ghost-chip')).toBeVisible({ timeout: 60_000 * CI_SLOW });
   const r = await page.evaluate(() => {
