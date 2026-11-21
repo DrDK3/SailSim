@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Squib Sailing Simulator</title>
+    <meta name="description" content="Sail a National Squib keelboat on the River Dart and in Start Bay, in your browser: short lessons, free sailing, and races against AI boats. A simulator, not for navigation." />
+    <meta name="theme-color" content="#1f4e79" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Squib Sailing Simulator" />
+    <meta property="og:description" content="Sail a National Squib on the River Dart and in Start Bay, in your browser: lessons, free sailing and races against AI boats." />
+    <meta property="og:url" content="https://drdk3.github.io/SailSim/landing.html" />
+    <meta property="og:image" content="https://drdk3.github.io/SailSim/social-card.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://drdk3.github.io/SailSim/social-card.jpg" />
+    <!-- A static page about the simulator (package E, review #40): no scripts, no cookies, no third-party fonts or
+         images. The simulator itself stays at the site's address (./). Every picture is the simulator's own render. -->
+    <style>
+      :root {
+        --bg: #f6f8fa;
+        --ink: #14212c;
+        --muted: #4a5b69;
+        --card: #ffffff;
+        --line: #d5dee6;
+        --accent: #1f4e79;
+        --accent-ink: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1c28;
+          --ink: #e6edf3;
+          --muted: #a8b6c3;
+          --card: #162736;
+          --line: #2a3d4f;
+          --accent: #8cc2f0;
+          --accent-ink: #0f1c28;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+      main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 8px; }
+      h2 { font-size: 22px; margin: 32px 0 8px; }
+      p { margin: 8px 0; }
+      .lead { font-size: 18px; color: var(--muted); max-width: 46em; }
+      .cta { display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; margin: 12px 12px 4px 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 700; text-decoration: none; }
+      .cta.secondary { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+      a { color: var(--accent); }
+      figure { margin: 20px 0; }
+      img, video { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); background: #0f1c28; }
+      figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+      .card h3 { margin: 0 0 4px; font-size: 17px; }
+      .card p { margin: 0; color: var(--muted); }
+      .trust li { margin: 4px 0; }
+      footer { margin-top: 40px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><img src="icons/icon.svg" alt="" width="48" height="48" style="width: 48px; border: 0; background: none" /></p>
+      <h1>Squib Sailing Simulator</h1>
+      <p class="lead">Sail a National Squib, the 5.8 m keelboat raced at the Royal Dart Yacht Club, on the River Dart and in Start Bay. It runs in your browser: nothing to install, no account.</p>
+      <p>
+        <a class="cta" href="./">Start sailing</a>
+        <a class="cta secondary" href="#trust">How far to trust it</a>
+      </p>
+
+      <figure>
+        <img src="media/hero.jpg" width="1600" height="900" alt="A Squib sailing on the River Dart, a town and wooded hills behind: a render from the simulator" />
+        <figcaption>The simulator&rsquo;s own render, not a photograph.</figcaption>
+      </figure>
+
+      <h2>What you can do</h2>
+      <div class="grid">
+        <div class="card"><h3>Learn to sail</h3><p>Six short lessons, each checked as you sail, then seamanship: a mooring, coming alongside, man overboard. The Learn map shows what to do next.</p></div>
+        <div class="card"><h3>Sail the Dart</h3><p>Free sailing on the river and in Start Bay, in the Met Office forecast or the wind and tide you choose.</p></div>
+        <div class="card"><h3>Race</h3><p>Today&rsquo;s challenge, this week&rsquo;s short course, a start drill, or up to 20 AI Squibs on a course you choose.</p></div>
+        <div class="card"><h3>Look back</h3><p>A debrief after each sail, replays, a ghost of a run to race, and a challenge to share by link.</p></div>
+      </div>
+
+      <figure>
+        <video src="media/trailer.mp4" controls muted playsinline preload="none" poster="media/hero.jpg" width="960" height="540" aria-describedby="trailer-cap"><track kind="captions" src="media/trailer.vtt" srclang="en" label="English (no sound)" default /></video>
+        <figcaption id="trailer-cap">A sail on the River Dart: the boat from behind, the harbour from above, then from behind again. 24 seconds, no sound: the simulator&rsquo;s own frames (drawn at its lowest graphics setting), not a recording of a real boat.</figcaption>
+      </figure>
+
+      <h2 id="trust">How far to trust it</h2>
+      <ul class="trust">
+        <li>The boat moves by a physics model. Her dimensions are from class sources; the water and sail coefficients are estimates awaiting calibration with Squib sailors. Nothing in it has been validated against a real Squib.</li>
+        <li>The river comes from open data. Mid-channel depths, individual moorings, most ferry timetables and the tidal stream are provisional estimates.</li>
+        <li>The race judge applies a simplified subset of the racing rules: it is not an authoritative adjudication.</li>
+        <li><strong>Not for navigation or performance prediction.</strong></li>
+      </ul>
+      <p>The simulator&rsquo;s About page and its Instructor view say where each figure comes from.</p>
+
+      <footer>
+        <p>Free to use; it runs entirely in your browser. What you sail is kept in your browser unless you choose to send it.</p>
+        <p>The RDYC has approved use of the club&rsquo;s name and burgee.</p>
+      </footer>
+    </main>
+  </body>
+</html>

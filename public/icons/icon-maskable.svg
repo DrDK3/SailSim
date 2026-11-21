@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <!-- Maskable: the mark inside the central safe zone (80 %), on a full-bleed background. -->
+  <rect width="40" height="40" fill="#dfe9f2"/>
+  <g transform="translate(8 7) scale(0.75)">
+    <path d="M16 3 L16 26 L6 26 Z" fill="#f4f1e8" stroke="#1f4e79" stroke-width="1.3"/>
+    <path d="M18 8 L18 26 L26 26 Z" fill="#f4f1e8" stroke="#1f4e79" stroke-width="1.3"/>
+    <path d="M4 27 H28 L25 30 H7 Z" fill="#1f4e79"/>
+  </g>
+</svg>
