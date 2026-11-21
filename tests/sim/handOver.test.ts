@@ -5,6 +5,13 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SimController, DEFAULT_SCENARIO } from '../../src/app/controller';
+import { INPUT_GRID } from '../../src/app/replay';
+
+/**
+ * Handed over at the same setting: to within half a step of the grid of thousandths the player's controls are kept on
+ * (package C, compact replays), far below anything a jump would be.
+ */
+const handedOver = (now: number, before: number) => expect(Math.abs(now - before)).toBeLessThanOrEqual(0.5 / INPUT_GRID + 1e-12);
 
 const memory = new Map<string, string>();
 beforeEach(() => {
@@ -44,7 +51,7 @@ describe('issue 201: auto-trim off hands the sheet over without a jump', () => {
     expect(Math.abs(before - 0.3)).toBeGreaterThan(0.2);
     c.setInput({ autoMain: false });
     expect(c.sim.input.autoMain).toBe(false);
-    expect(c.sim.currentSheet('main')).toBeCloseTo(before, 9);
+    handedOver(c.sim.currentSheet('main'), before);
     // And the boat sails on as before: speed after 3 s within 2% of the boat that kept auto-trim.
     const kept = broadReach();
     c.advance(3);
@@ -58,7 +65,7 @@ describe('issue 201: auto-trim off hands the sheet over without a jump', () => {
     expect(Math.abs(before - 0.3)).toBeGreaterThan(0.2);
     key(c, 'KeyJ');
     expect(c.sim.input.autoJib).toBe(false);
-    expect(c.sim.currentSheet('jib')).toBeCloseTo(before, 9);
+    handedOver(c.sim.currentSheet('jib'), before);
   });
 
   it('a lesson step that gives the crew the sheet (Trim, step "main") hands it over at the same setting', () => {
@@ -69,7 +76,7 @@ describe('issue 201: auto-trim off hands the sheet over without a jump', () => {
     c.tutorialNext();
     expect(c.getState().tutorial?.step.id).toBe('main');
     expect(c.sim.input.autoMain).toBe(false);
-    expect(c.sim.currentSheet('main')).toBeCloseTo(before, 9);
+    handedOver(c.sim.currentSheet('main'), before);
   });
 
   it('a change that sets the sheet keeps its own value (release sheets, explicit settings)', () => {

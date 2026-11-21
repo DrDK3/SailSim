@@ -8,12 +8,15 @@ import { Woodland } from '../../src/render/trees';
  * impostors that cast no shadow.
  */
 
-/** A square of dark-green drape (woodland) 1 km across, centred on the origin, on flat ground above the shore. */
+/**
+ * A square of dark-green drape (woodland) 400 m across, centred on the origin, on flat ground above the shore: small
+ * enough that from 1,850 m off every chunk of it is beyond the impostor distance and inside the drawing range.
+ */
 function wood(impostors = false): Woodland {
-  const nx = 100;
+  const nx = 40;
   const pixels = new Uint8ClampedArray(nx * nx * 4);
   for (let k = 0; k < nx * nx; k++) pixels.set([32, 58, 30, 255], k * 4);
-  const w = new Woodland({ pixels, drape: { nx, ny: nx, cell: 10, e0: -500, n0: -500 }, groundAt: () => 20 });
+  const w = new Woodland({ pixels, drape: { nx, ny: nx, cell: 10, e0: -200, n0: -200 }, groundAt: () => 20 });
   w.impostors = impostors;
   return w;
 }
@@ -42,15 +45,20 @@ function positions(w: Woodland): string[] {
 }
 
 describe('trees', () => {
-  it('near trees come in several shapes, each one instanced mesh', () => {
+  it('near trees come in several shapes, each one instanced mesh; far crowns in one shape a family (no extra draw calls)', () => {
     const w = wood();
     w.update(cameraAt(0, 0));
     const geos = new Set(meshes(w).map((m) => m.geometry.uuid));
     // Three broadleaf shapes and two conifers (a cone and a pine): more than the two meshes there were before.
     expect(geos.size).toBeGreaterThanOrEqual(4);
-    expect(w.count).toBeGreaterThan(1000);
+    expect(w.count).toBeGreaterThan(500);
     // Every tree drawn once.
     expect(meshes(w).reduce((s, m) => s + m.count, 0)).toBe(w.count);
+    // Far (850 m on, no impostors): one broadleaf and one conifer mesh a chunk, as before the shapes.
+    const far = wood();
+    far.update(cameraAt(0, 1200));
+    expect(new Set(meshes(far).map((m) => m.geometry.uuid)).size).toBeLessThanOrEqual(2);
+    expect(meshes(far).reduce((s, m) => s + m.count, 0)).toBe(far.count);
   });
 
   it('the shapes do not move or add trees: the same places, whichever band draws them', () => {

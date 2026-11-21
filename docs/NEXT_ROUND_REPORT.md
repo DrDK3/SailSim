@@ -11,7 +11,7 @@ measured means measured in the model, not against a Squib on the water.
 |---|---|---|---|
 | A (no physics): wind visibility and quick wins | `next-a-wind` | draft (link in §A.9) | Built; checks in §A.8 |
 | B (physics): spinnaker and sail controls | `next-b-spinnaker` | draft (link in §B.9) | Built; checks in §B.8 |
-| C (no physics): graphics performance and the low preset | `next-c-graphics` | — | Not started |
+| C (no physics): the low preset, trees, compact replays | `next-c-graphics` | draft (link in §C.9) | Built; checks in §C.6 |
 | D (no physics): Learn map and instructor view | `next-d-learn` | — | Not started |
 | E (no physics): metadata, media, manifest, landing page | `next-e-share` | — | Not started |
 | F: simplified rule 18 and AI fleet safety | `next-f-rules` | — | Not started |
@@ -290,6 +290,124 @@ phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail control
 
 Draft pull request: https://github.com/DrDK3/SailSim/pull/40 (branch `next-b-spinnaker`, base `next-a-wind`, so its
 diff shows package B alone; it follows package A, https://github.com/DrDK3/SailSim/pull/39).
+
+## Package C: the low preset, trees and compact replays (no physics)
+
+**No physics.** The determinism hash, the golden traces and `npm run envelope` are identical to package B's (§C.6).
+The player's controls are now kept on a grid of thousandths (C.1): no coefficient changes, and those checks do not go
+through the app's controls.
+
+### C.1 What changed, by review number
+
+| # | Change | Where |
+|---|---|---|
+| Low preset: water | **Start Bay's stripes at the lowest preset** (Smooth draws "simple" water). Simple water drew five ripple trains at regular wavelengths (0.12 m × 2.2ⁿ, the longest 2.8 m, no jitter), which ran in step across the bay as parallel bands. It now draws every other train of the detailed water's spectrum (seven of thirteen: the same jittered wavelengths and spread of directions), fades each train before the pixel reaches half its wavelength (the preset draws at three-quarters resolution), and varies alternate trains in patches some 30–60 m across. Detailed water (Balanced and Ultra) is unchanged | `src/render/water.ts` (`LOW_RIPPLES`, `ripples()`) |
+| Low preset: sky | **The sky and horizon at the lowest preset**: compared with Balanced in the same conditions they are the same (the same dome, gradient and haze; the two presets differ in the water, not the sky). Nothing needed changing, so nothing was changed | — |
+| Low preset: lighter | **Impostors for far trees**: beyond 1,400 m, at the lowest scenery detail (the Performance preset), each tree is two crossed quads with a silhouette drawn in code (4 triangles against about 30), casting no shadow. Kept on the evidence of §C.3: fewer triangles and draw calls, no measurable change in frame time. **Not done**, because they would not help here: merged geometry (the trees are already one instanced mesh per chunk and shape; the buildings are already merged into one mesh per map tile), texture atlases (the scene uses 35–48 textures, no draw-call problem from them), and density by distance (the woods already end at 2.7 km and coarsen beyond 850 m) | `src/render/trees.ts`, `src/render/dart.ts` |
+| #35 | **Trees in several shapes**: three broadleaf crowns (round, tall and narrow, broad and flat-topped) and two conifers (a cone, and a pine with a bare trunk and a flat crown), each one instanced mesh per chunk. The shape comes from a hash of the tree's position, so every tree stands where it stood and none is added (tested: the same positions and count whichever band draws them). Billboards: the impostors above | `src/render/trees.ts` |
+| #12 (issue 214) | **Compact replay inputs**: a new schema, **`squib-replay/4`**, stores the input log as small integers, one row per change: the steps since the last change, a mask of the controls that changed, and only their new values. To make every value a whole number, the player's controls are kept on a grid of thousandths of their travel (`quantiseInput`; E: below anything a person can set or feel); the file decodes to the very inputs sailed (a seeded property test over every control). A held sheet key keeps its exact rate (its position is accumulated, only the input is on the grid; rounding each step would have made it 14 % fast). Written whenever every input is on the grid (any run of this build); otherwise the recording is written as before. **Every older schema (/1, /2, /3) still reads and replays**, as do share links and saved runs (they carry the same recordings): tested by converting this build's recordings to the row form and replaying them bit for bit, and by the earlier files' tests. An older build refuses a /4 file rather than replaying it wrongly | `src/app/replay.ts`, `src/app/controller.ts` |
+| Issue 264 (found here) | **A control handed back did not replay as handed back** (package B's /3 rows; fixed): the replay fed each recorded input to the simulation as a change, and the simulation merges changes, so a kicker or jib lead handed back to the Flat control (recorded as "not set") kept its last value in the replay, which then diverged. A recorded input now replaces the whole input. Regression test: a kicker set and handed back replays bit for bit in the compact and in the row form | `src/app/replay.ts` (`replacingInput`), `src/app/controller.ts` |
+
+### C.2 Evidence (software rendering)
+
+- **Water at the lowest preset**, Start Bay, 16 kn, the same scene before (the build before this round) and after:
+  [`docs/img/next-c/water-low-before-after.jpg`](img/next-c/water-low-before-after.jpg). Before: bands of regular
+  stripes radiating across the bay. After: the ripples vary in size and direction and patch; the long swell's
+  pattern far off is the sea's wave trains, which the detailed water shows as well.
+- **Trees**, the benchmark's fixed views before and after at the lowest preset:
+  [`trees-drone-harbour.jpg`](img/next-c/trees-drone-harbour.jpg), [`trees-golden-river.jpg`](img/next-c/trees-golden-river.jpg).
+  At these sizes the difference is hard to see; the shapes and the unchanged positions are checked by
+  `tests/render/trees.test.ts`.
+- **Against the rubric** (JUNIORS_REPORT §2.3): the horizon and the sky are unchanged and clear; the water keeps its
+  colour and loses the regular stripes ("no shimmer"); the boat, landmarks and light are untouched; the impostors
+  are only beyond 1,400 m, where a tree is a few pixels. Whether Smooth now looks better is the owner's judgement.
+
+### C.3 Graphics figures (`tools/gfx-bench.mjs`, the lowest preset, software rendering, relative)
+
+Eight fixed views; render time is one frame under SwiftShader at 1280 × 720 (relative only).
+
+| View | Before: render ms / calls / triangles (M) | Shapes, no impostors | Shapes + impostors (run 1) | Shapes + impostors (run 2) |
+|---|---|---|---|---|
+| chase-river | 3003 / 350 / 2.83 | 2673 / 433 / 2.82 | 2619 / 394 / 2.65 | 2522 / 394 / 2.65 |
+| helm-river | 2994 / 366 / 3.08 | 2821 / 463 / 3.04 | 3704 / 417 / 2.85 | 2838 / 417 / 2.85 |
+| sail-close | 3935 / 675 / 3.50 | 4083 / 762 / 3.45 | 3676 / 710 / 3.23 | 3956 / 710 / 3.23 |
+| wake-stern | 798 / 131 / 0.96 | 825 / 131 / 0.96 | 754 / 131 / 0.96 | 797 / 131 / 0.96 |
+| chase-sea | 774 / 131 / 0.96 | 726 / 131 / 0.96 | 997 / 131 / 0.96 | 702 / 131 / 0.96 |
+| golden-river | 2801 / 337 / 2.66 | 2656 / 414 / 2.62 | 2908 / 377 / 2.54 | 2628 / 377 / 2.54 |
+| backlit-sails | 3478 / 375 / 3.27 | 3426 / 483 / 3.29 | 3015 / 426 / 2.80 | 2889 / 426 / 2.80 |
+| drone-harbour | 2171 / 388 / 3.16 | 2848 / 465 / 3.07 | 2293 / 435 / 2.91 | 1986 / 435 / 2.91 |
+| **Total** | **19953 / 2753 / 20.41** | **20058 / 3282 / 20.20** | **19966 / 3021 / 18.89** | **18320 / 3021 / 18.89** |
+
+The five tree shapes cost draw calls (+19 %: each chunk draws up to five meshes instead of two) and no triangles.
+The impostors then take 6.5 % of the triangles and 8 % of the draw calls off. Frame time: the same build measured
+19966 and 18320 ms in two runs, so the run-to-run noise is as large as any difference; **no measurable change**
+claimed. All views stay inside the Smooth budget proposed in JUNIORS_REPORT §2.4 (≤ 700 calls except sail-close's
+710, which was 675 before; ≤ 3.5 M triangles).
+
+### C.4 Replay sizes (measured)
+
+Ten minutes of sailing each, the input log alone (a replay adds its scenario and checkpoints, a few kB). Compressed
+is deflate, as links and club submissions send it. Reproduce with
+`REPLAY_SIZES=1 npx vitest run tests/sim/replaySizes.test.ts` (one minute each by default, as a test). "Before" is
+the old controller's log in this round's row form; the middle column is this build's log (on the grid) in the row
+form, to separate the two effects; "after" is what this build saves (/4).
+
+| Run (10 min) | Before: changes, JSON, compressed | Same run on the grid, row form | After (/4): JSON, compressed | Compressed, before → after |
+|---|---|---|---|---|
+| Keyboard (a key held for 1.2 s every 5 s) | 14,826; 750 kB; 50 kB | 14,826; 451 kB; 44 kB | 120 kB; 2.2 kB | 22× smaller |
+| Game controller (the stick moving every frame) | 41,816; 1.91 MB; 484 kB | 40,337; 1.30 MB; 197 kB | 337 kB; 81 kB | 6× smaller |
+| AI-style helm (changes every step) | 56,452; 3.47 MB; 703 kB | 35,421; 1.15 MB; 154 kB | 275 kB; 56 kB | 12.6× smaller |
+
+The grid alone (shorter numbers; for a stick or an AI, fewer changes, since a change smaller than a thousandth is no
+change) halves to quarters the compressed size; writing only what changed then takes it down 2.4–2.8× more for a
+stick or an AI and 20× for keys (whose changes repeat exactly). A share link is the compressed replay in base64,
+about 4/3 of its size: a 10-minute stick-steered run is now about 110,000 characters, under the 150,000 limit (it was
+about 645,000, not offered). The AI line stands for the app's own steering of the player's boat ("show me",
+lessons), whose inputs go through the same grid; AI boats themselves are not recorded (they are re-sailed from the
+seed).
+
+### C.5 Accessibility
+
+No interface changed. The replay panel's message counts the input changes in either form.
+
+### C.6 Checks
+
+Locally (cloud container, software rendering):
+
+- typecheck (app, simulation and tests, tools), lint, the build with the secret scan;
+- unit tests: 894 in 134 files before the last fixes, all passing after them. The first full run found five
+  failures, all mine: two hand-over tests demanded 1e-9 where the grid now allows half a step (0.0005); the
+  held-sheet rate bound was one float epsilon too tight; the tree test's wood was too big for one camera to see
+  all of it in the impostor band;
+- the determinism hash (`11824f89f479d0f4`, unchanged), the seven golden traces (identical with the date field
+  removed), `npm run envelope` (identical to package B's, every row);
+- new tests, each failing before its change: `replayCompact.test.ts` (round trip, malformed files, the older
+  schemas, a compact run and its row form replaying bit for bit, a control handed back, the held key's rate),
+  `waterLow.test.ts` (the low spectrum is the detailed one's, no regular ratio), `trees.test.ts` (shapes, the same
+  positions, impostors);
+- the browser test of replays (`phase6.spec.ts`) now checks the saved file is /4 and that its row form (/1) plays
+  and is caught when changed.
+
+CI runs the whole browser suite and is the authority; its result is on the pull request (§C.9).
+
+### C.7 What is left from package C
+
+- Whether Smooth now looks better, and the tree shapes, need the owner's eye (and a real GPU, #32).
+- The extra draw calls of the tree shapes (+19 % at the lowest preset) could be won back by drawing every shape of a
+  chunk in one call (a shape attribute per instance); not needed within the budget measured here.
+- Recordings of a run sailed with an older build's inputs (off the grid) are still written in the row form.
+
+### C.8 Estimates introduced (E)
+
+The input grid (thousandths of each control's travel), the impostor distance (1,400 m), the tree shapes' proportions
+and the equal share of each shape, the water patches' size (30–60 m): E, L6, chosen for the eye and the file size,
+not measured against anything.
+
+### C.9 Pull request
+
+PR_TEXT
+
+---
 
 ## Needs people (this round does not do these)
 

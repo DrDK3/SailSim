@@ -211,7 +211,8 @@ describe('compact replays in the app', () => {
     const s0 = c.sim.input.mainSheet;
     c.advance(1);
     c.press('mainOut', false);
-    expect(Math.abs(c.sim.input.mainSheet - s0 - 0.35)).toBeLessThanOrEqual(1 / INPUT_GRID);
+    // Two values on the grid: within a step (and a rounding error of the arithmetic) of the exact 0.35.
+    expect(Math.abs(c.sim.input.mainSheet - s0 - 0.35)).toBeLessThanOrEqual(1 / INPUT_GRID + 1e-9);
     expect(onGrid(c.sim.input.mainSheet)).toBe(true);
   });
 

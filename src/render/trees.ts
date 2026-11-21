@@ -439,9 +439,12 @@ export class Woodland {
           if (band === 'impostor') break;
         }
       };
-      // Impostors draw every kind with one silhouette (they are too far for the shape to tell).
-      add(band === 'impostor' ? c.trees.broad : c.trees.broad, band === 'impostor' ? 1 : BROAD_KINDS, band === 'near' ? this.geo.broadNear : this.geo.broadFar, this.impostorMat.broad);
-      add(c.trees.conifer, band === 'impostor' ? 1 : CONIFER_KINDS, band === 'near' ? this.geo.coniferNear : this.geo.coniferFar, this.impostorMat.conifer);
+      // The shapes near only (inside 850 m, where they show): far crowns and impostors draw each family in one shape,
+      // so the far chunks cost the draw calls they did before the shapes (package C: sail-close stayed within the
+      // Smooth budget of 700 calls).
+      const near = band === 'near';
+      add(c.trees.broad, near ? BROAD_KINDS : 1, near ? this.geo.broadNear : this.geo.broadFar, this.impostorMat.broad);
+      add(c.trees.conifer, near ? CONIFER_KINDS : 1, near ? this.geo.coniferNear : this.geo.coniferFar, this.impostorMat.conifer);
       c.meshes = { near: band === 'near', band, list };
       if (list.length) this.group.add(...list);
       this.built.add(c);
