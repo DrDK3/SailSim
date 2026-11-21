@@ -265,13 +265,17 @@ the console's top edge (left on a laptop, right on a phone). The cue test caught
 drop; it now fires only for a set spinnaker. CI runs the whole suite and is the authority; its result is on the pull
 request (§B.9).
 
+**First CI run on the pull request (269d5a8): green.** The checks job (typecheck, lint, unit tests, build with the
+secret scan, the envelope) and all five browser shards passed, the new `spinnaker.spec.ts` included. Later commits
+on this branch only merge package A's test fixes (§A.8).
+
 Screens added this package (`docs/img/next-b/`): the spinnaker's states (§B.4), the console's tab on a laptop and a
 phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail controls (`sail-controls-expert.jpg`).
 
 ### B.9 Pull request
 
-Draft, stacked on package A (base `next-a-wind`): linked from the pull request list once open (see the commit that
-adds it).
+Draft pull request: https://github.com/DrDK3/SailSim/pull/40 (branch `next-b-spinnaker`, base `next-a-wind`, so its
+diff shows package B alone; it follows package A, https://github.com/DrDK3/SailSim/pull/39).
 
 ### B.7 Estimates introduced (E)
 
