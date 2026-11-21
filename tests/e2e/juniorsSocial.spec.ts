@@ -44,7 +44,8 @@ test('weekly course: targets missing, stale, then published; a target ghost race
     const track = { everyS: 1, rows: [0, 1, 2, 3, 4, 5].map(row) };
     return {
       schema: 'squib-weekly-targets/1', week: w.week.key, generated: new Date(Date.now() - 30 * 60e3).toISOString(), build: 'test', course: w.name, scenario: JSON.stringify(w.scenario),
-      targets: [{ medal: 'bronze', level: 'club', timeS: 400, runs: [400], track }, { medal: 'silver', level: 'good', timeS: 380, runs: [380], track }, { medal: 'gold', level: 'expert', timeS: 360, runs: [360], track }],
+      // Review #11: gold is the expert AI's time, silver and bronze 10% and 25% slower (their ghosts the gold one slowed).
+      targets: [{ medal: 'bronze', level: 'expert', timeS: 450, slowedBy: 0.25, runs: [], track }, { medal: 'silver', level: 'expert', timeS: 396, slowedBy: 0.1, runs: [], track }, { medal: 'gold', level: 'expert', timeS: 360, runs: [360], track }],
       note: 'Model-sailed targets',
     };
   });
@@ -54,7 +55,12 @@ test('weekly course: targets missing, stale, then published; a target ghost race
     s.targetsFor = undefined;
     return s.loadTargets();
   });
-  await expect(card.getByTestId('weekly-targets')).toContainText('Model-sailed targets (the simulator’s AI, not people; updated 30 minutes ago)');
+  await expect(card.getByTestId('weekly-targets-line')).toHaveText('gold 6:00 · silver 6:36 · bronze 7:30');
+  await expect(card.getByTestId('weekly-targets')).toContainText('Gold is the simulator’s expert AI (not people); silver and bronze are its time 10% and 25% slower (estimates). Updated 30 minutes ago');
+  await expect(card.getByRole('button', { name: /^Silver 6:36\.0$/ })).toHaveAttribute('title', /slowed 10% to the silver time/);
+  // Review #10: the RDYC courses at full length are the optional long course, still pending the club's check.
+  await expect(card.getByTestId('weekly-long')).toContainText('Long course (optional)');
+  await expect(card.getByTestId('weekly-long')).toContainText('pending club check');
   await card.getByRole('button', { name: /^Gold 6:00\.0$/ }).click();
   await page.waitForFunction(() => window.__squib!.controller.getState().ghost?.title.startsWith('Gold target'), null, { timeout: 60_000 * CI_SLOW });
   const st = await page.evaluate(() => window.__squib!.controller.getState());

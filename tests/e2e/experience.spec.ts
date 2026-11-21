@@ -41,13 +41,25 @@ test('the activity button opens the hub; each door opens the feature it names, a
   await expect(page.getByTestId('hub-now')).toContainText('Free sailing');
   await hub(page).getByRole('button', { name: 'Scenarios' }).click();
   await expect(hub(page)).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Library' })).toBeVisible(PANEL);
+  await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toBeVisible(PANEL);
 
   // Race against AI: the race set-up.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Race against AI' }).click();
-  await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible(PANEL);
-  await expect(page.getByRole('region', { name: 'Library' })).toHaveCount(0);
+  try {
+    await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible(PANEL);
+  } catch (e) {
+    // Seen on CI only (21 Nov 2026), not reproduced locally: say what was on the screen instead.
+    const seen = await page.evaluate(() => ({
+      regions: [...document.querySelectorAll('section[aria-label], [role="dialog"]')].map((el) => el.getAttribute('aria-label')),
+      side: document.querySelector('.side')?.className,
+      sideKids: [...(document.querySelector('.side')?.children ?? [])].map((el) => el.className),
+      dart: window.__squib?.controller.getState().dart,
+      paused: window.__squib?.controller.getState().paused,
+    }));
+    throw new Error(`${(e as Error).message}\nOn the screen: ${JSON.stringify(seen)}\nPage errors: ${JSON.stringify(errors)}`, { cause: e });
+  }
+  await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toHaveCount(0);
 
   // Learn to sail: the next lesson, and the button says so.
   await chip.click();
@@ -85,8 +97,8 @@ test('leaving a race that has started asks first: keep racing loses nothing; lea
   await expect(chip).toContainText('3 AI');
 
   // From the library, during the race: asked.
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  const lib = page.getByRole('region', { name: 'Library' });
+  await page.getByRole('button', { name: 'Scenarios and replays', exact: true }).click();
+  const lib = page.getByRole('region', { name: 'Scenarios and replays' });
   await lib.getByRole('button', { name: 'Load Fog in the harbour' }).click();
   const ask = page.getByTestId('confirm-leave');
   await expect(ask).toBeVisible();

@@ -71,3 +71,39 @@ test('the resolution notice goes by itself after a quarter of a minute', async (
   expect(await page.evaluate(() => window.__squib!.controller.getState().dynamicScale)).toBe(0.7);
   expect(errors).toEqual([]);
 });
+
+test('in the drone and helm views the notices sit below the camera strip and never take its clicks (CI, 21 Nov 2026)', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  const errors = await ready(page);
+  // The "running slow" notice held on, as on a slow machine.
+  await page.evaluate(() => {
+    const c = window.__squib!.controller as unknown as Hooks;
+    c.watchPace = () => {};
+    c.runningSlow = { ratio: 0.05 };
+    c.publish(true);
+  });
+  for (const cam of ['drone', 'helm'] as const) {
+    await page.evaluate((cam) => window.__squib!.controller.setCamera(cam), cam);
+    const pill = page.getByTestId('running-slow');
+    await expect(pill).toBeVisible();
+    const bar = page.locator('.camera-bar');
+    await expect(bar).toBeVisible();
+    const p = (await pill.boundingBox())!;
+    const b = (await bar.boundingBox())!;
+    const overlap = p.x < b.x + b.width && b.x < p.x + p.width && p.y < b.y + b.height && b.y < p.y + p.height;
+    expect(overlap, `${cam}: the notice clear of the camera strip`).toBe(false);
+    // The notice lets clicks through (it is a status, with nothing to press).
+    const through = await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[data-testid="running-slow"]')!;
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !el.contains(hit);
+    });
+    expect(through, `${cam}: clicks pass through the notice`).toBe(true);
+  }
+  // Back to the drone: "Back to boat" takes a real click.
+  await page.evaluate(() => window.__squib!.controller.setCamera('drone'));
+  const back = page.getByRole('button', { name: /Back to boat/ });
+  await back.click();
+  expect(errors).toEqual([]);
+});

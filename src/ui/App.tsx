@@ -11,7 +11,7 @@ import { AboutDialog } from './About';
 import { MarkPointer, RaceStrip, StartCountdown, useNarrow } from './RaceGlance';
 import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
-import { GhostChip, GhostStatus, ResumeCard } from './ResumeCard';
+import { GhostChip, GhostStatus, ResumeCard, RiverCard } from './ResumeCard';
 import { DarkCard } from './DarkCard';
 import { GpuCard } from './GpuCard';
 import { ReplayBar } from './ReplayBar';
@@ -21,6 +21,7 @@ import { ExercisePanel } from './ExercisePanel';
 import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
 import { hasStoredLevel } from '../app/level';
 import { Confirm } from './Confirm';
+import { MastheadInset } from './MastheadInset';
 import { activityOf } from './activity';
 import { ActivityIcon } from './icons';
 import type { CameraMode } from '../render/scene';
@@ -58,6 +59,10 @@ function writeFlag(key: string, v: boolean): void {
     // storage unavailable
   }
 }
+
+/** The side column's top in styles.css (.side), and the room the camera strip takes above it (its height and a gap). */
+const SIDE_TOP_DEFAULT = 70;
+const CAMERA_BAR_ROOM = 46;
 
 export function App({ ctl }: { ctl: SimController }) {
   const host = useRef<HTMLDivElement>(null);
@@ -103,7 +108,7 @@ export function App({ ctl }: { ctl: SimController }) {
     setControlsHiddenState(v);
     writeFlag(CONTROLS_KEY, v);
   };
-  // One side panel at a time: opening one of Race, Library and Scenario closes the others.
+  // One side panel at a time: opening one of Race, Scenarios and replays (the library) and Conditions closes the others.
   const openScenario = (open: boolean) => {
     setScenarioOpen(open);
     if (open) {
@@ -214,6 +219,20 @@ export function App({ ctl }: { ctl: SimController }) {
       // On phones the instruments span the top: open panels (the tutorial too) below them, not over them.
       if (window.innerWidth <= 700 && instruments) top = Math.max(top ?? 0, instruments.getBoundingClientRect().bottom + 8);
       setSideTop(top === undefined ? undefined : Math.round(top));
+      // The part of the screen the interface leaves clear above the boat and below it (review #3: the masthead, where
+      // the wind indicator flies, is kept below whatever lies across the middle of the top of the screen).
+      {
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const across = (b: DOMRect) => b.width > 0 && b.height > 0 && b.right > W * 0.35 && b.left < W * 0.65;
+        let safeTop = 0;
+        for (const el of [nav, instruments, document.querySelector('.masthead-inset')]) {
+          const b = el?.getBoundingClientRect();
+          if (b && across(b) && b.top < H / 2) safeTop = Math.max(safeTop, b.bottom);
+        }
+        const d = dockNow()?.getBoundingClientRect();
+        ctl.setViewSafeArea(Math.round(safeTop), d && across(d) && d.top > H / 2 ? Math.round(d.top) : H);
+      }
       if (instruments) {
         const h = instruments.getBoundingClientRect();
         const d = dockNow()?.getBoundingClientRect();
@@ -249,6 +268,51 @@ export function App({ ctl }: { ctl: SimController }) {
     };
   }, [ctl]);
 
+  // The drone and helm views have a strip of hints at the top right: the notices and side panels start below it
+  // (CI, 21 Nov 2026: the "running slow" notice lay over "Back to boat").
+  const sideBase = sideTop ?? SIDE_TOP_DEFAULT;
+  const sideAt = sideBase + (ui.camera === 'drone' || ui.camera === 'helm' ? CAMERA_BAR_ROOM : 0);
+  const sideStyle = sideAt === SIDE_TOP_DEFAULT ? undefined : { top: sideAt, maxHeight: `calc(100% - ${sideAt + 230}px)` };
+
+  // Notices (paused, running slow, resolution lowered, preparing): at the top right under the toolbar, above any open
+  // side panel, and above the console on a phone; never at the top centre, where the masthead and its wind indicator
+  // are (review #3, 20 Nov 2026).
+  const notices = (
+    <>
+      {ui.paused && (
+        <div className="banner paused-pill" role="status">
+          {ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}
+        </div>
+      )}
+      {ui.runningSlow && (
+        <div className="banner paused-pill slow-pill" role="status" data-testid="running-slow">
+          Running slow: {Math.round(ui.runningSlow.ratio * 100)}% of real time
+          {ui.runningSlow.lowered ? ` · graphics lowered to ${presetLabel(ui.runningSlow.lowered)}` : ''}
+        </div>
+      )}
+      {!ui.runningSlow && !ui.paused && ((lowered && !qualityNoteDone) || ui.deviceCheck || ui.warming) && (
+        <div className="banner paused-pill slow-pill" role="status" data-testid="quality-pill">
+          {ui.warming ? (
+            'Preparing the 3D view…'
+          ) : ui.deviceCheck ? (
+            <>
+              Checking this device: {Math.round(ui.deviceCheck.progress * 100)}%{' '}
+              <button className="link" onClick={() => ctl.cancelDeviceCheck()}>Stop</button>
+            </>
+          ) : (
+            <>
+              Resolution lowered to {Math.round((ui.dynamicScale ?? 1) * 100)}% to keep it smooth{' '}
+              <button className="link" onClick={() => ctl.setAutoLowerGraphics(false)} data-testid="keep-quality">Keep full quality</button>
+              <button className="pill-close" onClick={() => setQualityNoteDone(true)} aria-label="Dismiss this notice" title="Dismiss" data-testid="quality-dismiss">
+                <span aria-hidden="true">×</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className={`app${ui.showMinimap ? ' has-minimap' : ''}${!ui.replay && !controlsHidden ? ' console-on' : ''}`}>
       <div ref={host} className="viewport" data-testid="viewport" />
@@ -269,7 +333,10 @@ export function App({ ctl }: { ctl: SimController }) {
         {ui.race && (!narrow || raceOpenNarrow) && <RacePanel race={ui.race} ctl={ctl} caption={ui.soundCaption} />}
         {ui.race && (!narrow || raceOpenNarrow) && <CoachCard ctl={ctl} ui={ui} />}
       </div>
-      {ui.race && !narrow && <StartCountdown race={ui.race} top={(barTop ?? 72) + (ui.camera === 'drone' || ui.camera === 'helm' ? 92 : 44)} />}
+      {/* The masthead's picture by the compass (review #2): right of the instruments under the toolbar; on a phone,
+          under the Menu button. */}
+      <MastheadInset ctl={ctl} ui={ui} top={narrow || barTop === undefined ? undefined : barTop} />
+      {ui.race && !narrow && <StartCountdown race={ui.race} top={(barTop ?? 72) + (ui.camera === 'drone' || ui.camera === 'helm' ? 104 : 64)} />}
       {/* On a phone the strip carries the arrow to the next mark; a second one at the edge would only cover water. */}
       {ui.race && !narrow && <MarkPointer ctl={ctl} />}
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation" data-density={density}>
@@ -328,8 +395,11 @@ export function App({ ctl }: { ctl: SimController }) {
           {/* Setting up a sail: ready-made scenarios, or your own. */}
           <div className="tb-group">
             <button aria-pressed={raceOpen} onClick={() => openRace(!raceOpen)} title="Race: today\u2019s challenge, or choose the course, the fleet, the start and the conditions">Race</button>
-            <button className="tb-secondary" aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Ready-made scenarios, your saved ones, and replays" data-tutorial="library">Library</button>
-            <button className="tb-secondary" aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Options: the boat, wind, tide, place, course and fleet">Options</button>
+            <button className="tb-secondary" aria-pressed={libraryOpen} onClick={() => openLibrary(!libraryOpen)} title="Scenarios and replays: ready-made scenarios, your saved ones, and replays (was Library)" data-tutorial="library" aria-label="Scenarios and replays">
+              {/* Where the toolbar is short of room (compact densities) it reads "Scenarios"; its name stays the same. */}
+              Scenarios<span className="tb-label"> and replays</span>
+            </button>
+            <button className="tb-secondary" aria-pressed={scenarioOpen} onClick={() => openScenario(!scenarioOpen)} title="Conditions: the boat, wind, tide, place, course and fleet (was Options)">Conditions</button>
           </div>
           {/* Everything else, one click further away. */}
           <div className="tb-group">
@@ -352,6 +422,7 @@ export function App({ ctl }: { ctl: SimController }) {
                 { section: 'Show', label: 'Place labels', keys: 'L', checked: ui.showLabels, onSelect: () => ctl.toggleLabels() },
                 { label: 'Daylight view when dark', checked: ui.prefs.daylightView, onSelect: () => ctl.setPrefs({ daylightView: !ui.prefs.daylightView }) },
                 { label: 'Minimap', keys: 'N', checked: ui.showMinimap, onSelect: () => ctl.toggleMinimap() },
+                { label: 'Masthead picture', checked: ui.prefs.mastheadInset, onSelect: () => ctl.setPrefs({ mastheadInset: !ui.prefs.mastheadInset }) },
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
                 { section: 'Settings', label: 'All settings…', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
@@ -374,7 +445,8 @@ export function App({ ctl }: { ctl: SimController }) {
           </div>
         </div>
       </nav>
-      <div className="side" style={sideTop === undefined ? undefined : { top: sideTop, maxHeight: `calc(100% - ${sideTop + 230}px)` }}>
+      <div className="side" style={sideStyle}>
+        <div className="notice-stack" data-testid="notice-stack">{notices}</div>
         {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} onRace={() => openRace(true)} />}
         {ui.exercise && <ExercisePanel ctl={ctl} ui={ui} />}
         <Suspense fallback={null}>{scenarioOpen && <ScenarioPanel ctl={ctl} ui={ui} onClose={() => openScenario(false)} onRace={() => openRace(true)} />}</Suspense>
@@ -413,6 +485,8 @@ export function App({ ctl }: { ctl: SimController }) {
         <GhostStatus ctl={ctl} ui={ui} />
       ) : ui.resume || ui.catchingUp !== undefined ? (
         <ResumeCard ctl={ctl} ui={ui} />
+      ) : ui.dart.ask ? (
+        <RiverCard ctl={ctl} ui={ui} />
       ) : ui.gpuCard ? (
         <GpuCard ctl={ctl} ui={ui} />
       ) : ui.light.offer || ui.light.notice ? (
@@ -423,40 +497,6 @@ export function App({ ctl }: { ctl: SimController }) {
         !ui.tutorial && <HintCard ctl={ctl} ui={ui} />
       )}
       <GhostChip ctl={ctl} ui={ui} />
-      {ui.paused && (
-        // Below the toolbar however many rows it wraps onto (it covered the pill on a two-row toolbar), and below
-        // a camera strip if one is showing.
-        <div className="banner paused-pill" role="status" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
-          {ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}
-        </div>
-      )}
-      {ui.runningSlow && (
-        // Same place as the paused pill (the two never show together).
-        <div className="banner paused-pill slow-pill" role="status" data-testid="running-slow" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
-          Running slow: {Math.round(ui.runningSlow.ratio * 100)}% of real time
-          {ui.runningSlow.lowered ? ` · graphics lowered to ${presetLabel(ui.runningSlow.lowered)}` : ''}
-        </div>
-      )}
-      {!ui.runningSlow && !ui.paused && ((lowered && !qualityNoteDone) || ui.deviceCheck || ui.warming) && (
-        <div className="banner paused-pill slow-pill" role="status" data-testid="quality-pill" style={barTop === undefined || window.innerWidth <= 700 ? undefined : { top: barTop + (ui.camera === 'drone' || ui.camera === 'helm' ? 48 : 4) }}>
-          {ui.warming ? (
-            'Preparing the 3D view…'
-          ) : ui.deviceCheck ? (
-            <>
-              Checking this device: {Math.round(ui.deviceCheck.progress * 100)}%{' '}
-              <button className="link" onClick={() => ctl.cancelDeviceCheck()}>Stop</button>
-            </>
-          ) : (
-            <>
-              Resolution lowered to {Math.round((ui.dynamicScale ?? 1) * 100)}% to keep it smooth{' '}
-              <button className="link" onClick={() => ctl.setAutoLowerGraphics(false)} data-testid="keep-quality">Keep full quality</button>
-              <button className="pill-close" onClick={() => setQualityNoteDone(true)} aria-label="Dismiss this notice" title="Dismiss" data-testid="quality-dismiss">
-                <span aria-hidden="true">×</span>
-              </button>
-            </>
-          )}
-        </div>
-      )}
       {ui.contact && (
         <div className="banner error contact-banner" role="alert" data-testid="contact">
           {ui.contact}
@@ -537,5 +577,5 @@ async function copyShareLink(ctl: SimController): Promise<string | undefined> {
   } catch {
     return `Copy this link: ${r.url}`;
   }
-  return `Link copied: whoever opens it races you as a ghost.${r.long ? ' It is long: if a messaging app cuts it short, save the replay file (Library) and send that.' : ''}`;
+  return `Link copied: whoever opens it races you as a ghost.${r.long ? ' It is long: if a messaging app cuts it short, save the replay file (Scenarios and replays) and send that.' : ''}`;
 }

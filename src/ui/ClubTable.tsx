@@ -94,7 +94,8 @@ export function ClubSubmit({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   const url = clubTableUrl();
   const f = ui.social.finish;
   const [state, setState] = useState<string>();
-  if (!url || !f || !f.key.startsWith('weekly:')) return null;
+  // The week's (short) course only: the long course is not on the club table (review #10).
+  if (!url || !f || !f.key.startsWith('weekly:') || f.key.endsWith(':long')) return null;
   const submit = async () => {
     setState('Sending…');
     try {

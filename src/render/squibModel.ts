@@ -6,6 +6,8 @@ import type { BoatParams } from '../sim/boat/params';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { CrewFigure, type BodyFrame, type CrewBuild, type CrewPose } from './crew';
 import { Burgee, BURGEE_STICK } from './burgee';
+import { MastheadVane } from './mastheadVane';
+import type { IndicatorType } from '../app/windIndicator';
 import { nonSlipTexture, sailTexture, transomTexture, woodTexture } from './squibTextures';
 import { addTranslucency, addWetBand, addWireAA } from './materialFx';
 
@@ -312,6 +314,9 @@ interface StaticParts {
 
 const staticCache = new Map<string, StaticParts>();
 
+/** The helm's eye keeps this far from the boom's spar (m, E): the helm ducks as it comes over. */
+export const BOOM_CLEAR_M = 0.3;
+
 export class SquibModel {
   readonly group = new THREE.Group();
   readonly type: SquibTypeId;
@@ -328,6 +333,8 @@ export class SquibModel {
   private readonly sheets: { geo: THREE.BufferGeometry; pts: number }[] = [];
   private readonly telltales: THREE.Mesh[] = [];
   private readonly burgee: Burgee;
+  /** The masthead vane, built when the player chooses it instead of the burgee (review #4; the player's boat only). */
+  private vane?: MastheadVane;
   private readonly water: THREE.Mesh;
   private readonly p: BoatParams;
   private readonly mastTopY: number;
@@ -989,13 +996,14 @@ export class SquibModel {
         const front = bubble > 0 ? 1 - smoothstep(bubbleReach * 0.55, bubbleReach, fu) : 0;
         const depth = chord * camber * shape * (1 - 2 * bubble * front) + bubble * front * chord * 0.012 * Math.sin(time * trim.flutterW * 1.3 + fv * 7 + fu * 11);
         // A flogging sail: two waves running aft along the cloth, faster and harder in more wind, whipping most at
-        // the free leech (the luff is held by the mast or the stay).
+        // the free leech (the luff is held by the mast or the stay). Across the chord's own normal, not the belly's:
+        // the belly (the fill) is near zero exactly when the sail lines up with the wind and flogs, which had left a
+        // fully flogging sail flat and still, edge-on from astern (issue 225). Driven by the luff value alone.
         const wave =
           flog * chord * trim.flutterAmp * burst * (Math.sin(fu * 9 - time * trim.flutterW + fv * 5) + 0.45 * Math.sin(fu * 17 - time * trim.flutterW * 1.9 + fv * 9 + 1.1)) * (0.2 + 1.15 * fu * fu);
-        const off = depth + wave;
-        const x = luff.x + cx * chord * fu + nx * off;
+        const x = luff.x + cx * chord * fu + nx * depth - cz * wave;
         const y = luff.y;
-        const z = luff.z + cz * chord * fu + nz * off;
+        const z = luff.z + cz * chord * fu + nz * depth + cx * wave;
         pos.setXYZ(k++, x, y, z);
         if (u === Math.round(nu * 0.4)) {
           const w = chord;
@@ -1031,7 +1039,7 @@ export class SquibModel {
       this.group.traverse((o) => {
         if (o instanceof THREE.Mesh && (o.name === 'hull' || o.name === 'hull-transom')) hull.push(o);
       });
-      const rig: THREE.Object3D[] = [this.boom, this.burgee.group, ...this.telltales];
+      const rig: THREE.Object3D[] = [this.boom, this.burgee.group, ...(this.vane ? [this.vane.group] : []), ...this.telltales];
       for (const o of this.group.children) if (o.name === 'mainsail' || o.name === 'jib' || o.name === 'sheet') rig.push(o);
       const rigGroup = find('rig');
       if (rigGroup) rig.push(rigGroup);
@@ -1089,6 +1097,26 @@ export class SquibModel {
     const k = nonSlipStrength(distance);
     MAT.deck.bumpScale = NON_SLIP_BUMP.deck * k;
     MAT.greySole.bumpScale = NON_SLIP_BUMP.sole * k;
+  }
+
+  /**
+   * What flies at the masthead (review #4, a setting pending the sailors' answer): the RDYC burgee, or a masthead vane
+   * with tacking tabs `tabDeg` either side of dead aft. Both read the same apparent wind.
+   */
+  setIndicator(type: IndicatorType, tabDeg?: number): void {
+    if (type === 'vane' && !this.vane) {
+      this.vane = new MastheadVane(tabDeg);
+      this.vane.group.position.copy(this.burgee.group.position);
+      this.group.add(this.vane.group);
+    }
+    if (this.vane && tabDeg !== undefined) this.vane.setTabs(tabDeg);
+    this.burgee.group.visible = type === 'burgee';
+    if (this.vane) this.vane.group.visible = type === 'vane';
+  }
+
+  /** Which indicator flies (tests). */
+  get indicator(): IndicatorType {
+    return this.vane?.group.visible ? 'vane' : 'burgee';
   }
 
   update(params: {
@@ -1197,6 +1225,7 @@ export class SquibModel {
     }
 
     this.burgee.update(awa, aws, time);
+    this.vane?.update(awa);
 
     this.updateWater(params.water ?? 0, params.heel ?? 0);
     // Water from a breach risen above the cockpit floor: its level surface over the floor.
@@ -1405,9 +1434,31 @@ export class SquibModel {
       else f.look.lerp(look, ease(0.2));
       const pose: CrewPose = { hip, facing, back, feet, hands, look: f.look.clone() };
       c.pose(pose);
-      c.group.visible = !(helm && hideHelm);
+      // The helm's own view (review #15): her or his hands, forearms, legs and the tiller stay in sight; the head and
+      // torso, which the eye is inside, are not drawn.
+      if (helm) c.setFirstPerson(hideHelm);
     });
     if (out.jib.lengthSq() === 0) out.jib.copy(jibLead);
+    return out;
+  }
+
+  /**
+   * The helm's eye in the boat's frame after the last pose (review #15: the helm view from the helm's own eye on the
+   * side deck), lowered to keep clear of the boom as a helm ducks under it: never nearer the boom's spar than
+   * BOOM_CLEAR_M (E), by at most 0.45 m.
+   */
+  helmEye(out = new THREE.Vector3()): THREE.Vector3 {
+    const fig = this.crew[0]!;
+    fig.eye(out).applyMatrix4(fig.group.matrix);
+    const len = this.p.main.foot;
+    const a = this.boom.position;
+    const dir = new THREE.Vector3(0, 0, 1).applyEuler(this.boom.rotation);
+    for (let k = 0; k < 10; k++) {
+      const t = Math.max(0, Math.min(len, out.clone().sub(a).dot(dir)));
+      const d = out.distanceTo(a.clone().addScaledVector(dir, t));
+      if (d >= BOOM_CLEAR_M || out.y < a.y - 0.45) break;
+      out.y -= Math.min(0.06, BOOM_CLEAR_M - d + 0.01);
+    }
     return out;
   }
 

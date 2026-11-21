@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import type { Attempt } from '../app/bests';
 import { ADJECTIVES, CREATURES, nameFrom, nameParts } from '../app/safeNames';
-import { MEDALS, type Medal } from '../app/targets';
+import { MEDALS_BEST_FIRST, TARGET_SPREAD, targetsLine, type Medal } from '../app/targets';
 import { useModal } from './useModal';
 import { SHARE_MAX_CHARS } from '../app/shareLink';
 import { ClubTableSection, ClubSubmit } from './ClubTable';
@@ -68,11 +68,13 @@ export function WeeklyCard({ ctl, ui, onStarted }: { ctl: SimController; ui: UiS
         </ul>
         {t.state === 'ok' ? (
           <div className="targets" data-testid="weekly-targets">
-            <span className="fine">Model-sailed targets (the simulator’s AI, not people; updated {ageText(t.ageMin)}):</span>
-            {MEDALS.map((m) => {
+            <span className="fine">
+              Model-sailed targets: <strong data-testid="weekly-targets-line">{targetsLine(t.file.targets)}</strong>. Gold is the simulator’s expert AI (not people); silver and bronze are its time {Math.round(TARGET_SPREAD.silver * 100)}% and {Math.round(TARGET_SPREAD.bronze * 100)}% slower (estimates). Updated {ageText(t.ageMin)}. Race a ghost:
+            </span>
+            {MEDALS_BEST_FIRST.map((m) => {
               const x = t.file.targets.find((q) => q.medal === m);
               return x ? (
-                <button key={m} onClick={() => ctl.leaveTo('Racing a target', () => ctl.social.raceTarget(m as Medal) && onStarted())} title={`Race the ${x.level} AI’s ghost: a recording, it does not react`}>
+                <button key={m} onClick={() => ctl.leaveTo('Racing a target', () => ctl.social.raceTarget(m as Medal) && onStarted())} title={x.slowedBy ? `Race the ${x.level} AI’s ghost slowed ${Math.round(x.slowedBy * 100)}% to the ${m} time: a recording, it does not react` : `Race the ${x.level} AI’s ghost: a recording, it does not react`}>
                   {m[0]!.toUpperCase() + m.slice(1)} {clockS(x.timeS)}
                 </button>
               ) : null;
@@ -88,6 +90,17 @@ export function WeeklyCard({ ctl, ui, onStarted }: { ctl: SimController; ui: UiS
         )}
         {best && <ProgressChart history={best.history} />}
         <ClubTableSection ctl={ctl} ui={ui} />
+        {w.long && (
+          <div className="weekly-long" data-testid="weekly-long">
+            <p className="fine">
+              <strong>Long course (optional):</strong> {w.long.name} ({w.long.status}): {w.long.summary}.
+              {w.long.best ? ` Your best: on your own ${w.long.best.independent ? clockS(w.long.best.independent.timeS) : '—'}, with assists ${w.long.best.assisted ? clockS(w.long.best.assisted.timeS) : '—'}.` : ''}
+            </p>
+            <button onClick={() => ctl.leaveTo('Sailing this week’s long course', () => ctl.social.sailLong() && onStarted())} data-testid="weekly-long-start">
+              Sail the long course
+            </button>
+          </div>
+        )}
       </div>
       <button className="primary" onClick={() => ctl.leaveTo('Sailing this week’s course', () => ctl.social.sailWeekly() && onStarted())} data-testid="weekly-start">
         Sail it
@@ -172,7 +185,7 @@ export function SocialResult({ ctl, ui }: { ctl: SimController; ui: UiState }) {
           </div>
           {link && link.length > SHARE_MAX_CHARS && (
             <p className="fine" role="status" data-testid="challenge-link-too-long">
-              This run is too long to fit in a link ({Math.round(link.length / 1000)} thousand characters). Save it instead (Library → Save replay) and send the file: your friend opens it to race it as a ghost.
+              This run is too long to fit in a link ({Math.round(link.length / 1000)} thousand characters). Save it instead (Scenarios and replays → Save replay) and send the file: your friend opens it to race it as a ghost.
             </p>
           )}
           {link && link.length <= SHARE_MAX_CHARS && (

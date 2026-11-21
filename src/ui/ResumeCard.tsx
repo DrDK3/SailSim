@@ -69,3 +69,25 @@ export function GhostChip({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     </div>
   );
 }
+
+/**
+ * The River Dart data arrived during a run that is not restarted without asking (review #9): a lesson, an exercise, a
+ * race, or a free sail where the boat is not in clear water on the river. Restart here, or keep sailing in open water.
+ */
+export function RiverCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
+  if (!ui.dart.ask) return null;
+  const what = ui.tutorial ? 'this lesson' : ui.exercise ? 'this exercise' : ui.race ? 'this race' : 'this sail';
+  return (
+    <div className="hint-card" role="dialog" aria-label="The river is ready" data-testid="river-card">
+      <p>
+        <strong>The river is ready. Restart here?</strong> The River Dart’s depths, tidal stream and harbour have loaded. Restart {what} with them, or keep sailing in open water: the river joins at your next start.
+      </p>
+      <div className="row">
+        <button className="primary" onClick={() => ctl.riverRestart()} data-testid="river-restart">
+          Restart
+        </button>
+        <button onClick={() => ctl.riverKeep()} data-testid="river-keep">Keep sailing</button>
+      </div>
+    </div>
+  );
+}

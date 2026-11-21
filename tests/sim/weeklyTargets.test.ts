@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { weeklyCourse } from '../../src/app/weekly';
 import { sailOnce, sailTargets } from '../../src/app/weeklyTargets';
-import { targetsStatus, trackPoses } from '../../src/app/targets';
+import { TARGET_SPREAD, targetsLine, targetsStatus, trackPoses, type Target } from '../../src/app/targets';
 import { SimController } from '../../src/app/controller';
 import { loadDartApp } from './helpers';
 import type { DartData } from '../../src/app/geoLoader';
@@ -18,11 +18,29 @@ describe('weekly targets', () => {
     expect(f.targets.map((t) => t.medal)).toEqual(['bronze', 'silver', 'gold']);
     for (const t of f.targets) {
       expect(t.timeS).toBeGreaterThan(60);
-      expect(t.runs.every((r) => r !== null)).toBe(true);
-      expect(t.track.rows.length).toBeGreaterThan(t.timeS - 2);
+      expect(t.level).toBe('expert');
+      expect(t.track.rows.length).toBeGreaterThan(t.timeS / (1 + (t.slowedBy ?? 0)) - 2);
       const poses = trackPoses(t.track);
       expect(poses.length).toBeGreaterThan(t.timeS * 9);
     }
+    // Review #11: gold is the expert AI's median; silver and bronze 10% and 25% slower (E, configurable).
+    const [bronze, silver, gold] = f.targets as [Target, Target, Target];
+    expect(gold.runs.every((r) => r !== null)).toBe(true);
+    expect(gold.slowedBy).toBeUndefined();
+    expect(silver.slowedBy).toBe(TARGET_SPREAD.silver);
+    expect(bronze.slowedBy).toBe(TARGET_SPREAD.bronze);
+    expect(silver.timeS).toBeCloseTo(gold.timeS * 1.1, 0);
+    expect(bronze.timeS).toBeCloseTo(gold.timeS * 1.25, 0);
+    // The silver ghost is the gold ghost slowed after the start: it finishes at the silver time, not before.
+    const start = practiceWeek.scenario.race!.startInS;
+    expect(silver.track.rows.at(-1)![0]! - start).toBeCloseTo((gold.track.rows.at(-1)![0]! - start) * 1.1, 0);
+    expect(silver.track.rows[10]).toEqual(gold.track.rows[10]);
+    // Shown in one line, best first.
+    expect(targetsLine(f.targets)).toMatch(/^gold \d+:\d\d · silver \d+:\d\d · bronze \d+:\d\d$/);
+    expect(targetsLine([{ medal: 'gold', timeS: 400 }, { medal: 'silver', timeS: 440 }, { medal: 'bronze', timeS: 500 }])).toBe('gold 6:40 · silver 7:20 · bronze 8:20');
+    // The course is sized for juniors: the good AI's time is recorded as the check (5–10 minutes).
+    expect(f.sizing?.timeS).toBeGreaterThanOrEqual(300);
+    expect(f.sizing?.timeS).toBeLessThanOrEqual(600);
     expect(f.note).toMatch(/not people/);
     const ok = targetsStatus(JSON.parse(JSON.stringify(f)), '2026-W47', JSON.stringify(practiceWeek.scenario), Date.parse('2026-11-17T03:00:00Z'));
     expect(ok.state).toBe('ok');

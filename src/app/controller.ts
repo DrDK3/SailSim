@@ -6,6 +6,7 @@ import { helmAction, loadSteering, saveSteering, type SteeringMode } from './ste
 import { DT, Simulation, type BoatSnapshot, type ControlInput, type InputLogEntry } from '../sim/simulation';
 import { quayPiers } from '../sim/env/quays';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import { MastheadInsetView } from '../render/mastheadInset';
 import { HintEngine, loadMilestones, loadSeenHints, saveMilestones, saveSeenHints, type Hint, type HintSample, type Milestones, type ShowMe } from './hints';
 import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
@@ -48,7 +49,7 @@ import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
-import { CHECKPOINT_STEPS, REPLAY_SCHEMA, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
+import { CHECKPOINT_STEPS, REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
 import { Tutorial, type TutorialState } from './tutorial';
 import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
@@ -255,6 +256,8 @@ export interface UiState {
   deviceReport?: DeviceReport;
   /** The player's preferences kept in this browser (src/app/prefs.ts). */
   prefs: Prefs;
+  /** The small 3D picture of the masthead is drawing (else the interface shows the 2D one): review #2. */
+  insetOk: boolean;
   scenarioError?: string;
   race?: RaceUi;
   weatherSources: DataSource[];
@@ -288,7 +291,11 @@ export interface UiState {
   confirmLeave?: string;
   telemetryVersion: number;
   /** River Dart data: loading, loaded, or unavailable; plus anything that failed to load. */
-  dart: { status: 'loading' | 'loaded' | 'unavailable'; issues: DartData['issues'] };
+  /**
+   * The River Dart data: 'ready' when it arrived during a run that goes on without it (it joins at the next start);
+   * `ask` while the card offers to restart with it (review #9).
+   */
+  dart: { status: 'loading' | 'loaded' | 'ready' | 'unavailable'; issues: DartData['issues']; ask: boolean };
   showLabels: boolean;
   showMinimap: boolean;
   showLayers: boolean;
@@ -494,7 +501,8 @@ export class SimController {
   traffic?: RiverTraffic;
   private dartStatus: UiState['dart']['status'] = 'loading';
   private dartScene?: DartScene;
-  private showLabels = true;
+  /** Place labels on the water (and the boats' names): on at Expert, off at Learn and Club (review #20). */
+  private showLabels = levelDefaults(loadLevel()).labels;
   /** The course being sailed, the race (fleet, committee, judges, rules) and the validator's warnings. */
   race?: { course: Course; resolved: ResolvedCourse; session: RaceSession; warnings: CourseIssue[] };
   private fleetPrev = new Map<string, FleetPose>();
@@ -528,7 +536,7 @@ export class SimController {
    * Start (or restart) a run. `initialInput` overrides the input the user's boat is built with (a replay
    * passes the recorded one; by default the previous run's input carries over with the helm centred).
    */
-  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean } = {}): boolean {
+  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean; openWater?: boolean } = {}): boolean {
     // The exercise's own scenario, restarted from outside the exercise while an attempt (or the warm-up) runs: the
     // attempt starts again through the exercise, so its measurements start again with the boat. In a review or the
     // result the exercise is not measuring, so the boat simply restarts.
@@ -541,8 +549,11 @@ export class SimController {
     }
     // A replay (or a ghost) is a recording, not an attempt: it ends the exercise.
     if (opts.keepReplay) this.endExercise(false);
+    // River data that arrived during the last run joins from this start (review #9).
+    if (this.dartPending) this.adoptDart(this.dartPending);
     let built: BuiltConditions;
-    const geo = this.dartData?.geo;
+    // A recording whose river joined part-way starts in open water, as it did (the replay joins it at the same step).
+    const geo = opts.openWater ? undefined : this.dartData?.geo;
     try {
       built = buildConditions(scenario.conditions, geo);
     } catch (err) {
@@ -558,19 +569,9 @@ export class SimController {
     let sim: Simulation;
     const boatParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
     // River traffic for this run (its ferries crab in this run's stream): shared by the physics and the picture.
-    const feats = this.dartData?.features;
-    const startMs = built.env.startEpochMs ?? Date.parse(scenario.conditions.startTime);
-    const traffic = feats
-      ? buildRiverTraffic({
-          ferries: feats.ferries,
-          current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e),
-          waterLevel: built.env.waterLevel ? (ms) => built.env.waterLevel!((ms - startMs) / 1000) : undefined,
-          geo,
-          moorings: feats.moorings,
-          marinas: feats.marinas,
-          piers: feats.piers,
-        })
-      : undefined;
+    const runData = geo ? this.dartData : undefined;
+    const feats = runData?.features;
+    const traffic = this.trafficFor(built, scenario, runData);
     if (scenario.course) {
       try {
         const w = windFrom(built.env.wind(0, loc.n, loc.e));
@@ -581,7 +582,7 @@ export class SimController {
           conditions: scenario.conditions,
           env: built.env,
           geo,
-          features: this.dartData?.features ? { ...this.dartData.features, piers: [...this.dartData.features.piers, ...this.solidWalls()] } : undefined,
+          features: feats ? { ...feats, piers: [...feats.piers, ...this.solidWalls(runData)] } : undefined,
           course,
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
@@ -592,7 +593,7 @@ export class SimController {
             params: boatParams,
             // Sailing the course alone: 100 m behind the line as before; with a fleet, the first starting slot.
             // Either way in clear water (not on the mud of a river bank).
-            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(feats, geo), ...this.solidWalls()]) : undefined),
+            initial: fleet.aiCount > 0 ? undefined : (r) => preStartPosition(r, geo ? startClearWater(geo, built.env.waterLevel?.(0), boatParams.draft, feats?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(feats, geo), ...this.solidWalls(runData)]) : undefined),
           },
           committee: { startAt: Math.round(seq.startInS), sequence: seq.sequence, prepFlag: fleet.prepFlag },
           traffic,
@@ -616,15 +617,12 @@ export class SimController {
         input: startInput,
         controller: () => this.sampleInputs(),
       });
-      const fleet = new Fleet(built.env);
-      fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
-      const f = this.dartData?.features;
-      if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a, swingDeg: mooringSwingDeg(m.h) })), ferries: f.ferries, traffic, piers: [...raceStructures(f, geo), ...this.solidWalls()] });
-      this.soloFleet = fleet;
+      this.soloFleet = this.soloFleetFor(sim, built, traffic, runData);
     }
     if (race) this.soloFleet = undefined;
     this.scenarioError = undefined;
     this.traffic = traffic;
+    this.dartFromStep = undefined;
     this.scenario = structuredClone(scenario);
     this.realTime = Math.abs(Date.parse(scenario.conditions.startTime) - Date.now()) < REAL_TIME_WITHIN_MS;
     this.built = built;
@@ -700,9 +698,34 @@ export class SimController {
    * The walls standing in the water, solid to the boats: the towns' quays and the yacht club's frontage sea wall
    * (each drawn as a vertical stone face; owner, 6 Nov 2026: the Squib going through solid objects).
    */
-  private solidWalls(): PierInput[] {
-    if (!this.dartData?.geo) return [];
-    return [...quayPiers(this.dartData.quays ?? []), ...quayPiers([{ line: [...RDYC_FRONTAGE] }], "the yacht club's sea wall")];
+  private solidWalls(data = this.dartData): PierInput[] {
+    if (!data?.geo) return [];
+    return [...quayPiers(data.quays ?? []), ...quayPiers([{ line: [...RDYC_FRONTAGE] }], "the yacht club's sea wall")];
+  }
+
+  /** The river traffic of a run (its ferries crab in the run's stream): shared by the physics and the picture. */
+  private trafficFor(built: BuiltConditions, scenario: AppScenario, data: DartData | undefined): RiverTraffic | undefined {
+    const feats = data?.features;
+    if (!feats) return undefined;
+    const startMs = built.env.startEpochMs ?? Date.parse(scenario.conditions.startTime);
+    return buildRiverTraffic({
+      ferries: feats.ferries,
+      current: (ms, n, e) => built.env.current((ms - startMs) / 1000, n, e),
+      waterLevel: built.env.waterLevel ? (ms) => built.env.waterLevel!((ms - startMs) / 1000) : undefined,
+      geo: data.geo,
+      moorings: feats.moorings,
+      marinas: feats.marinas,
+      piers: feats.piers,
+    });
+  }
+
+  /** Free sailing: the user's boat alone in a one-boat fleet, so moored boats, ferries and walls are solid. */
+  private soloFleetFor(sim: Simulation, built: BuiltConditions, traffic: RiverTraffic | undefined, data: DartData | undefined): Fleet {
+    const fleet = new Fleet(built.env);
+    fleet.add({ id: 'you', name: 'You', sailNumber: 'GBR', colour: 0xf5f5f2, kind: 'human', sim });
+    const f = data?.features;
+    if (f) fleet.setObstacles({ moored: f.moorings.map((m) => ({ n: m.n, e: m.e, l: m.l, area: m.a, swingDeg: mooringSwingDeg(m.h) })), ferries: f.ferries, traffic, piers: [...raceStructures(f, data.geo), ...this.solidWalls(data)] });
+    return fleet;
   }
 
   /** Validation context: with the River Dart data when it is loaded (land, depth, restrictions). */
@@ -721,6 +744,8 @@ export class SimController {
 
   /** One physics step: the whole race (fleet, committee, judges, rules, AI) or the user's boat alone. */
   private stepSim(): void {
+    // A recording whose river joined part-way: join it at the same step (review #9).
+    if (this.replay?.rec.dartFromStep === this.sim.step && this.dartFromStep === undefined && !this.sim.seabed) this.joinRiverHere();
     if (this.replay && !this.replay.ended && this.sim.step >= this.replay.rec.endStep) {
       // The recording's last checkpoint is where it was saved, usually between the regular ones.
       if (this.sim.step % CHECKPOINT_STEPS !== 0) this.verify(this.sim.step, this.stateHash());
@@ -993,7 +1018,7 @@ export class SimController {
     if (!this.raceBest.finish && st.phase === 'finished' && st.finishTime !== undefined && st.startTime !== undefined) {
       const timeS = st.finishTime - cm.startTime;
       const key = this.raceTag?.key;
-      const label = key?.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : key ? `Today's challenge (${key.slice(10)})` : courseKey(r.course.name, r.course.laps);
+      const label = key?.endsWith(':long') ? `This week's long course (${key.slice(7, -5)})` : key?.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : key ? `Today's challenge (${key.slice(10)})` : courseKey(r.course.name, r.course.laps);
       this.raceBest.finish = { timeS, label, ...recordRaceTime(key ?? courseKey(r.course.name, r.course.laps), label, timeS) };
       if (!this.replay) this.social.onFinish(key, label, timeS, st.events, cm.startTime);
       this.publish(true);
@@ -1257,6 +1282,7 @@ export class SimController {
     writeFlag('squib.coach', d.coach);
     this.raceAidsOn = d.raceAids;
     writeFlag('squib.raceAids', d.raceAids);
+    this.showLabels = d.labels;
     try {
       localStorage.setItem('squib.instruments.more', d.allInstruments ? '1' : '0');
     } catch {
@@ -1454,13 +1480,15 @@ export class SimController {
     const checkpoints = this.checkpoints.filter((c) => c[0] <= this.sim.step);
     if (!checkpoints.length || checkpoints[checkpoints.length - 1]![0] !== this.sim.step) checkpoints.push([this.sim.step, this.stateHash()]);
     return {
-      schema: REPLAY_SCHEMA,
+      schema: this.dartFromStep === undefined ? REPLAY_SCHEMA : REPLAY_SCHEMA_RIVER_JOINED,
       created: new Date().toISOString(),
       title,
       build: BUILD_ID,
       scenario: sc,
       initialInput: this.initialInput,
-      dart: this.dartData?.geo ? 'loaded' : 'none',
+      // What this run sailed on (river data that arrived and waits for the next start is not part of it).
+      dart: this.sim.seabed ? 'loaded' : 'none',
+      ...(this.dartFromStep === undefined ? {} : { dartFromStep: this.dartFromStep }),
       inputs: encodeInputs(this.sim.inputLog),
       checkpoints,
       endStep: this.sim.step,
@@ -1481,7 +1509,8 @@ export class SimController {
     const dartNow = this.dartData?.geo ? 'loaded' : 'none';
     if (rec.dart !== dartNow) notes.push(`Recorded ${rec.dart === 'loaded' ? 'with' : 'without'} the River Dart data, played ${dartNow === 'loaded' ? 'with' : 'without'} it: it will not match.`);
     if (rec.build !== BUILD_ID) notes.push(`Recorded with build ${rec.build}; this is ${BUILD_ID}. A different build may not reproduce it exactly.`);
-    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true })) return false;
+    if (rec.dartFromStep !== undefined && dartNow === 'loaded') notes.push(`The River Dart joined this run ${Math.round(rec.dartFromStep / 100)} s in; it joins the replay there too.`);
+    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined })) return false;
     this.replay = { rec, inputs: decodeInputs(rec.inputs), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
     this.held.clear();
     this.paused = false;
@@ -1803,6 +1832,74 @@ export class SimController {
     this.dartStatus = 'loading';
     this.publish(true);
     const data = await loadDartData(base);
+    const how = this.riverArrival(data);
+    if (how === 'ask' || how === 'wait') {
+      // The run goes on as it is; the river joins at its next start (or now, from the card).
+      this.dartPending = data;
+      this.dartStatus = 'ready';
+      this.riverAsk = how === 'ask';
+      this.publish(true);
+    } else {
+      this.adoptDart(data);
+      if (how === 'in-place') this.joinRiverHere();
+      // A scenario that needed the Dart (channel stream) may not have started: rebuild it (nothing sailed is lost).
+      else if (how === 'restart') this.restart(this.scenario);
+      else this.publish(true);
+    }
+    // Live data that arrived while the Dart loaded: switch to it now, in one restart.
+    this.goLiveIfUntouched();
+    // A shared run in the address (#ghost=…): race it, now the water it was sailed on is here.
+    void this.openSharedLink();
+    // An exercise in the address (?exercise=…).
+    this.openExerciseLink();
+  }
+
+  // ------------------------------------------------------------ the river arriving during a run (review #9)
+
+  /** River Dart data that arrived during a run, kept for the run's next start (the card asks, or a replay plays on). */
+  private dartPending?: DartData;
+  /** The card "The river is ready. Restart here?" is up. */
+  private riverAsk = false;
+  /** The step at which the river joined this run in place (recorded in its replay, which joins it at the same step). */
+  private dartFromStep?: number;
+
+  /**
+   * What the River Dart data does to the run under way when it arrives (review #9, 20 Nov 2026: arriving data used
+   * to restart whatever was running). Untouched (no input from the sailor yet; an activity in its first seconds):
+   * restart as before, nothing sailed is lost. Free sailing already under way: the river joins the run where the boat
+   * is, if that is safe (water deeper than her draught, clear of structures and moorings); if not, ask. A lesson, an
+   * exercise, a race, a drill or a ghost race is never restarted without asking. A replay plays on, and the river
+   * joins at the next start. Data that did not load (open water) changes nothing for a run under way.
+   */
+  private riverArrival(data: DartData): 'restart' | 'in-place' | 'ask' | 'wait' | 'none' {
+    if (this.replay || this.catchUp) return data.geo ? 'wait' : 'none';
+    const activity = !!(this.race || this.tutorial || this.exercise || this.drill || this.ghost);
+    const touched = this.sim.inputLog.length > 1 || this.sim.time >= (activity ? 5 : Infinity);
+    if (!touched) return 'restart';
+    if (!data.geo) return this.scenarioError ? 'restart' : 'none';
+    if (activity) return 'ask';
+    return this.riverSafeHere(data) ? 'in-place' : 'ask';
+  }
+
+  /** Whether the boat's place now is clear water on the river: deep enough for her keel, clear of structures and moorings. */
+  private riverSafeHere(data: DartData): boolean {
+    const geo = data.geo;
+    if (!geo) return false;
+    let wl: number | undefined;
+    try {
+      wl = buildConditions(this.scenario.conditions, geo, { wind: this.built.wind }).env.waterLevel?.(this.sim.time);
+    } catch {
+      return false;
+    }
+    const f = data.features;
+    const clear = startClearWater(geo, wl, this.sim.params.draft, f?.mooringAreas.map((a) => ({ ring: a.ring.map(([e, n]) => ({ n, e })) })), [...raceStructures(f, geo), ...this.solidWalls(data)]);
+    return clear(this.sim.state.n, this.sim.state.e);
+  }
+
+  /** Take the River Dart data as this app's: the scene drawn, the data used by every run from now on. */
+  private adoptDart(data: DartData): void {
+    this.dartPending = undefined;
+    this.riverAsk = false;
     this.dartData = data;
     this.dartStatus = data.geo ? 'loaded' : 'unavailable';
     if (data.geo && data.manifest && this.view) {
@@ -1818,14 +1915,52 @@ export class SimController {
         data.issues.push({ asset: '3D scene', message: (err as Error).message, effect: 'River Dart not drawn; the physics still uses it.' });
       }
     }
-    // A scenario that needed the Dart (channel stream) may not have started: rebuild either way.
+  }
+
+  /**
+   * The river joins the free sail under way, where the boat is: the same wind field (the gusts carry on), the river's
+   * bed, stream and obstacles from this step. The run is not restarted; its recording notes the step (schema /2).
+   */
+  private joinRiverHere(): boolean {
+    const data = this.dartData;
+    const old = this.soloFleet;
+    if (!data?.geo || !old || this.race) return false;
+    let built: BuiltConditions;
+    try {
+      built = buildConditions(this.scenario.conditions, data.geo, { wind: this.built.wind });
+    } catch (err) {
+      this.liveIssues = [...this.liveIssues, `The River Dart could not join this sail: ${(err as Error).message}`];
+      this.publish(true);
+      return false;
+    }
+    const traffic = this.trafficFor(built, this.scenario, data);
+    this.sim.joinRiver(built.env, data.geo);
+    const fleet = this.soloFleetFor(this.sim, built, traffic, data);
+    fleet.time = old.time;
+    fleet.step = old.step;
+    fleet.events.push(...old.events);
+    this.soloFleet = fleet;
+    this.built = built;
+    this.traffic = traffic;
+    this.dartFromStep = this.sim.step;
+    this.view?.setFleet(this.fleetList());
+    this.lastWeather = -Infinity;
+    this.publish(true);
+    return true;
+  }
+
+  /** The card's "Restart here": the current activity starts again, with the river. */
+  riverRestart(): void {
+    const data = this.dartPending;
+    if (!data) return;
+    this.adoptDart(data);
     this.restart(this.scenario);
-    // Live data that arrived while the Dart loaded: switch to it now, in one restart.
-    this.goLiveIfUntouched();
-    // A shared run in the address (#ghost=…): race it, now the water it was sailed on is here.
-    void this.openSharedLink();
-    // An exercise in the address (?exercise=…).
-    this.openExerciseLink();
+  }
+
+  /** The card's "Keep sailing": the run goes on in open water; the river joins at its next start. */
+  riverKeep(): void {
+    this.riverAsk = false;
+    this.publish(true);
   }
 
   // ------------------------------------------------------------ shared runs (src/app/shareLink.ts)
@@ -1875,6 +2010,9 @@ export class SimController {
     this.publish(true);
   }
 
+  /** The part of the screen the interface leaves clear (kept for a view built later). */
+  private safeArea = { top: 0, bottom: 0 };
+
   attach(container: HTMLElement): void {
     // Start downloading the River Dart data first: building the view compiles shaders for a second or more,
     // and the download runs meanwhile (the scene is added when both are ready).
@@ -1887,6 +2025,9 @@ export class SimController {
       this.webglError = `3D view unavailable: ${(err as Error).message}. The simulation still runs; instruments remain live.`;
     }
     this.view?.setBoatType(isSquibType(this.scenario.boat) ? this.scenario.boat : DEFAULT_SQUIB_TYPE, this.sim.params, this.scenario.helm === 'female' ? 'female' : 'male');
+    this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
+    this.view?.setHelmFov(this.prefs.helmFovDeg);
+    this.view?.setSafeArea(this.safeArea.top, this.safeArea.bottom);
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
     this.lastWeather = -Infinity; // new conditions: update the sky at the next frame
@@ -2025,6 +2166,7 @@ export class SimController {
   }
 
   detach(): void {
+    this.attachInset(undefined);
     window.clearTimeout(this.checkTimer);
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKeyDown);
@@ -2118,11 +2260,41 @@ export class SimController {
           }
         : undefined,
       course: this.race
-        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: this.showLabels, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e), laylines: this.raceLaylines?.lines }
+        ? { nextLeg: this.race.session.judgeOf('you').legIndex, phase: this.race.session.judgeOf('you').phase, showLabels: true, committeeHeading: (n, e) => committeeHeading(sim.env, sim.time, n, e), laylines: this.raceLaylines?.lines }
         : undefined,
       fleet: this.race || this.ghost ? { prev: this.fleetPrev, curr: this.fleetCurr, showLabels: this.showLabels } : undefined,
     });
+    // The masthead's picture by the compass: the same apparent wind and draw clock as the burgee at the masthead.
+    this.inset?.render(this.currSnap.awa, this.currSnap.aws, this.renderTime, now);
     ev.contact = ev.grounding = 0;
+  }
+
+  /** The small 3D picture of the masthead (review #2), drawn after the main view; undefined while not shown. */
+  private inset?: MastheadInsetView;
+
+  /**
+   * Give the small masthead picture its canvas (or take it away with undefined). Returns whether a 3D picture can be
+   * drawn there; when it cannot (no WebGL for a second canvas), the interface draws the 2D one instead.
+   */
+  attachInset(canvas: HTMLCanvasElement | undefined): boolean {
+    if (this.inset && this.inset.canvas === canvas) return this.inset.ok;
+    this.inset?.dispose();
+    this.inset = undefined;
+    if (!canvas) return false;
+    this.inset = new MastheadInsetView(canvas);
+    this.inset.setType(this.prefs.windIndicator, this.prefs.vaneTabDeg);
+    return this.inset.ok;
+  }
+
+  /** Hold (true) or let go of (false) "look up" at the masthead (review #1: the T key, or the console's button). */
+  setLookUp(on: boolean): void {
+    this.view?.setLookUp(on);
+  }
+
+  /** The part of the screen the interface leaves clear, top and bottom (CSS px): the chase view frames within it. */
+  setViewSafeArea(top: number, bottom: number): void {
+    this.safeArea = { top, bottom };
+    this.view?.setSafeArea(top, bottom);
   }
 
   /** Contact and grounding heard since the last frame (0…1), for the next frame's cue state. */
@@ -2471,6 +2643,11 @@ export class SimController {
     this.prefs = { ...this.prefs, ...change };
     savePrefs(this.prefs);
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
+    if ('helmFovDeg' in change) this.view?.setHelmFov(this.prefs.helmFovDeg);
+    if ('windIndicator' in change || 'vaneTabDeg' in change) {
+      this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
+      this.inset?.setType(this.prefs.windIndicator, this.prefs.vaneTabDeg);
+    }
     // The light changes at once (the sky is otherwise refreshed once a second).
     if ('daylightView' in change) this.lastWeather = -Infinity;
     // Chosen just now: no need to be told that it is on.
@@ -3062,6 +3239,12 @@ export class SimController {
       ev.preventDefault();
       return;
     }
+    // Look up at the masthead while T is held (review #1). Not a sailing input: nothing is recorded in a replay.
+    if (ev.code === 'KeyT') {
+      if (!ev.repeat) this.setLookUp(true);
+      ev.preventDefault();
+      return;
+    }
     switch (ev.code) {
       case 'Space': this.centreHelm(); break;
       case 'KeyX': this.releaseSheets(); break;
@@ -3087,11 +3270,15 @@ export class SimController {
   };
 
   private onKeyUp = (ev: KeyboardEvent) => {
+    if (ev.code === 'KeyT') this.setLookUp(false);
     const held = this.keyAction(ev.code);
     if (held) this.press(held, false);
   };
 
-  private onBlur = () => this.held.clear();
+  private onBlur = () => {
+    this.held.clear();
+    this.setLookUp(false);
+  };
 
   // ------------------------------------------------------------ UI store
 
@@ -3205,7 +3392,7 @@ export class SimController {
       tideSources: this.tideSources,
       liveIssues: this.liveIssues,
       telemetryVersion: this.telemetry.version,
-      dart: { status: this.dartStatus, issues: this.dartData?.issues ?? [] },
+      dart: { status: this.dartStatus, issues: (this.dartData ?? this.dartPending)?.issues ?? [], ask: this.riverAsk },
       showLabels: this.showLabels,
       showMinimap: this.showMinimap,
       showLayers: this.showLayers,
@@ -3218,6 +3405,7 @@ export class SimController {
       soundCaption: this.caption && this.sim.time - this.caption.t < 5 && this.sim.time >= this.caption.t ? this.caption.text : undefined,
       showSettings: this.showSettings,
       graphics: this.view?.graphics,
+      insetOk: !!this.inset?.ok,
       sceneryBuilt: this.view?.sceneryBuilt,
       shadowsBuilt: this.view?.shadowsBuilt,
       audio: this.sound.settings,

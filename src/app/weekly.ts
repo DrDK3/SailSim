@@ -57,24 +57,31 @@ export function weekOf(at: Date = new Date()): WeekId {
   return { key: `${w.year}-W${String(w.week).padStart(2, '0')}`, year: w.year, week: w.week, index, monday: new Date(w.mondayMs).toISOString().slice(0, 10) };
 }
 
-/** The rotation: practice courses in Start Bay and the RDYC courses (pending the club's check), alternately. */
-export type WeeklySlot = { kind: 'practice'; practice: PracticeKind; legM?: number } | { kind: 'club'; id: string };
+/**
+ * The rotation (review #10, 20 Nov 2026): short practice courses in Start Bay that the good AI sails in 5–10 minutes
+ * (measured: docs/NEXT_ROUND_REPORT.md §A3), so a junior's weekly race is a short one. The RDYC courses at full length
+ * (pending the club's check) are each week's optional long course instead (`longCourse`).
+ */
+export type WeeklySlot = { kind: 'practice'; practice: PracticeKind; legM?: number; laps?: number } | { kind: 'club'; id: string };
 
-export function rotation(courses: LibraryEntry[] = builtInCourses()): WeeklySlot[] {
-  const club = courses.filter((c) => c.group === 'club').map((c) => c.id).sort();
-  const practice: WeeklySlot[] = [
-    { kind: 'practice', practice: 'windward-leeward', legM: 300 },
-    { kind: 'practice', practice: 'triangle', legM: 300 },
-    { kind: 'practice', practice: 'windward-leeward', legM: 450 },
-    { kind: 'practice', practice: 'rounding-drill' },
-  ];
-  const out: WeeklySlot[] = [];
-  const n = Math.max(club.length, practice.length);
-  for (let i = 0; i < n; i++) {
-    out.push(practice[i % practice.length]!);
-    if (club[i]) out.push({ kind: 'club', id: club[i]! });
-  }
-  return out;
+export const JUNIOR_SLOTS: readonly WeeklySlot[] = [
+  { kind: 'practice', practice: 'windward-leeward', legM: 320, laps: 1 },
+  { kind: 'practice', practice: 'triangle', legM: 350, laps: 1 },
+  { kind: 'practice', practice: 'tacking-lane', legM: 350, laps: 1 },
+  { kind: 'practice', practice: 'rounding-drill', legM: 120, laps: 3 },
+  { kind: 'practice', practice: 'windward-leeward', legM: 400, laps: 1 },
+  { kind: 'practice', practice: 'gybing-slalom', legM: 720, laps: 1 },
+];
+/** The junior course's length in the good AI's time (s): 5 to 10 minutes (review #10), checked by the tests. */
+export const JUNIOR_GOOD_AI_S = [300, 600] as const;
+
+export function rotation(): WeeklySlot[] {
+  return [...JUNIOR_SLOTS];
+}
+
+/** The RDYC courses, full length, in a fixed order: one a week as the optional long course. */
+export function longRotation(courses: LibraryEntry[] = builtInCourses()): string[] {
+  return courses.filter((c) => c.group === 'club').map((c) => c.id).sort();
 }
 
 const season = import.meta.glob('../../data/weekly/season.json', { eager: true, import: 'default' }) as Record<string, { weeks?: Record<string, string> }>;
@@ -88,7 +95,7 @@ function slotFor(week: WeekId, courses: LibraryEntry[], plan: Record<string, str
   const set = plan[week.key];
   if (set?.startsWith('practice:')) return { kind: 'practice', practice: set.slice(9) as PracticeKind };
   if (set && courses.some((c) => c.id === set)) return { kind: 'club', id: set };
-  const r = rotation(courses);
+  const r = rotation();
   return r[((week.index % r.length) + r.length) % r.length]!;
 }
 
@@ -102,7 +109,18 @@ export function weekSeed(key: string): number {
   return (h % 99991) + 1;
 }
 
+/** The week's optional long course: an RDYC course at full length (no targets; its own best). */
+export interface LongCourse {
+  id: string;
+  name: string;
+  status: string;
+  scenario: AppScenario;
+  summary: string;
+}
+
 export interface WeeklyCourse {
+  /** The week's optional long course (review #10), when the RDYC courses are in the library. */
+  long?: LongCourse;
   week: WeekId;
   slot: WeeklySlot;
   /** Name for the course card. */
@@ -120,6 +138,8 @@ const PRACTICE_NAMES: Partial<Record<PracticeKind, string>> = {
   'windward-leeward': 'Windward–leeward',
   triangle: 'Triangle',
   'rounding-drill': 'Rounding drill',
+  'tacking-lane': 'Tacking lane',
+  'gybing-slalom': 'Gybing slalom',
 };
 
 /**
@@ -153,13 +173,14 @@ export function weeklyCourse(at: Date = new Date(), courses: LibraryEntry[] = bu
     startLocation: club ? 'start-bay' : 'start-bay-practice',
     startHeadingDeg: 0,
     startSpeedKn: 2,
-    course: club ? { source: 'library', id: club.id } : { source: 'practice', kind: slot.kind === 'practice' ? slot.practice : 'windward-leeward', ...(slot.kind === 'practice' && slot.legM ? { legM: slot.legM } : {}), laps: 1 },
+    course: club ? { source: 'library', id: club.id } : { source: 'practice', kind: slot.kind === 'practice' ? slot.practice : 'windward-leeward', ...(slot.kind === 'practice' && slot.legM ? { legM: slot.legM } : {}), laps: slot.kind === 'practice' ? (slot.laps ?? 1) : 1 },
     race: { sequence: 'one-minute', startInS: 90 },
     fleet: { aiCount: 0, level: 'good', prepFlag: 'P' },
     boat: DEFAULT_SQUIB_TYPE,
   };
   const name = club ? club.course.name.replace(/ \(club course\)$/, '') : `${PRACTICE_NAMES[slot.kind === 'practice' ? slot.practice : 'windward-leeward'] ?? 'Practice'} in Start Bay`;
   return {
+    long: longCourse(week, seed, scenario, courses),
     week, slot, name, status: club ? 'pending club check' : undefined, scenario,
     terms: {
       boat: 'Rondar Squib',
@@ -172,5 +193,29 @@ export function weeklyCourse(at: Date = new Date(), courses: LibraryEntry[] = bu
   };
 }
 
+/**
+ * The week's long course: the next RDYC course of the long rotation, full length (pending the club's check), in the
+ * week's wind strength and gusts, the wind within 15° of the direction the course is set for. Its own seed stream, so
+ * the short course's conditions are as they were.
+ */
+function longCourse(week: WeekId, seed: number, short: AppScenario, courses: LibraryEntry[]): LongCourse | undefined {
+  const ids = longRotation(courses);
+  if (!ids.length) return undefined;
+  const id = ids[((week.index % ids.length) + ids.length) % ids.length]!;
+  const club = courses.find((c) => c.id === id)!;
+  const rng = createRng(seed * 104729 + 7);
+  const w = short.conditions.weather as { twsKn: number };
+  const twdDeg = Math.round((((club.course.designWindFromDeg ?? 0) + (rng.next() - 0.5) * 30) % 360 + 360) % 360);
+  const scenario: AppScenario = {
+    ...structuredClone(short),
+    conditions: { ...structuredClone(short.conditions), weather: { source: 'manual', twsKn: w.twsKn, twdDeg } },
+    startLocation: 'start-bay',
+    course: { source: 'library', id },
+  };
+  return { id, name: club.course.name.replace(/ \(club course\)$/, ''), status: 'pending club check', scenario, summary: `${w.twsKn} kn from ${twdDeg}°, full length: the RDYC course as set (no targets)` };
+}
+
 /** The best-time key for a week (kept apart from every other best). */
 export const weeklyKey = (w: WeekId): string => `weekly:${w.key}`;
+/** The best-time key for a week's long course. */
+export const weeklyLongKey = (w: WeekId): string => `weekly:${w.key}:long`;

@@ -7,7 +7,7 @@ A script for the owner (and any club testers) to accept or reject the build. It 
 - **Where.** Use the published site once the `hifi` branch is merged into `main`: the Deploy workflow publishes it to GitHub Pages. Or run it locally with `npm install` then `npm run dev` (README, Quick start).
 - **What to use.** A laptop or desktop with a real graphics card and a current Chrome, Edge, Firefox or Safari. Do part 9 on a phone as well.
 - **Fill in each row.** Mark it **Pass**, **Fail** or **Note**. For a Fail, write what you did, what you saw and the scenario's start time, and take a screenshot.
-- **Saving a run.** Library → **Save replay of this run** saves the whole run as a file. Send it with the report: it plays back exactly what you saw.
+- **Saving a run.** Scenarios and replays → **Save replay of this run** saves the whole run as a file. Send it with the report: it plays back exactly what you saw.
 - **The judge.** It is a simplified subset of the racing rules, not an authoritative adjudication (RACING.md). Judge it for whether it is useful for training, not as a protest committee would.
 
 | Key | Action |
@@ -47,7 +47,7 @@ Restart with Scenario → Start position **Off RDYC, mid-river**, Start time **1
 
 ## 3. Robotic marks and sponsors (10 min)
 
-Library → **Practice race**, or Race → **Quick race** with 0–5 AI boats.
+Scenarios and replays → **Practice race**, or Race → **Quick race** with 0–5 AI boats.
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
@@ -105,10 +105,10 @@ Set the start time to **15 July 2026 10:05 (UTC)**, which is 11:05 local, before
 
 | # | Do | Expect | Pass / Fail / Note |
 |---|---|---|---|
-| 7.1 | Library → Wind against tide | Short steep waves in the entrance; spray into a classic cockpit | |
-| 7.2 | Library → Fog, Rain, Evening | Visibility, rain streaks and sunset light look right; colours are not washed out | |
+| 7.1 | Scenarios and replays → Wind against tide | Short steep waves in the entrance; spray into a classic cockpit | |
+| 7.2 | Scenarios and replays → Fog, Rain, Evening | Visibility, rain streaks and sunset light look right; colours are not washed out | |
 | 7.3 | Scenario → Tide manual; set a low tide and sail near the edge | The boat grounds where the drying areas are; no start is placed on the mud | |
-| 7.4 | Library → the Met Office replay | Wind follows the forecast, labelled as model output with its age | |
+| 7.4 | Scenarios and replays → the Met Office replay | Wind follows the forecast, labelled as model output with its age | |
 | 7.5 | Open the published site fresh (no scenario chosen) | Within a few seconds it sails in today's live wind and sky, at this minute: the light is the real light (dark after sunset); the instruments (All instruments and conditions) and More → Layers and sources name the Met Office forecast | |
 | 7.6 | Settings → Light → Real time | Restarts now, in the live weather if the site has it | |
 
@@ -145,7 +145,7 @@ The graphics round ([GRAPHICS_REPORT.md](GRAPHICS_REPORT.md)). It was checked he
 | 11.1 | Sail off RDYC in 12 kn, chase camera; look at the water near and far | Fine ripples running with the wind near the boat, short-crested, never tiled; further off the water grows smoothly duller and rougher, with **no shimmer or crawling** | |
 | 11.2 | Look along the sun's direction (Settings → Light → Golden hour) | A glitter path of sun on the water; the sky and the water warm; distant hills fade into warm haze toward the sun and bluer haze away from it | |
 | 11.3 | Look back at the wake at 5 kn, then put the helm over | A churned white centre that spreads and breaks up, faint arms at an angle behind; it lies on the waves; turning stirs it | |
-| 11.4 | Sail fast on a reach in waves (Library → Fresh and shifty, or Start Bay at 16 kn) | A bow wave and foam along the lee side that grow with speed; spray from the bow when it drops into a wave | |
+| 11.4 | Sail fast on a reach in waves (Scenarios and replays → Fresh and shifty, or Start Bay at 16 kn) | A bow wave and foam along the lee side that grow with speed; spray from the bow when it drops into a wave | |
 | 11.5 | Press Z (flatten) twice, then ease the main a long way (S) | The sails flatten and their heads open; easing lets the leech twist open; let a sail luff and it flogs, harder in more wind | |
 | 11.6 | Camera → Scenic; then the wheel in the chase view; then press C a few times | Scenic circles the boat low and well off, never over land; the wheel moves the chase camera in and out; each change of camera glides rather than jumps | |
 | 11.7 | Settings → Camera motion at 0, then at 100% | At 0 the horizon stays level in the chase and helm views; at 100% the view rides the waves and heels with the boat | |
@@ -163,8 +163,8 @@ UI v2, slice 1 ([UI_V2_REPORT.md](UI_V2_REPORT.md)).
 | 12.1 | Open the site in a private window (first visit) | "Squib sailing simulator" with four choices: Learn to sail, Free sailing, Race against AI, Scenarios; the sea is live behind it; Escape or × closes it and you are sailing | |
 | 12.2 | Look at the start of the toolbar | A button says what you are doing: "Free sailing" | |
 | 12.3 | Choose it, then each door in turn | Learn to sail starts the lesson (the button says Tutorial); Race against AI opens the race set-up; Scenarios opens the library; Free sailing ends the lesson and sails on | |
-| 12.4 | Start a quick race and let the start signal go; then choose a scenario in the Library, or Free sailing from the activity button | "Leave the race?" asks first. Keep racing (or Escape) changes nothing; Leave the race starts the new activity | |
-| 12.5 | Pause, then load a scenario from the Library | The new scenario starts sailing (it does not stay paused) | |
+| 12.4 | Start a quick race and let the start signal go; then choose a scenario in Scenarios and replays, or Free sailing from the activity button | "Leave the race?" asks first. Keep racing (or Escape) changes nothing; Leave the race starts the new activity | |
+| 12.5 | Pause, then load a scenario from Scenarios and replays | The new scenario starts sailing (it does not stay paused) | |
 | 12.6 | **Look and feel** | The colours (deep navy, slate, ocean blue; teal for good, amber for advice, red for warnings) read well over the water; note anything hard to read | |
 
 ## 13. Review Package 1: measure and make consistent (15 min)
@@ -189,8 +189,8 @@ From the documents the owner supplied on 3 Nov 2026 ([CLUB_DOCUMENTS.md](CLUB_DO
 |---|---|---|---|
 | 14.1 | Sail out of the harbour towards Castle Ledge with labels on | Homestone (red can, quick red light), Castle Ledge (green cone), Checkstone (red can), West Rock and Mewstone (south cardinals), the yellow 6-knot buoys and RDYC 1–4 (yellow cones) where the club's Course Appendix puts them; also on the minimap | |
 | 14.2 | Quick race → Where: "Start Bay: an RDYC club course for the wind", random conditions | The summary names the course (e.g. "RDYC B1: wind south-west") and says it awaits a club check; SAMARITAN lies at one end of the line, the named buoy at the other | |
-| 14.3 | Sail the course | The marks and roundings match the course string in the appendix (Library → the course's description) | |
-| 14.4 | **For an RDYC member:** Library → Club courses → each course | Compare it with the Course Appendix 2026; if it matches, set it to verified with your name and the date in the course editor, and export it | |
+| 14.3 | Sail the course | The marks and roundings match the course string in the appendix (Scenarios and replays → the course's description) | |
+| 14.4 | **For an RDYC member:** Scenarios and replays → Club courses → each course | Compare it with the Course Appendix 2026; if it matches, set it to verified with your name and the date in the course editor, and export it | |
 
 ## 15. Review Package 2, round A: accessibility, the start, steering (15 min)
 
@@ -288,7 +288,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 21.5 | Settings → Report a visual problem; type a note; Save the report | A picture of the 3D view and the details in one HTML file in your downloads; nothing sent | |
 | 21.6 | Sail freely for a minute, close the tab, open the app again | A card offers to continue; Continue catches up and hands over where you left off | |
 | 21.7 | On a phone: drag the tiller picture left and right | The tiller follows your finger and the boat turns; let go and it centres; the battery saver is on in Settings | |
-| 21.8 | After a race, Library → Race this run as a ghost | The race starts again with a see-through boat sailing your earlier race; Stop the ghost removes it | |
+| 21.8 | After a race, Scenarios and replays → Race this run as a ghost | The race starts again with a see-through boat sailing your earlier race; Stop the ghost removes it | |
 | 21.9 | Learn → Seamanship: pick up the mooring | You can stop with the buoy at the bow by sailing in on a close reach, letting the sheets go and luffing; the lesson finishes with your distance | |
 | 21.10 | Sail into the boats lying in Dart Marina's berths (and the training boats at Sandquay) | She stops against them with a contact report; she never passes through a boat; where a berth is empty she can sail into it |
 | 21.11 | Open the app after sunset (Real time) | A card says it is dark on the Dart now; Daylight view lights the river as at midday while the clock in the instruments, the tide and the wind stay as they were; More → Daylight view when dark turns it off again; Keep it dark hides the card for the visit |
@@ -342,7 +342,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 25.1 | While sailing, click the activity button (first on the toolbar; there is no house button now, 16 Nov) | The main menu opens at once (Learn to sail, Free sailing, Race against AI, Scenarios); the boat stops | |
 | 25.2 | Close it (× or Escape) | Back on the water, sailing on from where you were | |
 | 25.3 | Press the Home key | The main menu opens the same way | |
-| 25.4 | Look along the toolbar | **Options** (was Scenario) opens the boat, wind, tide, place, course and fleet panel; **Settings ▾** (was More) holds lessons, what is shown, sound and "All settings…" | |
+| 25.4 | Look along the toolbar | **Conditions** (was Options, before that Scenario) opens the boat, wind, tide, place, course and fleet panel; **Settings ▾** (was More) holds lessons, what is shown, sound and "All settings…" | |
 | 25.5 | Sail mid-river opposite the Town Jetty and turn on place labels (L) | Five large yellow buoys, MS1 to MS5 from south to north, the anchorage and its moored boats to their east | |
 | 25.6 | Look at Mosaique on MS1 and MS2, all round | A blue-hulled 50 m superyacht moored bow and stern to the two buoys; nothing flying at her masthead; the club's defaced red ensign (crown and arrow in the fly) flying from a staff off her stern by day; her tender alongside; recognisable from your photographs | |
 | 25.7 | Sail gently into her side, into a buoy, and into one of her mooring lines between her and a buoy | You meet them ("Contact with the superyacht Mosaique", "… ship buoy MS…", "… Mosaique's mooring line") and do not pass through; the mooring line stops you without damage | |
@@ -388,7 +388,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 29.2 | Go on above the Higher Ferry to the Noss and Distins moorings | The boats there lie to single buoys and swing with the wind and the stream, as before | |
 | 29.3 | Sail into the side of a boat on a trot | She is solid: you meet her and stay out | |
 | 29.4 | Look at Mosaique's stern in daylight | ~~The club's ensign on its staff at the stern, and the RDYC burgee on its own staff at the port quarter; nothing at her masthead. Both lowered at night~~ Superseded by 30.4 (18 Nov 2026: the burgee on her mast) | |
-| 29.5 | Change the wind direction (Options) and watch the flags: your burgee, an AI boat's, Mosaique's, the club's flagstaff, a ferry's ensign, the committee boat's and the pin end's flags, the vanes on the moored boats | Each flies downwind (the vanes point into the wind); on a moving ferry the ensign follows the wind she feels, swung towards her stern | |
+| 29.5 | Change the wind direction (Conditions) and watch the flags: your burgee, an AI boat's, Mosaique's, the club's flagstaff, a ferry's ensign, the committee boat's and the pin end's flags, the vanes on the moored boats | Each flies downwind (the vanes point into the wind); on a moving ferry the ensign follows the wind she feels, swung towards her stern | |
 | 29.6 | Compare a calm with a fresh breeze; then turn on the system's "reduce motion" | In a calm the flags hang limp and still; in a breeze they stream out and flutter, faster as it blows harder. With reduced motion they still point downwind but barely flutter | |
 | 29.7 | Tell us where the trots really are and which way their boats lie | The rows' places and bearings are our estimates | |
 
@@ -402,7 +402,7 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 30.4 | Look at Mosaique | The burgee at the top of her signal mast; nothing at her stern quarter; the ensign on its staff off the stern | |
 | 30.5 | Start a race and look at the committee boat in a breeze (Start Bay, a fresh wind) | She rises and falls with the waves, pitching and rolling a little, as the Squibs do | |
 | 30.6 | Look at the committee boat's stern | SAMARITAN across the transom, above the bathing platform. Tell us if it should be elsewhere or in another style | |
-| 30.7 | Open the Library | No "Met Office forecast replay, 23 Oct 2026 14:00 UTC"; the other built-in scenarios are there. (Options still offers that forecast as a weather source) | |
+| 30.7 | Open Scenarios and replays | No "Met Office forecast replay, 23 Oct 2026 14:00 UTC"; the other built-in scenarios are there. (Conditions still offers that forecast as a weather source) | |
 
 ## 31. The race at a glance; a phone; tactical aids; the finish; the welcome (18 Nov 2026) (25 min)
 
@@ -427,6 +427,23 @@ What changed: [COMPREHENSIVE_REVIEW.md](COMPREHENSIVE_REVIEW.md) §14.
 | 32.1 | Sail until "Resolution lowered to …% to keep it smooth" shows under the toolbar | "Keep full quality" can be clicked (the resolution comes back and the notice goes); the "×" dismisses it; left alone it goes by itself in about 15 s and does not return this visit. Settings → All settings → Graphics tells the resolution in use | |
 | 32.2 | Open the site after sunset, as on the evening of 18 Nov | If the picture is sunlit, a card says that it is dark on the Dart, with the time, and that you are seeing the daylight view you chose before; the instruments carry the line "Daylight view · it is hh:mm, dark on the Dart". **If the picture is sunlit and neither shows, tell us: the cause is then something else** | |
 | 32.3 | Press "Show the night" on the card, or "Show the real light" in the instruments | The picture goes dark, as it is on the river at that time; Settings → "Daylight view when dark" brings the daylight view back | |
+
+## 33. Next round, package A: the wind at the masthead and quick wins (21 Nov 2026) (20 min)
+
+| # | Do | Expect | Pass / notes |
+|---|---|---|---|
+| 33.1 | Sail in the chase view; hold **T** (or the console's ⇡), then let go | The view eases up the mast to the burgee and back; the boat sails on as before. With reduced motion on (the system setting) it cuts instead | |
+| 33.2 | Look at the small picture by the compass, then Settings → Wind indicator → Masthead vane | The picture shows the burgee flying away from the wind (bow up); with the vane, the arrow points into the wind between two red tabs; the boat's masthead changes too. Which one Squib sailors use is still to be asked | |
+| 33.3 | In the chase view at your usual window size, look at the top of the mast | No toolbar, notice or label lies over the masthead; the Paused notice is at the top right (bottom left on a phone) | |
+| 33.4 | On a slow connection (or a phone), start sailing before the river has appeared; then start a lesson before it appears | Free sailing: the river appears around you and the sail goes on. In a lesson: a card asks "The river is ready. Restart here?"; Keep sailing goes on in open water | |
+| 33.5 | Race → this week's course | A short practice course (the AI takes 5–10 minutes); targets read "gold … · silver … · bronze …"; an RDYC course is offered as the optional long course, marked pending the club's check | |
+| 33.6 | The toolbar | "Conditions" (was Options) and "Scenarios and replays" (was Library) open the same panels as before | |
+| 33.7 | Sail dead downwind with auto-trim on | The main reads "Eased right out" in grey, never "Stalled" in green; the toggle reads "Crew trimming" and an arrow on the sheet's bar shows when the crew moves it | |
+| 33.8 | Settings → Level → Learn | Plain words: "Wind from 40° to starboard", "Full", "Flapping: pull it in (W)"; VMG reads "VMG upwind" or "VMG downwind" with a positive number at every level | |
+| 33.9 | At Club, rest the mouse on a place on the river (or tap it on a phone) | Its name shows for a few seconds; Settings → Place labels shows them all; course marks are always labelled | |
+| 33.10 | On a phone, upright and on its side | The instruments are a short strip, the whole boat shows above the controls, and every control is easy to press | |
+| 33.11 | The helm view, on each tack | You look forward from the helm's eye on the side deck; your hands, legs and the tiller show, not your own head; Settings → Helm view sets the field of view | |
+| 33.12 | Head to wind with both sheets let go, in the chase view from astern | The sails visibly flap | |
 
 ## Accepting the build
 

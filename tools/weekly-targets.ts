@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { weeklyCourse } from '../src/app/weekly';
 import { sailTargets } from '../src/app/weeklyTargets';
+import { targetsLine } from '../src/app/targets';
 import { loadDartAppNode } from './lib/dartGeoNode';
 
 const args = process.argv.slice(2);
@@ -41,7 +42,8 @@ write(`${w.week.key}.json`, file);
 write('index.json', { latest: w.week.key, generated: file.generated });
 const old = readdirSync(outDir).filter((f) => /^\d{4}-W\d{2}\.json$/.test(f)).sort().slice(0, -KEEP_WEEKS);
 for (const f of old) rmSync(join(outDir, f));
-console.log(`${w.week.key} ${w.name}: ${file.targets.map((t) => `${t.medal} ${t.timeS} s (${t.runs.join(', ')})`).join('; ')} in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+// Gold from the expert AI's runs; silver and bronze from gold (review #11); the good AI's time checks the 5–10 min sizing.
+console.log(`${w.week.key} ${w.name}: ${targetsLine(file.targets)} (expert runs ${file.targets.find((t) => t.medal === 'gold')?.runs.join(', ') ?? 'none'}; good AI ${file.sizing?.timeS ?? '—'} s) in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 if (file.targets.length < 3) {
   console.error('not every level finished');
   process.exit(1);

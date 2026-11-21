@@ -5,15 +5,18 @@
  * seeded boat states and checks three rules for every sail in every state:
  *  1. never ask to ease or trim a sheet that is at its end stop;
  *  2. never ask to work a sheet auto-trim is setting (unless the advice also says to turn auto-trim off);
- *  3. never contradict the state shown: the label is the state's own name, a sheet key appears only with the
- *     matching action, drawing asks for nothing, luffing never eases, stalled never trims, by the lee is helm work.
+ *  3. never contradict the state shown: the label is the state's own name (or, eased to the stop on a run, "Eased right
+ *     out"), a sheet key appears only with the matching action, drawing asks for nothing, luffing never eases, stalled
+ *     never trims, by the lee is helm work;
+ *  4. (review #17) the colour agrees with the words: green only for Drawing, neutral only for "Eased right out";
+ *  5. (review #23) never ask to ease a slack sheet; (review #22) the Learn level's plain words obey the same rules.
  * What this establishes: the advice is actionable and consistent in the model's states. It does not establish that
  * the advice is good sailing teaching (an instructor's question: docs/VALIDATION_SHEET.md).
  */
 import { describe, expect, it } from 'vitest';
 import { Simulation, squibParams, uniformEnvironment, type ControlInput } from '../../src/sim/index';
 import { autopilotHelm } from '../../src/sim/control/autopilot';
-import { SHEET_END, sailAdvice, sailState, type SailState } from '../../src/app/sailStatus';
+import { EASED_LABEL, PLAIN_LABEL, SHEET_END, SLACK_RAD, STATE_LABEL, sailAdvice, sailState, type SailAdvice, type SailState } from '../../src/app/sailStatus';
 import { RaceCoach, type BriefingInput, type CoachSample } from '../../src/app/coach';
 import { Polar } from '../../src/sim/ai/polar';
 import { AI_POLAR } from '../../src/sim/ai/polarData';
@@ -41,8 +44,17 @@ function read(sim: Simulation, sail: 'main' | 'jib') {
   const f = s.forces[sail];
   const angle = sail === 'main' ? s.boomMain : s.boomJib;
   const state = sailState(f, angle);
-  const ctx = { sail, sheet: sim.currentSheet(sail), auto: sail === 'main' ? s.input.autoMain : s.input.autoJib };
-  return { f, angle, state, ctx, advice: sailAdvice(state, KEYS[sail], ctx) };
+  // As the console builds it (src/ui/Controls.tsx): the slack sheet and the side are known.
+  const limit = sail === 'main' ? s.mainSheetLimit : s.jibSheetLimit;
+  const ctx = { sail, sheet: sim.currentSheet(sail), auto: sail === 'main' ? s.input.autoMain : s.input.autoJib, slack: Math.abs(angle) < limit - SLACK_RAD, angle };
+  return { f, angle, state, ctx, advice: sailAdvice(state, KEYS[sail], ctx), plain: sailAdvice(state, KEYS[sail], { ...ctx, plain: true }) };
+}
+
+/** Rule 4 (review #17): the colour agrees with the words. */
+function agrees(a: SailAdvice, words: { good: string; neutral: string }): boolean {
+  if (a.cls === 'good') return a.text === words.good;
+  if (a.cls === 'neutral') return a.text === words.neutral;
+  return a.text !== words.good && a.text !== words.neutral;
 }
 
 describe('issue 200 (O3): an over-sheeted main is stalled, not by the lee', () => {
@@ -157,7 +169,20 @@ describe('advice actionability (property, seeded sweep)', () => {
         // 2. Never a sheet the assist is setting (unless the advice says to turn auto-trim off).
         if (ctx.auto && (advice.action === 'ease' || advice.action === 'trim')) expect(advice.advice, where).toMatch(/auto-trim off/i);
         // 3. Never contradicting the state shown.
-        expect(advice.text, where).toBe(LABEL[state]);
+        const easedOut = state === 'stalled' && ctx.sheet >= 1 - SHEET_END;
+        expect(advice.text, where).toBe(easedOut ? EASED_LABEL : LABEL[state]);
+        // 4. The colour agrees with the words (review #17): never "Stalled" in green.
+        expect(agrees(advice, { good: STATE_LABEL.drawing, neutral: EASED_LABEL }), `${where} ${advice.cls}`).toBe(true);
+        // 5. Never easing a slack sheet (review #23); the plain words keep every rule (review #22).
+        if (ctx.slack) expect(advice.action, where).not.toBe('ease');
+        const { plain } = read(sim, sail);
+        expect(plain.action, where).toBe(advice.action);
+        expect(plain.cls, where).toBe(advice.cls);
+        expect(plain.text, where).toBe(easedOut ? PLAIN_LABEL.eased : PLAIN_LABEL[state]);
+        expect(agrees(plain, { good: PLAIN_LABEL.drawing, neutral: PLAIN_LABEL.eased }), where).toBe(true);
+        expect(plain.text + plain.advice, where).not.toMatch(/luff|stall|by the lee|trim in|ease out/i);
+        if (plain.action === 'trim') expect(plain.advice, where).toContain(`(${keys.trim})`);
+        if (plain.action === 'ease') expect(plain.advice, where).toContain(`(${keys.ease})`);
         const asksTrim = advice.advice.includes(`(${keys.trim})`);
         const asksEase = advice.advice.includes(`(${keys.ease})`);
         expect(asksTrim, where).toBe(advice.action === 'trim');
@@ -174,4 +199,26 @@ describe('advice actionability (property, seeded sweep)', () => {
     for (const want of ['drawing/none', 'luffing/trim', 'stalled/ease', 'stalled/none']) expect([...seen], want).toContain(want);
     // 120 simulated sails: about 3 s alone, longer on a loaded machine.
   }, 60_000);
+});
+
+describe('review #17, #22, #23: colour and words agree; plain words at Learn; a slack sheet', () => {
+  const keys = KEYS.main;
+  it('eased to the stop on a run (auto-trim on or off): neutral, "Eased right out", nothing to do; never "Stalled" in green', () => {
+    for (const auto of [true, false]) {
+      const a = sailAdvice('stalled', keys, { sail: 'main', sheet: 1, auto });
+      expect(a).toMatchObject({ text: 'Eased right out', cls: 'neutral', action: 'none' });
+      expect(sailAdvice('stalled', keys, { sail: 'main', sheet: 1, auto, plain: true })).toMatchObject({ text: 'Let right out', cls: 'neutral', action: 'none' });
+    }
+  });
+  it('a slack sheet: easing moves nothing, so it asks for the helm and says why', () => {
+    const a = sailAdvice('stalled', keys, { sail: 'main', sheet: 0.6, auto: false, slack: true });
+    expect(a.action).toBe('helm');
+    expect(a.advice).toMatch(/slack: the wind holds the sail, easing moves nothing/);
+  });
+  it('plain words at Learn name the boom’s side when the wind is behind the sail', () => {
+    expect(sailAdvice('by-the-lee', keys, { sail: 'main', sheet: 1, auto: false, angle: 1.2, plain: true }).advice).toBe("the wind is on the boom's side (out to port): it may swing across; steer towards the wind");
+    expect(sailAdvice('by-the-lee', KEYS.jib, { sail: 'jib', sheet: 1, auto: false, angle: -0.9, plain: true }).advice).toBe('the wind is behind the jib (out to starboard): it will cross over; steer towards the wind');
+    expect(sailAdvice('luffing', keys, { sail: 'main', sheet: 0.5, auto: false, plain: true })).toMatchObject({ text: 'Flapping', advice: 'pull it in (W)', action: 'trim' });
+    expect(sailAdvice('stalled', keys, { sail: 'main', sheet: 0.3, auto: false, plain: true })).toMatchObject({ text: 'Pulled in too far', advice: 'let it out (S)', action: 'ease', cls: 'bad' });
+  });
 });

@@ -160,6 +160,11 @@ option { background: var(--navy-900); }
 .status.good { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
 .status.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 .status.bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+/* As it should be and nothing to do (eased right out on a run, review #17): neither green nor a warning. */
+.status.neutral { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.status.neutral .dot { background: var(--muted); }
+/* The sheet moving (review #23, #24): an arrow at the end of the fill, and "crew trimming" while auto-trim works it. */
+.sheet-bar span.sheet-move, .sheet-meter span.sheet-move { position: absolute; z-index: 2; top: 50%; transform: translate(-50%, -50%); font-size: 13px; line-height: 1; width: 10px; text-align: center; color: var(--text); text-shadow: 0 0 3px #000; pointer-events: none; }
 .toggle, .slider { display: flex; align-items: center; gap: 5px; color: var(--muted); white-space: nowrap; }
 .misc-row { justify-content: flex-start; flex-wrap: wrap; }
 
@@ -888,7 +893,11 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   border-radius: 9px; background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07);
 }
 .panel.dock.console .sail-mod { width: 250px; }
-.panel.dock.console .helm-mod { width: 180px; }
+.panel.dock.console .helm-mod { width: 188px; }
+/* The band beside the minimap from 1180 px (2 × 250 + 188 + 232 + gaps = 952 px): the look-up button without its
+   key letter under 1440 px (its tooltip and name still give T). */
+@media (max-width: 1439px) { .panel.dock.console .look-up .key-hint { display: none; } }
+.panel.dock.console .helm-readout { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel.dock.console .boat-mod { width: 232px; }
 .panel.dock.console .mod-top, .panel.dock.console .mod-row { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; flex-wrap: nowrap; }
 .panel.dock.console .mod-label {
@@ -928,7 +937,7 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 }
 .panel.dock.console .rudder-dial .tiller-svg { width: 40px; height: 24px; }
 .panel.dock.console .helm-readout { flex: 1 1 auto; min-width: 0; text-align: center; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
-.panel.dock.console .helm-mod .mod-row > button:last-child { flex: 0 0 auto; }
+.panel.dock.console .helm-mod .mod-row > button { flex: 0 0 auto; }
 /* The boat: release, and steppers that move in the keys' 25% steps. */
 .panel.dock.console .stepper { gap: 5px; }
 .panel.dock.console .stepper-value { display: inline-block; min-width: 3.1em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -942,8 +951,9 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
    give the keys) and with "Auto" for "Auto-trim". */
 @media (max-width: 989px) {
   .panel.dock.console .key-hint, .panel.dock.console .label-more { display: none; }
-  .panel.dock.console .sail-mod { width: 210px; }
-  .panel.dock.console .helm-mod { width: 150px; }
+  /* 2 × 204 + 172 + 196 + gaps: the band fits 820 px with the look-up button in the helm module (review #1). */
+  .panel.dock.console .sail-mod { width: 204px; }
+  .panel.dock.console .helm-mod { width: 172px; }
   .panel.dock.console .boat-mod { width: 196px; }
   .panel.dock.console button, .panel.dock.console .hold { padding: 0 7px; }
 }
@@ -1103,3 +1113,109 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 /* The daylight view is lighting the picture: said in the instruments for as long as it is, with the way back. */
 .daylight-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-top: 6px; padding: 5px 8px; border-radius: 6px; font-size: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: color-mix(in srgb, var(--warn) 70%, white); }
 .daylight-note .link { font-size: 12px; min-height: 24px; }
+
+/*
+ * Next round, package A (review #1–#3, 20 Nov 2026): the wind made visible. The masthead's picture by the compass,
+ * the console's look-up button, and the notices moved off the top centre, where the masthead is.
+ */
+.masthead-inset { position: absolute; z-index: 1; left: calc(var(--hud-w, 300px) + 20px); top: 12px; width: 84px; height: 84px; padding: 3px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: rgba(10, 24, 36, 0.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.masthead-inset canvas, .masthead-inset svg { width: 78px; height: 78px; display: block; }
+.inset-hull { fill: rgba(255, 255, 255, 0.06); stroke: rgba(210, 225, 240, 0.35); stroke-width: 1.5; }
+.inset-forestay { stroke: rgba(190, 205, 220, 0.4); stroke-width: 1; }
+.inset-mast { fill: #c9d3dd; stroke: #0b1a24; stroke-width: 1; }
+.inset-burgee { fill: #c8102e; stroke: rgba(0, 0, 0, 0.45); stroke-width: 0.8; }
+.inset-burgee-crown { fill: #f2c14e; }
+.inset-vane { stroke: #e8eef3; stroke-width: 2.4; }
+.inset-vane-head, .inset-vane-fin { fill: #e8eef3; }
+.inset-tab { stroke: #e2403f; stroke-width: 2.2; stroke-linecap: round; }
+.panel.dock .look-up { min-width: 44px; }
+@media (max-width: 700px) {
+  .masthead-inset { left: auto; right: 8px; top: 64px; width: 76px; height: 76px; }
+  .masthead-inset canvas, .masthead-inset svg { width: 70px; height: 70px; }
+}
+/* Notices at the top right, above any open side panel (it flows below them); on a phone, above the console. */
+.notice-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+.notice-stack:empty { display: none; }
+.notice-stack .banner { position: static; transform: none; left: auto; top: auto; margin: 0; max-width: min(440px, calc(100vw - 24px)); }
+.notice-stack .banner.paused-pill { pointer-events: auto; }
+/* A status with nothing to press lets clicks through; its buttons, if any, take them (CI, 21 Nov 2026). */
+.notice-stack .banner.slow-pill { pointer-events: none; }
+.notice-stack .banner.slow-pill button { pointer-events: auto; }
+@media (max-width: 700px) {
+  .notice-stack { position: fixed; left: 8px; right: auto; top: auto; align-items: flex-start; bottom: calc(var(--console-h) + var(--console-bottom) + 10px); z-index: 3; }
+  .app:not(.console-on) .notice-stack { bottom: 12px; }
+}
+
+
+/* Review #21, phones: more of the water. The instruments as a compact strip (the compass small, the speed, then wind,
+   wind speed, VMG and depth in one row; the heading is on the compass, the heel in "All instruments"). */
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .panel.instruments.compact { padding: 6px 8px; }
+  .panel.instruments.compact .compass { width: 64px; height: 64px; }
+  .panel.instruments.compact .big-value { font-size: 26px; }
+  .panel.instruments.compact .big .cell-label { font-size: 12px; }
+  .panel.instruments.compact .big-value .unit { font-size: 12px; }
+  .panel.instruments.compact .tack-chip { margin-top: 2px; padding: 1px 6px; font-size: 12px; }
+  .panel.instruments.compact .grid { grid-template-columns: repeat(4, minmax(0, auto)); gap: 2px 8px; margin-top: 4px; }
+  .panel.instruments.compact .cell[data-cell='heading'], .panel.instruments.compact .cell[data-cell='heel'] { display: none; }
+  /* 12 px at the least, as everywhere (a11y.spec.ts). */
+  .panel.instruments.compact .cell-label { font-size: 12px; letter-spacing: 0; }
+  .panel.instruments.compact .cell-value { font-size: 14px; }
+  .panel.instruments.compact .cell-value .unit { font-size: 12px; }
+  .panel.instruments.compact .more-toggle { margin-top: 2px; }
+}
+/* A phone on its side has little height: a smaller compass and tighter strip, so the water shows between the strip
+   and the console (CI, 21 Nov 2026: 92 px with the runner's fonts, against the 100 px asked for). */
+@media (max-height: 500px) and (pointer: coarse) {
+  .panel.instruments.compact { padding: 4px 8px; }
+  .panel.instruments.compact .compass { width: 52px; height: 52px; }
+  .panel.instruments.compact .big-value { font-size: 22px; }
+  .panel.instruments.compact .grid { margin-top: 2px; }
+}
+/* Touch screens a phone's size, upright or on its side: every sailing control at least 44 × 44 px (review #21). */
+@media (pointer: coarse) and (max-width: 700px), (pointer: coarse) and (max-height: 500px) {
+  .panel.dock.console .mod { grid-template-rows: 44px 44px; row-gap: 3px; padding: 3px 5px; }
+  .panel.dock.console button, .panel.dock.console .hold { min-height: 44px; height: 44px; min-width: 44px; padding: 0 8px; }
+  .panel.dock.console .toggle { min-height: 44px; padding-right: 2px; }
+  .panel.dock.console .toggle input[type='checkbox'] { width: 22px; height: 22px; }
+  .panel.dock.console .sheet-meter, .panel.dock.console .rudder-dial { height: 36px; }
+  .panel.dock.console .status { height: auto; min-height: 26px; white-space: normal; line-height: 1.15; padding: 2px 8px; }
+  .panel.dock.console .controls-hide { width: 48px; min-height: 44px; height: 44px; top: -44px; }
+  .controls-show { min-width: 44px; min-height: 44px; }
+}
+/* A phone upright: the two sails side by side, the helm and the boat side by side under them. */
+@media (pointer: coarse) and (max-width: 700px) {
+  .panel.dock.console { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .panel.dock.console .sail-mod { grid-column: auto; }
+  .panel.dock.console .mod-label { flex-basis: 28px; font-size: 11px; letter-spacing: 0.04em; }
+  .panel.dock.console .sail-mod .toggle span { display: none; }
+  .panel.dock.console .sail-mod .toggle::after { content: attr(data-word); font-size: 12px; }
+  .panel.dock.console .sheet-value .sheet-word { display: none; }
+  .app { --console-h: 216px; }
+}
+/* A phone on its side: the band along the bottom, two rows of 44 px (review #21). */
+@media (pointer: coarse) and (max-height: 500px) and (min-width: 701px) {
+  .app { --console-h: 105px; --console-bottom: 6px; --hud-top: 6px; }
+  .panel.dock.console .sail-mod { width: 200px; }
+  .panel.dock.console .helm-mod { width: 190px; }
+  .panel.dock.console .boat-mod { width: 200px; }
+}
+@media (pointer: coarse) and (max-height: 500px) and (min-width: 701px) {
+  .instruments.compact { width: 280px; }
+  /* The masthead's picture at the top right, beside the menu, so the middle of the view stays clear. */
+  .masthead-inset { left: auto; right: 96px; top: 8px !important; width: 72px; height: 72px; }
+  /* The notices above the band (the right-hand column is too short here to hold them). */
+  .notice-stack { position: fixed; left: 12px; top: auto; align-items: flex-start; bottom: calc(var(--console-h) + var(--console-bottom) + 8px); z-index: 3; }
+}
+/* Review #24: "Crew trimming" in full where the sail modules have room for it beside the longest state ("Eased right
+   out"); "Crew" (and "Auto") below 1440 px. The state's words never break out of their pill. */
+@media (min-width: 1440px) { .panel.dock.console .sail-mod { width: 318px; } }
+@media (max-width: 1439px) { .panel.dock.console .sail-mod .toggle .label-more { display: none; } }
+.panel.dock.console .status strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The console's state pill stays one line on a laptop or desktop: the older dock's wide-screen rule (a wrapping flex
+   box 28 px tall) must not reach it. On a touch phone a long Learn word may take two lines. */
+.app .panel.dock.console .status { display: inline-flex; flex-wrap: nowrap; height: 22px; min-height: 0; padding: 0 9px; }
+@media (pointer: coarse) and (max-width: 700px), (pointer: coarse) and (max-height: 500px) {
+  .app .panel.dock.console .status { height: auto; min-height: 26px; padding: 2px 8px; }
+  .app .panel.dock.console .status strong { white-space: normal; line-height: 1.15; }
+}

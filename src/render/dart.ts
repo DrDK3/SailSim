@@ -124,6 +124,10 @@ function townGround(input: DartSceneInput, e: number, n: number): number | undef
   return rdycForeshore(e, n, h);
 }
 
+/** A hover or tap within this of a place (px) shows its label for this long (ms), with the labels off (review #20). */
+export const REVEAL_PX = 48;
+export const REVEAL_MS = 3000;
+
 export class DartScene {
   readonly fixed = new THREE.Group();
   readonly floating = new THREE.Group();
@@ -1226,12 +1230,41 @@ export class DartScene {
       (ml.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = on ? 3 : 0;
     }
     const cam = u.camera.position;
-    this.labels.visible = u.showLabels;
-    for (const l of this.labels.children) l.visible = u.showLabels && l.position.distanceTo(cam) < LABEL_RANGE_M;
+    // With the labels off, one place a hover or a tap pointed at is labelled for a few seconds (review #20).
+    const reveal = !u.showLabels && this.revealed && performance.now() < this.revealUntil ? this.revealed : undefined;
+    this.labels.visible = u.showLabels || !!reveal;
+    for (const l of this.labels.children) l.visible = u.showLabels ? l.position.distanceTo(cam) < LABEL_RANGE_M : l === reveal;
 
     this.woodland?.update(u.camera);
     this.street?.update(u.time, u.camera);
     if (u.showLabels) this.declutter(u.camera);
+  }
+
+  private revealed?: THREE.Object3D;
+  private revealUntil = 0;
+
+  /**
+   * A hover or a tap at (px, py) on a view `width`×`height` px (review #20): the nearest place label within REVEAL_PX
+   * of the point, in range, is shown for REVEAL_MS while the labels are off. Its text, or undefined if none is near.
+   */
+  revealNear(px: number, py: number, camera: THREE.Camera, width: number, height: number): string | undefined {
+    const p = new THREE.Vector3();
+    let best: THREE.Object3D | undefined;
+    let bestD = REVEAL_PX;
+    for (const l of this.labels.children) {
+      if (l.position.distanceTo(camera.position) > LABEL_RANGE_M) continue;
+      p.copy(l.position).project(camera);
+      if (p.z > 1 || p.z < -1) continue;
+      const d = Math.hypot(((p.x + 1) / 2) * width - px, ((1 - p.y) / 2) * height - py);
+      if (d < bestD) {
+        bestD = d;
+        best = l;
+      }
+    }
+    if (!best) return undefined;
+    this.revealed = best;
+    this.revealUntil = performance.now() + REVEAL_MS;
+    return (best.userData.text as string | undefined) ?? best.name;
   }
 
   /**

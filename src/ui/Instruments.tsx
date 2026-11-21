@@ -4,7 +4,7 @@ import type { EnvironmentInfo } from '../sim/env/environment';
 import { describeSky } from '../sim/env/sky';
 import { Compass } from './Compass';
 import { agroundText } from './aground';
-import { bearing, deg, kn, sideAngle } from './format';
+import { bearing, deg, kn, sideAngle, vmgShown, windFromWords } from './format';
 
 const MORE_KEY = 'squib.instruments.more';
 
@@ -22,9 +22,9 @@ function initialMore(): boolean {
 }
 
 /** `wide`: a value in words (damage), across the whole row and wrapping, so it cannot push the columns out of the panel. */
-function Cell({ label, value, unit, title, tutorial, wide }: { label: string; value: string; unit?: string; title?: string; tutorial?: string; wide?: boolean }) {
+function Cell({ label, value, unit, title, tutorial, wide, cell }: { label: string; value: string; unit?: string; title?: string; tutorial?: string; wide?: boolean; cell?: string }) {
   return (
-    <div className={wide ? 'cell wide' : 'cell'} title={title} data-tutorial={tutorial}>
+    <div className={wide ? 'cell wide' : 'cell'} title={title} data-tutorial={tutorial} data-cell={cell}>
       <div className="cell-label">{label}</div>
       <div className="cell-value">
         {value}
@@ -48,6 +48,11 @@ export function Instruments({
 }) {
   const tack = s.mainSide === 1 ? 'Starboard' : 'Port';
   const aground = agroundText(s);
+  // Review #18: plain words at the Learn level; Club and Expert keep the sailors' abbreviations, each with its tooltip.
+  const plain = level === 'learn';
+  const L = (abbr: string, words: string) => (plain ? words : abbr);
+  // Review #19: VMG as progress up or down the wind, always a positive number, at every level.
+  const vmg = vmgShown(s.vmg, s.twa);
   const [more, setMore] = useState(initialMore);
   // A change of interface level sets the default (all instruments at Expert): follow it.
   const lastLevel = useRef(level);
@@ -76,11 +81,11 @@ export function Instruments({
         </div>
       </div>
       <div className="grid">
-        <Cell label="Heading" value={bearing(s.heading)} unit="°" />
-        <Cell label="TWA" value={sideAngle(s.twa)} title="True wind angle: where the wind comes from, relative to the bow (0° = head to wind, 180° = dead downwind)" tutorial="twa" />
-        <Cell label="TWS" value={kn(s.tws)} unit="kn" title="True wind speed (relative to the water)" />
-        <Cell label="Heel" value={`${deg(Math.abs(s.heel))}° ${s.heel > 0.005 ? 'stbd' : s.heel < -0.005 ? 'port' : ''}`} title="How far the boat leans over" />
-        <Cell label="VMG" value={kn(s.vmg, 2)} unit="kn" title="Velocity made good: speed towards (or away from) the wind" />
+        <Cell label="Heading" value={bearing(s.heading)} unit="°" cell="heading" />
+        <Cell label={L('TWA', 'Wind from')} value={plain ? windFromWords(s.twa) : sideAngle(s.twa)} title="True wind angle (TWA): where the wind comes from, relative to the bow (0° = head to wind, 180° = dead downwind)" tutorial="twa" />
+        <Cell label={L('TWS', 'Wind speed')} value={kn(s.tws)} unit="kn" title="True wind speed (TWS), relative to the water" />
+        <Cell cell="heel" label="Heel" value={`${deg(Math.abs(s.heel))}° ${s.heel > 0.005 ? 'stbd' : s.heel < -0.005 ? 'port' : ''}`} title="How far the boat leans over" />
+        <Cell label={vmg.label} value={kn(vmg.kn, 2)} unit="kn" title={vmg.title} tutorial="vmg" />
         <Cell
           label="Depth"
           value={Number.isFinite(s.depthAtKeel) ? s.depthAtKeel.toFixed(1) : '—'}
@@ -97,11 +102,11 @@ export function Instruments({
         )}
         {more && (
           <>
-            <Cell label="SOG" value={kn(s.sog, 2)} unit="kn" title="Speed over ground" />
-            <Cell label="COG" value={bearing(s.cog)} unit="°" title="Course over ground" />
-            <Cell label="AWA" value={sideAngle(s.awa)} title="Apparent wind angle: the wind you feel on board" />
-            <Cell label="AWS" value={kn(s.aws)} unit="kn" title="Apparent wind speed" />
-            <Cell label="Leeway" value={deg(Math.abs(s.leeway), 1)} unit="°" title="Sideways slip through the water" />
+            <Cell label={L('SOG', 'Speed over the ground')} value={kn(s.sog, 2)} unit="kn" title="Speed over ground (SOG): through the water plus the stream" />
+            <Cell label={L('COG', 'Course over the ground')} value={bearing(s.cog)} unit="°" title="Course over ground (COG): where the boat is actually going, with the stream and the slip" />
+            <Cell label={L('AWA', 'Wind on board')} value={plain ? windFromWords(s.awa) : sideAngle(s.awa)} title="Apparent wind angle (AWA): the wind you feel on board, what the burgee shows" />
+            <Cell label={L('AWS', 'Wind on board speed')} value={kn(s.aws)} unit="kn" title="Apparent wind speed (AWS): the wind you feel on board" />
+            <Cell label={L('Leeway', 'Sideways slip')} value={deg(Math.abs(s.leeway), 1)} unit="°" title="Leeway: sideways slip through the water" />
             <Cell label="Rudder" value={sideAngle(s.rudder)} />
             <Cell label="Helm balance" value={helmText(s.helmBalance)} title="Rudder angle that would hold the boat straight right now. Weather helm = the boat wants to round up." />
             <Cell label="Current" value={Math.hypot(s.current.n, s.current.e) < 0.01 ? 'none' : `${kn(Math.hypot(s.current.n, s.current.e))} → ${bearing(Math.atan2(s.current.e, s.current.n))}°`} unit={Math.hypot(s.current.n, s.current.e) < 0.01 ? undefined : 'kn'} title={s.env?.currentLabel ?? 'Water velocity over the ground at the boat'} />

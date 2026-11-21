@@ -19,12 +19,12 @@ async function open(page: Page, query = ''): Promise<string[]> {
   return errors;
 }
 
-const library = (page: Page) => page.getByRole('region', { name: 'Library' });
+const library = (page: Page) => page.getByRole('region', { name: 'Scenarios and replays' });
 
 test('Phase 6: replays: a raced session saved from the library plays back verified, a changed one diverges', async ({ page }, info) => {
   test.setTimeout(180_000 * CI_SLOW);
   const errors = await open(page);
-  await page.getByRole('button', { name: 'Library' }).click();
+  await page.getByRole('button', { name: 'Scenarios and replays' }).click();
   await library(page).getByRole('button', { name: 'Load Practice race: windward–leeward, 5 AI boats' }).click();
   await expect(library(page).getByTestId('library-message')).toContainText('Started');
   await expect(page.getByTestId('race-panel')).toContainText('Windward–leeward (simulated)');
@@ -89,8 +89,10 @@ test('Phase 6: replays: a raced session saved from the library plays back verifi
 
   // A changed input row (helm nudged before the first checkpoint) is caught at that checkpoint.
   const i = rec.inputs.findIndex((r) => r[0]! > 100 && r[0]! < 1000);
-  rec.inputs[i]![1]! += 0.05;
-  await page.getByRole('button', { name: 'Library' }).click(); // the panel closed when the replay opened
+  // Towards the centre: a helm already hard over (±1) nudged outwards is clamped back to the same input and nothing
+  // diverges (a flake seen on CI, 21 Nov 2026, when the sampled row had the helm right over).
+  rec.inputs[i]![1]! += rec.inputs[i]![1]! > 0 ? -0.05 : 0.05;
+  await page.getByRole('button', { name: 'Scenarios and replays' }).click(); // the panel closed when the replay opened
   await library(page).getByLabel('Open replay file').setInputFiles({ name: 'changed.replay.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(rec)) });
   await expect(bar).toBeVisible(); // the file is read asynchronously
   await page.evaluate(() => window.__squib!.advance(25));
@@ -103,7 +105,7 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   // A test of the library, not the picture: the lighter scenery (CI draws in software, on two cores, slowly).
   test.setTimeout(300_000 * CI_SLOW);
   const errors = await open(page, '?quality=low');
-  await page.getByRole('button', { name: 'Library' }).click();
+  await page.getByRole('button', { name: 'Scenarios and replays' }).click();
   const lib = library(page);
   // The River Dart scenarios are available here. The Met Office forecast replay of 23 Oct 2026 is no longer in the
   // library (owner, 18 Nov 2026).
@@ -132,7 +134,7 @@ test('Phase 6: scenario library: built-ins, save in the browser, export and impo
   await page.reload();
   await expect(page.getByTestId('stw')).toBeVisible();
   await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 60_000 });
-  await page.getByRole('button', { name: 'Library' }).click();
+  await page.getByRole('button', { name: 'Scenarios and replays' }).click();
   await expect(lib.getByRole('button', { name: 'Load Foggy test' })).toBeVisible();
   await lib.getByRole('button', { name: 'Delete Foggy test' }).click();
   await expect(lib.getByRole('button', { name: 'Load Foggy test' })).toHaveCount(0);

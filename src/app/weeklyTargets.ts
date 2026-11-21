@@ -18,7 +18,7 @@ import { courseFor } from './courseLibrary';
 import { START_LOCATIONS } from './controller';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { poseOf } from './ghost';
-import { MEDALS, MEDAL_LEVEL, TARGETS_SCHEMA, median, trackRow, type Target, type TargetsFile } from './targets';
+import { TARGET_LEVEL, TARGET_SPREAD, TARGETS_SCHEMA, median, slowTrack, trackRow, type Target, type TargetsFile } from './targets';
 import type { WeeklyCourse } from './weekly';
 
 export interface DartForTargets {
@@ -61,21 +61,30 @@ export function sailOnce(w: WeeklyCourse, level: 'club' | 'good' | 'expert', see
   return { timeS: r?.elapsed !== undefined ? Math.round(r.elapsed * 10) / 10 : null, rows };
 }
 
-/** The week's targets: each level over `seeds` seeds; the ghost is the run nearest the median. */
+/**
+ * The week's targets (review #11, 20 Nov 2026): the expert AI over `seeds` seeds gives gold (the median; its ghost is
+ * the run nearest the median); silver and bronze are gold slower by TARGET_SPREAD, their ghosts the gold ghost slowed.
+ * The good AI is sailed too, as a check that the course is a 5–10 minute junior course (`sizing`), not as a target.
+ */
 export function sailTargets(w: WeeklyCourse, dart: DartForTargets, opts: { seeds: number[]; build: string; now?: Date }): TargetsFile {
   const targets: Target[] = [];
-  for (const medal of MEDALS) {
-    const level = MEDAL_LEVEL[medal];
-    const runs = opts.seeds.map((s) => sailOnce(w, level, s, dart));
-    const times = runs.map((r) => r.timeS);
-    const m = median(times);
-    if (m === undefined) continue;
+  const runs = opts.seeds.map((s) => sailOnce(w, TARGET_LEVEL, s, dart));
+  const times = runs.map((r) => r.timeS);
+  const m = median(times);
+  if (m !== undefined) {
     let pick = 0;
     times.forEach((t, i) => {
       if (t !== null && Math.abs(t - m) < Math.abs((times[pick] ?? Infinity) - m)) pick = i;
     });
-    targets.push({ medal, level, timeS: Math.round(m * 10) / 10, runs: times, track: { everyS: 1, rows: runs[pick]!.rows } });
+    const gold = Math.round(m * 10) / 10;
+    const track = { everyS: 1, rows: runs[pick]!.rows };
+    const start = w.scenario.race!.startInS;
+    targets.push(
+      ...(['bronze', 'silver'] as const).map((medal): Target => ({ medal, level: TARGET_LEVEL, timeS: Math.round(gold * (1 + TARGET_SPREAD[medal]) * 10) / 10, slowedBy: TARGET_SPREAD[medal], runs: [], track: slowTrack(track, start, 1 + TARGET_SPREAD[medal]) })),
+      { medal: 'gold', level: TARGET_LEVEL, timeS: gold, runs: times, track },
+    );
   }
+  const good = opts.seeds.map((s) => sailOnce(w, 'good', s, dart).timeS);
   return {
     schema: TARGETS_SCHEMA,
     week: w.week.key,
@@ -84,6 +93,7 @@ export function sailTargets(w: WeeklyCourse, dart: DartForTargets, opts: { seeds
     course: w.name,
     scenario: JSON.stringify(w.scenario),
     targets,
-    note: 'Model-sailed targets: the simulator\'s AI at three levels (club, good, expert), not people. Its ghosts are recordings that do not react.',
+    sizing: { level: 'good', timeS: median(good) ?? null, runs: good },
+    note: 'Model-sailed targets: gold is the simulator\'s expert AI (not people); silver and bronze are its time 10% and 25% slower (estimates), their ghosts its ghost slowed. The ghosts are recordings that do not react.',
   };
 }

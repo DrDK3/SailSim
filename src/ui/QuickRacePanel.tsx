@@ -48,7 +48,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
   const set = (patch: Partial<QuickRaceOptions>) => setO({ ...o, ...patch });
   const live = ui.weatherSources.some((w) => w.kind === 'live');
   const liveTide = ui.tideSources.some((t) => t.kind === 'live');
-  const river = ui.dart.status === 'loaded';
+  const river = ui.dart.status === 'loaded' || ui.dart.status === 'ready';
   const challenge = dailyChallenge();
   const bests = loadBests();
   const todayBest = bests.races[challenge.key];
@@ -272,7 +272,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
           ? 'Random conditions are training ranges (wind, gusts, a season afternoon, sky and tide phase), not a record of the Dart.'
           : o.conditions === 'live'
             ? `Live: the latest Met Office model wind for the area${liveTide ? ' and the Dartmouth tide' : ''}, from the site’s scheduled job.${!liveTide && o.venue === 'river' && o.stream ? ' No live tide is published yet, so the river has no tidal stream.' : ''}`
-            : 'Uses the wind, tide, sky, boat and start time set in Options.'}{' '}
+            : 'Uses the wind, tide, sky, boat and start time set in Conditions.'}{' '}
         {o.venue === 'rdyc' && 'RDYC courses were entered from the club’s 2026 sailing instructions and await a check by a club member; the club gives approximate mark positions, and where the committee boat anchors is the simulator’s choice. '}
         AI Squibs sail with the same physics and controls as you and follow a simplified subset of the racing rules (not an authoritative rules adjudication). Their sail numbers are invented. Starting sequence per rule 26; recalls per rule 29.
       </p>

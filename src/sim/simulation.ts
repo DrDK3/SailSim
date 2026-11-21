@@ -265,7 +265,8 @@ export class Simulation {
   /** How flat the sails are now (0…1): follows `input.flatten` at the crew's pace. */
   private flat = 0;
   readonly ownsEnvironment: boolean;
-  readonly seabed?: Seabed;
+  /** The bed under the boat (none: open water). Set at construction; changed only by joinRiver. */
+  seabed?: Seabed;
   readonly logInputs: boolean;
   lastBoomEvent: BoomEvent | null = null;
   /** Damage from collisions and groundings (src/sim/boat/damage.ts), and the impacts so far. */
@@ -337,6 +338,17 @@ export class Simulation {
   /** Water level (m ODN) at time t: from the environment's tide, else about mean sea level. */
   waterLevel(t = this.time): number {
     return this.env.waterLevel?.(t) ?? DEFAULT_WATER_LEVEL_ODN;
+  }
+
+  /**
+   * The River Dart data arriving during a run (review #9, 20 Nov 2026): from this step on, sail in the environment
+   * built with it (the same wind field, so the gusts carry on) over its bed. Called between steps only; a replay calls
+   * it at the same step (Recording.dartFromStep), so the run repeats exactly. Nothing else about the boat changes.
+   */
+  joinRiver(env: Environment, seabed: Seabed): void {
+    this.env = env;
+    this.seabed = seabed;
+    this.groundCtx = undefined;
   }
 
   /** Water level and seabed at time t (one reused record: read it before the next call). */

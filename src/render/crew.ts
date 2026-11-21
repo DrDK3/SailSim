@@ -36,6 +36,8 @@ const BONES = [
   'footR',
 ] as const;
 type BoneName = (typeof BONES)[number];
+/** Not drawn in the helm's own view (review #15): what the eye is inside or sees only as a blur at the edge. */
+export const FIRST_PERSON_HIDDEN: readonly BoneName[] = ['pelvis', 'spine', 'chest', 'neck', 'head', 'upperArmL', 'upperArmR'];
 const B = Object.fromEntries(BONES.map((n, i) => [n, i])) as Record<BoneName, number>;
 
 /** Segment lengths and widths (m) the parts are modelled at: a reference figure 1.877 m tall (REF_STATURE). */
@@ -400,6 +402,30 @@ export class CrewFigure {
     g.setAttribute('color', src.getAttribute('color').clone());
     g.setIndex(src.getIndex()!.clone());
     return g;
+  }
+
+  /**
+   * The helm's own figure seen from the helm's eye (review #15): the head and torso are not drawn (the eye is inside
+   * them), the hands, forearms, legs and boots are. Each part is rigid in its bone's frame, so a part is hidden by
+   * scaling its bone to nothing.
+   */
+  setFirstPerson(on: boolean): void {
+    if (on === this.firstPerson) return;
+    this.firstPerson = on;
+    for (const n of FIRST_PERSON_HIDDEN) this.bones[B[n]]!.scale.setScalar(on ? 0 : 1);
+  }
+  private firstPerson = false;
+  get isFirstPerson(): boolean {
+    return this.firstPerson;
+  }
+
+  /**
+   * The eye (in the parent's frame, the boat's: bow towards −z) after the last pose: a little above the head's centre
+   * and forward of it. Not turned with the head, so a glance at the sails does not swing a camera placed here.
+   */
+  eye(out = new THREE.Vector3()): THREE.Vector3 {
+    const k = this.body.neck / BODY.neck;
+    return out.copy(this.bones[B.head]!.position).add(this.v[5]!.set(0, 0.07 * k, -0.08 * k));
   }
 
   /** Bone position (in the parent's frame) after the last pose: for tests and attaching things. */

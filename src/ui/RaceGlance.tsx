@@ -111,7 +111,7 @@ export function MarkPointer({ ctl }: { ctl: SimController }) {
         // The toolbar spans the top on a wide screen; on a phone it is a button in the corner (avoided, not a band).
         const band = bar && bar.r - bar.l > w * 0.5;
         safe = { l: 0, t: band ? bar.b : 0, r: w, b: dock ? dock.t : h };
-        avoid = ['.hud-left', '.minimap', '.side', '.race-countdown', '.camera-bar', '.race-strip', ...(band ? [] : ['nav.toolbar'])]
+        avoid = ['.hud-left', '.minimap', '.side', '.race-countdown', '.camera-bar', '.race-strip', '.masthead-inset', ...(band ? [] : ['nav.toolbar'])]
           .flatMap((q) => [...document.querySelectorAll(q)])
           .map(rectOf)
           .filter((b): b is Box => !!b);
