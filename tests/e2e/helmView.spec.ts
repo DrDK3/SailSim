@@ -66,6 +66,7 @@ test('the helm view: at the helm’s eye on the windward deck, head and torso hi
       return {
         eye,
         headDist: Math.hypot(eye.x - head.position.x, eye.y - head.position.y, eye.z - head.position.z),
+        headY: head.position.y,
         visible: helm.visible,
         headScale: head.scale.x,
         chestScale: bone('chest').scale.x,
@@ -75,8 +76,10 @@ test('the helm view: at the helm’s eye on the windward deck, head and torso hi
       };
     });
     await info.attach(`helm view, ${c.name}`, { body: await page.screenshot(), contentType: 'image/png' });
-    // At the helm figure's head, on the windward side deck (the boom out to leeward), aft of the mast.
-    expect(m.headDist, c.name).toBeLessThan(0.15);
+    // At the helm figure's head, on the windward side deck (the boom out to leeward), aft of the mast: since 21 Nov 2026
+    // (§3.4) a little above and outboard of it (0.10 m up, 0.08 m out), as tests/render/helmEye.test.ts holds it.
+    expect(m.headDist, c.name).toBeLessThan(0.25);
+    expect(m.eye.y, `${c.name}: at or above the head`).toBeGreaterThanOrEqual(m.headY - 0.01);
     // On a side deck. Upwind on the windward one (mainSide 1 is the starboard tack, src/ui/Instruments.tsx: the wind
     // and the helm on the starboard side, x > 0); on a run the crew's weight, and so the helm, may sit to leeward.
     // On a run in this light wind the crew sit in the middle and the helm with them, low in the cockpit (the crew's
