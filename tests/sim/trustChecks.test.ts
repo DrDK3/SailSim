@@ -193,10 +193,12 @@ describe('5. AI parity', () => {
       return out;
     };
     const init = { n: ai.sim.state.n, e: ai.sim.state.e, headingDeg: ai.sim.state.psi * R2D, speedKn: ai.sim.state.u / KN };
+    // The controls as they were at the start (the replay starts there; the AI's input object changes as it sails).
+    const startInput = { ...ai.sim.input };
     const { env } = buildConditions(conditions);
     for (let i = 0; i < 4000; i++) session.step();
     let k = 0;
-    const plain = new Simulation({ params: squibParams(), env, initial: init, input: ai.sim.input, controller: () => inputs[k++] });
+    const plain = new Simulation({ params: squibParams(), env, initial: init, input: startInput, controller: () => inputs[k++] });
     // The plain simulation started from the AI's initial pose: replay the same number of steps.
     for (let i = 0; i < inputs.length; i++) plain.stepOnce();
     expect(Math.abs(plain.state.n - ai.sim.state.n)).toBeLessThan(1e-6);
@@ -219,13 +221,15 @@ describe('5. AI parity', () => {
       return out;
     };
     const init = { n: ai.sim.state.n, e: ai.sim.state.e, headingDeg: ai.sim.state.psi * R2D, speedKn: ai.sim.state.u / KN };
+    // The controls as they were at the start (the replay starts there; the AI's input object changes as it sails).
+    const startInput = { ...ai.sim.input };
     const { env } = buildConditions(conditions);
     // Through the start, the beat and the run (about 12 minutes).
     for (let i = 0; i < 72_000 && session.judgeOf(ai.id).phase !== 'finished'; i++) session.step();
     // It hoisted on the run and dropped before the leeward mark.
     expect([...phases]).toEqual(expect.arrayContaining(['down', 'hoisting', 'up', 'dropping']));
     let k = 0;
-    const plain = new Simulation({ params: withSpinnaker(squibParams()), env, initial: init, input: ai.sim.input, controller: () => inputs[k++] });
+    const plain = new Simulation({ params: withSpinnaker(squibParams()), env, initial: init, input: startInput, controller: () => inputs[k++] });
     for (let i = 0; i < inputs.length; i++) plain.stepOnce();
     expect(Math.abs(plain.state.n - ai.sim.state.n)).toBeLessThan(1e-6);
     expect(Math.abs(plain.state.e - ai.sim.state.e)).toBeLessThan(1e-6);
