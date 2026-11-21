@@ -20,7 +20,7 @@ import type { PierInput } from './piers';
 import { placeOutline } from './hull';
 import { DEFAULT_COMMITTEE, RaceCommittee, type BoatRaceStatus, type CommitteeOptions, type ResultRow, type Signal } from './committee';
 import { PenaltyTracker, rightOfWay, TackTracker, type Incident, type RulesBoat } from './rules';
-import { MarkRoomTracker, markRoomRuling, type MarkRoomBoat } from './markRoom';
+import { MarkRoomTracker, markRoomAdvisory, markRoomRuling, type MarkRoomBoat } from './markRoom';
 import { hypot2 } from '../math/hypot';
 
 /**
@@ -60,6 +60,12 @@ export interface RaceSessionOptions {
   piers?: readonly PierInput[];
   mooringAreas?: MooringArea[];
   seed?: number;
+  /**
+   * Penalties under the simplified rule 18 (fixes of 21 Nov 2026, §2.2). Off (the default): at a contact while one boat
+   * owes the other mark-room, the incident records it as advisory and the ruling and penalty follow rules 10–13, as
+   * before package F. On: the boat owing mark-room is at fault under rule 18.2. The AI keeps clear the same either way.
+   */
+  markRoomPenalties?: boolean;
 }
 
 export interface LogEntry {
@@ -403,16 +409,19 @@ export class RaceSession implements AiWorld {
       // Near a mark, simplified rule 18: the boat owing mark-room is at fault (the entitled boat is not blamed).
       const room = this.markRoom.entitlement(c.a, c.b);
       const ruling = room ? markRoomRuling(room, (id) => this.fleet.boat(id)!.name) : undefined;
-      const kc = this.fleet.boat(ruling ? ruling.atFault : row.keepClear)!;
-      const rw = this.fleet.boat(ruling ? room!.entitled : row.rightOfWay)!;
+      // Rule 18 decides the ruling only with its penalties switched on; otherwise it is advisory (§2.2).
+      const by18 = ruling && this.opts.markRoomPenalties === true ? ruling : undefined;
+      const kc = this.fleet.boat(by18 ? by18.atFault : row.keepClear)!;
+      const rw = this.fleet.boat(by18 ? room!.entitled : row.rightOfWay)!;
       inc.summary = `Contact between ${A.name} and ${B.name} at ${c.speed.toFixed(1)} m/s`;
       if (racing && !this.outOfRace(c.a) && !this.outOfRace(c.b)) {
         inc.atFault = kc.id;
-        inc.rule = ruling ? ruling.rule : row.rule;
+        inc.rule = by18 ? by18.rule : row.rule;
         inc.penaltyTurns = 2;
         inc.penaltyTaken = false;
-        inc.summary += ruling ? `: ${kc.name} did not give mark-room (rule 18.2, simplified: ${ruling.reason}).` : `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
-        if (ruling) inc.notes.push(...ruling.notes);
+        inc.summary += by18 ? `: ${kc.name} did not give mark-room (rule 18.2, simplified: ${by18.reason}).` : `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
+        if (by18) inc.notes.push(...by18.notes);
+        else if (room) inc.notes.push(markRoomAdvisory(this.fleet.boat(room.giver)!.name));
         inc.notes.push(`Rule 14 also applied to ${rw.name} (avoid contact if reasonably possible); not judged here.`);
         const h = this.rowHistory.get(PAIR(c.a, c.b));
         if (h && t - h.since < 5) inc.notes.push(`Right of way changed ${(t - h.since).toFixed(1)} s before contact: rule 15 (room to keep clear) may apply; not judged here.`);

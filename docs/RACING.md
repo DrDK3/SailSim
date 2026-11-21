@@ -250,8 +250,13 @@ RR11; the World Sailing PDF could not be fetched, issue 32). `src/sim/race/markR
   (the definition's overlap, on opposite tacks too), the outside boat (the one farther from the mark); if not, the boat
   that has not reached the zone.
 - **Until**: the entitled boat leaves the zone, passes head to wind, or has rounded (bound for the next mark).
-- **At a contact while it lasts**: the boat that owed mark-room is at fault under rule 18.2 (a Two-Turns Penalty, as
-  for rules 10–13); the entitled boat is not blamed. Otherwise rules 10–13 decide, as before.
+- **At a contact while it lasts** (fixes of 21 Nov 2026, §2.2): **advisory by default.** Rule 18's penalties are behind
+  a switch, `markRoomPenalties` (Settings → Advanced), **off** until the club has reviewed the rule. Off: the contact is
+  ruled and penalised under rules 10–13, as before package F, and the incident and the protest room say "Rule 18
+  (simplified, advisory): X should have given mark-room. No penalty applied until the club has reviewed this rule". On:
+  the boat that owed mark-room is at fault under rule 18.2 (a Two-Turns Penalty, as for rules 10–13) and the entitled
+  boat is not blamed. A race's recording carries the setting it was sailed with, so its replay rules the same way. The
+  AI keeps clear of a boat it owes mark-room either way.
 - **Not judged**: how much room was needed (the definition of mark-room), 18.2(c) (overlaps after 18.2(a) ends),
   18.2(d) (an inside overlap from clear astern or by tacking that the outside boat could not answer), 18.2(e), 18.3
   (tacking in the zone), 18.4 (gybing), rule 21 (exoneration), and gate marks beyond taking the nearer mark.

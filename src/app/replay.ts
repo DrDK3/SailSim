@@ -243,6 +243,8 @@ export interface Recording {
    * start signal and whether it was sailed without assists. The verifier re-sails the run and checks both.
    */
   claimed?: { finishS: number; independent: boolean };
+  /** A race sailed with rule 18's penalties switched on (fixes of 21 Nov 2026, §2.2). Absent: off, the default. */
+  markRoomPenalties?: boolean;
 }
 
 export function encodeInputs(log: readonly InputLogEntry[]): InputRow[] {
@@ -306,6 +308,7 @@ export function parseRecording(json: unknown): Recording {
   }
   if (!isNum(r.endStep) || r.endStep < 0) throw new Error('replay: bad end step');
   if (r.dart !== 'loaded' && r.dart !== 'none') throw new Error('replay: bad dart flag');
+  if (r.markRoomPenalties !== undefined && typeof r.markRoomPenalties !== 'boolean') throw new Error('replay: bad mark-room flag');
   return r as Recording;
 }
 
