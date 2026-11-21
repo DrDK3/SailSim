@@ -214,6 +214,10 @@ It never changes the physics.
   - With 10 boats the contacts are mostly port–starboard around the start.
   - With 20 boats they come during the race, at crossings and roundings (no mark-room).
   - See issue 42.
+- **Package F (21 Nov 2026), seeds 101–200, never used for tuning:** 10 boats, 79 → 81 of 100 clean (contacts 42 →
+  26; short of the 90% aimed for); 5 boats, 92 → 98 of 100 (contacts 13 → 2); river (20 races, 5 boats), 15 → 16 of 20 (contacts 9 → 3, boats finishing 95% → 99%). The changes are in
+  "The AI in big fleets" below; the trials, the tuning runs and what is left in
+  [NEXT_ROUND_REPORT.md](NEXT_ROUND_REPORT.md) §F.
 - **Review Package 1 (3 Nov 2026).** The committee boat became her drawn hull (10.82 m, lying to the stream or the wind) instead of a 2.5 m circle. Trials were re-run, with a same-day baseline from the commit before the change (`dd7d16c`), because results had drifted since 23 Oct:
   - **Start Bay, seeds 1–100:**
     - baseline 91 of 100 clean;
