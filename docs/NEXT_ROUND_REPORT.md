@@ -628,6 +628,154 @@ in the next package's report.
 
 ---
 
+## Package F: simplified rule 18 and AI fleet safety (no physics)
+
+**No physics changed.** The boat model is untouched: the golden traces and `npm run envelope` are identical (§F.8). What
+changed is the race judge (rule 18) and the AI skippers' decisions, so the reference race (seven AI boats) sails
+differently: its hash changes, as it must, and both values are recorded in §F.8.
+
+### F.1 What changed, by review number
+
+| # | Change | Where |
+|---|---|---|
+| #26 | **Simplified rule 18, mark-room.** The zone is three hull lengths of the boat nearer the mark (17.4 m for a Squib), measured to any part of her hull. Rule 18 applies between boats bound for the same mark on the same leg and leaving it on the same side, once either is in the zone. It does not apply between boats on opposite tacks both beating, or between a boat approaching a mark and one leaving it. When the first of two boats reaches the zone (18.2(a)): if they are overlapped, the outside boat must give mark-room; if not, the boat that has not reached the zone must give it. This lasts until the entitled boat leaves the zone, passes head to wind, or rounds. At a contact while it lasts, the boat owing mark-room is at fault under rule 18.2 (a Two-Turns Penalty), and the protest room says so in plain words. **Labelled "simplified, not authoritative"**: what mark-room is, 18.2(c)–(e), 18.3, 18.4 and rule 21 are not judged | `src/sim/race/markRoom.ts`, `src/sim/race/session.ts`, `src/app/protestRoom.ts`, `docs/RACING.md` |
+| #27, issue 42 | **The AI in big fleets**, each change aimed at a cause found by replaying the trials' contacts (§F.5): (1) the start spots spread over the usable line (the two boats nearest each end had been sent to one spot); (2) fleets of three or more wait in three staggered rows, at least about 37 m apart; (3) half the room asked of a boat that holds its distance alongside; (4) marks kept clear of the bow and the stern, not only the hull's centre; (5) avoidance never steers within 5° of a dead run; (6) at a mark, the boat owing mark-room keeps clear; (7) between two finished boats, the rules decide who keeps clear; (8) a collision reflex held over 5 s between boats side by side, away from marks, is broken by the boat keeping clear dropping back. Two other ideas were tried and dropped. Detail in `docs/RACING.md`, "The AI in big fleets" | `src/sim/ai/skipper.ts`, `src/sim/race/session.ts` |
+| Found here | **The AI parity test replayed from the wrong starting controls.** It built its plain simulation after the run with the AI's input object as it was at the end, not at the start; it passed only while the AI happened to end with the controls it began with. It now replays from a copy of the starting controls, and passes on both the old and the new AI (to 1e-6 m) | `tests/sim/trustChecks.test.ts` |
+
+### F.2 Sources and evidence levels (rule 18)
+
+The World Sailing text of the Racing Rules of Sailing 2025–2028 could not be fetched: the host is refused from this
+environment (issue 32). Rule 18 therefore follows secondary copies quoted in web-search excerpts: sailzing.com's rule
+18 pages, the Asian Sailing Federation's printing of the rules, Dave Perry's overview for US Sailing, Sailing Canada's
+presentation, the RYA's summary of changes, and US Sailing Appeal 130. They are recorded as SOURCES RR11: **search
+excerpts only, no page opened** (L3). The sources differ on one point: whether the 2025 wording of 18.2(a)(2) changed
+who gets room (the RYA calls it layout only; Perry and others say the boat reaching the zone first, not the one clear
+ahead, is entitled). The simulator follows the second reading and says it is simplified. The "beating" test for the
+opposite-tacks exception (within 80° of the true wind) is an estimate (E).
+
+### F.3 Rule 18 scenario tests
+
+`tests/sim/markRoom.test.ts` (6 tests):
+
+1. The zone's size, measured to the hull.
+2. Overlapped at the zone: the inside boat is entitled, and the ruling is 18.2, labelled simplified.
+3. Clear ahead at the zone: she keeps her entitlement when the boat astern later gets an inside overlap.
+4. No rule 18 between opposite tacks beating; rule 18 does apply on opposite gybes downwind.
+5. No rule 18 between boats bound for different marks or rounding on different sides.
+6. The entitlement ends when she leaves the zone, tacks or rounds.
+
+### F.4 AI fleet safety: the trials
+
+`npm run ai:trials` (`tools/ai-trials.ts`): seeded AI-only races, a one-lap windward–leeward or triangle in the Start
+Bay practice area, wind 6–16 kn from any direction, a five-minute sequence. A race is clean only if every boat
+finishes, no boat touches another boat, a mark, the committee boat or the bottom, and no boundary is crossed. "Before"
+is the code as it was (package E's AI; the simplified rule 18 changes rulings, not the AI, so it cannot change whether
+a race is clean); "after" is this package.
+
+**The measure: seeds 101–200, never used for tuning** (`--first 101`):
+
+| Fleet | Before: clean | After: clean | Contacts before → after | Boats finishing |
+|---|---|---|---|---|
+| 10 boats | **79 of 100** | **81 of 100** | 42 → 26 | 99.8% → 99.9% |
+| 5 boats | 92 of 100 | **98 of 100** | 13 → 2 | 100% → 100% |
+| River, 5 boats (20 races, the Range sausage, 1.5 kn flood) | 15 of 20 | 16 of 20 | 9 → 3 | 95% → 99% |
+
+**The target was missed.** Package F aimed to take clean 10-boat races from about 77% to at least 90%. On the seeds
+never used for tuning they went from 79 to 81 of 100. That is within the noise of 100 races: a change of two races
+proves nothing either way. The number of contacts fell by 38% (42 to 26), and the 5-boat fleet did not fall: it rose
+from 92 to 98. The tuning seeds overstated the gain (below), so the trial-to-trial spread is large. What is left is
+spread across the race, with no single cause: 6 pre-start contacts, 5 mark touches, 5 contacts while racing, 2
+line-end touches at the start, and 1 boat that did not finish (§F.6).
+
+**Tuning: seeds 1–60, 10 boats** (the order the candidates were tried; each builds on A unless named):
+
+| Variant | Clean | Pre-start contacts | Mark touches | Kept? |
+|---|---|---|---|---|
+| Before | 43 / 60 (72%) | 12 | 1 | — |
+| A: start spots, dead runs, mark-room, finished boats | 45 / 60 (75%) | 6 | 3 | yes |
+| A + waiting rows (H) | 44 / 60 (73%) | 4 | 6 | yes (fewer pre-start contacts) |
+| A + H + half room alongside (P) | 49 / 60 (82%) | 4 | 3 | yes |
+| A + H + P + the stern at marks (S) | 50 / 60 (83%) | 4 | 1 | yes |
+| A + H + P + S + lock break (L) | 49 / 60 (82%) | 5 | 2 | yes: every boat finished (the lock in seed 17 broken), 13 contacts against 17 |
+| A + a later reflex for the right-of-way boat (R), + a near-hard limit at marks (M) | stopped at 17 races (5 not clean) | — | — | no |
+| A + H + L + M | stopped at 24 races (9 not clean; 3 windward-mark touches) | — | — | no |
+
+Changing any part of the AI reshuffles which seeds fail, because a race is chaotic. 60 races cannot separate 75% from
+82% with confidence, so each change was also judged by what it was for: the pre-start contacts it should remove, the
+mark touches, the locks. Each also has a unit test of its mechanism (§F.8). One change was found to cost speed: the
+waiting rows moved where a lone boat starts, and on the week's junior course the good AI took 607 s, over the 600 s
+sizing check. Fleets of one or two now keep their slots (562.5 s, against 563 before; issue 270).
+
+### F.5 Evidence (what caused the contacts)
+
+The failing races (the baseline's on seeds 101–200, and seed 17 from a tuning run) were replayed with a diagnostic that prints both boats' positions, speeds and intentions
+for the seconds before each contact (a scratch tool, not committed). What it showed, and which change answers it:
+
+| Seen in | What happened | Change |
+|---|---|---|
+| Every fleet size (a unit test reproduces it) | Two boats were sent to the same spot on the starting line, 0 m apart | (1) |
+| Seeds 105, 149, 165 (pre-start) | Boats waiting 17.6 m apart drifted into each other, or met while sailing back to their places; both "avoiding" for 10 s or more before the contact | (2), (3) |
+| Seeds 17, 181 (windward mark) | Pushed inside her rounding circle by another boat, a boat bore away and her stern swung onto the mark | (4) |
+| Seeds 120, 152 (the run) | An avoiding boat steered dead downwind; her tack flipped with the boom, and so did right of way | (5) |
+| Seed 156 (after the finish) | Two finished boats each kept clear of the other, both swerved, and met | (7) |
+| Seed 174 (the start) | Two boats side by side, 2 m apart, held their collision reflexes for over a minute and sailed off the course together; neither finished | (8) |
+
+Change (6) brings the AI into line with the new judge (rule 18). It is not tied to one race.
+
+### F.6 What is left from package F
+
+- **The 90% target** for 10-boat fleets (81% now). What is left (issue 268):
+  - the start line's ends: a boat slowing for its timed run (sails eased) near a crowded end is pinched up, cannot steer away, and is set onto the pin or the committee boat (seeds 122, 155);
+  - the windward mark in a crowd (seeds 119, 152 and others);
+  - crossings soon after the start;
+  - a boat returning behind the line after starting early, held off its way for minutes by a boat sailing alongside, without a contact. In seed 176 she started 606 s late and missed the finishing window. This is a lock of the avoidance, not of the reflex (which L now breaks).
+- **20-boat fleets** were not re-measured (40% clean in Phase 5). The river trials (seeds 1–20, not used for tuning in this package) are in the table above: no fall.
+- **Rule 18** is simplified (§F.1), and its wording rests on secondary sources until the World Sailing text can be read (issue 32). The judge's rule 18 has not been tried on a crowded mark by people.
+
+### F.7 Estimates introduced (E)
+
+- The opposite-tacks "beating" test for rule 18: within 80° of the true wind.
+- The AI: half the room for tracks not closing, and "closing" above 0.8 m/s.
+- The waiting rows: 60, 95 and 130 m behind the line, a third of the fleet in each.
+- Dead-run limit: 175° from the wind.
+- Lock break: after 5 s.
+- Mark clearance: measured at half the hull's length either side of the centre.
+
+### F.8 Checks
+
+Locally (cloud container):
+
+- **Code checks**: typecheck and lint pass. Unit tests: **922 in 138 files, all passing**.
+  - New: `markRoom.test.ts` (6 rule 18 scenarios) and `aiFleet.test.ts` (12).
+  - `aiFleet.test.ts` has one test per AI change: the start spots at 5, 10 and 20 boats; the waiting places at 5, 10 and 20 boats; the room alongside; the dead run; the stern at a mark; mark-room; finished boats; the lock.
+  - Each test was run against the code without its change and failed. The start-spot test failed at every fleet size. The waiting-place test failed at 5 and 10 boats, where the slots were 17 m apart, and passed at 20, whose slots were already 35 m apart.
+- **The AI parity tests** (an AI boat acts only through the controls, with and without spinnakers) pass, to 1e-6 m, after the fix to the test itself (§F.1). The corrected test also passes on the AI before this package.
+- **No physics changed**: the seven golden traces are identical (with the date field removed), and `npm run envelope` is identical to package E's, every row.
+- **The reference race hash** (`tools/race-hash.ts`, seven AI boats, 400 s):
+  - `8f30a5cf5c450344` with the simplified rule 18 alone, identical to `main` (no ruling in those 400 s changes a boat's course);
+  - `33623f273ed1c7bd` with the AI changes, as expected: the AI decides differently.
+- **`npm run perf`**, quiet container, mean / p99 per 1/60 s frame (ms):
+
+  | Window | Package E, same machine | This package, two runs |
+  |---|---|---|
+  | Physics only (21 boats) | 0.47 / 1.22 | 0.60 / 1.50, then 0.46 / 1.19 |
+  | 20 AI boats: pre-start | 1.24 / 4.18 | 1.16 / 3.82, then 1.13 / 4.23 |
+  | 20 AI boats: racing | 0.96 / 2.84 | 1.08 / 4.38, then 1.00 / 3.56 |
+  | 20 AI boats under spinnakers | 1.02 / 3.08 | 1.18 / 3.50, then 0.84 / 2.56 |
+
+  The physics budget (≤ 1.5 ms mean, ≤ 3 ms p99) is met. The AI windows differ by about ±0.15 ms mean and ±1 ms p99 from run to run, before and after alike: no measurable change. The crowded windows exceed 3 ms p99 with the old AI too (issue 262).
+- **The grep** for RYA, "validated", "realistic" and accreditation in what package F adds: only citations of a source ("the RYA's summary of changes") and the label "not authoritative".
+
+**CI on the earlier packages, recorded here:** package E's pull request (d6302ad) is green, the checks job and all five browser shards.
+
+### F.9 Pull request
+
+Draft pull request: https://github.com/DrDK3/SailSim/pull/44 (branch `next-f-rules`, base `next-e-share`, so its
+diff shows package F alone; it follows package E, https://github.com/DrDK3/SailSim/pull/43). CI's result is recorded
+in the next package's report.
+
+---
+
 ## Needs people (this round does not do these)
 
 - **#28** The validation session with Squib sailors (with the B6 questions once package B adds them).

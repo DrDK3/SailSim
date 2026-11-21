@@ -80,7 +80,7 @@ An untaken penalty is shown in the results ("no penalty taken"). There is no pro
 ### Not implemented
 
 - Rules 15 and 16 as adjudication.
-- Rules 17–24, including 18 (mark-room) and 19–20 (obstructions, hailing). The AI keeps clear of boats at marks, but no mark-room is awarded.
+- Rules 17 and 19–24 (obstructions, hailing). **Rule 18 is judged in a simplified form** (package F, below); the AI keeps clear of boats at marks.
 - Exoneration.
 - The scoring penalty (44.3).
 - Protests, hearings and redress.
@@ -214,6 +214,10 @@ It never changes the physics.
   - With 10 boats the contacts are mostly port–starboard around the start.
   - With 20 boats they come during the race, at crossings and roundings (no mark-room).
   - See issue 42.
+- **Package F (21 Nov 2026), seeds 101–200, never used for tuning:** 10 boats, 79 → 81 of 100 clean (contacts 42 →
+  26; short of the 90% aimed for); 5 boats, 92 → 98 of 100 (contacts 13 → 2); river (20 races, 5 boats), 15 → 16 of 20 (contacts 9 → 3, boats finishing 95% → 99%). The changes are in
+  "The AI in big fleets" below; the trials, the tuning runs and what is left in
+  [NEXT_ROUND_REPORT.md](NEXT_ROUND_REPORT.md) §F.
 - **Review Package 1 (3 Nov 2026).** The committee boat became her drawn hull (10.82 m, lying to the stream or the wind) instead of a 2.5 m circle. Trials were re-run, with a same-day baseline from the commit before the change (`dd7d16c`), because results had drifted since 23 Oct:
   - **Start Bay, seeds 1–100:**
     - baseline 91 of 100 clean;
@@ -230,3 +234,56 @@ It never changes the physics.
   - **Full race:** 1 user + 20 AI boats, including the AI and race logic, 1.7 ms mean and about 5 ms p99.
   - See the report.
 - **Why the turn model is brisk:** using the measured turn rate in the avoidance search was tried. Clean runs fell from 88% to 30% on the same 40 seeds: when every escape looks equally late, the boat holds on into trouble. The brisk model starts avoidance earlier and further; the reflex, which does use the measured rate, handles the last 2.5 s.
+
+
+## Simplified rule 18, mark-room (package F, 21 Nov 2026)
+
+**Simplified, not authoritative.** From secondary copies of the 2025–2028 rules quoted in web-search excerpts (SOURCES
+RR11; the World Sailing PDF could not be fetched, issue 32). `src/sim/race/markRoom.ts`, tested in
+`tests/sim/markRoom.test.ts`.
+
+- **The zone**: three hull lengths of the boat nearer the mark (17.4 m for a Squib), to any part of her hull.
+- **When it applies**: boats bound for the same mark on the same leg, to leave on the same side, at least one in the
+  zone; not between boats on opposite tacks both beating (within 80° of the true wind, E), nor between a boat
+  approaching a mark and one leaving it (bound for different marks).
+- **Who must give mark-room**: decided when the first of the two reaches the zone (18.2(a)): if they are overlapped
+  (the definition's overlap, on opposite tacks too), the outside boat (the one farther from the mark); if not, the boat
+  that has not reached the zone.
+- **Until**: the entitled boat leaves the zone, passes head to wind, or has rounded (bound for the next mark).
+- **At a contact while it lasts**: the boat that owed mark-room is at fault under rule 18.2 (a Two-Turns Penalty, as
+  for rules 10–13); the entitled boat is not blamed. Otherwise rules 10–13 decide, as before.
+- **Not judged**: how much room was needed (the definition of mark-room), 18.2(c) (overlaps after 18.2(a) ends),
+  18.2(d) (an inside overlap from clear astern or by tacking that the outside boat could not answer), 18.2(e), 18.3
+  (tacking in the zone), 18.4 (gybing), rule 21 (exoneration), and gate marks beyond taking the nearer mark.
+
+## The AI in big fleets (package F, 21 Nov 2026)
+
+What made 10-boat AI races collide, found by replaying the contacts of the trials, and what changed
+(`src/sim/ai/skipper.ts`, `src/sim/race/session.ts`; each with a test in `tests/sim/aiFleet.test.ts` that fails
+without it). Thresholds marked E are estimates.
+
+- **Start spots.** Each boat's spot on the line was its line fraction clamped into the usable part of the line, so the
+  boats nearest each end were sent to the same spot (0 m apart, at every fleet size). The fractions are now spread over
+  the usable part: 8–10 m apart with 10 boats.
+- **Waiting places** (fleets of three or more). The boats waited at their starting slots, 17.6 m apart in a row of
+  seven, while each wanders up to 30 m from its place as it drifts. They now wait in the order of their slots over three
+  staggered rows 60, 95 and 130 m behind the line, at least about 37 m apart; a place that is not clear water keeps the
+  slot. One or two boats wait at their slots as before.
+- **Room for boats side by side.** The avoidance asked 16 m of a boat keeping clear of any other, whatever the
+  geometry, so on a crowded line the windward boat was always "avoiding". Tracks that have held their distance so far
+  (side by side, not closing) now need half the room; once they close at any point, the full room (E: halved, and
+  "closing" above 0.8 m/s).
+- **Marks and the stern.** The avoidance kept marks clear of the hull's centre only: a boat turning away from a mark
+  close by swung her stern onto it (most windward-mark touches). The bow and the stern are now kept clear too.
+- **Not onto a dead run.** Avoidance could pick a heading within 5° of dead downwind, where the boom can go either
+  side, so a boat's tack (and who had right of way) flipped back and forth. It no longer does (E: 5°).
+- **Mark-room.** At a mark, the boat owing mark-room under the simplified rule 18 keeps clear, as the judge rules it.
+- **Finished boats.** A boat out of the race keeps clear of one still racing; between two out of the race both used to
+  keep clear, and swerved, sometimes into each other. The rules now decide between them.
+- **Locks.** Two boats side by side, each unable to turn away without her stern swinging into the other, could hold
+  their collision reflexes for minutes and sail off the course together (in baseline seed 174 two boats locked just
+  after the start, one of them not yet started, and neither finished).
+  After 5 s (E), away from marks, the boat keeping clear lets her sails go to drop back and the other keeps hers
+  drawing.
+- **Tried and dropped** (measured on the tuning seeds, no gain): a later reflex for the boat with right of way; a
+  near-hard limit round marks measured at the hull's centre (more windward-mark touches).

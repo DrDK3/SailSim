@@ -100,6 +100,11 @@ export const RULE_NOTES: Record<string, { title: string; says: string; couldHave
     says: 'After a boat passes head to wind, she keeps clear of other boats until she is on a close-hauled course.',
     couldHave: 'She could have tacked where there was room, finishing the tack before the other boat had to change course.',
   },
+  '18.2': {
+    title: 'Rule 18.2, mark-room (simplified here)',
+    says: 'Near a mark both boats must leave on the same side, the zone is three hull lengths. When the first of them reaches it, an outside boat overlapped with an inside one must give her room to round; if they are not overlapped, the boat that has not reached the zone gives room to the one that has. This simulator judges only who owed room, not how much: it is simplified, not authoritative.',
+    couldHave: 'The boat that owed room could have gone wide early, or slowed and passed astern, so the other boat could sail round the mark without changing course for her.',
+  },
   '31': {
     title: 'Rule 31, touching a mark',
     says: 'While racing, a boat must not touch a starting mark before starting, a mark of the leg she is sailing, or a finishing mark after finishing.',
