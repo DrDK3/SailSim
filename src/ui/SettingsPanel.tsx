@@ -209,6 +209,14 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             data-testid="pref-helm-fov"
           />
         </label>
+        <label className="field select-field">
+          <span>Crew in helm view</span>
+          <select value={ui.prefs.helmCrew} onChange={(e) => ctl.setPrefs({ helmCrew: e.target.value === 'faded' ? 'faded' : 'shown' })} data-testid="pref-helm-crew">
+            <option value="shown">Shown</option>
+            <option value="faded">Faded</option>
+          </select>
+        </label>
+        <p className="fine">Faded is a presentation choice: the crew are still aboard and still sail the boat; they are drawn see-through so they do not fill the view ahead.</p>
         <h5>Game controller</h5>
         <p className="fine" data-testid="gamepad-help">
           {ui.gamepad ? 'A game controller is connected. ' : 'Connect a game controller (and press a button) to use it. '}

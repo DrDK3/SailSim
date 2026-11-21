@@ -44,11 +44,17 @@ export interface Prefs {
    * and back with the next, for players who cannot hold a key. Off (the default): held, as before.
    */
   lookUpToggle: boolean;
+  /**
+   * The crew in the helm view (fixes of 21 Nov 2026, §3.4): shown (the default) or faded, so a crew sitting forward on
+   * the same deck does not fill the view ahead. A presentation choice: the crew are still aboard and sail the boat.
+   */
+  helmCrew: 'shown' | 'faded';
 }
 
 /** The helm view's field of view (deg): its range in Settings and the default (as before, E). */
 export const HELM_FOV_RANGE = [50, 90] as const;
-export const DEFAULT_HELM_FOV = 68;
+/** 74° (was 68° until 21 Nov 2026, §3.4: wider, so the bow and the crew ahead take less of the view; E). */
+export const DEFAULT_HELM_FOV = 74;
 export const clampHelmFov = (d: number): number => Math.round(Math.max(HELM_FOV_RANGE[0], Math.min(HELM_FOV_RANGE[1], d)));
 
 /** A touch screen with no mouse (a phone or tablet): the battery saver starts on there. */
@@ -77,6 +83,7 @@ export const DEFAULT_PREFS: Prefs = {
   helmFovDeg: DEFAULT_HELM_FOV,
   instructorView: false,
   lookUpToggle: false,
+  helmCrew: 'shown',
 };
 
 function defaults(): Prefs {
@@ -107,6 +114,7 @@ export function loadPrefs(): Prefs {
       helmFovDeg: typeof p.helmFovDeg === 'number' && Number.isFinite(p.helmFovDeg) ? clampHelmFov(p.helmFovDeg) : d.helmFovDeg,
       instructorView: typeof p.instructorView === 'boolean' ? p.instructorView : d.instructorView,
       lookUpToggle: typeof p.lookUpToggle === 'boolean' ? p.lookUpToggle : d.lookUpToggle,
+      helmCrew: p.helmCrew === 'faded' || p.helmCrew === 'shown' ? p.helmCrew : d.helmCrew,
     };
   } catch {
     return defaults();

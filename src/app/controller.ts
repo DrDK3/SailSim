@@ -2075,6 +2075,7 @@ export class SimController {
     this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
     this.view?.setSpinnakerColours(this.prefs.spinnakerColours);
     this.view?.setHelmFov(this.prefs.helmFovDeg);
+    this.view?.setHelmCrewFaded(this.prefs.helmCrew === 'faded');
     this.view?.setSafeArea(this.safeArea.top, this.safeArea.bottom);
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
@@ -2710,6 +2711,7 @@ export class SimController {
     savePrefs(this.prefs);
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
     if ('helmFovDeg' in change) this.view?.setHelmFov(this.prefs.helmFovDeg);
+    if ('helmCrew' in change) this.view?.setHelmCrewFaded(this.prefs.helmCrew === 'faded');
     // Changing how look-up works brings the view back down (§3.3).
     if ('lookUpToggle' in change) this.setLookUp(false);
     if ('spinnakerColours' in change) this.view?.setSpinnakerColours(this.prefs.spinnakerColours);

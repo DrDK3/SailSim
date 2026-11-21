@@ -334,6 +334,19 @@ function buildParts(role: CrewRole, c: CrewColours, build: CrewBuild = 'male'): 
 }
 
 const MATERIAL = shared(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 }));
+/** How much of a faded crew figure shows (§3.4; a presentation choice, E). */
+export const CREW_FADED_OPACITY = 0.3;
+let FADED: THREE.MeshStandardMaterial | undefined;
+/** The faded crew's material: the same, see-through and not hiding what is behind (made once, shared). */
+function fadedMaterial(): THREE.MeshStandardMaterial {
+  if (!FADED) {
+    FADED = shared(MATERIAL.clone());
+    FADED.transparent = true;
+    FADED.opacity = CREW_FADED_OPACITY;
+    FADED.depthWrite = false;
+  }
+  return FADED;
+}
 const geometryCache = new Map<string, THREE.BufferGeometry>();
 
 export class CrewFigure {
@@ -409,6 +422,20 @@ export class CrewFigure {
    * them), the hands, forearms, legs and boots are. Each part is rigid in its bone's frame, so a part is hidden by
    * scaling its bone to nothing.
    */
+  /**
+   * The crew drawn see-through (fixes of 21 Nov 2026, §3.4: "Crew in helm view: faded"): a presentation choice, so a
+   * figure sitting forward of the helm does not fill the view ahead. The crew are still aboard and sail the boat.
+   */
+  setFaded(on: boolean): void {
+    if (on === this.faded) return;
+    this.faded = on;
+    this.mesh.material = on ? fadedMaterial() : MATERIAL;
+  }
+  private faded = false;
+  get isFaded(): boolean {
+    return this.faded;
+  }
+
   setFirstPerson(on: boolean): void {
     if (on === this.firstPerson) return;
     this.firstPerson = on;

@@ -728,6 +728,12 @@ export class SceneView {
   }
 
   /** The helm view's widest field of view (deg; Settings, review #15): the view opens at it, the wheel zooms in from it. */
+  /** "Crew in helm view: faded" (§3.4): the crew drawn see-through in the helm view only. */
+  setHelmCrewFaded(on: boolean): void {
+    this.helmCrewFaded = on;
+  }
+  private helmCrewFaded = false;
+
   setHelmFov(deg: number): void {
     this.helmFovMax = deg;
     this.helmFov = deg;
@@ -988,6 +994,7 @@ export class SceneView {
       crewTo: curr.crewTo,
       time,
       hideHelm: this.mode === 'helm',
+      fadeCrew: this.mode === 'helm' && this.helmCrewFaded,
       awa: curr.awa,
       aws: curr.aws,
       heel,

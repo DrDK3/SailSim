@@ -156,3 +156,28 @@ test('§3.3: the look-up button as a toggle: pressed and announced, back on the 
   expect(await amount()).toBe(0);
   expect(errors).toEqual([]);
 });
+
+for (const [tack, heading] of [['starboard', 180], ['port', 270]] as const) {
+  test(`§3.4: the helm view on a beat, ${tack} tack: the crew shown, then faded (screenshots)`, async ({ page }, testInfo) => {
+    test.setTimeout(240_000 * CI_SLOW);
+    const errors = await ready(page);
+    // A beat in 10 kn from 225°: heading 180° is starboard tack, 270° port.
+    await page.evaluate((h) => {
+      const c = window.__squib!.controller;
+      const s = structuredClone(c.scenario);
+      c.restart({ ...s, startLocation: 'start-bay-practice', startHeadingDeg: h, startSpeedKn: 4, conditions: { ...s.conditions, weather: { source: 'manual', twsKn: 10, twdDeg: 225 }, gusts: { preset: 'steady', seed: 1 }, current: { mode: 'none' } } });
+      c.setCamera('helm');
+      c.advance(12);
+      if (!c.getState().paused) c.togglePause();
+    }, heading);
+    const draw = () => page.evaluate(() => (window.__squib!.controller as unknown as { frame(t: number): void }).frame(performance.now()));
+    await draw();
+    const shown = await page.locator('canvas').first().screenshot({ path: testInfo.outputPath(`helm-${tack}-crew-shown.png`) });
+    await page.evaluate(() => window.__squib!.controller.setPrefs({ helmCrew: 'faded' }));
+    await draw();
+    const faded = await page.locator('canvas').first().screenshot({ path: testInfo.outputPath(`helm-${tack}-crew-faded.png`) });
+    // The setting shows: the two pictures differ (the crew drawn see-through).
+    expect(Buffer.compare(shown, faded)).not.toBe(0);
+    expect(errors).toEqual([]);
+  });
+}
