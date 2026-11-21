@@ -23,6 +23,7 @@ import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
 import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
+import { bestSpinSheet, withSpinnaker } from '../sim/boat/spinnaker';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clamp } from '../sim/math/angles';
 import { optimalSheets } from '../sim/control/trim';
@@ -49,7 +50,7 @@ import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
-import { CHECKPOINT_STEPS, REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
+import { CHECKPOINT_STEPS, decodeInputs, encodeInputs, parseRecording, recordingSchema, type Recording, type ReplayStatus } from './replay';
 import { Tutorial, type TutorialState } from './tutorial';
 import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
@@ -104,6 +105,11 @@ export interface AppScenario {
   boat?: SquibTypeId;
   /** Who helms the user's boat, as drawn: a man (default) or a woman. Appearance only (the physics' crew weight is its calibration estimate). */
   helm?: CrewBuild;
+  /**
+   * The symmetric spinnaker aboard (package B): the user's boat and any AI fleet carry one. Absent: none, so every
+   * scenario, replay and share link from before keeps its physics.
+   */
+  spinnaker?: boolean;
 }
 
 /** One row of the live fleet ranking or the results. */
@@ -526,6 +532,8 @@ export class SimController {
   private showEditor = false;
 
   constructor() {
+    // Free sailing at Club and Expert carries the spinnaker (package B); at Learn it does not.
+    if (this.level !== 'learn') this.scenario.spinnaker = true;
     this.restart();
   }
 
@@ -567,7 +575,8 @@ export class SimController {
       opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
     let race: SimController['race'];
     let sim: Simulation;
-    const boatParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
+    const typeParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
+    const boatParams = scenario.spinnaker ? withSpinnaker(typeParams) : typeParams;
     // River traffic for this run (its ferries crab in this run's stream): shared by the physics and the picture.
     const runData = geo ? this.dartData : undefined;
     const feats = runData?.features;
@@ -587,6 +596,7 @@ export class SimController {
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
           seed: scenario.conditions.gusts.seed,
+          spinnaker: !!scenario.spinnaker,
           human: {
             controller: () => this.sampleInputs(),
             input: startInput,
@@ -1479,8 +1489,9 @@ export class SimController {
     if (this.race) sc.course = { source: 'inline', course: structuredClone(this.race.course) };
     const checkpoints = this.checkpoints.filter((c) => c[0] <= this.sim.step);
     if (!checkpoints.length || checkpoints[checkpoints.length - 1]![0] !== this.sim.step) checkpoints.push([this.sim.step, this.stateHash()]);
+    const inputs = encodeInputs(this.sim.inputLog);
     return {
-      schema: this.dartFromStep === undefined ? REPLAY_SCHEMA : REPLAY_SCHEMA_RIVER_JOINED,
+      schema: recordingSchema(inputs, this.dartFromStep),
       created: new Date().toISOString(),
       title,
       build: BUILD_ID,
@@ -1489,7 +1500,7 @@ export class SimController {
       // What this run sailed on (river data that arrived and waits for the next start is not part of it).
       dart: this.sim.seabed ? 'loaded' : 'none',
       ...(this.dartFromStep === undefined ? {} : { dartFromStep: this.dartFromStep }),
-      inputs: encodeInputs(this.sim.inputLog),
+      inputs,
       checkpoints,
       endStep: this.sim.step,
     };
@@ -1803,7 +1814,10 @@ export class SimController {
    */
   private goLiveIfUntouched(): void {
     if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('conditions') === 'set') return;
-    const untouched = !this.race && !this.tutorial && !this.replay && this.sim.time < 60 && JSON.stringify(this.scenario) === JSON.stringify(DEFAULT_SCENARIO);
+    // The default free sail, with or without the spinnaker its level gives it.
+    const { spinnaker: _spin, ...asSet } = this.scenario;
+    void _spin;
+    const untouched = !this.race && !this.tutorial && !this.replay && this.sim.time < 60 && JSON.stringify(asSet) === JSON.stringify(DEFAULT_SCENARIO);
     if (!untouched) return;
     try {
       this.useLiveNow();
@@ -2026,6 +2040,7 @@ export class SimController {
     }
     this.view?.setBoatType(isSquibType(this.scenario.boat) ? this.scenario.boat : DEFAULT_SQUIB_TYPE, this.sim.params, this.scenario.helm === 'female' ? 'female' : 'male');
     this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
+    this.view?.setSpinnakerColours(this.prefs.spinnakerColours);
     this.view?.setHelmFov(this.prefs.helmFovDeg);
     this.view?.setSafeArea(this.safeArea.top, this.safeArea.bottom);
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
@@ -2404,6 +2419,7 @@ export class SimController {
     this.sound.update({
       aws: q?.wind.aws ?? c.aws, awa: q?.wind.awa ?? c.awa, stw: q?.stw ?? c.stw, luffMain: q?.main.luff ?? c.forces.main.luff, luffJib: q?.jib.luff ?? c.forces.jib.luff,
       bowDrop: q?.bowDrop ?? 0, boomCrossed: crossed, gustOnset: q?.events.gustOnset ?? 0,
+      spinFlog: q?.spin ? (1 - q.spin.fill) * q.spin.deployed : 0, spinHoist: q?.events.spinHoist, spinFilled: q?.events.spinFilled, spinCollapsed: q?.events.spinCollapsed,
       harbour: this.harbour.value, paused: this.paused || !!this.replay?.ended,
       listener: this.view?.listenerPose(), boat: scenePoint(c, 1.5), harbourAt: this.harbour.where,
     });
@@ -2644,6 +2660,7 @@ export class SimController {
     savePrefs(this.prefs);
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
     if ('helmFovDeg' in change) this.view?.setHelmFov(this.prefs.helmFovDeg);
+    if ('spinnakerColours' in change) this.view?.setSpinnakerColours(this.prefs.spinnakerColours);
     if ('windIndicator' in change || 'vaneTabDeg' in change) {
       this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
       this.inset?.setType(this.prefs.windIndicator, this.prefs.vaneTabDeg);
@@ -2780,6 +2797,8 @@ export class SimController {
       if (c === 'releaseSheets') this.releaseSheets();
       else if (c === 'centreHelm') this.centreHelm();
       else if (c === 'pause') this.togglePause();
+      else if (c === 'spinnaker') this.callSpinnaker();
+      else if (c === 'gybePole') this.gybePole();
       else this.cycleCamera();
     }
     const connected = pad.index === undefined;
@@ -3030,6 +3049,53 @@ export class SimController {
     this.sim.setInput({ helm: 0 });
   }
 
+  /** Whether this run's boat carries a spinnaker (package B). */
+  get carriesSpinnaker(): boolean {
+    return !!this.sim.params.spin;
+  }
+
+  /**
+   * Call for the spinnaker (package B): up (hoist it), down (drop it), or the other way from the last call. The crew
+   * carry the call out as a timed task; it is an input like the others, so replays repeat it.
+   */
+  callSpinnaker(up?: boolean): void {
+    if (this.replay || !this.carriesSpinnaker) return;
+    const want = up ?? !((this.sim.input.spin ?? 0) >= 0.5);
+    this.setInput({ spin: want ? 1 : 0 });
+    this.publish(true);
+  }
+
+  /** Call for the crew to gybe the spinnaker pole (package B). */
+  gybePole(): void {
+    if (this.replay || !this.carriesSpinnaker) return;
+    this.setInput({ spinGybe: (this.sim.input.spinGybe ?? 0) + 1 });
+    this.publish(true);
+  }
+
+  /**
+   * The spinnaker trimmed by the crew (the default) or by hand (Expert): `sheet` 0 trimmed in … 1 eased. Handing over
+   * keeps the crew's last trim, as the main and jib do (issue 201).
+   */
+  setSpinnakerTrim(auto: boolean, sheet?: number): void {
+    if (this.replay || !this.carriesSpinnaker) return;
+    const sn = this.currSnap;
+    const best = sn?.spin ? bestSpinSheet(sn.spin.awa) : 0.5;
+    this.setInput(auto ? { autoSpin: true } : { autoSpin: false, spinSheet: clamp(sheet ?? this.sim.input.spinSheet ?? best, 0, 1) });
+    this.publish(true);
+  }
+
+  /**
+   * The flattening controls one by one and the jib lead (Expert, review #25). `null` hands a control back to the Flat
+   * control (it follows it exactly again).
+   */
+  setSailControl(k: 'kicker' | 'cunningham' | 'outhaul' | 'jibLead', v: number | null): void {
+    if (this.replay) return;
+    const lo = k === 'jibLead' ? -1 : 0;
+    // setInput merges, so a control handed back is set to undefined explicitly.
+    this.setInput({ [k]: v === null ? undefined : clamp(v, lo, 1) } as Partial<ControlInput>);
+    this.publish(true);
+  }
+
   /**
    * A one-off pause the app makes itself (new shaders compiled after the river scene arrives, a change of drawing
    * mode or graphics, the graphics check): leave its frames out and start the measurement again, so it is not
@@ -3251,6 +3317,8 @@ export class SimController {
       case 'KeyJ': this.setInput({ autoJib: !this.sim.input.autoJib }); break;
       case 'KeyM': this.setInput({ autoMain: !this.sim.input.autoMain }); break;
       case 'KeyK': this.setInput({ autoCrew: !this.sim.input.autoCrew }); break;
+      case 'KeyO': this.callSpinnaker(); break;
+      case 'KeyI': this.gybePole(); break;
       case 'KeyZ': this.setInput({ flatten: Math.round(((this.sim.input.flatten ?? 0) + (ev.shiftKey ? -0.25 : 0.25)) * 4) / 4 }); break;
       case 'KeyP': this.togglePause(); break;
       case 'KeyR': this.requestReset(); break;

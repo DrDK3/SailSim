@@ -2,8 +2,9 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
+import { spinnakerWords } from '../app/spinnakerWords';
 
 /**
  * The helm console (owner review, 5 Nov 2026, third: "not looking good … too much white space … lacks the
@@ -256,7 +257,105 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
   );
 }
 
+/**
+ * The spinnaker's buttons (package B): call it up or down (O), and while it is up, gybe the pole (I). The crew carry
+ * each call out; the button says what they are doing, and its state is read out (a polite live region) as it
+ * changes. Colour and words agree.
+ */
+function SpinnakerButtons({ ctl, ui }: { ctl: SimController; ui: UiState }) {
+  const sp = ui.snapshot.spin;
+  if (!sp) return null;
+  const w = spinnakerWords(sp, ui.level, ui.snapshot.input.autoSpin === false)!;
+  const called = (ui.snapshot.input.spin ?? 0) >= 0.5;
+  const plain = ui.level === 'learn';
+  const name = plain ? 'the big front sail' : 'the spinnaker';
+  return (
+    <>
+      <button
+        className={`spin-call is-${w.tone}`}
+        aria-pressed={called}
+        onClick={() => ctl.callSpinnaker()}
+        title={`${called ? `Drop ${name}` : `Hoist ${name}`} (O). Now: ${w.words}${w.advice ? `: ${w.advice}` : ''}`}
+        aria-label={`${called ? `Drop ${name}` : `Hoist ${name}`} (O)`}
+        data-testid="spin-call"
+      >
+        <span aria-hidden="true">
+          {called ? 'Drop' : 'Hoist'} <Key k="O" />
+        </span>
+      </button>
+      {sp.phase !== 'down' && (
+        <button onClick={() => ctl.gybePole()} title={`Gybe the pole to the other side (I)${plain ? ': the crew move it across' : ''}`} aria-label="Gybe the pole (I)" data-testid="spin-gybe">
+          <span aria-hidden="true">
+            Pole <Key k="I" />
+          </span>
+        </button>
+      )}
+      <span className="sr-only" role="status" aria-live="polite" data-testid="spin-status">
+        {w.words}
+        {w.advice ? `: ${w.advice}` : ''}
+      </span>
+    </>
+  );
+}
+
+/**
+ * Expert (review #25): the flattening controls one by one (each follows Flat until moved, and "Follow Flat" hands it
+ * back), the jib lead, and the spinnaker trimmed by hand. Effects are estimates (E, docs/PHYSICS.md §23).
+ */
+function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
+  const s = ui.snapshot;
+  const c = s.sailControls ?? { kicker: s.input.flatten ?? 0, cunningham: s.input.flatten ?? 0, outhaul: s.input.flatten ?? 0, jibLead: 0 };
+  const row = (k: 'kicker' | 'cunningham' | 'outhaul', label: string, hint: string) => (
+    <label className="sc-row">
+      <span>{label}</span>
+      <input type="range" min={0} max={1} step={0.05} value={s.input[k] ?? c[k]} aria-label={`${label}: ${hint}`} onChange={(e) => ctl.setSailControl(k, Number(e.target.value))} data-testid={`sc-${k}`} />
+      <span className="sc-val">{pct(s.input[k] ?? c[k])}</span>
+      <button className="link" disabled={s.input[k] === undefined} onClick={() => ctl.setSailControl(k, null)}>Follow Flat</button>
+    </label>
+  );
+  return (
+    <div className="panel sail-controls" role="dialog" aria-label="Sail controls" data-testid="sail-controls">
+      <div className="sc-head">
+        <strong>Sail controls</strong>
+        <button onClick={onClose} aria-label="Close the sail controls">Close</button>
+      </div>
+      {row('kicker', 'Kicker', 'pulls the boom down: a flatter, straighter leech')}
+      {row('cunningham', 'Cunningham', 'tightens the luff: the draft forward, less power')}
+      {row('outhaul', 'Outhaul', 'stretches the foot: a flatter lower main')}
+      <label className="sc-row">
+        <span>Jib lead</span>
+        <input type="range" min={-1} max={1} step={0.1} value={s.input.jibLead ?? 0} aria-label="Jib lead: aft twists the jib open, forward closes it" onChange={(e) => ctl.setSailControl('jibLead', Number(e.target.value))} data-testid="sc-jibLead" />
+        <span className="sc-val">{(s.input.jibLead ?? 0) > 0 ? 'aft' : (s.input.jibLead ?? 0) < 0 ? 'fwd' : 'set'}</span>
+        <span />
+      </label>
+      {s.spin && (
+        <label className="sc-row">
+          <span>Spinnaker</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.02}
+            value={s.input.spinSheet ?? 0.5}
+            disabled={s.input.autoSpin !== false}
+            aria-label="Spinnaker sheet: 0 trimmed in, 1 eased"
+            onChange={(e) => ctl.setSpinnakerTrim(false, Number(e.target.value))}
+            data-testid="sc-spinSheet"
+          />
+          <span className="sc-val">{s.input.autoSpin === false ? pct(s.input.spinSheet ?? 0.5) : 'crew'}</span>
+          <label className="toggle">
+            <input type="checkbox" checked={s.input.autoSpin !== false} onChange={(e) => ctl.setSpinnakerTrim(e.target.checked)} />
+            Crew trim
+          </label>
+        </label>
+      )}
+      <p className="fine">The effects are estimates (E). Flat moves all three together, as before.</p>
+    </div>
+  );
+}
+
 export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState; onHide?: () => void }) {
+  const [sailControls, setSailControls] = useState(false);
   const s = ui.snapshot;
   const tillerMode = ui.steering === 'tiller';
   // At the Learn level the console leaves out the advanced controls (src/app/level.ts); the keys still work.
@@ -322,6 +421,18 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
           )}
         </div>
       </div>
+      {/* The spinnaker and Expert's sail controls: a tab on the console's top edge, so no module grows (package B). */}
+      {(s.spin || ui.level === 'expert') && (
+        <div className="spin-tab" role="group" aria-label="Spinnaker and sail controls">
+          <SpinnakerButtons ctl={ctl} ui={ui} />
+          {ui.level === 'expert' && (
+            <button aria-expanded={sailControls} onClick={() => setSailControls(!sailControls)} title="Kicker, cunningham, outhaul, jib lead and the spinnaker's sheet, one by one" data-testid="sail-controls-open">
+              Sails…
+            </button>
+          )}
+        </div>
+      )}
+      {sailControls && ui.level === 'expert' && <SailControls ctl={ctl} ui={ui} onClose={() => setSailControls(false)} />}
       {onHide && (
         <button className="controls-hide" onClick={onHide} title="Put the controls away (the keys still work; Settings → Sailing controls brings them back)" aria-label="Hide sailing controls">
           <span aria-hidden="true">▾</span>

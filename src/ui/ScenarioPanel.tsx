@@ -118,6 +118,10 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
     <section className="panel scenario" aria-label="Conditions">
       <h3>Conditions</h3>
       <BoatChoice value={draft.boat ?? DEFAULT_SQUIB_TYPE} onChange={(boat) => setDraft({ ...draft, boat })} />
+      <label className="toggle" title="The symmetric spinnaker (13.5 m², on a 2.14 m pole): hoisted and dropped by the crew when you call (O). Applies from the next start.">
+        <input type="checkbox" checked={!!draft.spinnaker} onChange={(e) => setDraft({ ...draft, spinnaker: e.target.checked })} data-testid="spinnaker-aboard" />
+        Spinnaker aboard
+      </label>
       <label className="field select-field">
         <span>Helm</span>
         <select value={draft.helm ?? 'male'} onChange={(e) => setDraft({ ...draft, helm: e.target.value === 'female' ? 'female' : 'male' })} data-testid="helm-build">

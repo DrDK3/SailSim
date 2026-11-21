@@ -4,6 +4,7 @@ import { windVelocity, type NE } from '../boat/forces';
 import { squibParams } from '../boat/squib';
 import type { BoatParams } from '../boat/params';
 import { uniformEnvironment, type Environment } from '../env/environment';
+import { withSpinnaker } from '../boat/spinnaker';
 import { Simulation, type ControlInput } from '../simulation';
 import { autopilotHelm } from '../control/autopilot';
 import { aiSheetInput } from '../ai/sheets';
@@ -270,6 +271,109 @@ export function broachSweep(params = squibParams(), winds = [16, 20, 24], angles
   return { id: 'A-PH-13', title: 'Broach sweep (no spinnaker)', setup: 'TWS 16/20/24 kn, TWA 70–120°, 60 s; "held" = auto-trim alone, "crew" = crew policy. Broach = more than 30° off course with the autopilot steering.', rows };
 }
 
+// ------------------------------------------------------------------------------------------------ spinnaker
+
+/**
+ * Package B: the symmetric spinnaker hoisted, gybed and dropped by the simulated crew at 6, 10 and 16 kn, against the
+ * same boat with it down (A-PH-3 and A-PH-13 above are with it down). Every coefficient is an estimate (E).
+ */
+function spinRun(params: BoatParams, tws: number, twaAt: (t: number) => number, spinAt: (t: number) => Partial<ControlInput>, seconds: number) {
+  const sim = crewSim(withSpinnaker(params), steadyEnv(tws), { headingDeg: -twaAt(0), speedKn: 4 }, twaAt, spinAt);
+  const out: (Sample & { phase: string; fill: number; deployed: number; pole: number; main: number })[] = [];
+  const steps = Math.round(seconds / 0.01);
+  for (let i = 0; i < steps; i++) {
+    sim.stepOnce();
+    if (i % 10 === 0) {
+      const s = sim.state;
+      out.push({ t: sim.time, stw: msToKn(Math.hypot(s.u, s.v)), twa: wrapPi(-s.psi) / DEG, heel: s.phi / DEG, n: s.n, e: s.e, rudder: sim.act.rudder / DEG, phase: sim.spin.phase, fill: sim.spin.fill, deployed: sim.spin.deployed, pole: sim.spin.poleSide, main: sim.act.mainSide });
+    }
+  }
+  return out;
+}
+
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
+
+export function spinnakerHoist(params = squibParams(), winds = [6, 10, 16]): EnvelopeResult {
+  return {
+    id: 'B-SP-1',
+    title: 'Spinnaker hoisted on a run (TWA 150°)',
+    setup: 'Crew policy as A-PH-1; the hoist called at 30 s; the same boat with it down alongside; the last 30 s of 150 s averaged. E coefficients.',
+    rows: winds.map((tws) => {
+      const down = sampleRun(crewSim(withSpinnaker(params), steadyEnv(tws), { headingDeg: -150, speedKn: 4 }, () => 150), 150);
+      const up = spinRun(params, tws, () => 150, (t) => (t >= 30 ? { spin: 1 } : {}), 150);
+      const tail = <T extends { t: number }>(tr: T[]) => tr.filter((r) => r.t > 120);
+      const hoisted = up.find((r) => r.phase === 'up');
+      return {
+        tws_kn: tws,
+        down_kn: r2(avg(tail(down).map((r) => r.stw))),
+        up_kn: r2(avg(tail(up).map((r) => r.stw))),
+        gain_kn: r2(avg(tail(up).map((r) => r.stw)) - avg(tail(down).map((r) => r.stw))),
+        hoist_s: hoisted ? r1(hoisted.t - 30) : null,
+        fill: r2(avg(tail(up).map((r) => r.fill))),
+        max_heel_deg: r1(Math.max(...up.map((r) => Math.abs(r.heel)))),
+        broach: Math.max(...up.filter((r) => r.t > 10).map((r) => Math.abs(r.twa - 150))) > 30,
+      };
+    }),
+  };
+}
+
+export function spinnakerGybe(params = squibParams(), winds = [6, 10, 16]): EnvelopeResult {
+  return {
+    id: 'B-SP-2',
+    title: 'Gybe under spinnaker (TWA 150° to the other gybe)',
+    setup: 'Hoisted at 5 s, settled; the autopilot gybes at 60 s; the crew gybe the pole once they see the main across (crew trimming). E coefficients.',
+    rows: winds.map((tws) => {
+      const tr = spinRun(params, tws, (t) => (t < 60 ? 150 : -150), () => ({ spin: 1 }), 150);
+      const before = tr.find((r) => r.t >= 59.9)!;
+      const after = tr[tr.length - 1]!;
+      const win = tr.filter((r) => r.t >= 60 && r.t <= 90);
+      const poleOver = tr.find((r) => r.t > 60 && r.pole !== before.pole);
+      const full = tr.find((r) => r.t > (poleOver?.t ?? 60) && r.fill > 0.9);
+      return {
+        tws_kn: tws,
+        from_kn: r2(before.stw),
+        min_kn: r2(Math.min(...win.map((r) => r.stw))),
+        pole_over_s: poleOver ? r1(poleOver.t - 60) : null,
+        full_again_s: full ? r1(full.t - 60) : null,
+        min_fill: r2(Math.min(...win.map((r) => r.fill))),
+        end_kn: r2(after.stw),
+        max_heel_deg: r1(Math.max(...win.map((r) => Math.abs(r.heel)))),
+        pole_matches_main: after.pole === after.main,
+      };
+    }),
+  };
+}
+
+export function spinnakerDrop(params = squibParams(), winds = [6, 10, 16]): EnvelopeResult {
+  return {
+    id: 'B-SP-3',
+    title: 'Spinnaker dropped on a run (TWA 150°)',
+    setup: 'Hoisted at 5 s; the drop called at 70 s; 130 s. E coefficients.',
+    rows: winds.map((tws) => {
+      const tr = spinRun(params, tws, () => 150, (t) => ({ spin: t < 70 ? 1 : 0 }), 130);
+      const down = tr.find((r) => r.t > 70 && r.phase === 'down');
+      return {
+        tws_kn: tws,
+        before_kn: r2(avg(tr.filter((r) => r.t > 50 && r.t < 70).map((r) => r.stw))),
+        drop_s: down ? r1(down.t - 70) : null,
+        after_kn: r2(avg(tr.filter((r) => r.t > 110).map((r) => r.stw))),
+        deployed_end: r2(tr[tr.length - 1]!.deployed),
+      };
+    }),
+  };
+}
+
+export function spinnakerBroach(params = squibParams(), winds = [16, 20], angles = [100, 120, 140]): EnvelopeResult {
+  const rows: Record<string, Measure>[] = [];
+  for (const tws of winds) {
+    for (const twa of angles) {
+      const tr = spinRun(params, tws, () => twa, () => ({ spin: 1 }), 60);
+      rows.push({ tws_kn: tws, twa_deg: twa, broach: Math.max(...tr.filter((r) => r.t > 15).map((r) => Math.abs(r.twa - twa))) > 30, max_heel_deg: r1(Math.max(...tr.map((r) => Math.abs(r.heel)))), mean_fill: r2(avg(tr.filter((r) => r.t > 20).map((r) => r.fill))) });
+    }
+  }
+  return { id: 'B-SP-4', title: 'Broach sweep under spinnaker', setup: 'Hoisted from the start, crew policy, 60 s. Broach = more than 30° off course with the autopilot steering. E coefficients.', rows };
+}
+
 // ------------------------------------------------------------------------------------------------ contact
 
 const REL: Partial<ControlInput> = { helm: 0, mainSheet: 1, jibSheet: 1, autoMain: false, autoJib: false, crewHike: 0, autoCrew: false };
@@ -433,6 +537,8 @@ export function runEnvelope(params = squibParams()): EnvelopeReport {
       upwind(params), reaching(params), running(params), acceleration(params), coastDown(params), tacks(params), gybesAndCircle(params),
       irons(params), stepGust(params), broachSweep(params),
       jettyImpacts(params), boatImpacts(params), committeeEdge(params), pileTunnelling(params), pinnedOnJetty(params),
+      // Package B, after the rest (whose rows are unchanged with the spinnaker down).
+      spinnakerHoist(params), spinnakerGybe(params), spinnakerDrop(params), spinnakerBroach(params),
     ],
   };
 }

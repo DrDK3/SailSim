@@ -1,4 +1,5 @@
 import { LEVELS } from '../app/level';
+import { SPINNAKER_COLOURS, type SpinnakerColourId } from '../app/spinnakerColours';
 import { INDICATOR_LABEL, TAB_DEG_RANGE, clampTabDeg } from '../app/windIndicator';
 import { HELM_FOV_RANGE, clampHelmFov } from '../app/prefs';
 import { useRef, useState } from 'react';
@@ -153,6 +154,15 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             <input type="radio" name="steering" checked={ui.steering === 'tiller'} onChange={() => ctl.setSteering('tiller')} /> Move the tiller, as on the boat (A / ← tiller to port, bow to starboard)
           </label>
         </div>
+        <h5>Spinnaker colours</h5>
+        <label className="field select-field">
+          <span>Your spinnaker</span>
+          <select value={ui.prefs.spinnakerColours} onChange={(e) => ctl.setPrefs({ spinnakerColours: e.target.value as SpinnakerColourId })} data-testid="pref-spinnaker-colours">
+            {(Object.keys(SPINNAKER_COLOURS) as SpinnakerColourId[]).map((id) => (
+              <option key={id} value={id}>{SPINNAKER_COLOURS[id].label}</option>
+            ))}
+          </select>
+        </label>
         <h5>Wind indicator</h5>
         <div className="row left wrap" role="radiogroup" aria-label="Wind indicator at the masthead" data-testid="pref-indicator">
           {(['burgee', 'vane'] as const).map((t) => (

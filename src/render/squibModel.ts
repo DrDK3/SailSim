@@ -5,6 +5,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BoatParams } from '../sim/boat/params';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { CrewFigure, type BodyFrame, type CrewBuild, type CrewPose } from './crew';
+import { DEFAULT_SPINNAKER_COLOURS, SPINNAKER_COLOURS, SpinnakerView, type SpinnakerPose } from './spinnakerView';
+import { makeGhost } from './ghostLook';
 import { Burgee, BURGEE_STICK } from './burgee';
 import { MastheadVane } from './mastheadVane';
 import type { IndicatorType } from '../app/windIndicator';
@@ -1119,6 +1121,27 @@ export class SquibModel {
     return this.vane?.group.visible ? 'vane' : 'burgee';
   }
 
+  /** The spinnaker and its pole, made the first time the physics says this boat carries one (package B). */
+  private spinnaker?: SpinnakerView;
+  private spinnakerPanels: readonly string[] = SPINNAKER_COLOURS[DEFAULT_SPINNAKER_COLOURS].panels;
+
+  private makeSpinnaker(): SpinnakerView {
+    const v = new SpinnakerView(
+      { mastZ: MAST_Z, headY: HOUNDS_Y + 0.1, poleY: GOOSENECK_Y + 0.25, poleLength: 2.14, bowZ: BOW_Z, deckY: sheerAt(0.2) },
+      this.spinnakerPanels,
+    );
+    // A ghost's spinnaker, made after the ghost's other parts were made see-through, is see-through too.
+    if (this.group.userData.ghost) makeGhost(v.group);
+    this.group.add(v.group);
+    return v;
+  }
+
+  /** The spinnaker's colours (three panels, head to foot). */
+  setSpinnakerColours(panels: readonly string[]): void {
+    this.spinnakerPanels = panels;
+    this.spinnaker?.setColours(panels);
+  }
+
   update(params: {
     main: SailShapeInput;
     jib: SailShapeInput;
@@ -1140,8 +1163,15 @@ export class SquibModel {
     flatten?: number;
     mainEase?: number;
     jibEase?: number;
+    /** The spinnaker as the physics has it (package B), for a boat that carries one; `dt` smooths its pole. */
+    spin?: SpinnakerPose;
+    dt?: number;
   }): void {
     const { main, jib, time } = params;
+    if (params.spin || this.spinnaker) {
+      this.spinnaker ??= this.makeSpinnaker();
+      this.spinnaker.update(params.sailsDown ? undefined : params.spin, time, params.dt ?? 1 / 60);
+    }
     for (const o of this.group.children) if (o.name === 'mainsail' || o.name === 'jib' || o.name === 'telltale') o.visible = !params.sailsDown;
     const awa = params.awa ?? 0;
     const aws = params.aws ?? 4;

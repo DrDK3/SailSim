@@ -1,0 +1,52 @@
+{
+  "name": "Spinnaker hoisted, gybed and dropped in 10 kn",
+  "description": "Package B. Broad reach on starboard; the hoist called at 10 s; bear away to a run at 40 s; gybe onto port at 90 s (the crew gybe the pole when they see the main across); the drop called at 150 s. Crew trimming throughout. E coefficients.",
+  "durationS": 200,
+  "sampleEveryS": 0.5,
+  "spinnaker": true,
+  "conditions": {
+    "twsKn": 10,
+    "twdDeg": 270
+  },
+  "initial": {
+    "headingDeg": 50,
+    "speedKn": 4
+  },
+  "input": {
+    "autoMain": true,
+    "autoJib": true,
+    "autoCrew": true
+  },
+  "autopilot": {
+    "mode": "twa",
+    "targetDeg": 140
+  },
+  "events": [
+    {
+      "t": 10,
+      "input": {
+        "spin": 1
+      }
+    },
+    {
+      "t": 40,
+      "autopilot": {
+        "mode": "twa",
+        "targetDeg": 155
+      }
+    },
+    {
+      "t": 90,
+      "autopilot": {
+        "mode": "twa",
+        "targetDeg": -155
+      }
+    },
+    {
+      "t": 150,
+      "input": {
+        "spin": 0
+      }
+    }
+  ]
+}

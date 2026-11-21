@@ -16,6 +16,14 @@ export const REPLAY_SCHEMA = 'squib-replay/1';
  * it as before; an older build refuses a /2 file rather than replaying it wrongly.
  */
 export const REPLAY_SCHEMA_RIVER_JOINED = 'squib-replay/2';
+/**
+ * A recording whose inputs use the next round's controls (package B): the spinnaker calls and trim, the flattening
+ * controls one by one and the jib lead, and the crew's requests to stuff a hole (`plug`, which /1 and /2 rows did not
+ * carry, so a replay of a run that used it diverged). Its rows have 15 columns. Written only when a run used one of
+ * them; it may also carry `dartFromStep` as /2 does. Older builds refuse it rather than replaying it wrongly.
+ */
+export const REPLAY_SCHEMA_SAIL_CONTROLS = 'squib-replay/3';
+const SCHEMAS = [REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED, REPLAY_SCHEMA_SAIL_CONTROLS];
 /** Hash the state every 1000 steps (10 s simulated). */
 export const CHECKPOINT_STEPS = 1000;
 
@@ -23,7 +31,22 @@ export const CHECKPOINT_STEPS = 1000;
  * One input-log row: [step, helm, mainSheet, jibSheet, crewHike, flags, flatten] with flags autoMain 1 | autoJib 2 |
  * autoCrew 4. Recordings made before the flatten control have six columns (flatten 0).
  */
-export type InputRow = [number, number, number, number, number, number] | [number, number, number, number, number, number, number];
+export type InputRow = [number, number, number, number, number, number] | [number, number, number, number, number, number, number] | number[];
+
+/**
+ * Schema /3 rows: the seven columns above, then [spin, spinGybe, spinSheet, kicker, cunningham, outhaul, jibLead,
+ * plug], with flag 8 for the spinnaker trimmed by hand (autoSpin off). A control left to follow its default is −1
+ * (spinSheet: the best trim; kicker, cunningham, outhaul: the Flat control).
+ */
+export const ROW_COLUMNS_SAIL_CONTROLS = 15;
+
+/** Whether an input uses any control that only schema /3 rows carry. */
+function usesSailControls(i: ControlInput): boolean {
+  return (
+    (i.spin ?? 0) !== 0 || (i.spinGybe ?? 0) !== 0 || i.autoSpin === false || i.spinSheet !== undefined || i.kicker !== undefined ||
+    i.cunningham !== undefined || i.outhaul !== undefined || (i.jibLead ?? 0) !== 0 || (i.plug ?? 0) !== 0
+  );
+}
 
 export interface Recording {
   schema: string;
@@ -54,17 +77,38 @@ export interface Recording {
 }
 
 export function encodeInputs(log: readonly InputLogEntry[]): InputRow[] {
+  // Every row in the /3 shape once any input uses its controls, so that the file has one row shape.
+  const wide = log.some((e) => usesSailControls(e.input));
   return log.map(({ step, input: i }): InputRow => {
-    const row: InputRow = [step, i.helm, i.mainSheet, i.jibSheet, i.crewHike, (i.autoMain ? 1 : 0) | (i.autoJib ? 2 : 0) | (i.autoCrew ? 4 : 0)];
-    return i.flatten === undefined ? row : [...row, i.flatten] as InputRow;
+    const flags = (i.autoMain ? 1 : 0) | (i.autoJib ? 2 : 0) | (i.autoCrew ? 4 : 0) | (wide && i.autoSpin === false ? 8 : 0);
+    const row: InputRow = [step, i.helm, i.mainSheet, i.jibSheet, i.crewHike, flags];
+    if (!wide) return i.flatten === undefined ? row : ([...row, i.flatten] as InputRow);
+    const opt = (v: number | undefined) => (v === undefined ? -1 : v);
+    return [...row, i.flatten ?? 0, i.spin ?? 0, i.spinGybe ?? 0, opt(i.spinSheet), opt(i.kicker), opt(i.cunningham), opt(i.outhaul), i.jibLead ?? 0, i.plug ?? 0];
   });
 }
 
+/** The schema a recording of these inputs needs: /3 for the new controls, else /2 if the river joined, else /1. */
+export function recordingSchema(rows: readonly InputRow[], dartFromStep: number | undefined): string {
+  if (rows.some((r) => r.length === ROW_COLUMNS_SAIL_CONTROLS)) return REPLAY_SCHEMA_SAIL_CONTROLS;
+  return dartFromStep === undefined ? REPLAY_SCHEMA : REPLAY_SCHEMA_RIVER_JOINED;
+}
+
 export function decodeInputs(rows: readonly InputRow[]): InputLogEntry[] {
-  return rows.map(([step, helm, mainSheet, jibSheet, crewHike, f, flatten]) => ({
-    step,
-    input: { helm, mainSheet, jibSheet, crewHike, autoMain: (f & 1) !== 0, autoJib: (f & 2) !== 0, autoCrew: (f & 4) !== 0, ...(flatten === undefined ? {} : { flatten }) },
-  }));
+  return rows.map((row) => {
+    const [step, helm, mainSheet, jibSheet, crewHike, f, flatten] = row as number[] as [number, number, number, number, number, number, number | undefined];
+    const input: ControlInput = { helm, mainSheet, jibSheet, crewHike, autoMain: (f & 1) !== 0, autoJib: (f & 2) !== 0, autoCrew: (f & 4) !== 0, ...(flatten === undefined ? {} : { flatten }) };
+    if (row.length === ROW_COLUMNS_SAIL_CONTROLS) {
+      const [spin, spinGybe, spinSheet, kicker, cunningham, outhaul, jibLead, plug] = row.slice(7) as number[];
+      const opt = (v: number) => (v < 0 ? undefined : v);
+      Object.assign(input, { spin, spinGybe, autoSpin: (f & 8) === 0, jibLead, plug });
+      if (opt(spinSheet!) !== undefined) input.spinSheet = spinSheet;
+      if (opt(kicker!) !== undefined) input.kicker = kicker;
+      if (opt(cunningham!) !== undefined) input.cunningham = cunningham;
+      if (opt(outhaul!) !== undefined) input.outhaul = outhaul;
+    }
+    return { step, input };
+  });
 }
 
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
@@ -73,13 +117,15 @@ const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFin
 export function parseRecording(json: unknown): Recording {
   const r = json as Partial<Recording>;
   if (!r || typeof r !== 'object') throw new Error('replay: not a JSON object');
-  if (r.schema !== REPLAY_SCHEMA && r.schema !== REPLAY_SCHEMA_RIVER_JOINED) throw new Error(`replay: expected schema ${REPLAY_SCHEMA}, found ${String(r.schema)}`);
-  if (r.schema === REPLAY_SCHEMA_RIVER_JOINED ? !isNum(r.dartFromStep) || r.dartFromStep < 0 || r.dart !== 'loaded' : r.dartFromStep !== undefined) throw new Error('replay: bad river-joined step');
+  if (!SCHEMAS.includes(r.schema ?? '')) throw new Error(`replay: expected schema ${REPLAY_SCHEMA}, found ${String(r.schema)}`);
+  const joined = r.schema === REPLAY_SCHEMA_RIVER_JOINED || (r.schema === REPLAY_SCHEMA_SAIL_CONTROLS && r.dartFromStep !== undefined);
+  if (joined ? !isNum(r.dartFromStep) || r.dartFromStep < 0 || r.dart !== 'loaded' : r.dartFromStep !== undefined) throw new Error('replay: bad river-joined step');
   if (!r.scenario || typeof r.scenario !== 'object' || !r.scenario.conditions) throw new Error('replay: missing scenario');
   if (!Array.isArray(r.inputs)) throw new Error('replay: missing inputs');
   let prev = -1;
   for (const row of r.inputs) {
-    if (!Array.isArray(row) || (row.length !== 6 && row.length !== 7) || !row.every(isNum)) throw new Error('replay: bad input row');
+    const wide = r.schema === REPLAY_SCHEMA_SAIL_CONTROLS && Array.isArray(row) && row.length === ROW_COLUMNS_SAIL_CONTROLS;
+    if (!Array.isArray(row) || (row.length !== 6 && row.length !== 7 && !wide) || !row.every(isNum)) throw new Error('replay: bad input row');
     if (row[0] <= prev && !(row[0] === 0 && prev === -1)) throw new Error('replay: input steps must increase');
     prev = row[0];
   }

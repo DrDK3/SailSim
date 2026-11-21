@@ -1,4 +1,5 @@
 import { clampTabDeg, DEFAULT_TAB_DEG, type IndicatorType } from './windIndicator';
+import { DEFAULT_SPINNAKER_COLOURS, isSpinnakerColour, type SpinnakerColourId } from './spinnakerColours';
 
 /**
  * The player's own preferences that are not graphics or sound: kept in this browser only (localStorage), never sent
@@ -24,6 +25,8 @@ export interface Prefs {
   haptics: boolean;
   /** What flies at the masthead (review #4, pending the sailors' answer): the RDYC burgee or a masthead vane. */
   windIndicator: IndicatorType;
+  /** The colours of the player's spinnaker (package B; the simulator's own colour sets). */
+  spinnakerColours: SpinnakerColourId;
   /** The vane's tacking tabs either side of dead aft (deg, E). */
   vaneTabDeg: number;
   /** The small picture of the masthead by the compass (review #2). */
@@ -57,6 +60,7 @@ export const DEFAULT_PREFS: Prefs = {
   gustOutlines: false,
   gustOutlinesInRaces: false,
   windIndicator: 'burgee',
+  spinnakerColours: DEFAULT_SPINNAKER_COLOURS,
   vaneTabDeg: DEFAULT_TAB_DEG,
   mastheadInset: true,
   helmFovDeg: DEFAULT_HELM_FOV,
@@ -84,6 +88,7 @@ export function loadPrefs(): Prefs {
       gustOutlines: typeof p.gustOutlines === 'boolean' ? p.gustOutlines : d.gustOutlines,
       gustOutlinesInRaces: typeof p.gustOutlinesInRaces === 'boolean' ? p.gustOutlinesInRaces : d.gustOutlinesInRaces,
       windIndicator: p.windIndicator === 'vane' || p.windIndicator === 'burgee' ? p.windIndicator : d.windIndicator,
+      spinnakerColours: isSpinnakerColour(p.spinnakerColours) ? p.spinnakerColours : d.spinnakerColours,
       vaneTabDeg: typeof p.vaneTabDeg === 'number' ? clampTabDeg(p.vaneTabDeg) : d.vaneTabDeg,
       mastheadInset: typeof p.mastheadInset === 'boolean' ? p.mastheadInset : d.mastheadInset,
       helmFovDeg: typeof p.helmFovDeg === 'number' && Number.isFinite(p.helmFovDeg) ? clampHelmFov(p.helmFovDeg) : d.helmFovDeg,

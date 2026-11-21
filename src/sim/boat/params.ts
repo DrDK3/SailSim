@@ -1,3 +1,4 @@
+import type { SpinParams } from './spinnaker';
 import { DEG } from '../math/angles';
 import { G } from '../units';
 
@@ -119,6 +120,8 @@ export interface CockpitParams {
 
 /** Flat, SI-unit parameter set consumed by the physics. Built from the JSON documents by buildSquibParams. */
 export interface BoatParams {
+  /** The spinnaker, when the boat carries one (src/sim/boat/spinnaker.ts); absent: no spinnaker. */
+  spin?: SpinParams;
   loa: number;
   lwl: number;
   beam: number;

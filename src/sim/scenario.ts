@@ -5,6 +5,7 @@ import { optimalSheets } from './control/trim';
 import { uniformEnvironment, type UniformConditions } from './env/environment';
 import { buildConditions, type ConditionsSettings } from './env/conditions';
 import { squibParams } from './boat/squib';
+import { withSpinnaker } from './boat/spinnaker';
 import type { BoatParams } from './boat/params';
 import { Simulation, type BoatSnapshot, type ControlInput, type InitialConditions } from './simulation';
 
@@ -24,6 +25,8 @@ export interface Scenario {
   autopilot?: ScenarioAutopilot;
   /** Keep the sheets at the max-drive setting throughout. */
   optimiseTrim?: boolean;
+  /** The symmetric spinnaker aboard (package B); hoisted, gybed and dropped by `input` events (spin, spinGybe). */
+  spinnaker?: boolean;
 }
 
 export interface ScenarioAutopilot {
@@ -57,7 +60,7 @@ export function runScenario(scn: Scenario, onSample?: (s: BoatSnapshot) => void,
   const events = [...(scn.events ?? [])].sort((a, b) => a.t - b.t);
   let next = 0;
   const sim = new Simulation({
-    params,
+    params: scn.spinnaker ? withSpinnaker(params) : params,
     env: 'weather' in scn.conditions ? buildConditions(scn.conditions).env : uniformEnvironment(scn.conditions),
     initial: scn.initial,
     input: scn.input,

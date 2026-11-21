@@ -177,6 +177,8 @@ export function weeklyCourse(at: Date = new Date(), courses: LibraryEntry[] = bu
     race: { sequence: 'one-minute', startInS: 90 },
     fleet: { aiCount: 0, level: 'good', prepFlag: 'P' },
     boat: DEFAULT_SQUIB_TYPE,
+    // The spinnaker from the first week whose targets are sailed with it (package B); earlier weeks as published.
+    ...(week.index >= SPINNAKER_FROM_WEEK_INDEX ? { spinnaker: true } : {}),
   };
   const name = club ? club.course.name.replace(/ \(club course\)$/, '') : `${PRACTICE_NAMES[slot.kind === 'practice' ? slot.practice : 'windward-leeward'] ?? 'Practice'} in Start Bay`;
   return {
@@ -214,6 +216,14 @@ function longCourse(week: WeekId, seed: number, short: AppScenario, courses: Lib
   };
   return { id, name: club.course.name.replace(/ \(club course\)$/, ''), status: 'pending club check', scenario, summary: `${w.twsKn} kn from ${twdDeg}°, full length: the RDYC course as set (no targets)` };
 }
+
+/**
+ * The first week whose course carries the spinnaker (package B): 2026-W48, Monday 23 Nov 2026. The targets file holds
+ * the scenario it was sailed for, and the app uses only targets for the course it built, so a week already published
+ * keeps its targets and its course; the scheduled job sails the later weeks with the spinnaker.
+ */
+export const SPINNAKER_FROM_WEEK = '2026-W48';
+const SPINNAKER_FROM_WEEK_INDEX = weekOf(new Date('2026-11-23T12:00:00Z')).index;
 
 /** The best-time key for a week (kept apart from every other best). */
 export const weeklyKey = (w: WeekId): string => `weekly:${w.key}`;

@@ -13,6 +13,8 @@ const KEYS: [string, string][] = [
   ['K', 'Toggle auto crew weight'],
   ['X', 'Release both sheets (sails luff; head to wind as well to stop)'],
   ['Z / Shift+Z', 'Flatten the sails (depower) / power them up again, a quarter at a time'],
+  ['O', 'Spinnaker: call for it to be hoisted, or dropped (the crew do it, in a few seconds); game controller: d-pad up'],
+  ['I', 'Spinnaker: call for the crew to gybe the pole to the other side; game controller: d-pad down'],
   ['Home', 'Main menu: learn, sail freely, race or choose a scenario (the sail waits while it is open)'],
   ['P', 'Pause / resume'],
   ['R', 'Reset to the scenario start'],
@@ -53,6 +55,15 @@ export function Help({ onClose, onTutorial, build }: { onClose: () => void; onTu
           hull (water that comes over the rail stays until your crew bails it, so keep the rail out of the water), or the
           new Hyde B3 / Batt sails. The burgee at the masthead shows the apparent wind. With wind against tide, as in the
           harbour entrance on the ebb, expect short, steep waves; More instruments shows the waves.
+        </p>
+        <h3>The spinnaker</h3>
+        <p>
+          In races, and when free sailing at Club and Expert, your Squib carries her spinnaker. Call for it with O (or the
+          Hoist button) once the wind is well behind the beam: the crew hoist it on its pole and trim it, and it pulls the
+          boat faster. If the wind comes too far forward, or the pole is on the wrong side after a gybe, it collapses; press I
+          to have the pole gybed (the crew do this themselves after a gybe when they trim it). Drop it (O again) before
+          you round a mark onto a beat: dropping takes a few seconds. At Expert, Sails… lets you trim it by hand and set the
+          kicker, cunningham, outhaul and jib lead one by one. Its figures are estimates (docs/PHYSICS.md §23).
         </p>
         <h3>Racing</h3>
         <p>

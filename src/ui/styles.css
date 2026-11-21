@@ -1219,3 +1219,25 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .app .panel.dock.console .status { height: auto; min-height: 26px; padding: 2px 8px; }
   .app .panel.dock.console .status strong { white-space: normal; line-height: 1.15; }
 }
+
+/* Package B: the spinnaker's buttons in the console (colour agrees with the words) and Expert's sail controls. */
+.panel.dock.console .spin-tab {
+  position: absolute; top: -31px; left: 14px; display: flex; gap: 4px; padding: 3px 4px 0; border-radius: 8px 8px 0 0;
+  background: rgba(8, 20, 30, 0.55); border: 1px solid rgba(178, 205, 226, 0.14); border-bottom: 0; z-index: 1;
+}
+.panel.dock.console .spin-tab button { min-height: 26px; height: 26px; }
+/* On a phone the notices sit above the console's left-hand end: the tab goes to the right, beside the hide tab
+   (the minimap is not shown there). */
+@media (max-width: 700px) { .panel.dock.console .spin-tab { left: auto; right: 54px; } }
+@media (pointer: coarse) and (max-width: 700px), (pointer: coarse) and (max-height: 500px) {
+  .panel.dock.console .spin-tab { top: -49px; left: auto; right: 60px; }
+  .panel.dock.console .spin-tab button { min-height: 44px; height: 44px; }
+}
+.panel.dock.console .spin-call.is-good { box-shadow: inset 0 -3px 0 var(--good); }
+.panel.dock.console .spin-call.is-warn { box-shadow: inset 0 -3px 0 var(--warn, #e0a030); }
+.panel.dock.console .spin-call.is-bad { box-shadow: inset 0 -3px 0 var(--bad); }
+.sail-controls { position: absolute; z-index: 4; right: 12px; bottom: calc(var(--console-h, 120px) + var(--console-bottom, 12px) + 10px); width: min(420px, calc(100vw - 24px)); padding: 10px 12px; display: grid; gap: 6px; font-size: 13px; }
+.sail-controls .sc-head { display: flex; justify-content: space-between; align-items: center; }
+.sail-controls .sc-row { display: grid; grid-template-columns: 92px 1fr 44px auto; align-items: center; gap: 8px; min-height: 32px; }
+.sail-controls .sc-val { font-variant-numeric: tabular-nums; text-align: right; }
+.sail-controls input[type='range'] { width: 100%; min-height: 24px; }

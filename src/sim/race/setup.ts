@@ -3,6 +3,7 @@ import type { Environment } from '../env/environment';
 import type { DartGeo } from '../geo/dart';
 import { DART_PROJECTION } from '../geo/projection';
 import { squibParams } from '../boat/squib';
+import { withSpinnaker } from '../boat/spinnaker';
 import type { BoatParams } from '../boat/params';
 import type { RiverTraffic } from '../env/traffic';
 import { buildRestrictions } from '../course/restrictions';
@@ -47,6 +48,11 @@ export interface RaceSetup {
   aiCount: number;
   level: AiLevel;
   seed: number;
+  /**
+   * The fleet carries spinnakers (package B): the AI boats sail with them (and call for them as the player does). The
+   * user's boat follows its own `human.params`. Absent: no spinnakers, as before.
+   */
+  spinnaker?: boolean;
   /** The user's boat (omit for an AI-only race). */
   human?: {
     name?: string;
@@ -201,7 +207,7 @@ export function createRace(s: RaceSetup): CreatedRace {
   const geo = s.geo;
   const env = s.env ?? buildConditions(s.conditions, geo).env;
   const restrictions = s.features ? buildRestrictions(s.features) : undefined;
-  const params = squibParams();
+  const params = s.spinnaker ? withSpinnaker(squibParams()) : squibParams();
   const total = s.aiCount + (s.human ? 1 : 0);
   // A club course's committee boat anchors where the race officer sets her on the day: square to today's wind
   // at her outer distance mark, the line long enough for the fleet, in the deeper water (src/sim/course/course.ts).

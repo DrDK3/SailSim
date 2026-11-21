@@ -10,7 +10,7 @@ measured means measured in the model, not against a Squib on the water.
 | Package | Branch | Pull request | State |
 |---|---|---|---|
 | A (no physics): wind visibility and quick wins | `next-a-wind` | draft (link in §A.9) | Built; checks in §A.8 |
-| B (physics): spinnaker and sail controls | `next-b-spinnaker` | — | Not started |
+| B (physics): spinnaker and sail controls | `next-b-spinnaker` | draft (link in §B.9) | Built; checks in §B.8 |
 | C (no physics): graphics performance and the low preset | `next-c-graphics` | — | Not started |
 | D (no physics): Learn map and instructor view | `next-d-learn` | — | Not started |
 | E (no physics): metadata, media, manifest, landing page | `next-e-share` | — | Not started |
@@ -178,13 +178,118 @@ new windward deck (its eye 0.34 m from the centreline). The test now waits until
 settled, a hiking helm's eye reaches 1.006 m out, so its bound is 1.3 m rather than 1.0 m, the half-beam being
 0.92 m (fac1f44). Test-only changes; the app is as in the third run.
 
-**Fourth CI run (fac1f44):** on the pull request.
+**Fourth CI run (fac1f44, then c7e2259): the checks job failed, my mistake.** Commit dce09fe had swept in
+`dist-a/`, a build made only to compare screenshots before and after, and ESLint read its minified files. Removed in
+bb7b1e2 (a new commit, no history rewritten), with `dist-*/` added to `.gitignore`; on the next run the checks job
+passed.
 
 ### A.9 Pull request
 
 Draft pull request: https://github.com/DrDK3/SailSim/pull/39 (branch `next-a-wind`, base `main`).
 
 ---
+
+## Package B: the spinnaker and the sail controls (physics)
+
+**The only package that adds physics.** No existing coefficient was retuned. With the spinnaker down and the new
+controls at their defaults, every earlier golden trace, every earlier envelope row and the determinism hash
+(`11824f89f479d0f4`) are identical (§B.3).
+
+### B.1 What changed, by review number
+
+| # | What | Where |
+|---|---|---|
+| B1, B2 (PH-3, D2, D3) | The Squib's symmetric spinnaker: 13.5 m² (C4) on a 2.14 m pole (C16). The player calls for it (O: hoist or drop; I: gybe the pole; game controller d-pad up and down; the console's Hoist/Drop and Pole buttons); the simulated crew carry each call out as a timed task (hoist 9 s, drop 7 s, pole gybe 8 s, each ±20 % by the step it starts on: no random numbers in the state) and trim it; while busy, half their hiking weight is lost; with the crew trimming they gybe the pole themselves 1.5 s after a gybe. Its force is one more sail force in the existing sums (drive, side force, yaw moment, heeling moment): heel, weather helm and a broach come out of the existing dynamics. It collapses forward of about 48–62° apparent, by the lee on the wrong side of the pole, and (by hand) when over-eased; it fills again when it can. Expert trims it by hand (Sails…). The jib behind it draws less (E, labelled pending B6) | `src/sim/boat/spinnaker.ts`, `src/sim/boat/dynamics.ts`, `src/sim/simulation.ts` |
+| B2 | The AI calls for it through the same input as the player, with the same task times: hoist above 120° TWA with room before the next mark, drop below 100° or in time for the drop and a few lengths before the mark, none above 20 kn (E). AI parity extended: an AI boat's recorded inputs, fed to a plain simulation with the same parameters, give the same track with the spinnaker hoisted and dropped (`tests/sim/trustChecks.test.ts`) | `src/sim/ai/skipper.ts`, `src/sim/race/setup.ts` |
+| B2 | Replays: schema `/3` (15-column input rows) only when a run uses the new controls; `/1` and `/2` still read and replay. The `/3` rows also carry the crew's request to stuff a hole, which `/1` rows dropped (issue 260: such replays diverged) | `src/app/replay.ts` |
+| B3 (#25) | At Expert, the kicker, cunningham and outhaul one by one and the jib lead (Sails…). Their shares of the Flat control add up to it exactly, so "Flat" sets them as before: Flat with each set to the same value gives the same state bit for bit (tested). Manual crew weight was already there (Hike, Club and Expert) | `src/sim/boat/flatten.ts`, `src/ui/Controls.tsx` |
+| B4 | The spinnaker drawn: one mesh shaped every frame between hoisting (gathered, rising), filled (round, ahead of the forestay on the pole's side), collapsing and flogging (behind the forestay, rippling) and dropping; the pole swings across in a pole gybe. Colours: the simulator's own colour sets (Settings → Spinnaker colours; AI boats in their club's colours), drawn in code, no third-party image. Drawn at every graphics preset (tested on the AI fleet at Smooth, Balanced and Ultra). Its state in words is the text alternative (read out, and on the button's tooltip): colour and words agree. Hoist, fill and collapse sounds through the cue pipeline (synthesised; no recording added) | `src/render/spinnakerView.ts`, `src/render/cues.ts`, `src/render/audio.ts`, `src/app/spinnakerWords.ts` |
+| B5 | On by default in races (quick races, today's challenge, the library's practice races), the weekly course from 2026-W48, and free sailing at Club and Expert; off in lessons and the beginner exercise (they build their own scenarios). A "Spinnaker aboard" toggle in Conditions → Boat and "Spinnakers" in the race set-up. Help, README and the game controller | `src/app/quickRace.ts`, `src/app/weekly.ts`, `src/app/controller.ts`, `src/ui/*` |
+| B5 | The weekly targets tool sails a course with the spinnaker with it (`tools/weekly-targets.ts` via `sailOnce`), so the targets account for the downwind legs. The app uses only targets sailed for the course it built (the targets file holds the scenario), so this week's published targets stay valid; the workflow was not run | `src/app/weeklyTargets.ts` |
+| B6 | The questions for sailors (the jib with the spinnaker up, task times, collapse limits, the wind limit, who trims, broaching) are in README → Needs people | `README.md` |
+
+### B.2 Sources and evidence levels
+
+The ORC VPP documentation (free) could not be reached from this environment: the host was refused (HTTP 403 from the
+network proxy) on 21 Nov 2026, and a request to widen the environment's network was closed unanswered. **No value was
+taken from it, and no Squib target was invented.** The area and the pole are class figures (L1); the coefficient
+table follows the general shape of published VPP spinnaker curves from general knowledge, every number an estimate
+(E, L5); the task times, collapse limits, trim width, the jib behind it and the AI's calls are estimates (E, L6); the
+split of Flat between the three controls and the jib lead's effect are estimates (E, L5). docs/SOURCES.md SP1–SP4,
+docs/PARAMETERS.md, docs/PHYSICS.md §23.
+
+### B.3 Physics checks
+
+| Check | Result |
+|---|---|
+| Determinism hash, the reference race | `11824f89f479d0f4`, identical to package A |
+| Golden traces (4 earlier) | Identical (regenerated: only the date line changed, restored) |
+| `npm run envelope`, earlier rows | Identical to package A's (`diff` of the Markdown up to the new sections: no difference) |
+| Carried and never hoisted | The same state bit for bit as without it, upwind and on a run (`tests/sim/spinnaker.test.ts`) |
+| New golden traces | `spinnaker-6kn`, `-10kn`, `-16kn`: hoisted at 10 s, run from 40 s, gybed at 90 s, dropped at 150 s; its state as three extra columns |
+| New envelope rows (B-SP-1…4) | On a run at TWA 150°: 2.78 → 3.38 kn at 6 kn, 4.28 → 4.88 at 10 kn, 5.61 → 6.16 at 16 kn (+0.54 to +0.60 kn); hoist 9.4 s, drop 7 s at this start step; after a gybe the pole is across in 12–16 s and the sail full a second later; no broach at 16 and 20 kn, TWA 100–140°; heel up to 25° at 20 kn, TWA 100°. Model output from estimated coefficients |
+| `npm run exploits` | The earlier table unchanged; under the spinnaker no pattern beats steady sailing: sheet pumping −3.6 to −10.7 %, repeated hoist and drop −6.3 to −6.7 %, repeated pole gybes −7.9 to −8.5 %, helm rocking −0.4 to −2.7 %. The trim acts instantly (issue 259), so pumping loses the same at every period |
+| AI parity | Holds with spinnakers (an AI boat hoisted and dropped over a windward-leeward race; its inputs replay to the same track) |
+| `npm run perf` (quiet container) | 21 boats physics only 0.45 ms mean / 1.21 ms p99; full race pre-start 1.05 / 2.94; racing 0.85 / 2.32; **with spinnakers on the run (12–17 of 20 set) 0.90 / 2.68**: within the 3 ms budget. Under load (browser tests alongside) the leeward-mark window measured 4.01 ms p99 without spinnakers and 3.76 with them (issue 262) |
+
+### B.4 Evidence (software rendering)
+
+The spinnaker's states at a fixed seed (10 kn steady, a broad reach, crew trimming), `docs/img/next-b/`: hoisting
+(`spin-1-hoisting.jpg`), full (`spin-2-full.jpg`, and from the bow quarter `spin-6-full-orbit.jpg`), collapsed and
+flogging after being eased right out by hand (`spin-3-collapsed.jpg`, the button's colour red with "Spinnaker
+collapsed: eased too far"), gybing the pole (`spin-4-gybing-pole.jpg`) and dropping (`spin-5-dropping.jpg`). The same
+states are checked by the physics' state and the words in `tests/e2e/spinnaker.spec.ts`, which keeps a screenshot of
+each with its results. Nothing here was judged on a real GPU.
+
+### B.5 Accessibility
+
+The spinnaker's state in words is a polite live region and the button's tooltip; its colour agrees with the words
+(good only when drawing). The buttons are labelled with their keys ("Hoist the spinnaker (O)"); on a touch phone they
+are 44 × 44 px (the console's rule). Learn's words are plain ("Big front sail full", "falling in"). Expert's sail
+controls are a labelled dialog with labelled sliders.
+
+### B.6 What is left from package B
+
+- The coefficients need a source (issue 258): the ORC documentation from an environment that can reach it, and the
+  validation session (#28) with the B6 questions.
+- The trim has no sheet dynamics (issue 259); the AI polar does not know the spinnaker (issue 261).
+- Little frame-time margin with twenty boats at a mark, with or without spinnakers (issue 262).
+- Weekly targets with the spinnaker need the scheduled job to run for 2026-W48 after merging (issue 263).
+
+### B.8 Checks
+
+Locally (cloud container, software rendering): typecheck, lint, 876 unit tests (130 files), the build with the
+secret scan, the hash, the golden traces (7), `npm run envelope` (earlier rows identical), `npm run exploits`,
+`npm run perf` (§B.3). Browser tests run locally one file at a time: `spinnaker.spec.ts` (new), the console widths
+at every size (`immersive.spec.ts`), the phones' 44 px controls (`console.spec.ts`), the 24 px / 12 px floor
+(`a11y.spec.ts`), touch on a tablet (`juniors.spec.ts`), the masthead and look-up (`wind.spec.ts`), layout, phone.
+The first local run caught the new buttons overflowing the console's crew module at 360 px; they moved to a tab on
+the console's top edge (left on a laptop, right on a phone). The cue test caught a "collapsed" sound firing during a
+drop; it now fires only for a set spinnaker. CI runs the whole suite and is the authority; its result is on the pull
+request (§B.9).
+
+**First CI run on the pull request (269d5a8): green.** The checks job (typecheck, lint, unit tests, build with the
+secret scan, the envelope) and all five browser shards passed, the new `spinnaker.spec.ts` included. Later commits
+on this branch only merge package A's test fixes (§A.8).
+
+**Second CI run (22abcc9, merging package A's test fixes): one defect found and fixed.** The checks job failed on
+package A's committed preview build (§A.8). Shard 1: `ghost.spec.ts` found a ghost boat (ghost racing) with 42 of its
+44 meshes see-through: the spinnaker and its pole, made the first time the ghost's recording carried one, after the
+rest of the ghost had been made see-through, were drawn solid. The ghost's spinnaker is now see-through too, and keeps
+its see-through copy when its colours change (`src/render/ghostLook.ts`, `src/render/squibModel.ts`); regression test
+`tests/render/ghostSpinnaker.test.ts` (fails before: `spinnaker-sail` and `spinnaker-pole` solid). Issue 265.
+
+Screens added this package (`docs/img/next-b/`): the spinnaker's states (§B.4), the console's tab on a laptop and a
+phone (`console-tab-laptop.jpg`, `console-tab-phone.jpg`), Expert's sail controls (`sail-controls-expert.jpg`).
+
+### B.9 Pull request
+
+Draft pull request: https://github.com/DrDK3/SailSim/pull/40 (branch `next-b-spinnaker`, base `next-a-wind`, so its
+diff shows package B alone; it follows package A, https://github.com/DrDK3/SailSim/pull/39).
+
+### B.7 Estimates introduced (E)
+
+Every figure in docs/PARAMETERS.md "The spinnaker and the sail controls" except the area and the pole.
 
 ## Needs people (this round does not do these)
 

@@ -38,6 +38,7 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 | Training slice (17 Nov 2026, PR #31): two exercises built on evidence. **Trim, tack and recover** (beginner): a 30 s warm-up, then four attempts with falling assistance and graduated help (Look, Why, Try), results for assisted and independent attempts apart. **Wind shift on a beat** (tactics): a scripted shift that returns, a heading history, an optional prediction, and the decision judged apart from the outcome against model demonstrations ("in this model"). Five fixes (issues 198–201 and 203: the Options source, sail advice that asks only for what can be done, by the lee told from stalled, the auto-trim hand-over, sound that cannot start). Debrief notes after every sail; instructor files and links; a validation protocol (sheet section T). **All content draft; thresholds provisional (E); not tried by learners or instructors** | In progress, draft PR ([report](docs/TRAINING_SLICE_REPORT.md)) |
 | Juniors round: feel, sailing cues and social goals. An in-app device check (Settings → Check this device) with throttled stand-ins (not real devices) and the start-up and in-play stalls the profiles found, fixed; dynamic resolution with hysteresis before any preset step; game controllers, with optional vibration; the lowest preset renamed Smooth, with haze and spray; one cue state each frame for water, sails, telltales, spray, sound, camera and vibration, with optional gust outlines; challenge links with word-list names and splits, like-for-like bests (independent or assisted), a weekly course with model-sailed targets from a scheduled Action; a club table (one free-tier endpoint, verified automatically) written but **off until the owner sets it up**; physics unchanged | Draft, 17 Nov 2026 ([report](docs/JUNIORS_REPORT.md)); real-device performance, the low preset's look and the club table's set-up await people (validation sheet §E) |
 | Next round, package A (21 Nov 2026): **hold T to look up at the masthead**; the masthead in a small picture by the compass; the RDYC burgee or a masthead vane (which sailors use is still to be asked); the masthead kept clear of the interface. The River Dart data no longer resets a run (it joins a free sail where the boat is, or asks). A weekly course for juniors (5–10 minutes) with gold, silver and bronze spread apart, the RDYC courses as an optional long course. "Conditions" and "Scenarios and replays" (were Options and Library); sail status colour and words agree; plain words at Learn; VMG upwind or downwind; place labels by level; phones: a compact instrument strip and 44 px controls; the helm view from the helm's eye; a flogging sail that flaps seen from astern. **No physics changed; software rendering only** | In progress, draft PR ([report](docs/NEXT_ROUND_REPORT.md)) |
+| Next round, package B (21 Nov 2026): **the spinnaker**: the Squib's 13.5 m² symmetric spinnaker on its pole, called for with O (hoist or drop) and I (gybe the pole), hoisted, trimmed and gybed by the simulated crew as timed tasks, collapsing when the wind comes too far forward or onto the wrong side of the pole; on by default in races, the weekly course (from 2026-W48) and free sailing at Club and Expert, off in lessons and the beginner exercise; the AI fleets fly theirs. At Expert the kicker, cunningham, outhaul and jib lead one by one, and the spinnaker trimmed by hand. **Physics added; every spinnaker figure except the class area and pole is an estimate (E)**; with it down, every earlier trace, envelope row and the hash are identical | In progress, draft PR ([report](docs/NEXT_ROUND_REPORT.md)) |
 
 **New here?** The app asks whether you have sailed before and offers **Sail now**: for a newcomer that is lesson 1 of **six short lessons** (steering, the wind, trim, tacking and gybing, the start, the stream), each checked as you sail and ending on a result card. Four ways in follow (Learn to sail, Free sailing, Race against AI, Scenarios; the activity button at the start of the toolbar brings them back). The lessons are also under More → Lessons and in Help. A usability review and the changes it led to are in [docs/UX_REVIEW.md](docs/UX_REVIEW.md).
 
@@ -46,6 +47,26 @@ A browser-based 3D sailing simulator for the National Squib one-design keelboat 
 Physics coefficients are **estimates** awaiting Squib performance data ([calibration workflow](docs/CALIBRATION.md)). Mid-channel depths, individual moorings, ferry timetables and the tidal stream are provisional estimates (the in-app **Layers** panel lists them), and Met Office wind is forecast-model output. This is not for navigation or performance prediction.
 
 ![Phase 3: the River Dart up-river from above Kingswear](docs/img/phase3-overview.png)
+
+## Needs people
+
+These cannot be done by the simulator's builders alone, and none is claimed done:
+
+- **#28 Validation session** with Squib sailors (nothing in the simulator is validated). For the spinnaker (package B),
+  the **B6 questions**:
+  1. With the spinnaker up, do Squib crews keep the jib drawing, furl it, or drop it? (The model keeps it up and
+     blanketed: × (1 − 0.55 × how full the spinnaker is), an estimate.)
+  2. How long do a hoist, a drop and a pole gybe take a club crew of two, and a good one? (Model: 9, 7 and 8 s, ±20 %.)
+  3. How far forward can it be carried (apparent wind angle), and how far by the lee before it collapses? (Model: about
+     62° and 12°.)
+  4. In what wind do club crews stop hoisting it? (The AI: not above 20 kn.)
+  5. Is it hoisted from a bag in the cockpit or forward, and does the helm or the crew trim it?
+  6. Does the boat broach under it, in what wind and at what angle? (The model shows none up to 20 kn at 100–140°.)
+- **#32 Real-device checks**: phones, tablets and a real GPU (everything here was checked in software rendering).
+- **#4 The wind indicator** Squib sailors use (a burgee or a masthead vane): both are offered until it is known.
+- **NSOA**: the National Squib Owners' Association has not been contacted.
+- **The name and a domain** (#40): not chosen here.
+- **A listening test** of the sounds.
 
 ## Quick start
 
@@ -95,13 +116,15 @@ npm run dev          # open the printed URL; press H in the app for help
 | C | Cycle camera: chase (wheel to zoom), scenic, helm (drag to look round), orbit, drone (drag, right-drag to pan, wheel to climb), top |
 | B | Drone view: back to the boat |
 | Z / Shift+Z | Flatten the sails to depower / power them up, a quarter at a time |
+| O | Spinnaker: call for it to be hoisted or dropped (the crew do it, in a few seconds) |
+| I | Spinnaker: call for the crew to gybe the pole |
 | F / G | Force arrows / physics panel |
 | V | Validation dashboard (live charts, table, CSV export) |
 | L / N | Place labels / minimap |
 | U | Sound on / off |
 | H | Help |
 
-Game controllers (standard layout): left stick steers (a little or a lot), right / left trigger trims / eases the main, right / left shoulder the jib, A tacks and B gybes (the helm goes over while held), X lets both sheets go, Y centres the helm, Start pauses, Back changes the camera. Vibration for gusts, the boom crossing and contact is optional (Settings → Controls) and off with reduced motion.
+Game controllers (standard layout): left stick steers (a little or a lot), right / left trigger trims / eases the main, right / left shoulder the jib, A tacks and B gybes (the helm goes over while held), X lets both sheets go, Y centres the helm, d-pad up calls the spinnaker up or down and d-pad down gybes its pole, Start pauses, Back changes the camera. Vibration for gusts, the boom crossing and contact is optional (Settings → Controls) and off with reduced motion.
 
 On-screen buttons provide the same controls, with their keys shown on them. The sail status is one word when all is well and says what to do when not ("Luffing · trim in (W)"). The sailing controls can be put away (▾) when you sail by keyboard. On a phone the toolbar folds behind a Menu button.
 

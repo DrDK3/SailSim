@@ -44,7 +44,7 @@ export function shapeTrigger(v: number): number {
   return v <= TRIGGER_REST || !Number.isFinite(v) ? 0 : Math.min(1, (v - TRIGGER_REST) / (1 - TRIGGER_REST));
 }
 
-export type PadCommand = 'releaseSheets' | 'centreHelm' | 'pause' | 'camera';
+export type PadCommand = 'releaseSheets' | 'centreHelm' | 'pause' | 'camera' | 'spinnaker' | 'gybePole';
 
 export interface PadFrame {
   /** Helm target (−1 port … 1 starboard, bow sense), or undefined when the stick is at rest. */
@@ -83,6 +83,9 @@ export function readPad(s: PadState, prev: PadState | undefined, twa: number): P
   if (pressed(PAD.Y)) commands.push('centreHelm');
   if (pressed(PAD.START)) commands.push('pause');
   if (pressed(PAD.BACK)) commands.push('camera');
+  // The spinnaker (package B): d-pad up calls it up or down, d-pad down calls a pole gybe.
+  if (pressed(PAD.UP)) commands.push('spinnaker');
+  if (pressed(PAD.DOWN)) commands.push('gybePole');
   return {
     helm: x === 0 ? undefined : x,
     main: shapeTrigger(s.buttons[PAD.LT] ?? 0) - shapeTrigger(s.buttons[PAD.RT] ?? 0),

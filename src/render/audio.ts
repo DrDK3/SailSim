@@ -81,6 +81,14 @@ export interface AudioInput {
   boomCrossed: boolean;
   /** A gust arrived at the boat this frame: its size 0…1 (0 none), from the cue state (src/render/cues.ts). */
   gustOnset?: number;
+  /**
+   * The spinnaker (package B), from the cue state: how much of it flogs (0 … 1, it adds to the jib's flutter), and this
+   * frame's moments: the crew start hoisting (the halyard runs), it fills (a soft whump), it collapses (a crack).
+   */
+  spinFlog?: number;
+  spinHoist?: boolean;
+  spinFilled?: boolean;
+  spinCollapsed?: boolean;
   /** 0 … 1: how close moored boats are (halyards). */
   harbour: number;
   /** Simulation paused: the scene is still, so is the sound. */
@@ -381,7 +389,8 @@ export class SoundScape {
     const waterRec = loop('water', 0.6 * Math.max(v.rush, v.hiss) * still, 0.8 + 0.08 * Math.min(a.stw, 4));
     this.water.rush.gain.setTargetAtTime(waterRec ? 0 : 0.32 * v.rush * still, t, 0.3);
     this.water.hiss.gain.setTargetAtTime(waterRec ? 0 : 0.05 * v.hiss * still, t, 0.3);
-    const flaps = [a.luffMain, a.luffJib].map((luff) => flutterVoice(luff, a.aws));
+    // A flogging spinnaker flutters with the jib's voice (the louder of the two).
+    const flaps = [a.luffMain, Math.min(a.luffJib, 1 - (a.spinFlog ?? 0))].map((luff) => flutterVoice(luff, a.aws));
     const flapRec = loop('flutter', 0.4 * Math.max(flaps[0]!.level, flaps[1]!.level) * still, Math.min(2, Math.max(0.6, flaps[0]!.rate / 8)));
     flaps.forEach((f, i) => {
       const voice = this.flutter![i]!;
@@ -395,6 +404,9 @@ export class SoundScape {
       this.burst(this.buses!.water, Math.min(1, (-a.bowDrop - 0.6) / 1.2) * 0.35, 260, 0.18);
     }
     if (a.boomCrossed) this.boom();
+    if (a.spinHoist) this.halyard();
+    if (a.spinFilled) this.spinWhump(a.aws, false);
+    if (a.spinCollapsed) this.spinWhump(a.aws, true);
     if (a.gustOnset && a.gustOnset > 0) this.gust(a.gustOnset, a.aws);
     // Halyards: random clinks, more the more moored boats are about.
     if (a.harbour > 0.05 && t > this.nextClink) {
@@ -448,6 +460,39 @@ export class SoundScape {
 
   /** The last gust swell's peak level (tests). */
   lastGustLevel = 0;
+
+  /** The spinnaker's sounds this session (tests): what was played, in order. */
+  readonly spinSounds: ('halyard' | 'fill' | 'collapse')[] = [];
+
+  /** The halyard running out of the bag and up the mast as the crew hoist: a rattle of short clicks over a second. */
+  private halyard(): void {
+    this.spinSounds.push('halyard');
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    if (this.playSample('halyard', this.boatPan ?? this.buses!.effects, 0.5, t) !== undefined) return;
+    for (let i = 0; i < 9; i++) {
+      const at = t + i * 0.11 + Math.random() * 0.03;
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.setValueAtTime(1400 + Math.random() * 500, at);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.05, at + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
+      o.connect(g).connect(this.boatPan ?? this.buses!.effects);
+      o.start(at);
+      o.stop(at + 0.05);
+    }
+  }
+
+  /** The spinnaker filling (a soft, low whump of cloth) or collapsing (a sharper crack), louder in more wind. */
+  private spinWhump(aws: number, collapse: boolean): void {
+    this.spinSounds.push(collapse ? 'collapse' : 'fill');
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    void t;
+    this.burst(this.boatPan ?? this.buses!.effects, (collapse ? 0.25 : 0.18) * smooth(1, 8, aws), collapse ? 900 : 220, collapse ? 0.12 : 0.35);
+  }
 
   /** The boom crossing: a dull thump and a short creak of the gooseneck. */
   private boom(): void {
