@@ -6,6 +6,7 @@ import { Compass } from './Compass';
 import { agroundText } from './aground';
 import { bearing, deg, kn, sideAngle, vmgShown } from './format';
 import { windWords } from '../app/windWords';
+import { plainWords } from '../app/flags';
 import { TrustLink } from './trust';
 
 const MORE_KEY = 'squib.instruments.more';
@@ -51,7 +52,7 @@ export function Instruments({
   const tack = s.mainSide === 1 ? 'Starboard' : 'Port';
   const aground = agroundText(s);
   // Review #18: plain words at the Learn level; Club and Expert keep the sailors' abbreviations, each with its tooltip.
-  const plain = level === 'learn';
+  const plain = plainWords(level);
   const L = (abbr: string, words: string) => (plain ? words : abbr);
   // Review #19: VMG as progress up or down the wind, always a positive number, at every level.
   const vmg = vmgShown(s.vmg, s.twa);

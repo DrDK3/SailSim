@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { EASED_LABEL, PLAIN_LABEL, STATE_LABEL } from '../../src/app/sailStatus';
 
 /**
@@ -15,6 +16,8 @@ async function ready(page: Page, url = '/?nowelcome&conditions=set&quality=low')
   await page.goto(url);
   await expect(page.getByTestId('stw')).toBeVisible({ timeout: 90_000 * CI_SLOW });
   await expect(page.getByTestId('main-status')).toBeVisible();
+  // The River Dart data loaded (until then its arrival can change the screen under a click).
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 120_000 * CI_SLOW });
   return errors;
 }
 
@@ -89,3 +92,43 @@ test('§2.4: at Learn the wind is in words, the angle small alongside; at Club t
   await expect(cell.locator('.cell-value')).toHaveText(/^\d{1,3}°( stbd| port)?$/);
   expect(errors).toEqual([]);
 });
+
+test('§3.1: Settings → Advanced, five switches (axe-clean); plain words off gives Learn the Club words', async ({ page }) => {
+  test.setTimeout(180_000 * CI_SLOW);
+  const errors = await ready(page);
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
+  await expect(page.getByTestId('settings-panel')).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  const flags = page.getByTestId('feature-flags');
+  await flags.scrollIntoViewIfNeeded();
+  await expect(flags.getByRole('checkbox')).toHaveCount(5);
+  for (const f of ['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap']) await expect(page.getByTestId(`flag-${f}`)).toBeChecked();
+  await expect(page.getByTestId('flag-markRoomPenalties')).not.toBeChecked();
+  const axe = await new AxeBuilder({ page }).include('[data-testid="feature-flags"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  // Text at least 12 px.
+  expect(await flags.evaluate((el) => Math.min(...[...el.querySelectorAll('span, p')].map((n) => parseFloat(getComputedStyle(n).fontSize))))).toBeGreaterThanOrEqual(12);
+  // The switch clicked as a person would (the input's own click, so its handler runs), inside the scrolling panel.
+  await page.evaluate(() => (document.querySelector('[data-testid="flag-plainLanguage"]') as HTMLInputElement).click());
+  await expect(page.getByTestId('flag-plainLanguage')).not.toBeChecked();
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(false));
+  await expect(page.getByTestId('settings-panel')).toBeHidden();
+  // Plain words off: Learn shows the sailors' terms, as Club does (as before package A).
+  await page.evaluate(() => window.__squib!.controller.setLevel('learn'));
+  await expect(page.locator('[data-cell="twa"] .cell-label')).toHaveText('TWA');
+  // Back on: the plain words return at Learn.
+  await page.evaluate(() => window.__squib!.controller.setFeature('plainLanguage', true));
+  await expect(page.locator('[data-cell="twa"] .cell-label')).toHaveText('Wind');
+  expect(errors).toEqual([]);
+});
+
+for (const on of [true, false]) {
+  test(`§3.1: the Learn map ${on ? 'on (the default): in the Settings menu' : 'switched off: not in the Settings menu, Lessons heading its group'}`, async ({ page }) => {
+    test.setTimeout(150_000 * CI_SLOW);
+    if (!on) await page.addInitScript(() => localStorage.setItem('squib.flag.learnMap', '0'));
+    const errors = await ready(page);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Lessons' })).toBeVisible();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Learn map' })).toHaveCount(on ? 1 : 0);
+    expect(errors).toEqual([]);
+  });
+}

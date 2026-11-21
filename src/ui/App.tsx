@@ -1,4 +1,5 @@
 import { presetLabel } from '../render/graphics';
+import { featureOn } from '../app/flags';
 import { ChallengeCard, SocialResult } from './Social';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { SimController } from '../app/controller';
@@ -414,8 +415,9 @@ export function App({ ctl }: { ctl: SimController }) {
               label="Settings"
               title="Settings: lessons, course editor, what is shown, sound, all settings, and physics tools"
               items={[
-                { section: 'Learn and plan', label: 'Learn map', checked: showLearnMap, onSelect: () => setShowLearnMap(!showLearnMap) },
-                { label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
+                // The Learn map unless switched off in Settings → Advanced (§3.1): then Lessons heads the group, as before.
+                ...(featureOn('learnMap') ? [{ section: 'Learn and plan', label: 'Learn map', checked: showLearnMap, onSelect: () => setShowLearnMap(!showLearnMap) }] : []),
+                { ...(featureOn('learnMap') ? {} : { section: 'Learn and plan' }), label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
                 ...ui.exercises.map((e) => ({
                   label: `Exercise: ${e.title}`,
                   checked: ui.exercise?.info.id === e.id,
@@ -565,11 +567,11 @@ export function App({ ctl }: { ctl: SimController }) {
           }}
           onSailNow={() => closeHub(() => (ui.level === 'learn' ? ctl.leaveTo('Starting lesson 1', () => ctl.startLesson('steer')) : ctl.leaveTo('Free sailing', () => ctl.freeSail())))}
           lessonsDone={ui.lessons.filter((l) => l.done && l.group === 'basics').length}
-          onLearnMap={() => closeHub(() => setShowLearnMap(true))}
+          onLearnMap={featureOn('learnMap') ? () => closeHub(() => setShowLearnMap(true)) : undefined}
         />
       )}
       {showAbout && <AboutDialog at={showAbout} onClose={() => setShowAbout(false)} />}
-      {showLearnMap && <LearnMapDialog ctl={ctl} ui={ui} onClose={() => setShowLearnMap(false)} onOpenRace={() => openRace(true)} />}
+      {showLearnMap && featureOn('learnMap') && <LearnMapDialog ctl={ctl} ui={ui} onClose={() => setShowLearnMap(false)} onOpenRace={() => openRace(true)} />}
       {ui.confirmLeave && (
         <Confirm id="leave" title="Leave the race?" keep="Keep racing" go="Leave the race" onAnswer={(yes) => ctl.answerLeave(yes)} testId="confirm-leave">
           The race is under way. {ui.confirmLeave} ends it, and the race is lost.

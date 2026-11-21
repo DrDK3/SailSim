@@ -2,6 +2,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
+import { plainWords } from '../app/flags';
 import { useRef, useState } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
 import { spinnakerWords } from '../app/spinnakerWords';
@@ -184,7 +185,7 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
   // The sail inside the angle its sheet allows: a slack sheet (review #23: easing it moves nothing, and the advice says so).
   const limit = sail === 'main' ? s.mainSheetLimit : s.jibSheetLimit;
   const slack = Math.abs(angle) < limit - SLACK_RAD;
-  const st = sailAdvice(state, keys, { sail, sheet, auto, slack, angle, plain: ui.level === 'learn' });
+  const st = sailAdvice(state, keys, { sail, sheet, auto, slack, angle, plain: plainWords(ui.level) });
   const ok = st.cls === 'good';
   const name = sail === 'main' ? 'Main' : 'Jib';
   // Which way the sheet is going now (review #23, #24): an arrow on the bar while it moves, whoever works it.
@@ -268,7 +269,7 @@ function SpinnakerButtons({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   if (!sp) return null;
   const w = spinnakerWords(sp, ui.level, ui.snapshot.input.autoSpin === false)!;
   const called = (ui.snapshot.input.spin ?? 0) >= 0.5;
-  const plain = ui.level === 'learn';
+  const plain = plainWords(ui.level);
   const name = plain ? 'the big front sail' : 'the spinnaker';
   return (
     <>

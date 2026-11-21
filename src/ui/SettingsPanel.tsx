@@ -10,6 +10,7 @@ import { PRESETS, matchPreset, presetSettings, type GraphicsPreset, type Graphic
 import { LIGHTING_PRESETS } from '../app/lighting';
 import type { AudioSettings } from '../render/audio';
 import { DEVICE_CHECK_SECONDS, reportText } from '../app/deviceCheck';
+import { FEATURE_FLAGS, FLAG_ORDER, flagSetting } from '../app/flags';
 
 const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
   performance: { label: 'Smooth', note: 'For school laptops, tablets and older computers: every sailing cue (gusts on the water, sails, telltales, wake) at a lower resolution, with simpler water, shadows and scenery.' },
@@ -298,6 +299,22 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           {ui.recordedSounds.length ? `Recordings in use: ${ui.recordedSounds.join(', ')}.` : 'No recordings are included; any added to the audio folder are used in place of the synthesised sound (docs/SOUND.md).'} The
           countdown uses only voices on this device; nothing is sent anywhere.
         </p>
+        <h4 className="settings-group">Advanced</h4>
+        <p className="fine">
+          Feature switches, kept in this browser: each turns a feature off without changing the simulator. Off, it behaves as it did before that feature
+          was added.
+        </p>
+        <div data-testid="feature-flags">
+          {FLAG_ORDER.map((f) => (
+            <div key={f} className="flag-row">
+              <label className="toggle">
+                <input type="checkbox" checked={flagSetting(f)} onChange={(e) => ctl.setFeature(f, e.target.checked)} data-testid={`flag-${f}`} />
+                <span>{FEATURE_FLAGS[f].label}{FEATURE_FLAGS[f].defaultOn === 'learn' ? ' (Learn level)' : ''}</span>
+              </label>
+              <p className="fine">Off: {FEATURE_FLAGS[f].off}</p>
+            </div>
+          ))}
+        </div>
         <h4 className="settings-group">Troubleshooting</h4>
         <h5>Graphics check</h5>
         <div data-testid="gpu-check">

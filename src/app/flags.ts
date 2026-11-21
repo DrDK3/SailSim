@@ -65,6 +65,16 @@ export function featureOn(f: FeatureFlag, level?: InterfaceLevel): boolean {
   return d === 'learn' ? level === 'learn' : d;
 }
 
+/** The switch as Settings shows it: as set in this browser, or its default ("on at Learn" shows as on). */
+export function flagSetting(f: FeatureFlag): boolean {
+  return storedFlag(f) ?? FEATURE_FLAGS[f].defaultOn !== false;
+}
+
+/** Plain words at this level (review #18, #22): at Learn, unless switched off (§3.1). */
+export function plainWords(level?: InterfaceLevel | string): boolean {
+  return featureOn('plainLanguage', level === 'learn' || level === 'club' || level === 'expert' ? level : undefined);
+}
+
 /** Set a switch (true or false), or clear it back to its default (undefined). */
 export function setFeatureFlag(f: FeatureFlag, on: boolean | undefined): void {
   try {

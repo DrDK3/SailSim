@@ -58,7 +58,7 @@ import { CONTENT_STATUS, loadThresholds, mergeThresholds, resetThresholds, saveT
 import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
 import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
-import { featureOn } from './flags';
+import { featureOn, setFeatureFlag, type FeatureFlag } from './flags';
 import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
 import { COACH, RaceCoach, type Debrief, type Tip } from './coach';
@@ -594,7 +594,10 @@ export class SimController {
     let race: SimController['race'];
     let sim: Simulation;
     const typeParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
-    const boatParams = scenario.spinnaker ? withSpinnaker(typeParams) : typeParams;
+    // Settings → Advanced: with the spinnaker switched off nothing carries one, as before package B; a replay sails as it
+    // was recorded (fixes of 21 Nov 2026, §3.1).
+    const spinAboard = !!scenario.spinnaker && (!!opts.keepReplay || featureOn('spinnaker'));
+    const boatParams = spinAboard ? withSpinnaker(typeParams) : typeParams;
     // River traffic for this run (its ferries crab in this run's stream): shared by the physics and the picture.
     const runData = geo ? this.dartData : undefined;
     const feats = runData?.features;
@@ -614,7 +617,7 @@ export class SimController {
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
           seed: scenario.conditions.gusts.seed,
-          spinnaker: !!scenario.spinnaker,
+          spinnaker: spinAboard,
           markRoomPenalties: runMarkRoomPenalties,
           human: {
             controller: () => this.sampleInputs(),
@@ -1915,6 +1918,8 @@ export class SimController {
    */
   private riverArrival(data: DartData): 'restart' | 'in-place' | 'ask' | 'wait' | 'none' {
     if (this.replay || this.catchUp) return data.geo ? 'wait' : 'none';
+    // Settings → Advanced: with the river joining a run switched off, it restarts the run, as before package A (§3.1).
+    if (!featureOn('riverHotSwap')) return 'restart';
     const activity = !!(this.race || this.tutorial || this.exercise || this.drill || this.ghost);
     const touched = this.sim.inputLog.length > 1 || this.sim.time >= (activity ? 5 : Infinity);
     if (!touched) return 'restart';
@@ -3093,6 +3098,15 @@ export class SimController {
   centreHelm(): void {
     if (this.replay) return;
     this.sim.setInput({ helm: 0 });
+  }
+
+  /**
+   * Settings → Advanced (fixes of 21 Nov 2026, §3.1): switch a feature on or off in this browser. The screens follow at
+   * once; the spinnaker and rule 18's penalties from the next start; the river's arrival the next time it loads.
+   */
+  setFeature(f: FeatureFlag, on: boolean): void {
+    setFeatureFlag(f, on);
+    this.publish(true);
   }
 
   /** Whether this run's boat carries a spinnaker (package B). */
