@@ -11,3 +11,5 @@ __pycache__/
 .cache/
 dist-tools/
 dist-club/
+# Local preview builds made for before/after comparisons (dist-a, dist-before, ...)
+dist-*/
