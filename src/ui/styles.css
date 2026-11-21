@@ -1231,6 +1231,16 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .app .panel.dock.console .status { height: auto; min-height: 26px; padding: 2px 8px; }
   .app .panel.dock.console .status strong { white-space: normal; line-height: 1.15; }
 }
+/* Fixes of 21 Nov 2026, §2.4: on a phone upright the state's words were cut off ("Luf…", "Dra…": the pill had 51–66 px
+   between the sail's name and the Auto-trim toggle). The state takes its own line under them, the module's full width,
+   and is never cut: a long Learn phrase may wrap. The console grows by that line. */
+@media (pointer: coarse) and (max-width: 700px) {
+  .app { --console-h: 244px; }
+  .panel.dock.console .sail-mod { grid-template-rows: auto 44px; }
+  .panel.dock.console .sail-mod .mod-top { flex-wrap: wrap; row-gap: 2px; }
+  .app .panel.dock.console .sail-mod .status { order: 3; flex: 1 0 100%; width: 100%; justify-content: center; }
+  .app .panel.dock.console .sail-mod .status strong { overflow: visible; text-overflow: clip; white-space: normal; text-align: center; }
+}
 
 /* Package B: the spinnaker's buttons in the console (colour agrees with the words) and Expert's sail controls. */
 .panel.dock.console .spin-tab {

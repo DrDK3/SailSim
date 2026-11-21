@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { BoatSnapshot } from '../sim/simulation';
 import type { OverlayPart } from '../app/lessons';
 import { makeLabel } from './labels';
+import { vmgLabel } from '../app/vmgShown';
 
 /**
  * The teaching overlay (review UX-9, §8.3): what the instruments say, drawn on the water round the boat, each
@@ -220,7 +221,8 @@ export class TeachingOverlay {
         const len = Math.abs(s.vmg) * VMG_M_PER_MS;
         const from = at.clone().add(new THREE.Vector3(0, 0.15, 0));
         this.setArrow(this.vmgLine, from, d, len);
-        this.labels.vmg.set(`VMG ${(s.vmg / KN).toFixed(1)} kn`);
+        // The same words and sign as the instruments: progress up or down the wind, always positive (§2.4).
+        this.labels.vmg.set(vmgLabel(s.vmg, s.twa));
         this.labels.vmg.sprite.position.copy(from).addScaledVector(d, len).add(new THREE.Vector3(0, 1.0, 0));
         this.labels.vmg.sprite.visible = this.vmgLine.visible;
       } else this.vmgLine.visible = this.labels.vmg.sprite.visible = false;

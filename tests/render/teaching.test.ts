@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { Simulation, squibParams, uniformEnvironment } from '../../src/sim/index';
 import { TeachingOverlay } from '../../src/render/teaching';
+import { kn, vmgShown } from '../../src/ui/format';
 
 /** The teaching overlay (review UX-9): heading, course over ground, stream, true and apparent wind, VMG, a buoy. */
 
@@ -67,5 +68,38 @@ describe('teaching overlay', () => {
     // Labels: one sprite per part, all shown.
     const sprites = o.group.children.filter((c) => c instanceof THREE.Sprite && c.visible);
     expect(sprites.length).toBe(6);
+  });
+});
+
+describe('fixes of 21 Nov 2026, §2.4: the overlay’s VMG says what the instruments say', () => {
+  const sailAt = (headingDeg: number) => {
+    const sim = new Simulation({
+      params: squibParams(),
+      env: uniformEnvironment({ twsKn: 10, twdDeg: 225 }),
+      initial: { n: 0, e: 0, headingDeg, speedKn: 4 },
+      input: { autoMain: true, autoJib: true, autoCrew: true },
+    });
+    sim.advance(20);
+    return sim.snapshot();
+  };
+  const labelOf = (o: TeachingOverlay) => (o as unknown as { labels: { vmg: { text: string } } }).labels.vmg.text;
+
+  it.each([
+    ['upwind (close-hauled)', 180],
+    ['downwind (a broad run)', 30],
+  ])('%s: the same words, a positive number, and the instrument’s value', (_name, heading) => {
+    stubCanvas();
+    const s = sailAt(heading);
+    const o = new TeachingOverlay();
+    o.set(['vmg']);
+    o.update(s, new THREE.Vector3(s.e, 0, -s.n), 0);
+    const shown = vmgShown(s.vmg, s.twa);
+    const text = labelOf(o);
+    // Before the fix the run read "VMG -4.3 kn" while the instruments said "VMG downwind 4.3".
+    expect(text).toBe(`${shown.label} ${(shown.kn / 0.514444).toFixed(1)} kn`);
+    expect(text).not.toMatch(/-/);
+    expect(text).toMatch(heading === 30 ? /^VMG downwind / : /^VMG upwind /);
+    // The instrument shows the same quantity to two decimals.
+    expect(Math.abs(Number(text.split(' ')[2]) - Number(kn(shown.kn, 2)))).toBeLessThanOrEqual(0.05);
   });
 });

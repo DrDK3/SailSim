@@ -1314,8 +1314,11 @@ export class SimController {
     this.raceAidsOn = d.raceAids;
     writeFlag('squib.raceAids', d.raceAids);
     this.showLabels = d.labels;
+    // On a phone upright the instruments stay a compact strip at Expert too ("All instruments" a tap away), so the water
+    // keeps at least half the screen (fixes of 21 Nov 2026, §2.4: the full panel covered most of it).
+    const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (max-width: 700px)').matches;
     try {
-      localStorage.setItem('squib.instruments.more', d.allInstruments ? '1' : '0');
+      localStorage.setItem('squib.instruments.more', d.allInstruments && !phone ? '1' : '0');
     } catch {
       // storage unavailable
     }
