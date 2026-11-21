@@ -8,6 +8,7 @@ import { loadBests } from '../app/bests';
 import { mmss } from '../app/lessons';
 import type { AiLevel } from '../sim/ai/skipper';
 import type { PrepFlag } from '../sim/race/committee';
+import { useTrust } from './trust';
 
 const KEY = 'squib.quickRace.v1';
 
@@ -50,6 +51,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
   const liveTide = ui.tideSources.some((t) => t.kind === 'live');
   const river = ui.dart.status === 'loaded' || ui.dart.status === 'ready';
   const challenge = dailyChallenge();
+  const trust = useTrust();
   const bests = loadBests();
   const todayBest = bests.races[challenge.key];
   const practice = o.venue === 'start-bay' && o.course !== 'short' ? PRACTICE_KINDS.find((k) => k.kind === o.course) : undefined;
@@ -155,7 +157,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
       {o.venue === 'start-bay' && (
         <p className="fine">
           {o.course === 'short'
-            ? `A ${SHORT_COURSE_LEG_M} m windward–leeward, one lap. AI Squibs take about 5 minutes in a moderate breeze, longer in light air (model output).`
+            ? `A ${SHORT_COURSE_LEG_M} m windward–leeward, one lap. AI Squibs take about 5 minutes in a moderate breeze, longer in light air${trust.instructor ? ' (model output)' : ''}.`
             : `${practice?.description ?? ''} Laid at the start position, relative to the wind there. Simulated: not an RDYC course.`}
         </p>
       )}

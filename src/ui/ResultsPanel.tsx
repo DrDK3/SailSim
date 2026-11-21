@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FleetRow, RaceUi } from '../app/controller';
 import { gapText, ordinal } from '../app/raceStory';
+import { TrustNote } from './trust';
 
 function clock(s?: number): string {
   if (s === undefined) return '';
@@ -148,8 +149,8 @@ export function ResultsPanel({
       <p className="fine">
         Low-point scoring (Appendix A): place = points; boats that did not start, finish or were disqualified score the number of
         entries + 1. Elapsed from the start signal. Penalties: incidents found by the simplified judge (no protests or hearings).
-        The finishing window (15 min after the first finisher) is an estimate standing in for the sailing instructions.
       </p>
+      <TrustNote>The finishing window (15 min after the first finisher) is an estimate standing in for the sailing instructions.</TrustNote>
       <p className="fine" data-testid="results-disclaimer">Simplified rules, not an authoritative adjudication; AI sail numbers invented.</p>
     </section>
   );

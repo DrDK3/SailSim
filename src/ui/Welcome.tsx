@@ -81,6 +81,7 @@ export function ExperienceHub({
   level,
   onAnswer,
   lessonsDone,
+  onLearnMap,
 }: {
   first: boolean;
   steering: SteeringMode;
@@ -94,6 +95,8 @@ export function ExperienceHub({
   onScenarios: () => void;
   onSailNow: () => void;
   lessonsDone: number;
+  /** The Learn map (review #13): offered on later visits (the first visit stays one question and Sail now). */
+  onLearnMap?: () => void;
 }) {
   const sailNow = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -190,6 +193,11 @@ export function ExperienceHub({
               {first && (
                 <button className="link" onClick={() => setMore(!more)} aria-expanded={more} aria-controls="hub-ways" data-testid="hub-more">
                   {more ? 'Fewer ways to sail' : 'More ways to sail'}
+                </button>
+              )}
+              {!first && onLearnMap && (
+                <button className="link" onClick={onLearnMap} data-testid="hub-learn-map">
+                  Learn map: what to do next
                 </button>
               )}
               <button className="link" onClick={() => setAbout(true)} data-testid="hub-about">

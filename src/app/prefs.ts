@@ -33,6 +33,12 @@ export interface Prefs {
   mastheadInset: boolean;
   /** The helm view's field of view (deg; review #15): the widest it zooms out to. */
   helmFovDeg: number;
+  /**
+   * Instructor view (review #14, package D): the provenance and evidence labels, the exercises' thresholds and the
+   * assist record shown where they apply. Off (the player view), they are gathered in About, behind one "How far to
+   * trust this" link: moved, not deleted.
+   */
+  instructorView: boolean;
 }
 
 /** The helm view's field of view (deg): its range in Settings and the default (as before, E). */
@@ -64,6 +70,7 @@ export const DEFAULT_PREFS: Prefs = {
   vaneTabDeg: DEFAULT_TAB_DEG,
   mastheadInset: true,
   helmFovDeg: DEFAULT_HELM_FOV,
+  instructorView: false,
 };
 
 function defaults(): Prefs {
@@ -92,6 +99,7 @@ export function loadPrefs(): Prefs {
       vaneTabDeg: typeof p.vaneTabDeg === 'number' ? clampTabDeg(p.vaneTabDeg) : d.vaneTabDeg,
       mastheadInset: typeof p.mastheadInset === 'boolean' ? p.mastheadInset : d.mastheadInset,
       helmFovDeg: typeof p.helmFovDeg === 'number' && Number.isFinite(p.helmFovDeg) ? clampHelmFov(p.helmFovDeg) : d.helmFovDeg,
+      instructorView: typeof p.instructorView === 'boolean' ? p.instructorView : d.instructorView,
     };
   } catch {
     return defaults();

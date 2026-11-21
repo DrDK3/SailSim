@@ -7,6 +7,7 @@ import { PRACTICE_KINDS } from '../app/courseLibrary';
 import { dataAgeMinutes } from '../sim/env/weather';
 import { SKY_PRESETS, type SkyPreset } from '../sim/env/sky';
 import { DEFAULT_SQUIB_TYPE, SQUIB_TYPES, type SquibTypeId } from '../sim/boat/squib';
+import { InstructorOnly, TrustNote } from './trust';
 
 /** The Squib type: what each build or sail package changes, with the provenance of every difference. */
 function BoatChoice({ value, onChange }: { value: SquibTypeId; onChange: (id: SquibTypeId) => void }) {
@@ -32,8 +33,10 @@ function BoatChoice({ value, onChange }: { value: SquibTypeId; onChange: (id: Sq
                 <tr key={d.path}>
                   <td><code>{d.path}</code></td>
                   <td>{String(d.value)} {d.unit === '-' ? '' : d.unit}</td>
-                  <td title="Provenance: S secondary source, E estimate">{d.tag}</td>
-                  <td>{d.note}</td>
+                  <InstructorOnly>
+                    <td title="Provenance: S secondary source, E estimate">{d.tag}</td>
+                    <td>{d.note}</td>
+                  </InstructorOnly>
                 </tr>
               ))}
             </tbody>
@@ -129,7 +132,8 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
           <option value="female">Woman</option>
         </select>
       </label>
-      <p className="fine">How your helm is drawn (average adult height, 1.75 m or 1.61 m). Appearance only: the boat&apos;s crew weight is an estimate in its calibration.</p>
+      <p className="fine">How your helm is drawn (average adult height, 1.75 m or 1.61 m).</p>
+      <TrustNote>Appearance only: the boat&apos;s crew weight is an estimate in its calibration.</TrustNote>
       <h4>Start</h4>
       <TimeField label="Start time" iso={c.startTime} onChange={(iso) => setC({ startTime: iso })} />
       <div className="row tight">
@@ -293,12 +297,12 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
           <Num label="Entrance peak flood" value={cur.stream.peakFloodKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, peakFloodKn: v } } })} />
           <Num label="Entrance peak ebb" value={cur.stream.peakEbbKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, peakEbbKn: v } } })} />
           <Num label="River outflow" value={cur.stream.riverEbbKn} min={0} max={2} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'dart', stream: { ...cur.stream, riverEbbKn: v } } })} />
-          <p className="fine">
+          <TrustNote>
             Illustrative only: the pattern follows the channel, about twice as fast in the narrows as at the entrance,
             slack in the creeks. Its timing comes from the rise and fall of the tide, so it goes slack at high and low
             water and the flood mirrors the ebb: the real Dart stream does not keep that timing. Rates are the mean
             across the entrance at mid-tide. Not measured current data; not for learning stream tactics.
-          </p>
+          </TrustNote>
         </>
       )}
       {cur.mode === 'tidal' && (
@@ -307,7 +311,7 @@ export function ScenarioPanel({ ctl, ui, onClose, onRace }: { ctl: SimController
           <Num label="Peak flood" value={cur.stream.peakFloodKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, peakFloodKn: v } } })} />
           <Num label="Peak ebb" value={cur.stream.peakEbbKn} min={0} max={4} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, peakEbbKn: v } } })} />
           <Num label="River outflow" value={cur.stream.riverEbbKn} min={0} max={2} step={0.1} unit="kn" onChange={(v) => setC({ current: { mode: 'tidal', stream: { ...cur.stream, riverEbbKn: v } } })} />
-          <p className="fine">Illustrative only: slack at high and low water and strongest at mid-tide, a timing real streams need not follow. Not measured current data.</p>
+          <TrustNote>Illustrative only: slack at high and low water and strongest at mid-tide, a timing real streams need not follow. Not measured current data.</TrustNote>
         </>
       )}
 

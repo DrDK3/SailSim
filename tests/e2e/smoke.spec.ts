@@ -222,7 +222,11 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
   const panel = page.getByRole('region', { name: 'Conditions' });
   await panel.locator('.field', { hasText: /^Tide/ }).locator('select').selectOption('manual');
   await panel.locator('.field', { hasText: /^Current/ }).locator('select').selectOption('dart');
+  // In the player view the note is in About (package D); the instructor view shows it where the stream is chosen.
+  await expect(panel).not.toContainText('Illustrative only');
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ instructorView: true }));
   await expect(panel).toContainText('Illustrative only: the pattern follows the channel');
+  await page.evaluate(() => window.__squib!.controller.setPrefs({ instructorView: false }));
   await panel.getByRole('button', { name: 'Apply and restart' }).click();
   await page.getByRole('button', { name: 'All instruments and conditions' }).click();
   await expect(page.getByTestId('conditions')).toContainText('Tidal stream (illustrative, not real timing; channel-following)');

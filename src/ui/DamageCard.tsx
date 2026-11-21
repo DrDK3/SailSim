@@ -1,6 +1,7 @@
 import type { SimController, UiState } from '../app/controller';
 import { placeName, type Damage } from '../sim/boat/damage';
 import { FLOOD, worstReachable } from '../sim/boat/flooding';
+import { TrustNote } from './trust';
 
 /**
  * The damage report (owner, 6 Nov 2026): what the crew would know after a collision or a grounding. Where the
@@ -101,7 +102,8 @@ export function DamageCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
           {d.plugging > 0 ? `Stuffing a sail bag in… ${Math.ceil(d.plugging)} s` : 'Stuff the hole'}
         </button>
       )}
-      <p className="fine">Thresholds, sizes and rates are estimates (E). Restart to repair.</p>
+      <p className="fine">Restart to repair.</p>
+      <TrustNote>Thresholds, sizes and rates are estimates (E).</TrustNote>
     </section>
   );
 }

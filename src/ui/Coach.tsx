@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
+import { TrustNote } from './trust';
 
 const MARK = { good: '✓', ok: '•', work: '!' } as const;
 const VERDICT = { good: 'Went well', ok: 'All right', work: 'To work on' } as const;
@@ -48,7 +49,7 @@ export function CoachCard({ ctl, ui }: { ctl: SimController; ui: UiState }) {
               </li>
             ))}
           </ul>
-          <p className="fine">Judged against the app's model polar and the coach's rules of thumb (estimates), not measured Squib data.</p>
+          <TrustNote>Judged against the app's model polar and the coach's rules of thumb (estimates), not measured Squib data.</TrustNote>
         </>
       )}
     </section>
