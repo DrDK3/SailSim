@@ -1,7 +1,8 @@
 /**
  * Phase 5 acceptance: AI boats complete a practice course without grounding or collisions in at least 95% of
  * 100 seeded runs. Runs in parallel child processes (one per CPU by default).
- *   npm run ai:trials [-- --runs 100 --boats 5 --workers 4 --river]
+ *   npm run ai:trials [-- --runs 100 --boats 5 --workers 4 --river --spinnaker]
+ * --spinnaker: the fleet carries spinnakers (as races do by default since package B).
  * Writes out/ai-trials.json and prints a summary; exits non-zero below 95% clean.
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -26,11 +27,13 @@ function loadGeo() {
 }
 
 function trialOptions(river: boolean, boats: number): TrialOptions {
-  if (!river) return { ...DEFAULT_TRIAL, boats };
+  const spinnaker = process.argv.includes('--spinnaker');
+  if (!river) return { ...DEFAULT_TRIAL, boats, spinnaker };
   const course = JSON.parse(readFileSync(new URL('../data/courses/simulated/river-range-sausage.course.json', import.meta.url), 'utf8')) as Course;
   return {
     ...DEFAULT_TRIAL,
     boats,
+    spinnaker,
     course: { ...course, laps: 1 },
     twsRange: [6, 14],
     conditions: {
@@ -56,7 +59,7 @@ if (!workerSeeds) {
     Array.from({ length: workers }, (_, w) =>
       new Promise<void>((resolve, reject) => {
         const seeds = Array.from({ length: runs }, (_, i) => first + i).filter((_, i) => i % workers === w);
-        const child = spawn(process.execPath, [...process.execArgv, self, '--worker-seeds', seeds.join(','), '--boats', String(boats), ...(river ? ['--river'] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
+        const child = spawn(process.execPath, [...process.execArgv, self, '--worker-seeds', seeds.join(','), '--boats', String(boats), ...(river ? ['--river'] : []), ...(process.argv.includes('--spinnaker') ? ['--spinnaker'] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
         let buf = '';
         child.stdout.on('data', (d: Buffer) => {
           buf += d.toString();

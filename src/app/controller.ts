@@ -825,7 +825,7 @@ export class SimController {
         sequence: race.session.committee.opts.sequence,
         competitors: race.session.fleet.boats.length - 1,
       },
-      race.session.polar,
+      race.session.humanPolar,
     );
   }
 
@@ -2985,7 +2985,7 @@ export class SimController {
     const leg = r.resolved.legs[judge.legIndex];
     if (judge.phase !== 'racing' || !leg) return undefined;
     const s = this.currSnap;
-    return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.polar);
+    return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.humanPolar);
   }
 
   /**

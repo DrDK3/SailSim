@@ -225,6 +225,20 @@ function longCourse(week: WeekId, seed: number, short: AppScenario, courses: Lib
 export const SPINNAKER_FROM_WEEK = '2026-W48';
 const SPINNAKER_FROM_WEEK_INDEX = weekOf(new Date('2026-11-23T12:00:00Z')).index;
 
+/**
+ * The first week whose targets are sailed by the AI using the spinnaker table (fixes of 21 Nov 2026, §2.3): 2026-W49,
+ * Monday 30 Nov 2026. A change to the AI that sails a week's targets takes effect only from a week's start (Europe/London)
+ * after release, never mid-week; until then a fleet carrying spinnakers sails the targets by the table without one, as
+ * before. If this change is released on or after Monday 30 Nov, move this to the following week.
+ */
+export const AI_SPIN_POLAR_FROM_WEEK = '2026-W49';
+const AI_SPIN_POLAR_FROM_WEEK_INDEX = weekOf(new Date('2026-11-30T12:00:00Z')).index;
+
+/** Whether the AI sails a week's targets by the spinnaker table (§2.3): from AI_SPIN_POLAR_FROM_WEEK on. */
+export function aiSpinPolarFor(w: WeekId): boolean {
+  return w.index >= AI_SPIN_POLAR_FROM_WEEK_INDEX;
+}
+
 /** The best-time key for a week (kept apart from every other best). */
 export const weeklyKey = (w: WeekId): string => `weekly:${w.key}`;
 /** The best-time key for a week's long course. */

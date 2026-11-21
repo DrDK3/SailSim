@@ -188,7 +188,7 @@ export class RaceCoach {
   private gunT?: number;
   private wasOcs = false;
   // Time totals while racing (s).
-  private tot = { beat: 0, run: 0, reach: 0, headed: 0, shifted: 0, over: 0, overFlat: 0, poorTrim: 0, beatEff: 0, runEff: 0, beatN: 0, runN: 0 };
+  private tot = { beat: 0, run: 0, reach: 0, headed: 0, shifted: 0, over: 0, overFlat: 0, poorTrim: 0, beatEff: 0, runEff: 0, beatN: 0, runN: 0, runTws: 0 };
 
   constructor(readonly input: BriefingInput, private readonly polar: Polar) {
     this.briefing = briefing(input);
@@ -318,6 +318,7 @@ export class RaceCoach {
         if (target > 0.1) {
           this.tot.runEff += Math.max(0, Math.min(1.5, -s.vmg / target)) * dt;
           this.tot.runN += dt;
+          this.tot.runTws += s.tws * dt;
         }
       }
       if (Math.abs(s.heel) > COACH.overpoweredHeel) {
@@ -378,7 +379,13 @@ export class RaceCoach {
     }
     if (t.runN > 30) {
       const eff = t.runEff / t.runN;
-      items.push({ area: 'Downwind', verdict: eff > 0.9 ? 'good' : eff > 0.75 ? 'ok' : 'work', text: `Downwind you made ${(100 * eff).toFixed(0)}% of the target VMG. ${eff > 0.9 ? 'Good angles.' : 'Sail the target angle (often 150–165° off the wind) and gybe on the shifts rather than running dead downwind.'}` });
+      // Which table it judged against (fixes of 21 Nov 2026, §2.3): with the spinnaker set when the boat carries one.
+      const spin = this.polar.data.spinFromTwaDeg !== undefined;
+      const angle = Math.round(this.polar.run(t.runTws / t.runN).twa / DEG / 5) * 5;
+      const advice = spin
+        ? `Sail the target angle (with the spinnaker, about ${angle}° off the wind in that breeze) and gybe on the shifts.`
+        : 'Sail the target angle (often 150–165° off the wind) and gybe on the shifts rather than running dead downwind.';
+      items.push({ area: 'Downwind', verdict: eff > 0.9 ? 'good' : eff > 0.75 ? 'ok' : 'work', text: `Downwind you made ${(100 * eff).toFixed(0)}% of the target VMG (model polar ${spin ? 'with the spinnaker set' : 'without a spinnaker'}, E). ${eff > 0.9 ? 'Good angles.' : advice}` });
     }
     const all = [...this.manoeuvres, ...(this.open ? [this.open] : [])].filter((m) => m.before > 1);
     if (all.length) {

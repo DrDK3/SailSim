@@ -58,6 +58,11 @@ export interface RaceSetup {
    * the incident; the ruling and penalty follow rules 10–13, as before package F).
    */
   markRoomPenalties?: boolean;
+  /**
+   * An AI fleet carrying spinnakers sails by the spinnaker table (§2.3). False: by the table without one (the weekly
+   * targets, until the week the change reaches them). Absent: true.
+   */
+  aiSpinPolar?: boolean;
   /** The user's boat (omit for an AI-only race). */
   human?: {
     name?: string;
@@ -264,6 +269,7 @@ export function createRace(s: RaceSetup): CreatedRace {
     mooringAreas: restrictions?.moorings,
     seed: s.seed,
     markRoomPenalties: s.markRoomPenalties,
+    aiSpinPolar: s.aiSpinPolar,
   });
   return { session, warnings: v.issues.filter((i) => i.severity === 'warning'), course };
 }

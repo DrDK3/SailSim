@@ -19,7 +19,7 @@ import { START_LOCATIONS } from './controller';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { poseOf } from './ghost';
 import { TARGET_LEVEL, TARGET_SPREAD, TARGETS_SCHEMA, median, slowTrack, trackRow, type Target, type TargetsFile } from './targets';
-import type { WeeklyCourse } from './weekly';
+import { aiSpinPolarFor, type WeeklyCourse } from './weekly';
 
 export interface DartForTargets {
   geo?: DartGeo;
@@ -48,6 +48,8 @@ export function sailOnce(w: WeeklyCourse, level: 'club' | 'good' | 'expert', see
     seed,
     // A course with the spinnaker is sailed with it: the targets account for the downwind legs (package B).
     spinnaker: !!sc.spinnaker,
+    // By the spinnaker table only from the week that change reaches the targets (§2.3), never mid-week.
+    aiSpinPolar: aiSpinPolarFor(w.week),
     committee: { startAt: sc.race!.startInS, sequence: sc.race!.sequence, prepFlag: sc.fleet?.prepFlag ?? 'P' },
   });
   const boat = session.fleet.boats[0]!;

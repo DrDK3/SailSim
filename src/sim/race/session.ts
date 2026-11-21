@@ -14,6 +14,7 @@ import type { MooringArea } from '../course/restrictions';
 import { AiSkipper, aiSkill, type AiLevel, type AiWorld } from '../ai/skipper';
 import { Polar } from '../ai/polar';
 import { AI_POLAR } from '../ai/polarData';
+import { AI_POLAR_SPIN } from '../ai/polarDataSpin';
 import { COMMITTEE_OUTLINE } from './anchored';
 import { CONTACT, Fleet, markRadius, type CircleObstacle, type ContactEvent, type FleetBoat, type MooredBoat } from './fleet';
 import type { PierInput } from './piers';
@@ -66,6 +67,19 @@ export interface RaceSessionOptions {
    * before package F. On: the boat owing mark-room is at fault under rule 18.2. The AI keeps clear the same either way.
    */
   markRoomPenalties?: boolean;
+  /**
+   * Whether an AI fleet carrying spinnakers sails by the spinnaker table (§2.3; default true). False: by the table
+   * without one, as before (the weekly targets keep it until the change reaches them at a week's start).
+   */
+  aiSpinPolar?: boolean;
+}
+
+/** One shared lookup per table. */
+const POLAR_PLAIN = new Polar(AI_POLAR);
+const POLAR_SPIN = new Polar(AI_POLAR_SPIN);
+/** The target-speed table for a boat: with the spinnaker table when she carries one (§2.3). */
+export function polarFor(params: BoatParams, spinTable = true): Polar {
+  return params.spin && spinTable ? POLAR_SPIN : POLAR_PLAIN;
 }
 
 export interface LogEntry {
@@ -82,7 +96,13 @@ export class RaceSession implements AiWorld {
   readonly committee: RaceCommittee;
   readonly course: ResolvedCourse;
   readonly courseDef: Course;
-  readonly polar = new Polar(AI_POLAR);
+  /**
+   * The AI fleet's target speeds: the table for a boat carrying the spinnaker when the fleet carries one (fixes of
+   * 21 Nov 2026, §2.3), unless `aiSpinPolar` is false (the weekly targets before the week the change reaches them).
+   */
+  readonly polar: Polar;
+  /** The user's boat's target speeds, for the coach and the laylines: with the spinnaker table if she carries one. */
+  readonly humanPolar: Polar;
   readonly seabed?: Seabed;
   readonly draft: number;
   readonly mooringAreas: MooringArea[];
@@ -107,6 +127,8 @@ export class RaceSession implements AiWorld {
   constructor(readonly opts: RaceSessionOptions) {
     this.course = opts.resolved;
     this.courseDef = opts.course;
+    this.polar = polarFor(opts.params, opts.aiSpinPolar !== false);
+    this.humanPolar = polarFor(opts.humanParams ?? opts.params);
     this.seabed = opts.seabed;
     this.draft = opts.params.draft;
     this.mooringAreas = opts.mooringAreas ?? [];
