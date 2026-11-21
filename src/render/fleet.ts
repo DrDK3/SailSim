@@ -6,6 +6,7 @@ import type { BoatParams } from '../sim/boat/params';
 import { easeRide, lerpAngle, nedToThree, orientBoat, rideWaves, type WaveRide } from './frames';
 import { makeLabel } from './labels';
 import { SquibModel, sailFill } from './squibModel';
+import type { SpinnakerPose } from './spinnakerView';
 import type { DamageLook } from './damageView';
 import { HullFoam, WakeTrail, type SeaUniforms } from './boatWater';
 
@@ -37,6 +38,8 @@ export interface FleetPose {
   stw?: number;
   /** Her damage, when she has any (marks, rig, rudder, water inside, sinkage and trim). */
   damage?: DamageLook;
+  /** Her spinnaker, when she carries one (package B): the physics' state of it. */
+  spin?: Omit<SpinnakerPose, 'aws'>;
 }
 
 interface Entry {
@@ -141,6 +144,9 @@ export class FleetView {
       });
       if (club) model.setHullPaint(club.paint);
       else model.setHullColour(b.colour);
+      // Her spinnaker in her club's colours with white (or her own colour).
+      const c = club ? club.paint.topsides : `#${b.colour.toString(16).padStart(6, '0')}`;
+      model.setSpinnakerColours([c, '#f5f5f2', club ? club.paint.boot : c]);
       if (b.ghost) makeGhost(model.group);
       root.add(model.group);
       const label = makeLabel(b.label, b.ghost ? '#cfe8ff' : '#ffe9a8');
@@ -204,6 +210,8 @@ export class FleetView {
         heel,
         water: b.water,
         sailsDown: b.sailsDown,
+        spin: b.spin ? { ...b.spin, aws: b.aws } : undefined,
+        dt: frameDt,
       });
       e.label.visible = showLabels;
       const stw = b.stw ?? 0;

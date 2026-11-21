@@ -23,6 +23,7 @@ import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
 import { DEFAULT_SQUIB_TYPE, isSquibType, squibParams, squibTypeParams, type SquibTypeId } from '../sim/boat/squib';
+import { withSpinnaker } from '../sim/boat/spinnaker';
 import { buildConditions, type BuiltConditions, type ConditionsSettings } from '../sim/env/conditions';
 import { clamp } from '../sim/math/angles';
 import { optimalSheets } from '../sim/control/trim';
@@ -49,7 +50,7 @@ import { presetSky } from '../sim/env/sky';
 import { windFrom } from '../sim/boat/forces';
 import type { CrewBuild } from '../render/crew';
 import { loadLive, parseLiveIndex, type Freshness, type LiveIndexEntry } from '../sim/env/liveData';
-import { CHECKPOINT_STEPS, REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED, decodeInputs, encodeInputs, parseRecording, type Recording, type ReplayStatus } from './replay';
+import { CHECKPOINT_STEPS, decodeInputs, encodeInputs, parseRecording, recordingSchema, type Recording, type ReplayStatus } from './replay';
 import { Tutorial, type TutorialState } from './tutorial';
 import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
@@ -104,6 +105,11 @@ export interface AppScenario {
   boat?: SquibTypeId;
   /** Who helms the user's boat, as drawn: a man (default) or a woman. Appearance only (the physics' crew weight is its calibration estimate). */
   helm?: CrewBuild;
+  /**
+   * The symmetric spinnaker aboard (package B): the user's boat and any AI fleet carry one. Absent: none, so every
+   * scenario, replay and share link from before keeps its physics.
+   */
+  spinnaker?: boolean;
 }
 
 /** One row of the live fleet ranking or the results. */
@@ -567,7 +573,8 @@ export class SimController {
       opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
     let race: SimController['race'];
     let sim: Simulation;
-    const boatParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
+    const typeParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
+    const boatParams = scenario.spinnaker ? withSpinnaker(typeParams) : typeParams;
     // River traffic for this run (its ferries crab in this run's stream): shared by the physics and the picture.
     const runData = geo ? this.dartData : undefined;
     const feats = runData?.features;
@@ -587,6 +594,7 @@ export class SimController {
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
           seed: scenario.conditions.gusts.seed,
+          spinnaker: !!scenario.spinnaker,
           human: {
             controller: () => this.sampleInputs(),
             input: startInput,
@@ -1479,8 +1487,9 @@ export class SimController {
     if (this.race) sc.course = { source: 'inline', course: structuredClone(this.race.course) };
     const checkpoints = this.checkpoints.filter((c) => c[0] <= this.sim.step);
     if (!checkpoints.length || checkpoints[checkpoints.length - 1]![0] !== this.sim.step) checkpoints.push([this.sim.step, this.stateHash()]);
+    const inputs = encodeInputs(this.sim.inputLog);
     return {
-      schema: this.dartFromStep === undefined ? REPLAY_SCHEMA : REPLAY_SCHEMA_RIVER_JOINED,
+      schema: recordingSchema(inputs, this.dartFromStep),
       created: new Date().toISOString(),
       title,
       build: BUILD_ID,
@@ -1489,7 +1498,7 @@ export class SimController {
       // What this run sailed on (river data that arrived and waits for the next start is not part of it).
       dart: this.sim.seabed ? 'loaded' : 'none',
       ...(this.dartFromStep === undefined ? {} : { dartFromStep: this.dartFromStep }),
-      inputs: encodeInputs(this.sim.inputLog),
+      inputs,
       checkpoints,
       endStep: this.sim.step,
     };

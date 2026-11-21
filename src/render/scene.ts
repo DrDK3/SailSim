@@ -987,6 +987,8 @@ export class SceneView {
       flatten: curr.input.flatten ?? 0,
       mainEase: sheetEase(curr.mainSheetLimit),
       jibEase: sheetEase(curr.jibSheetLimit),
+      spin: curr.spin ? { ...curr.spin, aws: curr.aws } : undefined,
+      dt: frameDt,
     });
     this.crewSide = curr.crewY >= 0 ? 1 : -1;
 
