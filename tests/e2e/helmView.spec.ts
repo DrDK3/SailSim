@@ -47,7 +47,7 @@ test('the helm view: at the helm’s eye on the windward deck, head and torso hi
           const f = () => {
             frames++;
             const x = view.helmEyeLocal.x;
-            if (frames > 4 && (Math.abs(x - last) < 0.005 || frames > 240)) done();
+            if (frames > 4 && (Math.abs(x - last) < 0.005 || frames > 120)) done();
             else {
               last = x;
               requestAnimationFrame(f);
@@ -81,7 +81,8 @@ test('the helm view: at the helm’s eye on the windward deck, head and torso hi
     // and the helm on the starboard side, x > 0); on a run the crew's weight, and so the helm, may sit to leeward.
     // On a run in this light wind the crew sit in the middle and the helm with them, low in the cockpit (the crew's
     // posing, src/render/squibModel.ts): the eye goes where the helm's head is.
-    expect(Math.abs(m.eye.x), c.name).toBeLessThan(1.0);
+    // Within the boat or just outboard of her side deck (a hiking helm's head is out over the water: half-beam 0.92 m).
+    expect(Math.abs(m.eye.x), c.name).toBeLessThan(1.3);
     if (c.name.startsWith('upwind')) {
       expect(Math.abs(m.eye.x), `${c.name}: on a side deck`).toBeGreaterThan(0.45);
       expect(Math.sign(m.eye.x), `${c.name}: on the windward deck`).toBe(m.mainSide);
