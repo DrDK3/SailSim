@@ -278,6 +278,8 @@ export class DartScene {
         towns: TOWNS,
         bare: this.coastBare,
       });
+      // The lowest scenery detail draws far trees as impostors (package C).
+      this.woodland.impostors = input.detail === 'low';
       this.fixed.add(this.woodland.group);
     }
   }

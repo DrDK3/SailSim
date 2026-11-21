@@ -19,7 +19,7 @@
  *     anti-cheat system: re-sailing proves a run is physically valid, not that a person sailed it.
  */
 import { SimController, BUILD_ID, type AppScenario } from './controller';
-import { parseRecording, type Recording } from './replay';
+import { parseRecording, recordingRows, type Recording } from './replay';
 import { isSafeName } from './safeNames';
 import { weekOf, weeklyCourse } from './weekly';
 import { assistsFromInputs } from './assists';
@@ -75,7 +75,7 @@ function courseJson(sc: AppScenario, dart: DartData | undefined): string | undef
 export function inputEpisodes(rec: Recording): number[] {
   const out: number[] = [];
   let prev = -10;
-  for (const r of rec.inputs) {
+  for (const r of recordingRows(rec)) {
     if (r[0] > prev + 1) out.push(r[0]);
     prev = r[0];
   }
@@ -129,7 +129,7 @@ export function verifySubmission(sub: Submission, dart: DartData | undefined, bu
   const sailed = rec.scenario.course?.source === 'inline' ? JSON.stringify(rec.scenario.course.course) : courseJson(rec.scenario, dart);
   if (sailed !== courseJson(w.scenario, dart)) return { status: 'rejected', reason: 'course-changed', week: w.week.key, flags };
   // 5. Assists (auto-trim is in the inputs).
-  const auto = assistsFromInputs(rec.inputs, rec.endStep);
+  const auto = assistsFromInputs(recordingRows(rec), rec.endStep);
   const init = rec.initialInput;
   const autoTrim = auto.autoMain || auto.autoJib || !!init?.autoMain || !!init?.autoJib;
   if (rec.claimed.independent && autoTrim) return { status: 'rejected', reason: 'assists-not-as-claimed', week: w.week.key, flags };

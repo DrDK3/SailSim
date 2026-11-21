@@ -11,7 +11,7 @@ import { gunzipSync } from 'node:zlib';
 import { decodeGridPlanes, isGzip } from '../../src/sim/geo/pack';
 import { townQuays, loadDartData, type DartData, type DartFeatures, type TownGridSpec } from '../../src/app/geoLoader';
 import { SimController } from '../../src/app/controller';
-import { parseRecording, REPLAY_SCHEMA, REPLAY_SCHEMA_RIVER_JOINED } from '../../src/app/replay';
+import { parseRecording, REPLAY_SCHEMA, REPLAY_SCHEMA_COMPACT, REPLAY_SCHEMA_RIVER_JOINED, rowRecording, type Recording } from '../../src/app/replay';
 import { loadDartGeo } from './helpers';
 
 vi.mock('../../src/app/geoLoader', async (orig) => ({ ...(await orig<typeof import('../../src/app/geoLoader')>()), loadDartData: vi.fn() }));
@@ -71,27 +71,35 @@ describe('the River Dart data arriving during a run (review #9)', () => {
     expect(c.built.wind).toBe(wind);
     expect(c.getState().dart).toMatchObject({ status: 'loaded', ask: false });
     c.advance(12);
-    // The recording says where the river joined (schema /2) and plays back bit for bit.
-    const rec = parseRecording(JSON.parse(JSON.stringify(c.saveRecording('joined'))));
-    expect(rec.schema).toBe(REPLAY_SCHEMA_RIVER_JOINED);
-    expect(rec.dartFromStep).toBe(Math.round(t * 100));
-    expect(rec.dart).toBe('loaded');
-    const p = new SimController();
-    p.dartData = { ...data, issues: [] };
-    expect(p.startReplay(rec)).toBe(true);
-    expect(p.sim.seabed).toBeUndefined();
-    p.advance(rec.endStep * 0.01 + 1);
-    const st = p.getState().replay!;
-    expect(p.sim.seabed).toBe(data.geo);
-    expect(st.state).toBe('ended');
-    expect(st.checkpointsMatched).toBe(st.checkpointsTotal);
-    // Any other run's recording is unchanged (schema /1, no step).
+    // The recording says where the river joined and plays back bit for bit: written compact (schema /4, package C)
+    // with the step; the same in the row form is schema /2, as before, and plays back the same.
+    const saved = parseRecording(JSON.parse(JSON.stringify(c.saveRecording('joined'))));
+    expect(saved.schema).toBe(REPLAY_SCHEMA_COMPACT);
+    const rows = rowRecording(saved);
+    expect(rows.schema).toBe(REPLAY_SCHEMA_RIVER_JOINED);
+    const play = (rec: Recording) => {
+      expect(rec.dartFromStep).toBe(Math.round(t * 100));
+      expect(rec.dart).toBe('loaded');
+      const p = new SimController();
+      p.dartData = { ...data, issues: [] };
+      expect(p.startReplay(rec)).toBe(true);
+      expect(p.sim.seabed).toBeUndefined();
+      p.advance(rec.endStep * 0.01 + 1);
+      const st = p.getState().replay!;
+      expect(p.sim.seabed).toBe(data.geo);
+      expect(st.state).toBe('ended');
+      expect(st.checkpointsMatched).toBe(st.checkpointsTotal);
+    };
+    play(saved);
+    play(parseRecording(JSON.parse(JSON.stringify(rows))));
+    // Any other run's recording has no step (schema /4; /1 in the row form).
     const fresh = new SimController();
     fresh.dartData = { ...data, issues: [] };
     fresh.restart();
     fresh.advance(3);
     const r1 = fresh.saveRecording('plain');
-    expect(r1.schema).toBe(REPLAY_SCHEMA);
+    expect(r1.schema).toBe(REPLAY_SCHEMA_COMPACT);
+    expect(rowRecording(r1).schema).toBe(REPLAY_SCHEMA);
     expect('dartFromStep' in r1).toBe(false);
   }, 120_000);
 
