@@ -20,6 +20,7 @@ import type { PierInput } from './piers';
 import { placeOutline } from './hull';
 import { DEFAULT_COMMITTEE, RaceCommittee, type BoatRaceStatus, type CommitteeOptions, type ResultRow, type Signal } from './committee';
 import { PenaltyTracker, rightOfWay, TackTracker, type Incident, type RulesBoat } from './rules';
+import { MarkRoomTracker, markRoomRuling, type MarkRoomBoat } from './markRoom';
 import { hypot2 } from '../math/hypot';
 
 /**
@@ -92,6 +93,8 @@ export class RaceSession implements AiWorld {
   private lastIncident = new Map<string, number>();
   private headingHist = new Map<string, number[]>();
   private rowHistory = new Map<string, { holder: string; since: number }>();
+  /** Simplified rule 18 (package F): who is entitled to mark-room in each pair near a mark. */
+  private readonly markRoom = new MarkRoomTracker();
   private readonly hull: ReturnType<typeof hullReferencePoints>;
   private readonly seed: number;
 
@@ -200,6 +203,17 @@ export class RaceSession implements AiWorld {
     return r;
   }
 
+  /** A boat for rule 18: the mark she must leave next (mark legs; a gate's nearer mark), its side, her hull length. */
+  private markRoomBoat(id: string): MarkRoomBoat {
+    const r = this.rulesBoat(id);
+    const b = this.fleet.boat(id)!;
+    const j = this.judgeOf(id);
+    const leg = j.phase === 'racing' ? j.course.legs[j.legIndex] : undefined;
+    let mark = leg?.points[0];
+    if (leg && leg.points.length > 1) for (const p of leg.points) if (hypot2(p.n - r.n, p.e - r.e) < hypot2(mark!.n - r.n, mark!.e - r.e)) mark = p;
+    return { ...r, length: b.sim.params.loa, ...(leg && mark && leg.rounding ? { markKey: `${leg.index}:${leg.label}:${leg.points.indexOf(mark)}`, mark, rounding: leg.rounding } : {}) };
+  }
+
   private twaOf(b: FleetBoat): number {
     const s = b.sim.state;
     const t = this.fleet.time;
@@ -252,7 +266,10 @@ export class RaceSession implements AiWorld {
         if (h.length > 31) h.shift();
       }
     }
-    if (this.fleet.step % 10 === 0) this.trackRightOfWay(t);
+    if (this.fleet.step % 10 === 0) {
+      this.trackRightOfWay(t);
+      this.markRoom.update(t, this.fleet.boats.filter((b) => !this.outOfRace(b.id)).map((b) => this.markRoomBoat(b.id)));
+    }
     for (const c of contacts) this.onContact(c);
     this.updateCommittee(t);
   }
@@ -349,15 +366,19 @@ export class RaceSession implements AiWorld {
       const B = this.fleet.boat(c.b)!;
       inc.boats = [c.a, c.b];
       const row = rightOfWay(this.rulesBoat(c.a), this.rulesBoat(c.b));
-      const kc = this.fleet.boat(row.keepClear)!;
-      const rw = this.fleet.boat(row.rightOfWay)!;
+      // Near a mark, simplified rule 18: the boat owing mark-room is at fault (the entitled boat is not blamed).
+      const room = this.markRoom.entitlement(c.a, c.b);
+      const ruling = room ? markRoomRuling(room, (id) => this.fleet.boat(id)!.name) : undefined;
+      const kc = this.fleet.boat(ruling ? ruling.atFault : row.keepClear)!;
+      const rw = this.fleet.boat(ruling ? room!.entitled : row.rightOfWay)!;
       inc.summary = `Contact between ${A.name} and ${B.name} at ${c.speed.toFixed(1)} m/s`;
       if (racing && !this.outOfRace(c.a) && !this.outOfRace(c.b)) {
         inc.atFault = kc.id;
-        inc.rule = row.rule;
+        inc.rule = ruling ? ruling.rule : row.rule;
         inc.penaltyTurns = 2;
         inc.penaltyTaken = false;
-        inc.summary += `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
+        inc.summary += ruling ? `: ${kc.name} did not give mark-room (rule 18.2, simplified: ${ruling.reason}).` : `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
+        if (ruling) inc.notes.push(...ruling.notes);
         inc.notes.push(`Rule 14 also applied to ${rw.name} (avoid contact if reasonably possible); not judged here.`);
         const h = this.rowHistory.get(PAIR(c.a, c.b));
         if (h && t - h.since < 5) inc.notes.push(`Right of way changed ${(t - h.since).toFixed(1)} s before contact: rule 15 (room to keep clear) may apply; not judged here.`);

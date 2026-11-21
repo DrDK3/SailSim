@@ -80,7 +80,7 @@ An untaken penalty is shown in the results ("no penalty taken"). There is no pro
 ### Not implemented
 
 - Rules 15 and 16 as adjudication.
-- Rules 17–24, including 18 (mark-room) and 19–20 (obstructions, hailing). The AI keeps clear of boats at marks, but no mark-room is awarded.
+- Rules 17 and 19–24 (obstructions, hailing). **Rule 18 is judged in a simplified form** (package F, below); the AI keeps clear of boats at marks.
 - Exoneration.
 - The scoring penalty (44.3).
 - Protests, hearings and redress.
@@ -230,3 +230,24 @@ It never changes the physics.
   - **Full race:** 1 user + 20 AI boats, including the AI and race logic, 1.7 ms mean and about 5 ms p99.
   - See the report.
 - **Why the turn model is brisk:** using the measured turn rate in the avoidance search was tried. Clean runs fell from 88% to 30% on the same 40 seeds: when every escape looks equally late, the boat holds on into trouble. The brisk model starts avoidance earlier and further; the reflex, which does use the measured rate, handles the last 2.5 s.
+
+
+## Simplified rule 18, mark-room (package F, 21 Nov 2026)
+
+**Simplified, not authoritative.** From secondary copies of the 2025–2028 rules quoted in web-search excerpts (SOURCES
+RR11; the World Sailing PDF could not be fetched, issue 32). `src/sim/race/markRoom.ts`, tested in
+`tests/sim/markRoom.test.ts`.
+
+- **The zone**: three hull lengths of the boat nearer the mark (17.4 m for a Squib), to any part of her hull.
+- **When it applies**: boats bound for the same mark on the same leg, to leave on the same side, at least one in the
+  zone; not between boats on opposite tacks both beating (within 80° of the true wind, E), nor between a boat
+  approaching a mark and one leaving it (bound for different marks).
+- **Who must give mark-room**: decided when the first of the two reaches the zone (18.2(a)): if they are overlapped
+  (the definition's overlap, on opposite tacks too), the outside boat (the one farther from the mark); if not, the boat
+  that has not reached the zone.
+- **Until**: the entitled boat leaves the zone, passes head to wind, or has rounded (bound for the next mark).
+- **At a contact while it lasts**: the boat that owed mark-room is at fault under rule 18.2 (a Two-Turns Penalty, as
+  for rules 10–13); the entitled boat is not blamed. Otherwise rules 10–13 decide, as before.
+- **Not judged**: how much room was needed (the definition of mark-room), 18.2(c) (overlaps after 18.2(a) ends),
+  18.2(d) (an inside overlap from clear astern or by tacking that the outside boat could not answer), 18.2(e), 18.3
+  (tacking in the zone), 18.4 (gybing), rule 21 (exoneration), and gate marks beyond taking the nearer mark.
