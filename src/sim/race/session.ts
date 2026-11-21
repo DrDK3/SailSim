@@ -154,6 +154,7 @@ export class RaceSession implements AiWorld {
       const sk = this.skippers.get(b.id);
       if (sk) sk.skill.lineFraction = ranked.length > 1 ? 0.12 + (0.76 * i) / (ranked.length - 1) : 0.5;
     });
+    this.spreadHolds(ranked);
     const first = opts.resolved.legs[0]!.target;
     this.committee = new RaceCommittee({ ...DEFAULT_COMMITTEE, ...opts.committee }, opts.entries.map((e) => e.id), opts.resolved.start, first);
     this.resetJudges();
@@ -201,6 +202,39 @@ export class RaceSession implements AiWorld {
       this.rows.set(id, r);
     }
     return r;
+  }
+
+  /**
+   * Where the AI boats wait before the start: in the order of their slots along the line, spread over three staggered
+   * rows 60, 95 and 130 m behind it (each row a third of the fleet, so boats in a row are three slots apart), so that
+   * boats drifting while they wait do not meet their neighbours (issue 42). A boat whose place is not clear water
+   * waits at her starting slot, as before, and so do fleets of one or two.
+   */
+  private spreadHolds(ranked: FleetBoat[]): void {
+    const [a, b] = this.course.start;
+    const L = hypot2(b.n - a.n, b.e - a.e) || 1;
+    const u = { n: (b.n - a.n) / L, e: (b.e - a.e) / L };
+    let nn = { n: -u.e, e: u.n };
+    const first = this.course.legs[0]!.target;
+    const m = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    if ((first.n - m.n) * nn.n + (first.e - m.e) * nn.e > 0) nn = { n: -nn.n, e: -nn.e };
+    const N = ranked.length;
+    // One or two boats have no neighbours to meet (their slots are already far apart): they wait at their slots.
+    if (N < 3) return;
+    const span = 0.85 * L;
+    // Ranked along the line from its first end (a); `along` is measured from the middle towards b.
+    ranked.forEach((boat, i) => {
+      const sk = this.skippers.get(boat.id);
+      if (!sk) return;
+      const along = -span / 2 + (span * (i + 0.5)) / N;
+      const back = 60 + 35 * (i % 3);
+      sk.adoptHold({ n: m.n + u.n * along + nn.n * back, e: m.e + u.e * along + nn.e * back });
+    });
+  }
+
+  /** Of two boats, the one that must give the other mark-room now (simplified rule 18.2(a)), if either must. */
+  markRoomGiver(a: string, b: string): string | undefined {
+    return this.markRoom.entitlement(a, b)?.giver;
   }
 
   /** A boat for rule 18: the mark she must leave next (mark legs; a gate's nearer mark), its side, her hull length. */

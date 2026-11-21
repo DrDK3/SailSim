@@ -251,3 +251,35 @@ RR11; the World Sailing PDF could not be fetched, issue 32). `src/sim/race/markR
 - **Not judged**: how much room was needed (the definition of mark-room), 18.2(c) (overlaps after 18.2(a) ends),
   18.2(d) (an inside overlap from clear astern or by tacking that the outside boat could not answer), 18.2(e), 18.3
   (tacking in the zone), 18.4 (gybing), rule 21 (exoneration), and gate marks beyond taking the nearer mark.
+
+## The AI in big fleets (package F, 21 Nov 2026)
+
+What made 10-boat AI races collide, found by replaying the contacts of the trials, and what changed
+(`src/sim/ai/skipper.ts`, `src/sim/race/session.ts`; each with a test in `tests/sim/aiFleet.test.ts` that fails
+without it). Thresholds marked E are estimates.
+
+- **Start spots.** Each boat's spot on the line was its line fraction clamped into the usable part of the line, so the
+  boats nearest each end were sent to the same spot (0 m apart, at every fleet size). The fractions are now spread over
+  the usable part: 8–10 m apart with 10 boats.
+- **Waiting places** (fleets of three or more). The boats waited at their starting slots, 17.6 m apart in a row of
+  seven, while each wanders up to 30 m from its place as it drifts. They now wait in the order of their slots over three
+  staggered rows 60, 95 and 130 m behind the line, at least about 37 m apart; a place that is not clear water keeps the
+  slot. One or two boats wait at their slots as before.
+- **Room for boats side by side.** The avoidance asked 16 m of a boat keeping clear of any other, whatever the
+  geometry, so on a crowded line the windward boat was always "avoiding". Tracks that have held their distance so far
+  (side by side, not closing) now need half the room; once they close at any point, the full room (E: halved, and
+  "closing" above 0.8 m/s).
+- **Marks and the stern.** The avoidance kept marks clear of the hull's centre only: a boat turning away from a mark
+  close by swung her stern onto it (most windward-mark touches). The bow and the stern are now kept clear too.
+- **Not onto a dead run.** Avoidance could pick a heading within 5° of dead downwind, where the boom can go either
+  side, so a boat's tack (and who had right of way) flipped back and forth. It no longer does (E: 5°).
+- **Mark-room.** At a mark, the boat owing mark-room under the simplified rule 18 keeps clear, as the judge rules it.
+- **Finished boats.** A boat out of the race keeps clear of one still racing; between two out of the race both used to
+  keep clear, and swerved, sometimes into each other. The rules now decide between them.
+- **Locks.** Two boats side by side, each unable to turn away without her stern swinging into the other, could hold
+  their collision reflexes for minutes and sail off the course together (in baseline seed 174 two boats locked just
+  after the start, one of them not yet started, and neither finished).
+  After 5 s (E), away from marks, the boat keeping clear lets her sails go to drop back and the other keeps hers
+  drawing.
+- **Tried and dropped** (measured on the tuning seeds, no gain): a later reflex for the boat with right of way; a
+  near-hard limit round marks measured at the hull's centre (more windward-mark touches).

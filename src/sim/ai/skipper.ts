@@ -101,6 +101,8 @@ export interface AiWorld {
   waterLevel(t: number): number;
   /** Boat no longer racing (finished, retired, disqualified): it keeps out of the way. */
   outOfRace(id: string): boolean;
+  /** Of two boats, the one that must give the other mark-room now (simplified rule 18.2(a)), if either must. */
+  markRoomGiver?(a: string, b: string): string | undefined;
 }
 
 type Command =
@@ -133,6 +135,10 @@ const SPIN_DROP_TWA = 100 * DEG;
 const SPIN_MAX_TWS = 20 * (1852 / 3600);
 /** Sailing on under it after the hoist before the next mark, at the least (s). */
 const SPIN_MIN_LEG_S = 20;
+/** Avoidance never picks a heading nearer dead downwind than this (rad from the wind; E). */
+const DEAD_RUN_LIMIT = 175 * DEG;
+/** A collision reflex held this long (s) between boats side by side is broken by the boat keeping clear dropping back (E). */
+const LOCK_S = 5;
 
 /** A Squib hull as two circles along the centreline: [body x (m), radius (m)] (from the 5.79 m × 1.87 m outline). */
 const HULL_CIRCLES: [number, number][] = [[1.45, 1.3], [-1.35, 1.25]];
@@ -163,10 +169,14 @@ export class AiSkipper {
   private leeway = 5 * DEG;
   /** Last tactical decision, for the debug overlay. */
   intent = '';
+  /** The spot on the starting line this boat is making for (before the signal), for the debug overlay and tests. */
+  startSpot?: LocalPoint;
   /** Recovering from being stopped head to wind. */
   irons = false;
   private ironsSide: 1 | -1 = 1;
-  private reflex?: { helm: number; depower: number };
+  private reflex?: { helm: number; depower: number; giveWay: boolean; sideBySide: boolean };
+  /** When the collision reflex last took over (continuously since), or -1. */
+  private reflexSince = -1;
   private avoidHeading?: number;
   private returning = false;
   private onFinalApproach = false;
@@ -235,8 +245,12 @@ export class AiSkipper {
     if ((sim.step + this.phase) % 5 === 0) this.reflex = this.collisionReflex(sim);
     if (this.reflex) {
       helm = this.reflex.helm;
-      depower = Math.max(depower, this.reflex.depower);
-    }
+      if (this.reflexSince < 0) this.reflexSince = sim.time;
+      // Held for long (two boats side by side, each unable to turn away without her stern swinging into the other):
+      // the boat keeping clear lets her sails go to drop back, the other keeps hers drawing to pull ahead (issue 42).
+      if (sim.time - this.reflexSince > LOCK_S && this.reflex.sideBySide) depower = this.reflex.giveWay ? 1 : 0;
+      else depower = Math.max(depower, this.reflex.depower);
+    } else this.reflexSince = -1;
     const sheets = aiSheetInput(sim, this.sheets, depower);
     // The spinnaker call goes through the same input as the player's (a boat without one is left exactly as before).
     return sim.params.spin ? { helm, ...sheets, spin: this.spinWant ? 1 : 0 } : { helm, ...sheets };
@@ -267,16 +281,17 @@ export class AiSkipper {
    * per m/s, after the rudder moves), the others' with their present velocity and turn rate. If contact is
    * predicted for the current plan, the action keeping the largest clearance is taken, easing the sheets.
    */
-  private collisionReflex(sim: Simulation): { helm: number; depower: number } | undefined {
+  private collisionReflex(sim: Simulation): { helm: number; depower: number; giveWay: boolean; sideBySide: boolean } | undefined {
     const s = sim.state;
     const me = this.boat;
-    const near: { n: number; e: number; psi: number; vn: number; ve: number; r: number; circles: [number, number][] }[] = [];
+    const near: { n: number; e: number; psi: number; vn: number; ve: number; r: number; circles: [number, number][]; standOn?: boolean }[] = [];
+    const mine = this.world.rulesBoat(this.id);
     for (const b of this.world.fleet.boats) {
       if (b === me) continue;
       const bs = b.sim.state;
       if (Math.abs(bs.n - s.n) > 18 || Math.abs(bs.e - s.e) > 18) continue;
       const v = bodyToWorld(bs.u, bs.v, bs.psi);
-      near.push({ n: bs.n, e: bs.e, psi: bs.psi, vn: v.n, ve: v.e, r: bs.r, circles: HULL_CIRCLES });
+      near.push({ n: bs.n, e: bs.e, psi: bs.psi, vn: v.n, ve: v.e, r: bs.r, circles: HULL_CIRCLES, standOn: !this.keepsClearOf(b, mine) });
     }
     for (const m of this.world.obstacles) {
       if (Math.abs(m.n - s.n) > 18 || Math.abs(m.e - s.e) > 18) continue;
@@ -288,6 +303,7 @@ export class AiSkipper {
     const mv = bodyToWorld(s.u, s.v, s.psi);
     const spd = hypot2(s.u, s.v);
     const rMax = clamp(5.3 * spd, 2, 18) * DEG;
+    let nearest: (typeof near)[number] | undefined;
     const clearance = (helmSign: number): number => {
       let best = Infinity;
       let psi = s.psi;
@@ -310,7 +326,10 @@ export class AiSkipper {
             const ae = e + cx * Math.sin(psi);
             for (const [ox, or] of o.circles) {
               const d = hypot2(an - (on + ox * Math.cos(op)), ae - (oe + ox * Math.sin(op))) - cr - or;
-              if (d < best) best = d;
+              if (d < best) {
+                best = d;
+                nearest = o;
+              }
             }
           }
         }
@@ -319,6 +338,11 @@ export class AiSkipper {
     };
     const planned = this.cmd.mode === 'helm' ? this.cmd.helm : 0;
     const cNow = clearance(clamp(planned, -1, 1));
+    // Keeping clear of what she is nearest to: a mark, or a boat she must keep clear of.
+    const giveWay = !nearest || nearest.circles !== HULL_CIRCLES || !nearest.standOn;
+    // Locked side by side: the nearest is a boat on much the same heading, and no mark or other obstacle is close.
+    const sideBySide =
+      !!nearest && nearest.circles === HULL_CIRCLES && Math.abs(wrapPi(nearest.psi - s.psi)) < 30 * DEG && !this.world.obstacles.some((m) => hypot2(m.n - s.n, m.e - s.e) < 20 + m.radius);
     if (cNow > 0.6) return undefined;
     let bestHelm = planned;
     let bestC = cNow;
@@ -330,7 +354,7 @@ export class AiSkipper {
       }
     }
     this.intent += ' · REFLEX';
-    return { helm: bestHelm, depower: 0.8 };
+    return { helm: bestHelm, depower: 0.8, giveWay, sideBySide };
   }
 
   // ------------------------------------------------------------------ wind
@@ -444,19 +468,25 @@ export class AiSkipper {
   }
 
   /**
-   * Does this boat keep clear of `b`? One consistent answer for both boats of a pair: boats out of the race
-   * keep clear of everyone; a moving boat keeps clear of a stopped one (it cannot manoeuvre: rule 14); between
-   * two stopped boats the later entry keeps clear; otherwise the simplified rules decide.
+   * Does this boat keep clear of `b`? One consistent answer for both boats of a pair: a boat out of the race
+   * keeps clear of every boat still racing; a moving boat keeps clear of a stopped one (it cannot manoeuvre: rule 14); between
+   * two stopped boats the later entry keeps clear; at a mark, the boat owing mark-room (simplified rule 18);
+   * otherwise the simplified rules of Part 2 Section A and B decide.
    */
   private keepsClearOf(b: FleetBoat, mine: RulesBoat): boolean {
     const W = this.world;
-    if (W.outOfRace(this.id)) return true;
-    if (W.outOfRace(b.id)) return false;
+    // A boat out of the race keeps clear of one racing; between two out of the race, the rules below decide (when both
+    // kept clear of each other, both swerved, sometimes into each other: issue 42).
+    const outMe = W.outOfRace(this.id);
+    if (outMe !== W.outOfRace(b.id)) return outMe;
     const slowMe = hypot2(this.boat.sim.state.u, this.boat.sim.state.v) < 0.8;
     const slowIt = hypot2(b.sim.state.u, b.sim.state.v) < 0.8;
     if (slowIt && !slowMe) return true;
     if (slowMe && !slowIt) return false;
     if (slowMe && slowIt) return this.id > b.id;
+    // At a mark, the boat that must give mark-room keeps clear (as the judge rules it: src/sim/race/markRoom.ts).
+    const giver = W.markRoomGiver?.(this.id, b.id);
+    if (giver) return giver === this.id;
     return rightOfWay(mine, W.rulesBoat(b.id)).keepClear === this.id;
   }
 
@@ -573,7 +603,10 @@ export class AiSkipper {
       const offA = (-25 * (Math.cos(h0) * u.n + Math.sin(h0) * u.e)) / L;
       const lo = Math.max(0.2, 0.2 - offA);
       const hi = Math.min(0.8, 0.8 - offA);
-      const spot = onLine(lo <= hi ? clamp(this.skill.lineFraction, lo, hi) : 0.5);
+      // The boats' line fractions (0.1 … 0.9, in the order of their slots) are spread over the usable part of the
+      // line [lo, hi], not clamped into it: clamping put the boats nearest each end on the same spot (issue 42).
+      const spot = onLine(lo <= hi ? lo + (hi - lo) * clamp((this.skill.lineFraction - 0.1) / 0.8, 0, 1) : 0.5);
+      this.startSpot = spot;
       // Hold near the boat's own starting slot (the slots are spread in rows behind the line), then make a
       // timed run to its own spot on the line; spots follow the slots' order along the line.
       const hold = this.holdPoint;
@@ -820,6 +853,21 @@ export class AiSkipper {
     return b + r.sign * (Math.PI / 2 + ((r.radius - d) / r.radius) * 40 * DEG);
   }
 
+  /**
+   * Wait before the start at `p` instead of the starting slot, if it is clear water: deep enough with a margin, away
+   * from piers and structures, outside mooring areas, and reached in a straight line without crossing shallows.
+   */
+  adoptHold(p: LocalPoint): boolean {
+    const me = this.holdPoint;
+    const d = hypot2(p.n - me.n, p.e - me.e);
+    this.refreshMoorings(me);
+    const ok = (q: LocalPoint) => this.depthOk(0, q, 1) && !this.world.fleet.nearStructure(q.n, q.e, 15) && !this.inMoorings(q);
+    for (let x = 0; x <= d; x += 5) if (!ok(v(me.n + ((p.n - me.n) * x) / (d || 1), me.e + ((p.e - me.e) * x) / (d || 1)))) return false;
+    if (!ok(p)) return false;
+    this.holdPoint = p;
+    return true;
+  }
+
   private depthOk(t: number, p: LocalPoint, margin = 0.5): boolean {
     const sb = this.world.seabed;
     if (!sb) return true;
@@ -958,6 +1006,9 @@ export class AiSkipper {
     const wall = this.wallTime(t, goal);
     const stw0 = hypot2(s.u, s.v);
     const tr = new Float64Array(2 * (K + 1));
+    // Heading along the track: the marks are kept clear of the hull's ends, not only its centre.
+    const th = new Float64Array(K + 1);
+    const halfLoa = sim.params.loa / 2;
     // Polar speeds at this wind speed, per degree of TWA (one lookup table per decision).
     const spTab = new Float64Array(182);
     for (let a = 0; a <= 181; a++) spTab[a] = W.polar.speed(wind.speed, Math.min(180, a) * DEG);
@@ -976,6 +1027,7 @@ export class AiSkipper {
       let gybe = false;
       tr[0] = n;
       tr[1] = e;
+      th[0] = hh;
       const turn = wrapPi(h - hh);
       const dir = Math.sign(turn);
       let left = Math.abs(turn);
@@ -999,6 +1051,7 @@ export class AiSkipper {
         e += (sp * Math.sin(course) + wind.cur.e) * DT;
         tr[2 * k] = n;
         tr[2 * k + 1] = e;
+        th[k] = hh;
       }
       return { tack, gybe, speed: sp };
     };
@@ -1022,9 +1075,16 @@ export class AiSkipper {
         const need = manoeuvre ? 18 : giveWay ? 16 : 10;
         const T = giveWay ? K : 14; // stand-on boats react only to what is about to happen (rule 14)
         let worst = 0;
+        let dPrev = hypot2(tr[0]! - o.x[0]!, tr[1]! - o.x[1]!);
+        let closing = 0;
         for (let k = 1; k <= T; k++) {
           const d = hypot2(tr[2 * k]! - o.x[2 * k]!, tr[2 * k + 1]! - o.x[2 * k + 1]!);
-          if (d < need) worst = Math.max(worst, ((need - d) / need) * (1 - (k * DT) / (T * DT + 2)));
+          // Tracks that have held their distance so far (side by side, not closing) need only half the room; once they
+          // have closed at any point, the full room, the closest approach of a crossing included (issue 42).
+          closing = Math.max(closing, (dPrev - d) / DT);
+          dPrev = d;
+          const nd = need * (0.5 + 0.5 * clamp(closing / 0.8, 0, 1));
+          if (d < nd) worst = Math.max(worst, ((nd - d) / nd) * (1 - (k * DT) / (T * DT + 2)));
         }
         cost += (giveWay ? 5 : 8) * worst;
       }
@@ -1038,7 +1098,14 @@ export class AiSkipper {
         const need = mk.radius + (rounding ? 4 : lineEnd ? 9 : 7);
         let worst = 0;
         for (let k = 1; k <= 16; k++) {
-          const d = hypot2(tr[2 * k]! - mk.n, tr[2 * k + 1]! - mk.e);
+          let d = hypot2(tr[2 * k]! - mk.n, tr[2 * k + 1]! - mk.e);
+          if (d < need + halfLoa) {
+            // The bow and the stern, half a hull length either side of the centre: a boat turning away from a mark close
+            // by swings her stern onto it (issue 42).
+            const cn = Math.cos(th[k]!) * halfLoa;
+            const ce = Math.sin(th[k]!) * halfLoa;
+            d = Math.min(d, hypot2(tr[2 * k]! + cn - mk.n, tr[2 * k + 1]! + ce - mk.e), hypot2(tr[2 * k]! - cn - mk.n, tr[2 * k + 1]! - ce - mk.e));
+          }
           if (d < need) worst = Math.max(worst, ((need - d) / need) * (1 - k / 20));
         }
         cost += (lineEnd ? 9 : 5) * worst;
@@ -1109,12 +1176,17 @@ export class AiSkipper {
         bestSlow = slow;
       }
     };
-    // Coarse pass every 10°, then 5° either side of the two best.
+    // Coarse pass every 10°, then 5° either side of the two best. Not head to wind, and not within 5° of dead
+    // downwind: there the boom can go either side, so her tack, and who has right of way, would flip (issue 42).
+    const sailable = (h: number) => {
+      const a = Math.abs(wrapPi(wind.dir - h));
+      return a >= beatTwa - 4 * DEG && a <= DEAD_RUN_LIMIT;
+    };
     const coarse: [number, number][] = [];
     for (let k = -17; k <= 18; k++) {
       if (k === 0) continue;
       const h = hNav + k * 10 * DEG;
-      if (Math.abs(wrapPi(wind.dir - h)) < beatTwa - 4 * DEG) continue;
+      if (!sailable(h)) continue;
       const c = score(h, false, (Math.abs(k) * 10) / 180);
       coarse.push([c, k * 2]);
       if (c < bestCost - 1e-9) {
@@ -1129,7 +1201,7 @@ export class AiSkipper {
         const k = k2 + dk;
         if (k === 0) continue;
         const h = hNav + k * 5 * DEG;
-        if (Math.abs(wrapPi(wind.dir - h)) < beatTwa - 4 * DEG) continue;
+        if (!sailable(h)) continue;
         consider(h, false, (Math.abs(k) * 5) / 180);
       }
     }
