@@ -1241,6 +1241,13 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .app .panel.dock.console .sail-mod .status { order: 3; flex: 1 0 100%; width: 100%; justify-content: center; }
   .app .panel.dock.console .sail-mod .status strong { overflow: visible; text-overflow: clip; white-space: normal; text-align: center; }
 }
+/* The same at 360 px for the helm's words ("Str…": 30 px beside Centre and look-up): their own line under the tiller. */
+@media (pointer: coarse) and (max-width: 700px) {
+  .app { --console-h: 262px; }
+  .panel.dock.console .helm-mod { grid-template-rows: 44px auto; }
+  .panel.dock.console .helm-mod .mod-row:last-child { flex-wrap: wrap; row-gap: 2px; justify-content: center; }
+  .panel.dock.console .helm-readout { order: -1; flex: 1 0 100%; overflow: visible; text-overflow: clip; line-height: 16px; }
+}
 
 /* Package B: the spinnaker's buttons in the console (colour agrees with the words) and Expert's sail controls. */
 .panel.dock.console .spin-tab {

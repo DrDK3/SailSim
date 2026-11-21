@@ -4,9 +4,9 @@ import { EASED_LABEL, PLAIN_LABEL, STATE_LABEL } from '../../src/app/sailStatus'
 
 /**
  * Fixes of 21 Nov 2026 (docs/FIXES_21NOV_REPORT.md), in the browser.
- * §2.4: on a phone upright the sails' state words were cut off ("Luf…", "Dra…" at 390 px). Now, at 360, 390 and 430 px
- * and at every level, every state's words show in full, every sailing control is at least 44 px, and the 3D view keeps
- * at least half the screen's height. At Learn the wind is in words, the angle small alongside.
+ * §2.4: on a phone upright the sails' state words were cut off ("Luf…", "Dra…" at 390 px), and at 360 px the helm's
+ * ("Str…"). Now, at 360, 390 and 430 px and at every level, every state's words and the helm's show in full, every
+ * sailing control is at least 44 px, and the 3D view keeps at least half the screen's height. At Learn the wind is in words, the angle small alongside.
  */
 const CI_SLOW = process.env.CI ? 2 : 1;
 
@@ -54,21 +54,33 @@ for (const size of [
             }
             strong.textContent = was;
           }
+          // The helm's words too ("Str…" at 360 px before): straight, and the widest turn either way.
+          const helm = document.querySelector('.panel.dock.console .helm-readout') as HTMLElement;
+          const helmWas = helm.textContent;
+          for (const w of ['Straight', '35° → stbd', '35° → port']) {
+            helm.textContent = w;
+            if (helm.scrollWidth > helm.clientWidth + 0.5) cut.push(`helm: ${w} (${helm.scrollWidth}>${helm.clientWidth})`);
+          }
+          helm.textContent = helmWas;
           const small: string[] = [];
           for (const el of document.querySelectorAll<HTMLElement>('.panel.dock.console button, .panel.dock.console label.toggle')) {
             const b = el.getBoundingClientRect();
             if (b.width === 0) continue;
             if (b.width < 44 || b.height < 44) small.push(`${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 20)} ${Math.round(b.width)}×${Math.round(b.height)}`);
           }
-          const dock = document.querySelector('.panel.dock.console')!.getBoundingClientRect();
+          const dockEl = document.querySelector('.panel.dock.console') as HTMLElement;
+          const dock = dockEl.getBoundingClientRect();
+          // The console holds its modules: nothing spills out of its height (the pills' and helm's own lines).
+          const spill = dockEl.scrollHeight - dockEl.clientHeight;
           const bar = document.querySelector('.toolbar')!.getBoundingClientRect();
           const instr = document.querySelector('.panel.instruments')!.getBoundingClientRect();
           c.togglePause();
-          return { cut, small, view: dock.top - bar.bottom, instrBottom: instr.bottom, dockTop: dock.top, dockBottom: dock.bottom, H: innerHeight };
+          return { cut, small, spill, view: dock.top - bar.bottom, instrBottom: instr.bottom, dockTop: dock.top, dockBottom: dock.bottom, H: innerHeight };
         }, STATE_WORDS);
         expect(m.cut, level).toEqual([]);
         expect(m.small, level).toEqual([]);
         expect(m.dockBottom, level).toBeLessThanOrEqual(m.H);
+        expect(m.spill, level).toBeLessThanOrEqual(1);
         // The view between the top bar and the console: at least half the screen's height.
         expect(m.view / m.H, level).toBeGreaterThanOrEqual(0.5);
         // The instruments a compact strip at every level on a phone (Expert opened them all over the water before).
