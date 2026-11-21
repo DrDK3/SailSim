@@ -235,6 +235,11 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         </label>
         <h4 className="settings-group">Help and accessibility</h4>
         <label className="check">
+          <input type="checkbox" checked={ui.prefs.instructorView} onChange={(e) => ctl.setPrefs({ instructorView: e.target.checked })} data-testid="pref-instructor" />
+          Instructor view: show where each figure comes from and its evidence label (E for an estimate), the exercises&apos; thresholds and each
+          attempt&apos;s assist record, where they apply. Off, they are gathered in About (&ldquo;How far to trust this&rdquo;)
+        </label>
+        <label className="check">
           <input type="checkbox" checked={ui.prefs.lightLabels} onChange={(e) => ctl.setPrefs({ lightLabels: e.target.checked })} data-testid="pref-light-labels" />
           Name the ships' sidelights at night (P port, red; S starboard, green), for anyone who finds red and green hard to tell apart
         </label>

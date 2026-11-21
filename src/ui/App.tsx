@@ -1,6 +1,6 @@
 import { presetLabel } from '../render/graphics';
 import { ChallengeCard, SocialResult } from './Social';
-import { Suspense, lazy, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { SimController } from '../app/controller';
 import { Instruments } from './Instruments';
 import { DamageBanner, DamageCard } from './DamageCard';
@@ -8,6 +8,8 @@ import { Controls } from './Controls';
 import { Minimap } from './Minimap';
 import { RacePanel } from './RacePanel';
 import { AboutDialog } from './About';
+import { TrustContext } from './trust';
+import { LearnMapDialog } from './LearnMap';
 import { MarkPointer, RaceStrip, StartCountdown, useNarrow } from './RaceGlance';
 import { CoachCard, CoachTip, coachTipShowing } from './Coach';
 import { HintCard } from './HintCard';
@@ -88,7 +90,11 @@ export function App({ ctl }: { ctl: SimController }) {
     return () => window.clearTimeout(id);
   }, [lowered, qualityNoteDone]);
   // What the simulator is and how far to trust it (the caveats that were in the welcome).
-  const [showAbout, setShowAbout] = useState(false);
+  const [showAbout, setShowAbout] = useState<false | 'top' | 'trust'>(false);
+  // The Learn map (review #13): one ordered path through the lessons, exercises and challenges.
+  const [showLearnMap, setShowLearnMap] = useState(false);
+  // Player view or instructor view (review #14): where the honesty labels are shown.
+  const trust = useMemo(() => ({ instructor: ui.prefs.instructorView, openTrust: () => setShowAbout('trust') }), [ui.prefs.instructorView]);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [raceOpen, setRaceOpen] = useState(false);
@@ -314,6 +320,7 @@ export function App({ ctl }: { ctl: SimController }) {
   );
 
   return (
+    <TrustContext.Provider value={trust}>
     <div className={`app${ui.showMinimap ? ' has-minimap' : ''}${!ui.replay && !controlsHidden ? ' console-on' : ''}`}>
       <div ref={host} className="viewport" data-testid="viewport" />
       {ui.webglError && <div className="banner error" role="alert">{ui.webglError}</div>}
@@ -407,7 +414,8 @@ export function App({ ctl }: { ctl: SimController }) {
               label="Settings"
               title="Settings: lessons, course editor, what is shown, sound, all settings, and physics tools"
               items={[
-                { section: 'Learn and plan', label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
+                { section: 'Learn and plan', label: 'Learn map', checked: showLearnMap, onSelect: () => setShowLearnMap(!showLearnMap) },
+                { label: 'Lessons', checked: !!ui.tutorial, onSelect: () => (ui.tutorial ? ctl.endTutorial() : startTutorial()) },
                 ...ui.exercises.map((e) => ({
                   label: `Exercise: ${e.title}`,
                   checked: ui.exercise?.info.id === e.id,
@@ -426,7 +434,8 @@ export function App({ ctl }: { ctl: SimController }) {
                 { label: 'Sailing controls', checked: !controlsHidden, onSelect: () => setControlsHidden(!controlsHidden) },
                 { label: 'Layers and sources', checked: ui.showLayers, onSelect: () => ctl.toggleLayers() },
                 { section: 'Settings', label: 'All settings…', checked: ui.showSettings, onSelect: () => ctl.toggleSettings() },
-                { label: 'About this simulator', checked: showAbout, onSelect: () => setShowAbout(!showAbout) },
+                { label: 'Instructor view (where each figure comes from)', checked: ui.prefs.instructorView, onSelect: () => ctl.setPrefs({ instructorView: !ui.prefs.instructorView }) },
+                { label: 'About this simulator', checked: !!showAbout, onSelect: () => setShowAbout(showAbout ? false : 'top') },
                 { label: ui.audio.muted ? 'Sound off' : 'Sound on', keys: 'U', checked: !ui.audio.muted, onSelect: () => ctl.toggleMute() },
                 // The engineering tools (calibration and checking the physics): Expert level, or Settings → Help and accessibility.
                 ...(ui.prefs.devTools || ui.level === 'expert'
@@ -556,15 +565,18 @@ export function App({ ctl }: { ctl: SimController }) {
           }}
           onSailNow={() => closeHub(() => (ui.level === 'learn' ? ctl.leaveTo('Starting lesson 1', () => ctl.startLesson('steer')) : ctl.leaveTo('Free sailing', () => ctl.freeSail())))}
           lessonsDone={ui.lessons.filter((l) => l.done && l.group === 'basics').length}
+          onLearnMap={() => closeHub(() => setShowLearnMap(true))}
         />
       )}
-      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+      {showAbout && <AboutDialog at={showAbout} onClose={() => setShowAbout(false)} />}
+      {showLearnMap && <LearnMapDialog ctl={ctl} ui={ui} onClose={() => setShowLearnMap(false)} onOpenRace={() => openRace(true)} />}
       {ui.confirmLeave && (
         <Confirm id="leave" title="Leave the race?" keep="Keep racing" go="Leave the race" onAnswer={(yes) => ctl.answerLeave(yes)} testId="confirm-leave">
           The race is under way. {ui.confirmLeave} ends it, and the race is lost.
         </Confirm>
       )}
     </div>
+    </TrustContext.Provider>
   );
 }
 
