@@ -1164,6 +1164,14 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .panel.instruments.compact .cell-value .unit { font-size: 12px; }
   .panel.instruments.compact .more-toggle { margin-top: 2px; }
 }
+/* A phone on its side has little height: a smaller compass and tighter strip, so the water shows between the strip
+   and the console (CI, 21 Nov 2026: 92 px with the runner's fonts, against the 100 px asked for). */
+@media (max-height: 500px) and (pointer: coarse) {
+  .panel.instruments.compact { padding: 4px 8px; }
+  .panel.instruments.compact .compass { width: 52px; height: 52px; }
+  .panel.instruments.compact .big-value { font-size: 22px; }
+  .panel.instruments.compact .grid { margin-top: 2px; }
+}
 /* Touch screens a phone's size, upright or on its side: every sailing control at least 44 × 44 px (review #21). */
 @media (pointer: coarse) and (max-width: 700px), (pointer: coarse) and (max-height: 500px) {
   .panel.dock.console .mod { grid-template-rows: 44px 44px; row-gap: 3px; padding: 3px 5px; }
