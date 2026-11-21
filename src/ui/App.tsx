@@ -60,6 +60,10 @@ function writeFlag(key: string, v: boolean): void {
   }
 }
 
+/** The side column's top in styles.css (.side), and the room the camera strip takes above it (its height and a gap). */
+const SIDE_TOP_DEFAULT = 70;
+const CAMERA_BAR_ROOM = 46;
+
 export function App({ ctl }: { ctl: SimController }) {
   const host = useRef<HTMLDivElement>(null);
   const toolbar = useRef<HTMLElement>(null);
@@ -264,6 +268,12 @@ export function App({ ctl }: { ctl: SimController }) {
     };
   }, [ctl]);
 
+  // The drone and helm views have a strip of hints at the top right: the notices and side panels start below it
+  // (CI, 21 Nov 2026: the "running slow" notice lay over "Back to boat").
+  const sideBase = sideTop ?? SIDE_TOP_DEFAULT;
+  const sideAt = sideBase + (ui.camera === 'drone' || ui.camera === 'helm' ? CAMERA_BAR_ROOM : 0);
+  const sideStyle = sideAt === SIDE_TOP_DEFAULT ? undefined : { top: sideAt, maxHeight: `calc(100% - ${sideAt + 230}px)` };
+
   // Notices (paused, running slow, resolution lowered, preparing): at the top right under the toolbar, above any open
   // side panel, and above the console on a phone; never at the top centre, where the masthead and its wind indicator
   // are (review #3, 20 Nov 2026).
@@ -435,7 +445,7 @@ export function App({ ctl }: { ctl: SimController }) {
           </div>
         </div>
       </nav>
-      <div className="side" style={sideTop === undefined ? undefined : { top: sideTop, maxHeight: `calc(100% - ${sideTop + 230}px)` }}>
+      <div className="side" style={sideStyle}>
         <div className="notice-stack" data-testid="notice-stack">{notices}</div>
         {ui.tutorial && <TutorialPanel ctl={ctl} ui={ui} onRace={() => openRace(true)} />}
         {ui.exercise && <ExercisePanel ctl={ctl} ui={ui} />}

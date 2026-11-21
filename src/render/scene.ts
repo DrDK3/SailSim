@@ -295,6 +295,8 @@ export class SceneView {
   private helmLook = { yaw: 0, pitch: 0 };
   /** The helm's eye in the boat's frame at the last frame (review #15; tests read it). */
   readonly helmEyeLocal = new THREE.Vector3();
+  /** The eye as the reduced-motion helm view holds it (it follows helmEyeLocal smoothly). */
+  private helmEyeSteady?: THREE.Vector3;
   private helmFov = HELM_FOV;
   /** The widest the helm view zooms out to (deg): Settings → helm view (review #15). */
   private helmFovMax = HELM_FOV;
@@ -1286,7 +1288,16 @@ export class SceneView {
       // With reduced motion the eye follows the heading only: no heel, pitch or wave heave.
       const frame = reduced ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -heading) : this.boatRoot.quaternion;
       const base = reduced ? new THREE.Vector3(b.x, y, b.z) : this.boatRoot.position;
-      const eye = this.boat.helmEye(this.helmEyeLocal).clone().applyQuaternion(frame).add(base);
+      this.boat.helmEye(this.helmEyeLocal);
+      // With reduced motion the eye also moves smoothly as the helm shifts on the deck (hiking, tacking): at most
+      // 0.5 m/s and under 1 cm a frame, so it never jumps however slowly frames come (review GR-4).
+      if (reduced && this.helmEyeSteady) {
+        const d = this.helmEyeLocal.clone().sub(this.helmEyeSteady);
+        const step = Math.min(0.5 * dt, 0.009);
+        if (d.length() > step) d.setLength(step);
+        this.helmEyeSteady.add(d);
+      } else this.helmEyeSteady = this.helmEyeLocal.clone();
+      const eye = this.helmEyeSteady.clone().applyQuaternion(frame).add(base);
       // Awash or sinking, the helm's head stays above the water.
       eye.y = Math.max(eye.y, this.ride.heave + 0.45);
       this.camera.position.copy(eye);

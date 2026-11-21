@@ -144,12 +144,29 @@ traces on for that file (`retain-on-failure`) so the pull request's own runs kee
 
 ### A.8 Checks
 
-Filled in when the pull request's CI has run: typecheck, lint, unit tests, build, hash, envelope, golden traces, the
-end-to-end suite on CI, axe, and the grep for RYA / "validated" / "realistic" claims.
+Locally (cloud container, software rendering): typecheck, lint, unit tests, build with the secret scan, the determinism
+hash (`11824f89f479d0f4`, unchanged), `npm run envelope` (identical to the baseline), the golden traces (unchanged), and
+the grep for RYA / "validated" / "realistic" claims (none added). The end-to-end tests touched by the package were run
+locally one file at a time; CI runs the whole suite and is the authority (software rendering here runs at 1–7 % of
+real time).
+
+**First CI run (4ba9f71, run 44852625587): four defects found and fixed, one slow-renderer cancellation.**
+
+| Shard | Test | What it was | Fix (with its regression test) |
+|---|---|---|---|
+| 3 | `smoke.spec.ts:193` | The River Dart state gained the restart card's flag (`ask`), the test expected the old shape | Test updated to the new state (6634248) |
+| 2 | `redteam.spec.ts:49` (drone "Back to boat") | **Defect.** Moving the notices to the top right (A1) put the "Running slow" notice over the drone and helm views' camera strip, and a CSS rule of mine (`.notice-stack .banner.paused-pill`) gave it back the clicks it is meant to let through | The notices and side panels start below the camera strip in those views; a status notice lets clicks through again. New test in `notices.spec.ts` (fails before: the notice overlapped the strip) |
+| 1 | `a11y.spec.ts:41` (text ≥ 12 px) | **Defect.** The phone's compact instrument strip (A4, #21) used 10.5–11.7 px text | All its text at 12 px; the strip stays under 180 px tall (`console.spec.ts`) |
+| 1 | `a11y.spec.ts:117` (reduced motion, helm view) | **Defect.** The helm's-eye camera (A6, #15) followed the helm figure's head as it hikes, 1.5–1.8 cm a frame with reduced motion (limit 1 cm) | With reduced motion the eye moves at most 0.5 m/s and under 1 cm a frame; the existing test is the regression test |
+| 1 | `experience.spec.ts:31` (hub → Race against AI) | The race set-up panel did not appear within 60 s, twice; **not reproduced locally** (with `CI=1`, and with the CPU throttled four times) | Not yet explained. The test now reports what was on the screen if it fails again; see the next run |
+| 4 | `training.spec.ts:229` | Timed out at 8 min, passed on its retry: slow renderer | none |
+| 4 | (whole shard) | Cancelled at the 60-minute job limit: the round's new tests took the slowest of four shards past the hour | Five shards (`.github/workflows/ci.yml`, `docs/DEPLOYMENT.md`) |
+
+`daylight.spec.ts` (issue 202) passed in this run, both tests, first time.
 
 ### A.9 Pull request
 
-Filled in when it is open.
+Draft pull request: https://github.com/DrDK3/SailSim/pull/39 (branch `next-a-wind`, base `main`).
 
 ---
 

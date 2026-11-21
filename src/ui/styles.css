@@ -1138,6 +1138,9 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 .notice-stack:empty { display: none; }
 .notice-stack .banner { position: static; transform: none; left: auto; top: auto; margin: 0; max-width: min(440px, calc(100vw - 24px)); }
 .notice-stack .banner.paused-pill { pointer-events: auto; }
+/* A status with nothing to press lets clicks through; its buttons, if any, take them (CI, 21 Nov 2026). */
+.notice-stack .banner.slow-pill { pointer-events: none; }
+.notice-stack .banner.slow-pill button { pointer-events: auto; }
 @media (max-width: 700px) {
   .notice-stack { position: fixed; left: 8px; right: auto; top: auto; align-items: flex-start; bottom: calc(var(--console-h) + var(--console-bottom) + 10px); z-index: 3; }
   .app:not(.console-on) .notice-stack { bottom: 12px; }
@@ -1150,13 +1153,15 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
   .panel.instruments.compact { padding: 6px 8px; }
   .panel.instruments.compact .compass { width: 64px; height: 64px; }
   .panel.instruments.compact .big-value { font-size: 26px; }
-  .panel.instruments.compact .big .cell-label { font-size: 11px; }
-  .panel.instruments.compact .tack-chip { margin-top: 2px; padding: 1px 6px; font-size: 11px; }
-  .panel.instruments.compact .grid { grid-template-columns: repeat(4, minmax(0, auto)); gap: 2px 10px; margin-top: 4px; }
+  .panel.instruments.compact .big .cell-label { font-size: 12px; }
+  .panel.instruments.compact .big-value .unit { font-size: 12px; }
+  .panel.instruments.compact .tack-chip { margin-top: 2px; padding: 1px 6px; font-size: 12px; }
+  .panel.instruments.compact .grid { grid-template-columns: repeat(4, minmax(0, auto)); gap: 2px 8px; margin-top: 4px; }
   .panel.instruments.compact .cell[data-cell='heading'], .panel.instruments.compact .cell[data-cell='heel'] { display: none; }
-  .panel.instruments.compact .cell-label { font-size: 10.5px; letter-spacing: 0.02em; }
+  /* 12 px at the least, as everywhere (a11y.spec.ts). */
+  .panel.instruments.compact .cell-label { font-size: 12px; letter-spacing: 0; }
   .panel.instruments.compact .cell-value { font-size: 14px; }
-  .panel.instruments.compact .cell-value .unit { font-size: 10.5px; }
+  .panel.instruments.compact .cell-value .unit { font-size: 12px; }
   .panel.instruments.compact .more-toggle { margin-top: 2px; }
 }
 /* Touch screens a phone's size, upright or on its side: every sailing control at least 44 × 44 px (review #21). */

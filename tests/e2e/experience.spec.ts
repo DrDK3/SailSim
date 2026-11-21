@@ -46,7 +46,19 @@ test('the activity button opens the hub; each door opens the feature it names, a
   // Race against AI: the race set-up.
   await chip.click();
   await hub(page).getByRole('button', { name: 'Race against AI' }).click();
-  await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible(PANEL);
+  try {
+    await expect(page.getByRole('region', { name: 'Race set-up' })).toBeVisible(PANEL);
+  } catch (e) {
+    // Seen on CI only (21 Nov 2026), not reproduced locally: say what was on the screen instead.
+    const seen = await page.evaluate(() => ({
+      regions: [...document.querySelectorAll('section[aria-label], [role="dialog"]')].map((el) => el.getAttribute('aria-label')),
+      side: document.querySelector('.side')?.className,
+      sideKids: [...(document.querySelector('.side')?.children ?? [])].map((el) => el.className),
+      dart: window.__squib?.controller.getState().dart,
+      paused: window.__squib?.controller.getState().paused,
+    }));
+    throw new Error(`${(e as Error).message}\nOn the screen: ${JSON.stringify(seen)}\nPage errors: ${JSON.stringify(errors)}`, { cause: e });
+  }
   await expect(page.getByRole('region', { name: 'Scenarios and replays' })).toHaveCount(0);
 
   // Learn to sail: the next lesson, and the button says so.

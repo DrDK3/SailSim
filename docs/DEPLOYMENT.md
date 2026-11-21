@@ -59,7 +59,7 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
 | `live-data.yml` | :07 and :37 past each hour, 06–20 UTC; hourly 21–05 UTC | Runs `tools/ingest/weather.py`, `tide.py` and `index.py`, then `tools/ci/push-live-data.sh` |
 | `tide-harmonics.yml` | Mondays 03:23 UTC, or by hand | `tools/ingest/harmonics.py`: derive the constants, validate them, write a year of HW/LW events |
 
-**Why the browser tests run in four shards:**
+**Why the browser tests run in five shards:**
 - **No GPU:** GitHub's hosted runners have no GPU, so Chromium draws the 3D scene in software.
 - **Two browsers starve each other:** with two at once, a page could take over 90 s just to show the instruments. That is how the first two CI runs failed.
 - **The fix:**
@@ -67,7 +67,7 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
   - time limits are doubled on CI;
   - a test is retried once, and one that passes only on retry is reported as **flaky**;
   - failures appear as annotations on the run (Playwright's GitHub reporter).
-- **The scene keeps growing:** with the marinas and the railway (27 Oct 2026) the slowest of three shards took 35–45 minutes, against a 45-minute limit. Now four shards split by test (`fullyParallel`; by file, one shard had 23 tests and another none) with a 60-minute limit, and on a software renderer the app draws the berthed boats' detailed models only within 150 m and the sleepers only at Kingswear station (`?quality=low` does the same on a real GPU).
+- **The scene keeps growing:** with the marinas and the railway (27 Oct 2026) the slowest of three shards took 35–45 minutes, against a 45-minute limit. Now four shards split by test (`fullyParallel`; by file, one shard had 23 tests and another none) with a 60-minute limit, and on a software renderer the app draws the berthed boats' detailed models only within 150 m and the sleepers only at Kingswear station (`?quality=low` does the same on a real GPU). On 21 Nov 2026 the next round's tests took the slowest of the four shards past the hour (cancelled at 60 minutes): five shards now.
 
 **How the live-data job pushes:**
 - **Commits:** consecutive data commits are squashed into one ("Live data", amended and force-pushed with a lease), so `gh-pages` does not grow by 48 commits a day.
