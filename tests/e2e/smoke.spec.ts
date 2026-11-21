@@ -201,7 +201,8 @@ test('Phase 3: the River Dart loads, with terrain, minimap and labelled provisio
     (c as unknown as { view: { scene: { traverse: (f: (o: { name: string }) => void) => void } } }).view.scene.traverse((o) => names.add(o.name));
     return { dart: c.getState().dart, names: [...names] };
   });
-  expect(state.dart).toEqual({ status: 'loaded', issues: [] });
+  // `ask`: no card asking to restart with the river (it loaded before anything was sailed; review #9).
+  expect(state.dart).toEqual({ status: 'loaded', issues: [], ask: false });
   for (const n of ['terrain', 'buildings', 'pontoons', 'moorings', 'traffic', 'mark', 'club-ensign', 'berthed-vanes', 'walkers']) expect(state.names).toContain(n);
   await expect(page.getByTestId('minimap')).toBeVisible();
   await expectSessionSummary(page, 'River Dart (depths and stream provisional)');
