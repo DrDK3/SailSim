@@ -238,7 +238,11 @@ export class Woodland {
     coniferFar: Array.from({ length: CONIFER_KINDS }, (_, k) => conifer(5, k)),
     impostor: crossedQuads(),
   };
-  /** Far trees as crossed-quad impostors (beyond IMPOSTOR_M) when on; the far crowns otherwise. */
+  /**
+   * Far trees as crossed-quad impostors (beyond IMPOSTOR_M) when on; the far crowns otherwise. On at the lowest
+   * scenery detail (the Performance preset; src/render/dart.ts): there they took 6.5 % of the triangles and 8 % of the
+   * draw calls off the benchmark's views, with no measurable change in frame time under software rendering (package C).
+   */
   impostors = false;
   private readonly impostorMat = { broad: impostorMaterial('broad'), conifer: impostorMaterial('conifer') };
   private readonly built = new Set<Chunk>();
