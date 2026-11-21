@@ -361,6 +361,19 @@ const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 'unknow
 /** Fills a partial starting input to a full one for the recording. */
 const DEFAULT_INPUT_FOR_RECORD: ControlInput = { helm: 0, mainSheet: 0.3, jibSheet: 0.3, autoMain: false, autoJib: true, crewHike: 0.6, autoCrew: true, flatten: 0 };
 
+/**
+ * The controls a restart carries over from the previous run (one that does not pass its own starting controls): the
+ * sheets and the trim as they were, the helm centred, and no spinnaker call. The call to hoist and the count of
+ * pole-gybe calls are cleared, so the crew do not hoist again at the new start, even on a beat, and no pole gybe is
+ * pending (fixes of 21 Nov 2026, §2.1). A control the previous run never set stays unset.
+ */
+export function carriedInput(prev: ControlInput): ControlInput {
+  const next: ControlInput = { ...prev, helm: 0 };
+  if (next.spin !== undefined) next.spin = 0;
+  if (next.spinGybe !== undefined) next.spinGybe = 0;
+  return next;
+}
+
 /** The list of live and replay data files served next to the app (public/live/README.md). */
 const LIVE_INDEX = 'live/index.json';
 /** Replays built into every deployment, tried when the index cannot be read. */
@@ -572,7 +585,7 @@ export class SimController {
     const loc = START_LOCATIONS.find((l) => l.id === scenario.startLocation) ?? START_LOCATIONS[0];
     const prevInput = this.sim?.input;
     const startInput: ControlInput | undefined =
-      opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
+      opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? carriedInput(prevInput) : undefined;
     let race: SimController['race'];
     let sim: Simulation;
     const typeParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
