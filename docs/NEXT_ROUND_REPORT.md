@@ -9,13 +9,17 @@ measured means measured in the model, not against a Squib on the water.
 
 | Package | Branch | Pull request | State |
 |---|---|---|---|
-| A (no physics): wind visibility and quick wins | `next-a-wind` | draft (link in §A.9) | Built; checks in §A.8 |
-| B (physics): spinnaker and sail controls | `next-b-spinnaker` | draft (link in §B.9) | Built; checks in §B.8 |
-| C (no physics): the low preset, trees, compact replays | `next-c-graphics` | draft (link in §C.9) | Built; checks in §C.6 |
-| D (no physics): Learn map and instructor view | `next-d-learn` | draft (link in §D.8) | Built; checks in §D.6 |
-| E (no physics): metadata, media, manifest, landing page | `next-e-share` | draft (link in §E.9) | Built; checks in §E.7 |
-| F: simplified rule 18 and AI fleet safety | `next-f-rules` | — | Not started |
-| G: STATUS.md and issue hygiene | `next-g-status` | — | Not started |
+| A (no physics): wind visibility and quick wins | `next-a-wind` | [#39](https://github.com/DrDK3/SailSim/pull/39) | Built; CI green |
+| B (physics): spinnaker and sail controls | `next-b-spinnaker` | [#40](https://github.com/DrDK3/SailSim/pull/40) | Built; CI green |
+| C (no physics): the low preset, trees, compact replays | `next-c-graphics` | [#41](https://github.com/DrDK3/SailSim/pull/41) | Built; CI green |
+| D (no physics): Learn map and instructor view | `next-d-learn` | [#42](https://github.com/DrDK3/SailSim/pull/42) | Built; CI green |
+| E (no physics): metadata, media, manifest, landing page | `next-e-share` | [#43](https://github.com/DrDK3/SailSim/pull/43) | Built; CI green |
+| F (no physics): simplified rule 18 and AI fleet safety | `next-f-rules` | [#44](https://github.com/DrDK3/SailSim/pull/44) | Built; the 10-boat target missed (§F.4) |
+| G (no physics): STATUS.md, issue hygiene, scenery freeze | `next-g-status` | [#45](https://github.com/DrDK3/SailSim/pull/45) | Built |
+
+Each pull request's base is the previous package's branch, so each shows its own package alone; they are meant to be
+merged in order, by the owner. The handover (what was done, what is left, what to do next) is at the end of this
+report.
 
 ## The club's approval (20 Nov 2026)
 
@@ -773,6 +777,116 @@ Locally (cloud container):
 Draft pull request: https://github.com/DrDK3/SailSim/pull/44 (branch `next-f-rules`, base `next-e-share`, so its
 diff shows package F alone; it follows package E, https://github.com/DrDK3/SailSim/pull/43). CI's result is recorded
 in the next package's report.
+
+---
+
+## Package G: status, issue hygiene and the scenery freeze (no physics)
+
+**No physics changed**: documents only. The reference race hash, the golden traces and the envelope are those of
+package F (§G.4).
+
+### G.1 What changed
+
+| # | Change | Where |
+|---|---|---|
+| G | **One status page**: what the simulator does; what is measured or specified, what is estimated, and what is validated (nothing yet), by area, with the evidence levels; what was measured here; the open decisions (a name and a domain, the NSOA note, the club table, offline use, the UKHO licence, the RDYC courses and the scope of the club's approval); and the needs-people list (#28 with the B6 questions, #32, #4, the NSOA, naming, Squib data). Linked from the top of the README | `docs/STATUS.md`, `README.md` |
+| G | **Issue hygiene.** The 256 issues (numbered up to 270, with gaps) were one long table, open and closed mixed. Now the open ones are grouped by area (needs people; racing, rules and the AI; physics; data; training; interface; replays and sharing; scenery; build and performance), each area a table in number order, with an index of how many are open in each. The closed ones (fixed, handled or superseded) are in an archive, word for word. Every issue keeps its number and its text; none was renumbered, reworded, merged or reopened. The list's change history stays in git | `docs/OUTSTANDING_ISSUES.md`, `docs/OUTSTANDING_ISSUES_ARCHIVE.md` |
+| #29 | **The scenery freeze** is recorded in the README, in STATUS.md and at the head of the scenery issues: no new buildings, vehicles, people, trains or landmarks; changes only for performance, looks or occlusion | `README.md`, `docs/STATUS.md`, `docs/OUTSTANDING_ISSUES.md` |
+
+### G.2 How the issues were sorted
+
+256 issues: **230 open**, **26 closed** (moved to the archive).
+
+| Area | Open |
+|---|---|
+| Needs people | 5 |
+| Racing, rules and the AI | 29 |
+| Physics and the boat | 30 |
+| Data and sources | 23 |
+| Training | 10 |
+| Interface and accessibility | 20 |
+| Replays, sharing and the club table | 14 |
+| Scenery and graphics | 86 |
+| Build, deployment and performance | 13 |
+
+A script checked that every row of the old list appears, character for character, exactly once in the two new files,
+and that the list's dated history line is kept.
+
+Each row was classified by reading it: **closed** when it is struck through and marked fixed, handled, closed or
+superseded with nothing left to do; **open** otherwise, including the partly handled ones and those waiting on a check
+by the owner or on people. Some open rows have no next step planned ("acceptable", "expected", "none needed"): they stay
+open here, because closing them is the owner's call, not a tidy-up's. A few rows look out of date or overlapping:
+23 (the channel-following stream it asks for was built in Phase 3; only the check against measured data remains), 133 (waits on a merge that may have happened), 143 (the lights it asks for may since have been drawn, issues 185–194) and 145 (overlaps 114 and 119). They are left as they were, for the owner to decide.
+
+### G.3 What is left from package G
+
+- Closing the rows with no next step planned, and merging the overlapping ones: the owner's decision.
+- STATUS.md is a snapshot (21 Nov 2026): the round reports and this list are the running record.
+
+### G.4 Checks
+
+Locally (cloud container):
+
+- Unit tests: **922 in 138 files, all passing** (documents only; no test reads these documents).
+- The reference race hash: `33623f273ed1c7bd`, identical to package F's. The seven golden traces are identical, and
+  `npm run envelope` is identical to package F's, every row.
+- The row check of §G.2: 256 rows before, 256 after, the same text.
+- The grep for RYA, "validated", "realistic" and accreditation in what package G adds: only "nothing is validated"
+  and "No RYA or other accreditation is claimed".
+
+**CI on the earlier packages, recorded here:** package F's pull request (e3d2741): the checks job is green; its
+browser shards were still running when this was written (the pull request shows the result).
+
+### G.5 Pull request
+
+Draft pull request: https://github.com/DrDK3/SailSim/pull/45 (branch `next-g-status`, base `next-f-rules`, so its
+diff shows package G alone; it follows package F, https://github.com/DrDK3/SailSim/pull/44).
+
+---
+
+## Handover
+
+### What the round did
+
+| Package | Review numbers | In one line | Evidence |
+|---|---|---|---|
+| A | #1–#3, #9–#11, #15–#24, #30, #36 (§A.1) | The wind made visible (the masthead view and its picture, burgee or vane), the River Dart data no longer resetting a run, the junior weekly course, clearer words and phone controls | Screens at fixed seeds (§A.2); hash, traces and envelope identical |
+| B | B1–B6, #25 (§B.1) | The 13.5 m² spinnaker (hoist, trim, gybe, collapse) for the player and the AI; Expert's sail controls one by one | Physics checks (§B.3); with it down, every earlier trace and the hash identical; every spinnaker figure except area and pole an estimate |
+| C | The low preset, #35, #12 (issue 214) (§C.1) | Start Bay without stripes at the lowest preset; trees in five shapes, far impostors; replays 6–22 times smaller, every older one still read | Before/after screens and benchmark figures in software rendering (§C.2–§C.4) |
+| D | #13, #14 | The Learn map; the instructor view, the honesty labels moved there and to About behind one link | Screens (§D.2); axe-core clean |
+| E | #37–#41 | A current description and sharing cards; `npm run media` (hero, cards, a 24 s trailer); a manifest and icons (no service worker, with reasons); a static landing page; About led by what you can do; names proposed; an NSOA note drafted, not sent | The media themselves (§E.5); the built page tested |
+| F | #26, #27 (issue 42) | A simplified rule 18; the AI's big-fleet contacts traced to their causes and fixed | 10 boats 79 → 81 of 100 clean (target 90% missed; contacts 42 → 26); 5 boats 92 → 98; river 15 → 16 of 20 (§F.4) |
+| G | #29, status, hygiene | STATUS.md; the issue list grouped by area with an archive; the scenery freeze recorded | 256 rows moved word for word (§G.2) |
+
+No package claims validation, realism or any accreditation; every new estimate is marked E; the under-18 safeguards
+stand (no free text, accounts, personal data or compulsive mechanics were added). Physics changed only in package B.
+
+### What is left
+
+- **The AI's 90% target at 10 boats** (81% now; issue 268): the start line's ends, the windward mark in a crowd,
+  crossings after the start, an avoidance lock alongside. 20-boat fleets not re-measured.
+- **Real devices** (#32): nothing in this round was seen on a real GPU, phone or tablet.
+- **Rule 18 from the rulebook itself** (issue 32): only secondary copies could be read.
+- The owner's decisions in [STATUS.md](STATUS.md): a name and a domain, the NSOA note, the club table, offline use,
+  the UKHO licence, the RDYC courses' check.
+- Per package: §A.7, §B.6, §C.7, §D.4, §E.6, §F.6, §G.3. The needs-people list follows.
+
+### The next three improvements, ranked by what this round measured
+
+1. **The AI at the start line's ends and at a crowded windward mark** (issue 268). Measured: 19 of 100 ten-boat races
+   still have an AI incident, and in a player's race each one means a penalty or a boat not finishing. Fixing causes
+   one by one is shown to work: package F cut contacts by 38% at 10 boats and from 13 to 2 at 5 boats, and each
+   remaining case has been traced (§F.6). The next fixes are concrete: a boat slowing for its timed run should not ease
+   her sails while pinned near an end; the windward-mark approach in a crowd; the avoidance lock alongside.
+2. **The AI's cost in crowded moments** (issue 262). Measured: with 20 AI boats, the crowded windows reach 3.5–4.4 ms
+   per frame at the 99th percentile, before package F and after it alike. The physics alone stays within its 3 ms
+   budget. On a slow machine that can drop frames at the start and at mark roundings, exactly when a racer is busiest.
+   Profiling the avoidance scorer, which tries up to about 40 headings for a boat five times a second whenever
+   anything is close, is the next step.
+3. **A validation session with Squib sailors** (#28, needs people). Measured: nothing in the simulator is validated.
+   Every hydrodynamic, aerodynamic and spinnaker coefficient is an estimate (L5–L6), as About and the instructor view
+   say label by label. The questions (B6) and the calibration workflow are ready. One session would turn the
+   largest class of estimates into observations, and nothing else on this list can do that.
 
 ---
 
