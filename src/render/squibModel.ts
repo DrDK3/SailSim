@@ -6,6 +6,7 @@ import type { BoatParams } from '../sim/boat/params';
 import type { SquibTypeId } from '../sim/boat/squib';
 import { CrewFigure, type BodyFrame, type CrewBuild, type CrewPose } from './crew';
 import { DEFAULT_SPINNAKER_COLOURS, SPINNAKER_COLOURS, SpinnakerView, type SpinnakerPose } from './spinnakerView';
+import { makeGhost } from './ghostLook';
 import { Burgee, BURGEE_STICK } from './burgee';
 import { MastheadVane } from './mastheadVane';
 import type { IndicatorType } from '../app/windIndicator';
@@ -1129,6 +1130,8 @@ export class SquibModel {
       { mastZ: MAST_Z, headY: HOUNDS_Y + 0.1, poleY: GOOSENECK_Y + 0.25, poleLength: 2.14, bowZ: BOW_Z, deckY: sheerAt(0.2) },
       this.spinnakerPanels,
     );
+    // A ghost's spinnaker, made after the ghost's other parts were made see-through, is see-through too.
+    if (this.group.userData.ghost) makeGhost(v.group);
     this.group.add(v.group);
     return v;
   }
