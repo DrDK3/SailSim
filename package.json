@@ -25,11 +25,12 @@
     "exploits": "tsx tools/exploit-search.ts",
     "shift-sensitivity": "tsx tools/shift-sensitivity.ts",
     "check:secrets": "tsx tools/check-secrets.ts dist",
-    "check:secrets": "tsx tools/check-secrets.ts dist",
     "tools:build": "vite build -c vite.tools.config.ts",
     "weekly:targets": "npm run tools:build && node dist-tools/weekly-targets.mjs",
     "club:verify": "npm run tools:build && node dist-tools/club-verify.mjs",
-    "club:mock": "node server/club-table/mock.mjs"
+    "club:mock": "node server/club-table/mock.mjs",
+    "media": "node tools/media.mjs out/media",
+    "icons": "node tools/icons.mjs"
   },
   "dependencies": {
     "react": "19.2.9",
