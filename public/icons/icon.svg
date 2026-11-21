@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The simulator's own mark (a Squib's main, jib and hull), as the favicon in index.html. -->
+  <rect width="32" height="32" rx="6" fill="#dfe9f2"/>
+  <path d="M16 3 L16 26 L6 26 Z" fill="#f4f1e8" stroke="#1f4e79"/>
+  <path d="M18 8 L18 26 L26 26 Z" fill="#f4f1e8" stroke="#1f4e79"/>
+  <path d="M4 27 H28 L25 30 H7 Z" fill="#1f4e79"/>
+</svg>

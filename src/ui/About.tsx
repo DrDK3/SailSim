@@ -2,16 +2,40 @@ import { useEffect, useRef } from 'react';
 import { useModal } from './useModal';
 
 /**
- * About the simulator: what it is and how far to trust it (owner, 18 Nov 2026: the caveats moved here from the
- * welcome, which is now one question and "Sail now"). Every statement is one the simulator already made elsewhere
- * (the old welcome, Help, the race panel, the coach): nothing new is claimed.
+ * About the simulator: first what you can do (review #41, package E), then how far to trust it (owner, 18 Nov 2026: the
+ * caveats moved here from the welcome, which is now one question and "Sail now"). Every statement is one the
+ * simulator already made elsewhere (the old welcome, Help, the race panel, the coach): nothing new is claimed.
  */
 export function AboutContent() {
   return (
     <div className="about" data-testid="about">
+      <h4>What you can do</h4>
+      <ul className="about-can" data-testid="about-can">
+        <li>
+          <strong>Learn to sail.</strong> Six short lessons, each checked as you sail (steering, the wind, trim, tacking and gybing, the start, the
+          stream), then seamanship: a mooring, coming alongside, man overboard. The Learn map (Settings) shows the order and what to do next.
+        </li>
+        <li>
+          <strong>Sail the Dart.</strong> Free sailing on the River Dart and in Start Bay, in the Met Office forecast or the wind and tide you set.
+        </li>
+        <li>
+          <strong>Race.</strong> Today&apos;s challenge, this week&apos;s short course with targets sailed by the AI, a start drill, or up to 20 AI Squibs
+          on a course you choose.
+        </li>
+        <li>
+          <strong>Practise.</strong> Two exercises with feedback attempt by attempt: trim, tack and recover; a wind shift on a beat.
+        </li>
+        <li>
+          <strong>Look back.</strong> A debrief after each sail, replays you can save and play again, a ghost of a run to race, and a challenge
+          to share by link. It is all kept in this browser unless you choose to send it (a file, a link, or a time for the club table).
+        </li>
+        <li>
+          <strong>Teach.</strong> Settings → Instructor view shows where each figure comes from, the exercises&apos; thresholds and each attempt&apos;s
+          assistance.
+        </li>
+      </ul>
       <p>
-        Sail a National Squib, the 5.8 m keelboat raced at the Royal Dart Yacht Club, on the River Dart and in Start Bay: learn to sail, explore the
-        water, or race against AI Squibs. It runs in your browser.
+        It is a simulator of the National Squib, the 5.8 m keelboat raced at the Royal Dart Yacht Club, and it runs in your browser.
       </p>
       <h4>How far to trust it</h4>
       <ul>

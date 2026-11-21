@@ -1,0 +1,18 @@
+{
+  "name": "Squib Sailing Simulator",
+  "short_name": "Squib Sim",
+  "description": "Sail a National Squib keelboat on the River Dart and in Start Bay: lessons, free sailing and races against AI boats. A simulator, not for navigation.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1c28",
+  "theme_color": "#1f4e79",
+  "lang": "en-GB",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

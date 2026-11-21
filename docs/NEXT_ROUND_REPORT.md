@@ -13,7 +13,7 @@ measured means measured in the model, not against a Squib on the water.
 | B (physics): spinnaker and sail controls | `next-b-spinnaker` | draft (link in §B.9) | Built; checks in §B.8 |
 | C (no physics): the low preset, trees, compact replays | `next-c-graphics` | draft (link in §C.9) | Built; checks in §C.6 |
 | D (no physics): Learn map and instructor view | `next-d-learn` | draft (link in §D.8) | Built; checks in §D.6 |
-| E (no physics): metadata, media, manifest, landing page | `next-e-share` | — | Not started |
+| E (no physics): metadata, media, manifest, landing page | `next-e-share` | draft (link in §E.9) | Built; checks in §E.7 |
 | F: simplified rule 18 and AI fleet safety | `next-f-rules` | — | Not started |
 | G: STATUS.md and issue hygiene | `next-g-status` | — | Not started |
 
@@ -495,6 +495,99 @@ reminders or rewards for coming back.
 Draft pull request: https://github.com/DrDK3/SailSim/pull/42 (branch `next-d-learn`, base `next-c-graphics`, so its
 diff shows package D alone; it follows package C, https://github.com/DrDK3/SailSim/pull/41). CI's result is recorded
 in the next package's report.
+
+---
+
+## Package E: sharing (no physics)
+
+**No physics.** The simulation is untouched; the reference race hash, the golden traces and the envelope are
+identical (§E.7).
+
+### E.1 What changed, by review number
+
+| # | Change | Where |
+|---|---|---|
+| #37, #38 | **The page's description** no longer says "Phase 1 prototype": "Sail a National Squib keelboat on the River Dart and in Start Bay, in your browser: short lessons, free sailing, and races against AI boats. A simulator, not for navigation." **Open Graph and Twitter card tags** with an absolute image URL (`https://drdk3.github.io/SailSim/social-card.jpg`, 1200 × 630, its alt text saying it is a render from the simulator, not a photograph). Tested on the built page served as the site is (`tests/e2e/share.spec.ts`: the description, the absolute URLs, the image's size and that it loads) | `index.html`, `public/social-card.jpg` |
+| #37 | **`npm run media`**: deterministic renders of the simulator itself, headless with the software renderer: a hero image (1600 × 900), social cards (1200 × 630: the river, an evening, the harbour from above, a race), and a 24-second trailer encoded by ffmpeg (H.264, `-preset veryfast`, no sound). Fixed places, times, winds and seeds, so the same build makes the same pictures; each frame carries the caption "simulator output, not a photograph"; no music, voices, third-party images or fonts; no people, results or records. `media.json` records what was made | `tools/media.mjs`, `public/media/` |
+| #39 | **A web app manifest and icons**: name, colours, start URL `./`, standalone display; icons at 192 and 512 px and a maskable 512 px, rendered from the simulator's own mark (`npm run icons`). **No service worker**: see §E.2 | `public/manifest.webmanifest`, `public/icons/`, `tools/icons.mjs` |
+| #40 | **A static landing page** at `landing.html`, beside the app, whose address does not change: what you can do, the trailer, how far to trust it, the RDYC's approval in its recorded words. No scripts, cookies or third-party fonts or images; light and dark; tested for axe-core, text alternatives, 44 px buttons and no sideways scroll on a phone | `public/landing.html` |
+| #40 | **Names**: proposed in §E.3; no rename, no domain | — |
+| #41 | **About leads with what you can do**: learn, sail the Dart, race, practise, look back, teach (each a line, each something the simulator already does), then what it is, then how far to trust it and the labels | `src/ui/About.tsx` |
+| RDYC | The approval is recorded (package A): "The RDYC has approved use of the club's name and burgee (owner, 20 Nov 2026)." The landing page quotes it and claims nothing wider | `docs/CLUB_DOCUMENTS.md`, `public/landing.html` |
+| NSOA | A note to the National Squib Owners' Association is drafted below (§E.4). **Not sent** | this report |
+
+### E.2 Why there is no service worker
+
+A service worker was allowed only if it fetched `live/`, `club/` and the weekly files network-first and an end-to-end
+test proved it. It is left out, for these reasons:
+
+- **Nothing asked for offline use**, and the simulator's River Dart data (about 12 MB) would make an offline cache
+  large on a phone.
+- **A stale build is a real risk here**: replays and club-table submissions are checked against the build that made
+  them (src/app/clubVerify.ts), and a cached older build after a deploy would make a sailor's run "built by another
+  version". A service worker's update lifecycle (the old one serves until every tab closes) makes that likelier.
+- **The live weather, the club table and the weekly targets must always be fresh**; without a service worker the
+  browser's ordinary HTTP caching already does that, with nothing to get wrong.
+- With the manifest, a browser can add the simulator to a phone's home screen with its name and icon. Whether a
+  given browser also offers an install prompt without a service worker varies by browser and version (not checked
+  here, and not asked for).
+
+The end-to-end test checks that no service worker is registered (`share.spec.ts`).
+
+### E.3 Names (proposals only: no rename, no domain bought)
+
+1. **Squib Sim**: short; says what it is; the manifest's short name already.
+2. **Dart Squib**: the place and the boat.
+3. **Squib on the Dart**: the same, as a phrase.
+4. **Kingswear Squib Simulator**: the club's side of the river; long.
+5. **Start Bay Squib**: the open-water half of the simulator.
+
+None was checked for trade marks or domain availability (that is for the owner). The current name, "Squib Sailing
+Simulator", stays.
+
+### E.4 A note to the NSOA (draft, not sent)
+
+> Dear National Squib Owners' Association,
+>
+> I am writing about a free browser simulator of the National Squib, sailed on the River Dart and in Start Bay,
+> made for juniors and club sailors at the Royal Dart Yacht Club (the RDYC has approved the use of its name and
+> burgee). It is at https://drdk3.github.io/SailSim/ (an overview: https://drdk3.github.io/SailSim/landing.html).
+>
+> It is a teaching and practice tool, not a performance prediction: the boat moves by a physics model whose
+> dimensions come from the class rules and whose water and sail coefficients are estimates. Nothing in it has been
+> checked against a real Squib yet, and the simulator's About page says so, label by label.
+>
+> If the Association were willing, three things would help most: (1) any polar or speed data the class holds;
+> (2) a few experienced Squib sailors to try it and tell us where it is wrong (a list of questions is ready,
+> including how the spinnaker is set and trimmed); (3) your view on how the simulator should describe the class.
+> We would not use the Association's name or marks without permission.
+>
+> With thanks,
+> [the owner]
+
+### E.5 Evidence
+
+EEVIDENCE
+
+### E.6 What is left from package E
+
+- The trailer and cards are software renders (no GPU here): on a real GPU the simulator draws more (reflections,
+  finer water) than they show.
+- Sending the NSOA note, choosing a name and any domain: needs people (the owner).
+- Whether an offline mode is wanted (then a service worker, network-first for live data, with its test).
+
+### E.7 Checks
+
+ECHECKS
+
+### E.8 Assets and licences
+
+Every new image and the trailer are the simulator's own renders (made by `npm run media` and `npm run icons` from
+this repository); the icons draw the simulator's own mark. No third-party asset was added; no font, music or sound.
+
+### E.9 Pull request
+
+EPR
 
 ---
 
