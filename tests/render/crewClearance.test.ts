@@ -4,13 +4,19 @@ import { squibParams } from '../../src/sim/boat/squib';
 import { SquibModel } from '../../src/render/squibModel';
 
 /**
- * Owner, 22 Nov 2026: "Rigging lines sometimes appear to go through the crew." With their weight near the centreline
- * (light airs, a run) the crew and the helm slid to the middle of the cockpit: the crew sat in the mainsheet's tackle
- * (from the traveller car on the centreline up to the boom), the tiller extension ran through the helm (seen from the
- * helm's own eye as a rod across the view, the head and torso not drawn), and on a light-air reach the tackle leant
- * out across a crew sitting low to leeward. Now no sheet, wire, spar or the extension passes through either figure's
- * torso or head, whatever their weight, the boom's angle and the tiller: away from the hand that holds it, each line
- * keeps out of the torso (8 cm from its axis: the chest is 0.26 m deep and 0.38 m wide) and the head.
+ * Owner, 22 Nov 2026: "Rigging lines sometimes appear to go through the crew." Found by measuring each line against
+ * the figures' bodies:
+ * - with their weight near the centreline (light airs, a run) the crew and the helm slid to the middle of the cockpit:
+ *   the crew sat in the mainsheet's tackle (from the traveller car on the centreline up to the boom), and the tiller
+ *   extension ran through the helm (seen from the helm's own eye as a rod across the view: the head and torso are
+ *   not drawn there);
+ * - with the boom eased over the crew's side (weight to leeward on a light-air reach), the tackle came down through
+ *   the crew, and the boom past their shoulders;
+ * - the mainsheet's tail ran straight from the car to the helm's hand, through the helm's knee and the crew's shins.
+ * Now, for every combination met afloat (weight anywhere to windward, or to leeward as far as the side deck, except on a
+ * run) and every boom angle and tiller, no sheet, spar, the kicker or the extension passes into either figure: each kept out of the
+ * torso (0.13 m from its axis), the head (0.105 m from its centre), the thighs (0.07 m), shins and upper arms (0.05 m),
+ * allowing for its own thickness, except within a hand's breadth of a hand that holds it (and the arm that holds it).
  */
 type Seg = [THREE.Vector3, THREE.Vector3];
 const DIST = (p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) => {
@@ -18,6 +24,9 @@ const DIST = (p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) => {
   const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq()));
   return a.clone().addScaledVector(ab, t).distanceTo(p);
 };
+
+/** Each line's radius (m): the spars and the extension as built; the sheets about 1 cm across. */
+const THICKNESS: Record<string, number> = { boom: 0.034, kicker: 0.012, 'tiller extension': 0.011, 'jib sheet': 0.005, mainsheet: 0.005 };
 
 function lines(m: SquibModel): Record<string, Seg[]> {
   const out: Record<string, Seg[]> = {};
@@ -43,34 +52,53 @@ function lines(m: SquibModel): Record<string, Seg[]> {
 }
 
 describe('the rigging keeps out of the crew', () => {
-  it('no line through either figure, for every weight, boom angle and tiller', { timeout: 60_000 }, () => {
+  it('no line into either figure, for every weight met afloat, boom angle and tiller', { timeout: 120_000 }, () => {
     const hits: string[] = [];
-    for (const crewY of [-0.6, -0.2, -0.1, -0.05, 0, 0.05, 0.1, 0.2, 0.6]) {
-      for (const angle of [-1.2, -0.5, -0.1, 0.1, 0.5, 1.2]) {
+    for (const angle of [-1.3, -0.8, -0.5, -0.25, 0.25, 0.5, 0.8, 1.3]) {
+      // The boom's side (a main at angle > 0 lies to port, −x): weight to windward is the other side.
+      const boom = angle > 0 ? -1 : 1;
+      for (const w of [0.6, 0.3, 0.2, 0.1, 0, -0.1, -0.2]) {
+        // On a run crews sit to windward or on the centreline, not to leeward under the boom.
+        if (w < 0 && Math.abs(angle) > 1.1) continue;
+        const crewY = -boom * w;
         for (const rudder of [0, 0.35, -0.35]) {
           const m = new SquibModel(squibParams());
           for (let k = 0; k < 90; k++) m.update({ main: { angle, luff: 1, fill: 1 }, jib: { angle: angle * 0.8, luff: 1, fill: 1 }, rudder, crewY, crewTo: crewY, time: k / 30 } as never);
           m.group.updateMatrixWorld(true);
           const segs = lines(m);
-          for (const role of ['crew', 'helm']) {
+          for (const role of ['crew', 'helm'] as const) {
             const fig = m.group.getObjectByName(`crew-${role}`)!;
             const b = (n: string) => fig.children.find((c) => c.name === n)!.position.clone();
-            const torso: Seg = [b('pelvis'), b('neck')];
             const head = b('head').add(new THREE.Vector3(0, 0.1, 0));
+            const parts: [string, number, Seg, boolean][] = [
+              ['torso', 0.13, [b('pelvis'), b('neck')], false],
+              ['head', 0.105, [head, head], false],
+              ['left thigh', 0.07, [b('thighL'), b('shinL')], false],
+              ['right thigh', 0.07, [b('thighR'), b('shinR')], false],
+              ['left shin', 0.05, [b('shinL'), b('footL')], false],
+              ['right shin', 0.05, [b('shinR'), b('footR')], false],
+              ['left upper arm', 0.05, [b('upperArmL'), b('forearmL')], true],
+              ['right upper arm', 0.05, [b('upperArmR'), b('forearmR')], true],
+            ];
             const hands = [b('handL'), b('handR')];
+            // The lines this figure holds: the helm the extension and the mainsheet's tail, the crew the jib sheet.
+            const holds = role === 'helm' ? ['tiller extension', 'mainsheet'] : ['jib sheet'];
             for (const [name, list] of Object.entries(segs)) {
-              let dT = Infinity;
-              let dH = Infinity;
-              for (const s of list) {
-                for (let i = 0; i <= 60; i++) {
-                  const q = s[0].clone().lerp(s[1], i / 60);
-                  // A line held in this figure's hand reaches it: not counted within a hand's breadth of it.
-                  if (hands.some((h) => h.distanceTo(q) < 0.15)) continue;
-                  dT = Math.min(dT, DIST(q, torso[0], torso[1]));
-                  dH = Math.min(dH, q.distanceTo(head));
+              const lineR = THICKNESS[name] ?? 0.005;
+              for (const [part, r, ps, arm] of parts) {
+                if (arm && holds.includes(name)) continue;
+                // A line held may lie against the holder's body (an extension across a hiking helm's chest), not in it.
+                const radius = part === 'torso' && holds.includes(name) ? 0.09 : r;
+                let d = Infinity;
+                for (const s of list) {
+                  for (let i = 0; i <= 80; i++) {
+                    const q = s[0].clone().lerp(s[1], i / 80);
+                    if (hands.some((h) => h.distanceTo(q) < 0.15)) continue;
+                    d = Math.min(d, DIST(q, ps[0], ps[1]));
+                  }
                 }
+                if (d < radius + lineR) hits.push(`${name} into the ${role}'s ${part} (weight ${crewY}, boom ${angle}, tiller ${rudder}): ${d.toFixed(3)} m, under ${(radius + lineR).toFixed(3)}`);
               }
-              if (dT < 0.08 || dH < 0.08) hits.push(`${name} through the ${role} (weight ${crewY}, boom ${angle}, tiller ${rudder}): ${dT.toFixed(2)} m from the torso's axis, ${dH.toFixed(2)} m from the head`);
             }
           }
         }

@@ -130,6 +130,8 @@ const FOREDECK_R = 0.42;
 const FOREDECK_LEN = 0.555;
 /** Forward of the mast's collar (radius 0.08) with 2 cm to spare. */
 const FOREDECK_AFT = MAST_Z - 0.1;
+/** How far forward the crew sit, low, when the boom is eased over their side (m): from CREW_Z, forward of the car. */
+const UNDER_BOOM_FWD = 0.45;
 const GOOSENECK_Y = 1.3;
 const HOUNDS_Y = 6.3;
 const SPREADER_Y = 3.6;
@@ -359,7 +361,7 @@ export class SquibModel {
   };
   /** Each sailor's eased pose: lateral position and speed, side, crossing, and the eased targets. */
   private readonly figs = [0, 1].map(() => ({
-    y: 0, vy: 0, side: 1, low: 1, cross: 0, step: 0, aft: 0, sheetHand: 0, grip: true, back: 0, ext: new THREE.Vector3(0, 1, 0),
+    y: 0, vy: 0, side: 1, low: 1, fwd: 0, cross: 0, step: 0, aft: 0, sheetHand: 0, grip: true, back: 0, ext: new THREE.Vector3(0, 1, 0),
     hip: new THREE.Vector3(), facing: new THREE.Vector3(0, 0, -1), foot: new THREE.Vector3(),
     hands: [new THREE.Vector3(), new THREE.Vector3()] as [THREE.Vector3, THREE.Vector3], look: new THREE.Vector3(),
   }));
@@ -415,7 +417,7 @@ export class SquibModel {
 
     // Sheets as thin lines that move: the jib sheet from the clew through the leeward fairlead to the crew's
     // hand; the mainsheet tackle from the boom to the traveller car, and its tail to the helm's hand.
-    for (const [count, colour] of [[3, 0x2f5f9a], [7, 0x8a8f96]] as const) {
+    for (const [count, colour] of [[3, 0x2f5f9a], [9, 0x8a8f96]] as const) {
       const geo = new THREE.BufferGeometry().setFromPoints(Array.from({ length: count }, () => new THREE.Vector3()));
       const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: colour }));
       line.frustumCulled = false;
@@ -851,6 +853,42 @@ export class SquibModel {
     this.rudder.name = 'rudder';
   }
 
+  /**
+   * Where the mainsheet's tail, from the car `a` to the helm's hand `b`, bends to lie over the sailors rather than pass
+   * through them (owner, 22 Nov 2026): up to two points, each lifted until clear (2.5 cm over the clothes) where the body
+   * it would pass through pushes it highest. The helm's arms, which hold it, are not in its way.
+   */
+  private drape(a: THREE.Vector3, b: THREE.Vector3): [THREE.Vector3, THREE.Vector3] {
+    const body: [THREE.Vector3, THREE.Vector3, number][] = [];
+    this.crew.forEach((c, i) => {
+      body.push([c.joint('pelvis'), c.joint('neck'), 0.13 + 0.025]);
+      for (const side of ['L', 'R'] as const) {
+        body.push([c.joint(`thigh${side}`), c.joint(`shin${side}`), 0.07 + 0.025]);
+        body.push([c.joint(`shin${side}`), c.joint(`foot${side}`), 0.05 + 0.025]);
+        if (i > 0) body.push([c.joint(`upperArm${side}`), c.joint(`forearm${side}`), 0.05 + 0.025], [c.joint(`forearm${side}`), c.joint(`hand${side}`), 0.04 + 0.025]);
+      }
+    });
+    const inside = (p: THREE.Vector3) => p.distanceTo(b) > 0.15 && body.some(([u, v, r]) => segmentDistance(p, u, v) < r);
+    /** The point along a–c the body pushes up highest, lifted clear; none if nothing is in the way. */
+    const lift = (from: THREE.Vector3, to: THREE.Vector3): { p: THREE.Vector3; h: number } | undefined => {
+      let best: { p: THREE.Vector3; h: number } | undefined;
+      for (let i = 1; i < 20; i++) {
+        const p = from.clone().lerp(to, i / 20);
+        let h = 0;
+        for (; h < 0.6 && inside(p); h += 0.01) p.y += 0.01;
+        if (h > 0 && (!best || h > best.h)) best = { p, h };
+      }
+      return best;
+    };
+    const first = lift(a, b);
+    if (!first) return [a.clone().lerp(b, 1 / 3), a.clone().lerp(b, 2 / 3)];
+    const before = lift(a, first.p);
+    const after = lift(first.p, b);
+    if (before && (!after || before.h >= after.h)) return [before.p, first.p];
+    if (after) return [first.p, after.p];
+    return [first.p, first.p.clone().lerp(b, 0.5)];
+  }
+
   /** Spars, standing rigging and the burgee stick's base (static). */
   private buildRig(mastTopY: number): THREE.Object3D[] {
     const out: THREE.Object3D[] = [];
@@ -1229,10 +1267,7 @@ export class SquibModel {
     const lead = new THREE.Vector3(Math.sign(clew.x || 1) * 0.6, sheerAt(0.45) + 0.04, MAST_Z + 0.9);
     this.rudder.rotation.y = params.rudder;
     this.fadeCrew = !!params.fadeCrew;
-    // The mainsheet's tackle: from the boom (about 60% along) to the traveller car (drawn below; the crew keep clear).
-    const bp = new THREE.Vector3(0, -0.04, 0.6 * footMain).applyEuler(this.boom.rotation).add(this.boom.position);
-    const car = new THREE.Vector3(0, sheerAt(0.7) - (this.classic ? 0.075 : 0.065), 0.35);
-    const hands = this.poseCrew(params.crewY, params.crewTo ?? params.crewY, params.rudder, time, params.hideHelm ?? false, lead, jib.angle, main.angle, [car, bp]);
+    const hands = this.poseCrew(params.crewY, params.crewTo ?? params.crewY, params.rudder, time, params.hideHelm ?? false, lead, jib.angle, main.angle);
 
     const js = this.sheets[0]!.geo.getAttribute('position') as THREE.BufferAttribute;
     js.setXYZ(0, clew.x, clew.y, clew.z);
@@ -1240,13 +1275,21 @@ export class SquibModel {
     js.setXYZ(2, hands.jib.x, hands.jib.y, hands.jib.z);
     js.needsUpdate = true;
     // Mainsheet: a tackle from the boom (about 60% along) to the traveller car, the tail to the helm's hand.
+    const bp = new THREE.Vector3(0, -0.04, 0.6 * footMain).applyEuler(this.boom.rotation).add(this.boom.position);
+    const car = new THREE.Vector3(0, sheerAt(0.7) - (this.classic ? 0.075 : 0.065), 0.35);
     const ms = this.sheets[1]!.geo.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < 5; i++) {
       const p = i % 2 === 0 ? bp : car;
       ms.setXYZ(i, p.x + (i - 2) * 0.015, p.y, p.z);
     }
-    ms.setXYZ(5, car.x, car.y + 0.03, car.z);
-    ms.setXYZ(6, hands.main.x, hands.main.y, hands.main.z);
+    // The tail from the car's block to the helm's hand, draped over any leg in its way (owner, 22 Nov 2026: it ran
+    // straight through the helm's knee, the hand resting by it, and the crew's shins).
+    const tail0 = new THREE.Vector3(car.x, car.y + 0.03, car.z);
+    const [w1, w2] = this.drape(tail0, hands.main);
+    ms.setXYZ(5, tail0.x, tail0.y, tail0.z);
+    ms.setXYZ(6, w1.x, w1.y, w1.z);
+    ms.setXYZ(7, w2.x, w2.y, w2.z);
+    ms.setXYZ(8, hands.main.x, hands.main.y, hands.main.z);
     ms.needsUpdate = true;
 
     // Telltales stream along the jib's surface, with the flow (or flick about when it is luffing).
@@ -1294,7 +1337,7 @@ export class SquibModel {
    * Sheeting in, the sheet hand pulls in strokes. Both mostly watch the jib's luff, glancing up at the main and
    * to windward. Every target is eased, so nothing jumps. Returns where the sheets end.
    */
-  private poseCrew(crewY: number, crewTo: number, rudder: number, time: number, hideHelm: boolean, jibLead: THREE.Vector3, jibAngle: number, mainAngle: number, tackle?: [THREE.Vector3, THREE.Vector3]): { jib: THREE.Vector3; main: THREE.Vector3 } {
+  private poseCrew(crewY: number, crewTo: number, rudder: number, time: number, hideHelm: boolean, jibLead: THREE.Vector3, jibAngle: number, mainAngle: number): { jib: THREE.Vector3; main: THREE.Vector3 } {
     const st = this.crewState;
     // A first frame, a restart or a seek: place everyone at once.
     const snap = !Number.isFinite(st.t) || time < st.t || time - st.t > 1;
@@ -1348,41 +1391,54 @@ export class SquibModel {
       const mv = f.cross;
       const hike = smoothstep(0.3, 0.8, r);
       let onDeck = smoothstep(0.08, 0.22, r);
+      // The crew on the boom's side with it eased over them (weight to leeward in light airs) keep clear of it and the
+      // mainsheet's tackle (owner, 22 Nov 2026: on the side deck there the boom and the tackle came through them, and low
+      // at their usual place the tackle did). Reaching (the boom 0.12 to 1 rad out) the tackle leans aft over their usual
+      // place: they sit low and forward of it, the boom over their head. Running (from 1.15 rad) the tackle leans forward
+      // across the cockpit's forward end: sitting low, they sit to windward of it (as crews do on a run). The boom's
+      // side: a main at angle > 0 lies to port (−x).
+      const boomSide = mainAngle > 0 ? -1 : 1;
+      const eased = Math.abs(mainAngle);
+      const leeward = !helm && s === boomSide ? 1 : 0;
+      const run = smoothstep(0.95, 1.15, eased);
+      // Only with a light weight to leeward (to 0.2 m; none from 0.3 m, leaning out), and not while going across the
+      // boat; moved to at a steady pace (fully in about 0.7 s), as the boom comes over or they settle on its side.
+      const forwardTo = leeward * smoothstep(0.12, 0.25, eased) * (1 - run) * (1 - smoothstep(0.2, 0.3, r)) * (1 - mv);
+      if (snap) f.fwd = forwardTo;
+      else f.fwd += Math.max(-1.5 * dt, Math.min(1.5 * dt, forwardTo - f.fwd));
+      const forward = f.fwd;
+      onDeck *= 1 - forward;
+      const lowSide = leeward && run > 0.5 && onDeck < 0.5 ? -s : s;
 
-      const z = helm ? HELM_Z : CREW_Z;
+      const z = (helm ? HELM_Z : CREW_Z) - UNDER_BOOM_FWD * forward;
       const { b: edge, h } = this.hullStation((z - BOW_Z) / this.p.loa);
       // Sitting on the side deck: just outboard of the coaming, out to the edge as they hike.
       const xd = COCKPIT_HALF + 0.14 + (edge - COCKPIT_HALF - 0.24) * hike;
       const deck = V(s * xd, deckHeight(xd, edge, h) + 0.1, z);
       // Low in the cockpit: on the side they lean to, never settled in the middle (owner, 22 Nov 2026). Sliding to the
       // centreline as their weight came to it put the crew in the mainsheet's tackle (from the traveller car on the
-      // centreline up to the boom) and the tiller extension through the helm; 0.31 m out clears both at every boom
-      // angle (tests/render/crewClearance.test.ts). When their weight changes side they move across at a steady pace
+      // centreline up to the boom) and the tiller extension through the helm (tests/render/crewClearance.test.ts).
+      // When their weight changes side they move across at a steady pace
       // (side to side in about 1.3 s), so drifting across in light airs stays smooth; quicker going across in a tack, or
       // once the weight is clearly on the new side (as the seat followed the weight before).
       const lowRate = 1.5 + 8 * Math.max(mv, smoothstep(0.08, 0.2, r));
-      if (snap) f.low = s;
-      else f.low += Math.max(-lowRate * dt, Math.min(lowRate * dt, s - f.low));
+      if (snap) f.low = lowSide;
+      else f.low += Math.max(-lowRate * dt, Math.min(lowRate * dt, lowSide - f.low));
       const sig = f.low;
       const low = V(sig * (COCKPIT_HALF - 0.2), sole + 0.12, z);
-      // On a light-air reach the boom is eased over that side and the mainsheet's tackle leans out across the seat low
-      // in the cockpit: then they sit up on that side deck, clear of it (owner, 22 Nov 2026). Measured at the seat's
-      // chest and shoulders; fully up when the tackle would be within the torso (0.2 m), not at all from 0.3 m.
-      if (tackle && !helm) {
-        let clear = Infinity;
-        for (const up of [0.3, 0.5]) clear = Math.min(clear, segmentDistance(V(low.x, low.y + up, low.z), tackle[0], tackle[1]));
-        onDeck = Math.max(onDeck, 1 - smoothstep(0.2, 0.3, clear));
-      }
       const crouch = V(Math.max(-0.35, Math.min(0.35, f.y * 0.75)), sole + 0.3, z - 0.05);
       const hipTo = low.lerp(deck, onDeck).lerp(crouch, mv);
       // Inboard and forward (the helm more forward); straight forward while crossing.
-      const ang = helm ? 0.9 : 0.55;
+      // The crew sitting low face more forward, their legs along the floor beside the console rather than across it
+      // under the traveller (owner, 22 Nov 2026).
+      const ang = helm ? 0.9 : 0.55 + 0.45 * (1 - onDeck);
       const facingTo = V(-sig * Math.cos(ang), 0, -Math.sin(ang)).lerp(V(0, 0, -1), mv).normalize();
       const sway = 0.025 * Math.sin(time * 1.1 + i * 2.1) + 0.015 * Math.sin(time * 2.3 + i);
       const backTo = (0.32 + (0.06 + 0.62 * hike - 0.32) * onDeck) * (1 - mv) - 1.0 * mv + sway;
       // Feet: on the floor below the knees sitting in; under the toe strap hiking; under the hips crouching.
       const footDeck = V(s * (COCKPIT_HALF - 0.16 + (STRAP_X - COCKPIT_HALF + 0.16) * hike), sole + 0.075, z - 0.1 - 0.15 * hike);
-      const footLow = V(hipTo.x + facingTo.x * 0.7, sole + 0.075, hipTo.z + facingTo.z * 0.7);
+      // Their feet stay on their own side of the floor, clear of the console and the traveller's tackle on the centreline.
+      const footLow = V(sig * Math.max(0.3, sig * (hipTo.x + facingTo.x * 0.7)), sole + 0.075, hipTo.z + facingTo.z * 0.7);
       const footCrouch = V(hipTo.x, sole + 0.075, hipTo.z + 0.05);
       const footTo = footLow.lerp(footDeck, onDeck).lerp(footCrouch, mv);
       if (snap) {
@@ -1450,7 +1506,8 @@ export class SquibModel {
         hands[aft]!.copy(pivot).addScaledVector(f.ext, EXTENSION);
         // The mainsheet tail, held in front of the body towards the middle of the boat; pulled in strokes.
         const sh = fr.shoulders[fwd]!;
-        hands[fwd]!.copy(sh).addScaledVector(fr.front, 0.3 - 0.14 * pullMain).addScaledVector(Y_AXIS, -0.3 + 0.06 * pullMain).addScaledVector(across, -s * 0.08);
+        // Held a little above the knee (owner, 22 Nov 2026: beside it, the tail into the hand ran through the knee).
+        hands[fwd]!.copy(sh).addScaledVector(fr.front, 0.3 - 0.14 * pullMain).addScaledVector(Y_AXIS, -0.25 + 0.06 * pullMain).addScaledVector(across, -s * 0.08);
         look = jibLuff.clone().lerp(V(s * 10, 3, -18), glance);
       } else {
         // The leeward jib sheet, reached across towards its cleat (pulled in strokes when trimming); the other
