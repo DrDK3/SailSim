@@ -16,7 +16,8 @@ vi.mock('../../src/render/colours', async (orig) => ({ ...(await orig<typeof imp
 const { ShipBuoysView } = await import('../../src/render/mosaique');
 const { TrafficView } = await import('../../src/render/traffic');
 const { CourseScene } = await import('../../src/render/course');
-const { ClubEnsign } = await import('../../src/render/clubEnsign');
+const { ClubEnsign, flagstaffGaff } = await import('../../src/render/clubEnsign');
+const { buildRdycClub } = await import('../../src/render/rdyc');
 
 const DEG = Math.PI / 180;
 const DAY = Date.parse('2026-07-15T12:00:00Z');
@@ -137,5 +138,34 @@ describe('a drooping flag keeps its hoist on its staff (it no longer swings off 
     const cloth = en.group.getObjectByName('club-ensign-flag') as THREE.Mesh;
     const h = hoist(cloth);
     expect((h.top.clone().sub(h.bottom).normalize().angleTo(new THREE.Vector3(0, 1, 0)) * 180) / Math.PI).toBeLessThan(1);
+  });
+});
+
+describe('the club’s ensign hangs from its flagstaff’s gaff', () => {
+  it('the RDYC flagstaff has its gaff, and the ensign is hoisted to its peak (it hung in the air beside the yard)', () => {
+    const club = buildRdycClub();
+    const { at, fromM, height } = club.flagstaff;
+    const { throat, peak } = flagstaffGaff(at, fromM, height);
+    // The gaff drawn: the club's geometry has a spar's ends at the staff (the throat) and at the peak.
+    club.group.updateMatrixWorld(true);
+    const near = (p: THREE.Vector3, r: number) => {
+      let found = false;
+      club.group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (found || !m.isMesh) return;
+        const pos = m.geometry.getAttribute('position');
+        const v = new THREE.Vector3();
+        for (let i = 0; i < pos.count && !found; i++) if (v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).distanceTo(p) < r) found = true;
+      });
+      return found;
+    };
+    expect(near(peak, 0.1)).toBe(true);
+    expect(near(throat, 0.1)).toBe(true);
+    // The ensign's hoist hangs from that peak.
+    const en = new ClubEnsign(at, fromM, height);
+    en.update(DAY, { fromDir: 250 * DEG, speed: 6 }, 3);
+    en.group.updateMatrixWorld(true);
+    const h = hoist(en.group.getObjectByName('club-ensign-flag') as THREE.Mesh);
+    expect(h.top.distanceTo(peak)).toBeLessThan(0.05);
   });
 });
