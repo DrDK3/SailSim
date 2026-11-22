@@ -125,6 +125,11 @@ function smoothstep(e0: number, e1: number, x: number): number {
 
 const BOW_Z = -2.95;
 const MAST_Z = -0.55;
+/** The low foredeck rise (a flattened capsule along the boat): its end radius, straight length and aft end (m). */
+const FOREDECK_R = 0.42;
+const FOREDECK_LEN = 0.555;
+/** Forward of the mast's collar (radius 0.08) with 2 cm to spare. */
+const FOREDECK_AFT = MAST_Z - 0.1;
 const GOOSENECK_Y = 1.3;
 const HOUNDS_Y = 6.3;
 const SPREADER_Y = 3.6;
@@ -354,7 +359,7 @@ export class SquibModel {
   };
   /** Each sailor's eased pose: lateral position and speed, side, crossing, and the eased targets. */
   private readonly figs = [0, 1].map(() => ({
-    y: 0, vy: 0, side: 1, cross: 0, step: 0, aft: 0, sheetHand: 0, grip: true, back: 0, ext: new THREE.Vector3(0, 1, 0),
+    y: 0, vy: 0, side: 1, low: 1, cross: 0, step: 0, aft: 0, sheetHand: 0, grip: true, back: 0, ext: new THREE.Vector3(0, 1, 0),
     hip: new THREE.Vector3(), facing: new THREE.Vector3(0, 0, -1), foot: new THREE.Vector3(),
     hands: [new THREE.Vector3(), new THREE.Vector3()] as [THREE.Vector3, THREE.Vector3], look: new THREE.Vector3(),
   }));
@@ -661,11 +666,14 @@ export class SquibModel {
       }
       g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, 0.018, 6, false), this.classic ? MAT.varnish : MAT.rubbing));
     }
-    // Low foredeck rise forward of the mast (estimated), with a rounded edge.
-    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.75, 4, 12), MAT.deck);
+    // Low foredeck rise forward of the mast (estimated), with a rounded edge. It ends forward of the mast's collar
+    // (owner, 22 Nov 2026): its rounded aft end reached 0.1 m past the mast, which stood in its thin edge with the
+    // collar showing below it as a dark ring. Its forward edge is where it was.
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(FOREDECK_R, FOREDECK_LEN, 4, 12), MAT.deck);
     fore.rotation.x = Math.PI / 2;
     fore.scale.set(1.05, 1, 0.16);
-    fore.position.set(0, sheerAt(0.3) + 0.04, -1.25);
+    fore.position.set(0, sheerAt(0.3) + 0.04, FOREDECK_AFT - FOREDECK_R - FOREDECK_LEN / 2);
+    fore.name = 'foredeck';
     g.add(fore);
     return g;
   }
@@ -860,6 +868,7 @@ export class SquibModel {
     crane.position.set(0, mastTopY - 0.02, MAST_Z + 0.02);
     const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.05, 14), MAT.darkSpar);
     collar.position.set(0, deckY + 0.02, MAST_Z);
+    collar.name = 'mast-collar';
     out.push(mast, track, crane, collar);
     // Spreaders, swept back (estimate), and the standing rigging as wires with bottlescrews at the chainplates.
     const sweep = 0.12;
@@ -1220,7 +1229,10 @@ export class SquibModel {
     const lead = new THREE.Vector3(Math.sign(clew.x || 1) * 0.6, sheerAt(0.45) + 0.04, MAST_Z + 0.9);
     this.rudder.rotation.y = params.rudder;
     this.fadeCrew = !!params.fadeCrew;
-    const hands = this.poseCrew(params.crewY, params.crewTo ?? params.crewY, params.rudder, time, params.hideHelm ?? false, lead, jib.angle, main.angle);
+    // The mainsheet's tackle: from the boom (about 60% along) to the traveller car (drawn below; the crew keep clear).
+    const bp = new THREE.Vector3(0, -0.04, 0.6 * footMain).applyEuler(this.boom.rotation).add(this.boom.position);
+    const car = new THREE.Vector3(0, sheerAt(0.7) - (this.classic ? 0.075 : 0.065), 0.35);
+    const hands = this.poseCrew(params.crewY, params.crewTo ?? params.crewY, params.rudder, time, params.hideHelm ?? false, lead, jib.angle, main.angle, [car, bp]);
 
     const js = this.sheets[0]!.geo.getAttribute('position') as THREE.BufferAttribute;
     js.setXYZ(0, clew.x, clew.y, clew.z);
@@ -1228,8 +1240,6 @@ export class SquibModel {
     js.setXYZ(2, hands.jib.x, hands.jib.y, hands.jib.z);
     js.needsUpdate = true;
     // Mainsheet: a tackle from the boom (about 60% along) to the traveller car, the tail to the helm's hand.
-    const bp = new THREE.Vector3(0, -0.04, 0.6 * footMain).applyEuler(this.boom.rotation).add(this.boom.position);
-    const car = new THREE.Vector3(0, sheerAt(0.7) - (this.classic ? 0.075 : 0.065), 0.35);
     const ms = this.sheets[1]!.geo.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < 5; i++) {
       const p = i % 2 === 0 ? bp : car;
@@ -1284,7 +1294,7 @@ export class SquibModel {
    * Sheeting in, the sheet hand pulls in strokes. Both mostly watch the jib's luff, glancing up at the main and
    * to windward. Every target is eased, so nothing jumps. Returns where the sheets end.
    */
-  private poseCrew(crewY: number, crewTo: number, rudder: number, time: number, hideHelm: boolean, jibLead: THREE.Vector3, jibAngle: number, mainAngle: number): { jib: THREE.Vector3; main: THREE.Vector3 } {
+  private poseCrew(crewY: number, crewTo: number, rudder: number, time: number, hideHelm: boolean, jibLead: THREE.Vector3, jibAngle: number, mainAngle: number, tackle?: [THREE.Vector3, THREE.Vector3]): { jib: THREE.Vector3; main: THREE.Vector3 } {
     const st = this.crewState;
     // A first frame, a restart or a seek: place everyone at once.
     const snap = !Number.isFinite(st.t) || time < st.t || time - st.t > 1;
@@ -1337,17 +1347,32 @@ export class SquibModel {
       const r = Math.abs(f.y);
       const mv = f.cross;
       const hike = smoothstep(0.3, 0.8, r);
-      const onDeck = smoothstep(0.08, 0.22, r);
+      let onDeck = smoothstep(0.08, 0.22, r);
 
       const z = helm ? HELM_Z : CREW_Z;
       const { b: edge, h } = this.hullStation((z - BOW_Z) / this.p.loa);
       // Sitting on the side deck: just outboard of the coaming, out to the edge as they hike.
       const xd = COCKPIT_HALF + 0.14 + (edge - COCKPIT_HALF - 0.24) * hike;
       const deck = V(s * xd, deckHeight(xd, edge, h) + 0.1, z);
-      // Low in the cockpit: towards the side they lean to, nearer the middle (and facing more forward) as their
-      // weight comes to the centreline, so drifting across in light airs is continuous.
-      const sig = Math.max(-1, Math.min(1, f.y / 0.15));
+      // Low in the cockpit: on the side they lean to, never settled in the middle (owner, 22 Nov 2026). Sliding to the
+      // centreline as their weight came to it put the crew in the mainsheet's tackle (from the traveller car on the
+      // centreline up to the boom) and the tiller extension through the helm; 0.31 m out clears both at every boom
+      // angle (tests/render/crewClearance.test.ts). When their weight changes side they move across at a steady pace
+      // (side to side in about 1.3 s), so drifting across in light airs stays smooth; quicker going across in a tack, or
+      // once the weight is clearly on the new side (as the seat followed the weight before).
+      const lowRate = 1.5 + 8 * Math.max(mv, smoothstep(0.08, 0.2, r));
+      if (snap) f.low = s;
+      else f.low += Math.max(-lowRate * dt, Math.min(lowRate * dt, s - f.low));
+      const sig = f.low;
       const low = V(sig * (COCKPIT_HALF - 0.2), sole + 0.12, z);
+      // On a light-air reach the boom is eased over that side and the mainsheet's tackle leans out across the seat low
+      // in the cockpit: then they sit up on that side deck, clear of it (owner, 22 Nov 2026). Measured at the seat's
+      // chest and shoulders; fully up when the tackle would be within the torso (0.2 m), not at all from 0.3 m.
+      if (tackle && !helm) {
+        let clear = Infinity;
+        for (const up of [0.3, 0.5]) clear = Math.min(clear, segmentDistance(V(low.x, low.y + up, low.z), tackle[0], tackle[1]));
+        onDeck = Math.max(onDeck, 1 - smoothstep(0.2, 0.3, clear));
+      }
       const crouch = V(Math.max(-0.35, Math.min(0.35, f.y * 0.75)), sole + 0.3, z - 0.05);
       const hipTo = low.lerp(deck, onDeck).lerp(crouch, mv);
       // Inboard and forward (the helm more forward); straight forward while crossing.
@@ -1571,6 +1596,13 @@ function deckHeight(x: number, b: number, h: number): number {
 }
 
 /** Sheer line (deck edge height above the waterline): estimated, rising slightly to the transom. */
+/** The distance from a point to a segment. */
+function segmentDistance(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
+  const ab = b.clone().sub(a);
+  const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-9)));
+  return a.clone().addScaledVector(ab, t).distanceTo(p);
+}
+
 function sheerAt(t: number): number {
   return 0.74 - 0.2 * Math.sin((Math.PI / 2) * Math.min(t / 0.8, 1)) + 0.05 * Math.max(0, (t - 0.8) / 0.2);
 }
