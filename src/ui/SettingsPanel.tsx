@@ -10,6 +10,7 @@ import { PRESETS, matchPreset, presetSettings, type GraphicsPreset, type Graphic
 import { LIGHTING_PRESETS } from '../app/lighting';
 import type { AudioSettings } from '../render/audio';
 import { DEVICE_CHECK_SECONDS, reportText } from '../app/deviceCheck';
+import { FEATURE_FLAGS, FLAG_ORDER, flagSetting } from '../app/flags';
 
 const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
   performance: { label: 'Smooth', note: 'For school laptops, tablets and older computers: every sailing cue (gusts on the water, sails, telltales, wake) at a lower resolution, with simpler water, shadows and scenery.' },
@@ -208,6 +209,14 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
             data-testid="pref-helm-fov"
           />
         </label>
+        <label className="field select-field">
+          <span>Crew in helm view</span>
+          <select value={ui.prefs.helmCrew} onChange={(e) => ctl.setPrefs({ helmCrew: e.target.value === 'faded' ? 'faded' : 'shown' })} data-testid="pref-helm-crew">
+            <option value="shown">Shown</option>
+            <option value="faded">Faded</option>
+          </select>
+        </label>
+        <p className="fine">Faded is a presentation choice: the crew are still aboard and still sail the boat; they are drawn see-through so they do not fill the view ahead.</p>
         <h5>Game controller</h5>
         <p className="fine" data-testid="gamepad-help">
           {ui.gamepad ? 'A game controller is connected. ' : 'Connect a game controller (and press a button) to use it. '}
@@ -238,6 +247,10 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           <input type="checkbox" checked={ui.prefs.instructorView} onChange={(e) => ctl.setPrefs({ instructorView: e.target.checked })} data-testid="pref-instructor" />
           Instructor view: show where each figure comes from and its evidence label (E for an estimate), the exercises&apos; thresholds and each
           attempt&apos;s assist record, where they apply. Off, they are gathered in About (&ldquo;How far to trust this&rdquo;)
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={ui.prefs.lookUpToggle} onChange={(e) => ctl.setPrefs({ lookUpToggle: e.target.checked })} data-testid="pref-lookup-toggle" />
+          Look up at the masthead with one press: T (or the Look up button) looks up, and a second press looks back, instead of holding the key
         </label>
         <label className="check">
           <input type="checkbox" checked={ui.prefs.lightLabels} onChange={(e) => ctl.setPrefs({ lightLabels: e.target.checked })} data-testid="pref-light-labels" />
@@ -298,6 +311,22 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           {ui.recordedSounds.length ? `Recordings in use: ${ui.recordedSounds.join(', ')}.` : 'No recordings are included; any added to the audio folder are used in place of the synthesised sound (docs/SOUND.md).'} The
           countdown uses only voices on this device; nothing is sent anywhere.
         </p>
+        <h4 className="settings-group">Advanced</h4>
+        <p className="fine">
+          Feature switches, kept in this browser: each turns a feature off without changing the simulator. Off, it behaves as it did before that feature
+          was added.
+        </p>
+        <div data-testid="feature-flags">
+          {FLAG_ORDER.map((f) => (
+            <div key={f} className="flag-row">
+              <label className="toggle">
+                <input type="checkbox" checked={flagSetting(f)} onChange={(e) => ctl.setFeature(f, e.target.checked)} data-testid={`flag-${f}`} />
+                <span>{FEATURE_FLAGS[f].label}{FEATURE_FLAGS[f].defaultOn === 'learn' ? ' (Learn level)' : ''}</span>
+              </label>
+              <p className="fine">Off: {FEATURE_FLAGS[f].off}</p>
+            </div>
+          ))}
+        </div>
         <h4 className="settings-group">Troubleshooting</h4>
         <h5>Graphics check</h5>
         <div data-testid="gpu-check">

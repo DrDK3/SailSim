@@ -55,11 +55,15 @@ test('the landing page: beside the app, which keeps its address; accessible; no 
   for (const img of await page.locator('img').all()) expect(await img.getAttribute('alt')).not.toBeNull();
   await expect(page.locator('video')).toHaveAttribute('muted', '');
   // The trailer, its poster and its captions are in the build.
-  for (const [path, type] of [['media/trailer.mp4', 'video/mp4'], ['media/hero.jpg', 'image/jpeg'], ['media/trailer.vtt', 'text/vtt']]) {
+  for (const [path, type] of [['media/trailer.mp4', 'video/mp4'], ['media/hero.jpg', 'image/jpeg'], ['media/poster.jpg', 'image/jpeg'], ['media/trailer.vtt', 'text/vtt']]) {
     const res = await request.get(path!);
     expect(res.status(), path).toBe(200);
     expect(res.headers()['content-type'], path).toContain(type!);
   }
+  // Fixes of 21 Nov 2026, §3.6: the trailer's poster is its own frame, not the hero.
+  await expect(page.locator('video')).toHaveAttribute('poster', 'media/poster.jpg');
+  const [hero, poster] = await Promise.all(['media/hero.jpg', 'media/poster.jpg'].map(async (p) => (await request.get(p)).body()));
+  expect(Buffer.compare(hero!, poster!)).not.toBe(0);
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   // The way in is the app at the site's own address.

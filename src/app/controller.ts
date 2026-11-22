@@ -58,6 +58,7 @@ import { CONTENT_STATUS, loadThresholds, mergeThresholds, resetThresholds, saveT
 import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
 import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
+import { featureOn, setFeatureFlag, type FeatureFlag } from './flags';
 import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
 import { COACH, RaceCoach, type Debrief, type Tip } from './coach';
@@ -361,6 +362,19 @@ const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 'unknow
 /** Fills a partial starting input to a full one for the recording. */
 const DEFAULT_INPUT_FOR_RECORD: ControlInput = { helm: 0, mainSheet: 0.3, jibSheet: 0.3, autoMain: false, autoJib: true, crewHike: 0.6, autoCrew: true, flatten: 0 };
 
+/**
+ * The controls a restart carries over from the previous run (one that does not pass its own starting controls): the
+ * sheets and the trim as they were, the helm centred, and no spinnaker call. The call to hoist and the count of
+ * pole-gybe calls are cleared, so the crew do not hoist again at the new start, even on a beat, and no pole gybe is
+ * pending (fixes of 21 Nov 2026, §2.1). A control the previous run never set stays unset.
+ */
+export function carriedInput(prev: ControlInput): ControlInput {
+  const next: ControlInput = { ...prev, helm: 0 };
+  if (next.spin !== undefined) next.spin = 0;
+  if (next.spinGybe !== undefined) next.spinGybe = 0;
+  return next;
+}
+
 /** The list of live and replay data files served next to the app (public/live/README.md). */
 const LIVE_INDEX = 'live/index.json';
 /** Replays built into every deployment, tried when the index cannot be read. */
@@ -443,6 +457,10 @@ export class SimController {
   private lastWeather = -Infinity;
   /** The input the user's boat was built with (part of a recording), and the state hashes so far. */
   private initialInput: ControlInput | null = null;
+  /** Whether this run's race gives rule 18 penalties (Settings → Advanced, or as its recording says; §2.2). */
+  private runMarkRoomPenalties = false;
+  /** Whether this run's AI fleet steers by its spinnaker table downwind (§2.3; false only for an older replay). */
+  private runAiSpinPolar = true;
   private checkpoints: [number, string][] = [];
   /** Replay in progress: the recording, its decoded inputs and how far it has been checked. */
   private replay?: { rec: Recording; inputs: InputLogEntry[]; next: number; matched: number; total: number; verifiedTo: number; divergedAt?: number; ended: boolean; notes: string[] };
@@ -544,7 +562,7 @@ export class SimController {
    * Start (or restart) a run. `initialInput` overrides the input the user's boat is built with (a replay
    * passes the recorded one; by default the previous run's input carries over with the helm centred).
    */
-  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean; openWater?: boolean } = {}): boolean {
+  restart(scenario: AppScenario = this.scenario, opts: { initialInput?: ControlInput | null; keepReplay?: boolean; openWater?: boolean; markRoomPenalties?: boolean; aiSpinPolar?: boolean } = {}): boolean {
     // The exercise's own scenario, restarted from outside the exercise while an attempt (or the warm-up) runs: the
     // attempt starts again through the exercise, so its measurements start again with the boat. In a review or the
     // result the exercise is not measuring, so the boat simply restarts.
@@ -570,13 +588,20 @@ export class SimController {
       return false;
     }
     const loc = START_LOCATIONS.find((l) => l.id === scenario.startLocation) ?? START_LOCATIONS[0];
+    // Rule 18's penalties as switched in Settings → Advanced (off by default), or as a replay was recorded (§2.2).
+    const runMarkRoomPenalties = opts.markRoomPenalties ?? featureOn('markRoomPenalties');
+    // The AI fleet steers by its spinnaker table downwind (§2.3), unless a replay recorded before that says otherwise.
+    const runAiSpinPolar = opts.aiSpinPolar ?? true;
     const prevInput = this.sim?.input;
     const startInput: ControlInput | undefined =
-      opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? { ...prevInput, helm: 0 } : undefined;
+      opts.initialInput !== undefined ? (opts.initialInput ?? undefined) : prevInput ? carriedInput(prevInput) : undefined;
     let race: SimController['race'];
     let sim: Simulation;
     const typeParams = squibTypeParams(isSquibType(scenario.boat) ? scenario.boat : DEFAULT_SQUIB_TYPE);
-    const boatParams = scenario.spinnaker ? withSpinnaker(typeParams) : typeParams;
+    // Settings → Advanced: with the spinnaker switched off nothing carries one, as before package B; a replay sails as it
+    // was recorded (fixes of 21 Nov 2026, §3.1).
+    const spinAboard = !!scenario.spinnaker && (!!opts.keepReplay || featureOn('spinnaker'));
+    const boatParams = spinAboard ? withSpinnaker(typeParams) : typeParams;
     // River traffic for this run (its ferries crab in this run's stream): shared by the physics and the picture.
     const runData = geo ? this.dartData : undefined;
     const feats = runData?.features;
@@ -596,7 +621,9 @@ export class SimController {
           aiCount: Math.max(0, Math.min(20, Math.round(fleet.aiCount))),
           level: fleet.level,
           seed: scenario.conditions.gusts.seed,
-          spinnaker: !!scenario.spinnaker,
+          spinnaker: spinAboard,
+          markRoomPenalties: runMarkRoomPenalties,
+          aiSpinPolar: runAiSpinPolar,
           human: {
             controller: () => this.sampleInputs(),
             input: startInput,
@@ -637,6 +664,8 @@ export class SimController {
     this.realTime = Math.abs(Date.parse(scenario.conditions.startTime) - Date.now()) < REAL_TIME_WITHIN_MS;
     this.built = built;
     this.race = race;
+    this.runMarkRoomPenalties = runMarkRoomPenalties;
+    this.runAiSpinPolar = runAiSpinPolar;
     this.sim = sim;
     this.coach = race ? this.makeCoach(race, built, scenario) : undefined;
     this.debrief = undefined;
@@ -805,7 +834,7 @@ export class SimController {
         sequence: race.session.committee.opts.sequence,
         competitors: race.session.fleet.boats.length - 1,
       },
-      race.session.polar,
+      race.session.humanPolar,
     );
   }
 
@@ -1294,8 +1323,11 @@ export class SimController {
     this.raceAidsOn = d.raceAids;
     writeFlag('squib.raceAids', d.raceAids);
     this.showLabels = d.labels;
+    // On a phone upright the instruments stay a compact strip at Expert too ("All instruments" a tap away), so the water
+    // keeps at least half the screen (fixes of 21 Nov 2026, §2.4: the full panel covered most of it).
+    const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (max-width: 700px)').matches;
     try {
-      localStorage.setItem('squib.instruments.more', d.allInstruments ? '1' : '0');
+      localStorage.setItem('squib.instruments.more', d.allInstruments && !phone ? '1' : '0');
     } catch {
       // storage unavailable
     }
@@ -1503,6 +1535,10 @@ export class SimController {
       // What this run sailed on (river data that arrived and waits for the next start is not part of it).
       dart: this.sim.seabed ? 'loaded' : 'none',
       ...(this.dartFromStep === undefined ? {} : { dartFromStep: this.dartFromStep }),
+      // A race sailed with rule 18's penalties on says so (its replay rules the same way); absent: off (§2.2).
+      ...(this.race && this.runMarkRoomPenalties ? { markRoomPenalties: true } : {}),
+      // A race with spinnakers whose AI steered by its spinnaker table says so; absent: the table without one (§2.3).
+      ...(this.race && this.runAiSpinPolar && this.race.session.fleet.boats.some((b) => b.kind === 'ai' && !!b.sim.params.spin) ? { aiSpinPolar: true } : {}),
       ...(compact ? { inputsQ: compact } : { inputs }),
       checkpoints,
       endStep: this.sim.step,
@@ -1524,7 +1560,7 @@ export class SimController {
     if (rec.dart !== dartNow) notes.push(`Recorded ${rec.dart === 'loaded' ? 'with' : 'without'} the River Dart data, played ${dartNow === 'loaded' ? 'with' : 'without'} it: it will not match.`);
     if (rec.build !== BUILD_ID) notes.push(`Recorded with build ${rec.build}; this is ${BUILD_ID}. A different build may not reproduce it exactly.`);
     if (rec.dartFromStep !== undefined && dartNow === 'loaded') notes.push(`The River Dart joined this run ${Math.round(rec.dartFromStep / 100)} s in; it joins the replay there too.`);
-    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined })) return false;
+    if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined, markRoomPenalties: rec.markRoomPenalties === true, aiSpinPolar: rec.aiSpinPolar === true })) return false;
     this.replay = { rec, inputs: recordingLog(rec), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
     this.held.clear();
     this.paused = false;
@@ -1890,6 +1926,8 @@ export class SimController {
    */
   private riverArrival(data: DartData): 'restart' | 'in-place' | 'ask' | 'wait' | 'none' {
     if (this.replay || this.catchUp) return data.geo ? 'wait' : 'none';
+    // Settings → Advanced: with the river joining a run switched off, it restarts the run, as before package A (§3.1).
+    if (!featureOn('riverHotSwap')) return 'restart';
     const activity = !!(this.race || this.tutorial || this.exercise || this.drill || this.ghost);
     const touched = this.sim.inputLog.length > 1 || this.sim.time >= (activity ? 5 : Infinity);
     if (!touched) return 'restart';
@@ -2045,6 +2083,7 @@ export class SimController {
     this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
     this.view?.setSpinnakerColours(this.prefs.spinnakerColours);
     this.view?.setHelmFov(this.prefs.helmFovDeg);
+    this.view?.setHelmCrewFaded(this.prefs.helmCrew === 'faded');
     this.view?.setSafeArea(this.safeArea.top, this.safeArea.bottom);
     this.view?.setCourse(this.race?.resolved, this.race?.course, this.dartData?.features?.marks);
     this.view?.setFleet(this.fleetList());
@@ -2306,7 +2345,24 @@ export class SimController {
 
   /** Hold (true) or let go of (false) "look up" at the masthead (review #1: the T key, or the console's button). */
   setLookUp(on: boolean): void {
+    this.lookingUpNow = on;
     this.view?.setLookUp(on);
+  }
+
+  private lookingUpNow = false;
+  /** Whether the view is (or is going) looking up at the masthead now. */
+  get lookingUp(): boolean {
+    return this.lookingUpNow;
+  }
+
+  /**
+   * The T key or the console's button pressed (`down`) or released: held, look up while held; with the toggle setting
+   * (§3.3), each press switches between looking up and back, and a release does nothing.
+   */
+  lookUpPress(down: boolean): void {
+    if (this.prefs.lookUpToggle) {
+      if (down) this.setLookUp(!this.lookingUpNow);
+    } else this.setLookUp(down);
   }
 
   /** The part of the screen the interface leaves clear, top and bottom (CSS px): the chase view frames within it. */
@@ -2663,6 +2719,9 @@ export class SimController {
     savePrefs(this.prefs);
     this.dartScene?.setLightLabels(this.prefs.lightLabels);
     if ('helmFovDeg' in change) this.view?.setHelmFov(this.prefs.helmFovDeg);
+    if ('helmCrew' in change) this.view?.setHelmCrewFaded(this.prefs.helmCrew === 'faded');
+    // Changing how look-up works brings the view back down (§3.3).
+    if ('lookUpToggle' in change) this.setLookUp(false);
     if ('spinnakerColours' in change) this.view?.setSpinnakerColours(this.prefs.spinnakerColours);
     if ('windIndicator' in change || 'vaneTabDeg' in change) {
       this.view?.setIndicator(this.prefs.windIndicator, this.prefs.vaneTabDeg);
@@ -2963,7 +3022,7 @@ export class SimController {
     const leg = r.resolved.legs[judge.legIndex];
     if (judge.phase !== 'racing' || !leg) return undefined;
     const s = this.currSnap;
-    return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.polar);
+    return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.humanPolar);
   }
 
   /**
@@ -3068,6 +3127,15 @@ export class SimController {
   centreHelm(): void {
     if (this.replay) return;
     this.sim.setInput({ helm: 0 });
+  }
+
+  /**
+   * Settings → Advanced (fixes of 21 Nov 2026, §3.1): switch a feature on or off in this browser. The screens follow at
+   * once; the spinnaker and rule 18's penalties from the next start; the river's arrival the next time it loads.
+   */
+  setFeature(f: FeatureFlag, on: boolean): void {
+    setFeatureFlag(f, on);
+    this.publish(true);
   }
 
   /** Whether this run's boat carries a spinnaker (package B). */
@@ -3328,7 +3396,7 @@ export class SimController {
     }
     // Look up at the masthead while T is held (review #1). Not a sailing input: nothing is recorded in a replay.
     if (ev.code === 'KeyT') {
-      if (!ev.repeat) this.setLookUp(true);
+      if (!ev.repeat) this.lookUpPress(true);
       ev.preventDefault();
       return;
     }
@@ -3359,14 +3427,15 @@ export class SimController {
   };
 
   private onKeyUp = (ev: KeyboardEvent) => {
-    if (ev.code === 'KeyT') this.setLookUp(false);
+    if (ev.code === 'KeyT') this.lookUpPress(false);
     const held = this.keyAction(ev.code);
     if (held) this.press(held, false);
   };
 
   private onBlur = () => {
     this.held.clear();
-    this.setLookUp(false);
+    // A held look-up ends when the window loses the keys (the release would never come); a toggled one stays (§3.3).
+    if (!this.prefs.lookUpToggle) this.setLookUp(false);
   };
 
   // ------------------------------------------------------------ UI store

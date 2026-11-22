@@ -1,7 +1,7 @@
 import { LESSONS, type LessonId, type LessonProgress } from './lessons';
 import { EXERCISES, type ExerciseId } from './exercises/index';
 import type { StoredRun } from './exercises/records';
-import type { Bests } from './bests';
+import { earlierRulesRace, type Bests } from './bests';
 
 /**
  * The Learn map (review #13, package D): one ordered path through what the simulator already teaches: the six
@@ -93,7 +93,8 @@ export function learnSteps(p: LearnInputs): LearnStep[] {
       action: { kind: 'exercise', id: e.id },
     });
   }
-  const daily = p.bests.races[p.dailyKey];
+  // Today's challenge under the current rules, or under earlier ones (§3.2: still done).
+  const daily = p.bests.races[p.dailyKey] ?? earlierRulesRace(p.bests, p.dailyKey);
   const otherRace = Object.keys(p.bests.races).some((k) => !k.startsWith('challenge:'));
   const challenge = (id: string, title: string, summary: string, done: boolean, action: LearnAction, note?: string, minutes?: number): LearnStep => ({
     id,

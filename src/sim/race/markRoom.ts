@@ -145,6 +145,15 @@ export class MarkRoomTracker {
   }
 }
 
+/**
+ * The note on a contact while one boat owed the other mark-room, with rule 18's penalties switched off (the default
+ * until the club has reviewed the rule; fixes of 21 Nov 2026, §2.2): who should have given room, and that no penalty
+ * was applied for it.
+ */
+export function markRoomAdvisory(giver: string): string {
+  return `Rule 18 (simplified, advisory): ${giver} should have given mark-room. No penalty applied until the club has reviewed this rule.`;
+}
+
 /** The ruling text for a contact between two boats while one is entitled to mark-room (simplified rule 18.2). */
 export function markRoomRuling(e: Entitlement, names: (id: string) => string): { atFault: string; rule: string; reason: string; notes: string[] } {
   return {

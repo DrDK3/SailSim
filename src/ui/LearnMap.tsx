@@ -34,10 +34,11 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
         exerciseRuns: runs,
         bests: loadBests(),
         dailyKey: dailyChallenge().key,
-        weeklyDone: !!ui.social.weekly.best,
+        // A best under earlier rules still counts as done (§3.2).
+        weeklyDone: !!ui.social.weekly.best || !!ui.social.weekly.earlier,
         started,
       }),
-    [runs, ui.social.weekly.best, started],
+    [runs, ui.social.weekly.best, ui.social.weekly.earlier, started],
   );
   const next = nextStep(steps);
   const doneCount = steps.filter((s) => s.done).length;

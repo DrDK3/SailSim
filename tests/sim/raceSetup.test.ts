@@ -65,7 +65,8 @@ describe('race set-up', () => {
     const b = dailyChallenge(new Date('2026-11-04T22:59:00Z'));
     const c = dailyChallenge(new Date('2026-11-05T08:00:00Z'));
     expect(a).toEqual(b);
-    expect(a.key).toBe('challenge:2026-11-04');
+    // The key carries the ruleset (fixes of 21 Nov 2026, §3.2).
+    expect(a.key).toBe('challenge:2026-11-04:r2');
     expect(c.options.seed).not.toBe(a.options.seed);
     expect(a.options).toMatchObject({ competitors: 3, course: 'short', conditions: 'random', wind: 'medium', challenge: a.key });
     const s1 = quickRaceScenario(a.options, DEFAULT_SCENARIO);

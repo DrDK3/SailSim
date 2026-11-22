@@ -1,5 +1,6 @@
 import type { BoatSnapshot } from '../sim/simulation';
 import type { InterfaceLevel } from './level';
+import { plainWords } from './flags';
 import { SPIN_PARAMS } from '../sim/boat/spinnaker';
 
 /**
@@ -18,7 +19,7 @@ const DEG = 180 / Math.PI;
 
 export function spinnakerWords(s: BoatSnapshot['spin'], level: InterfaceLevel, manual = false): SpinnakerWords | undefined {
   if (!s) return undefined;
-  const plain = level === 'learn';
+  const plain = plainWords(level);
   const name = plain ? 'Big front sail' : 'Spinnaker';
   switch (s.phase) {
     case 'down':

@@ -1,10 +1,11 @@
 import { WeeklyCard } from './Social';
+import { featureOn } from '../app/flags';
 import { useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
 import { DEFAULT_QUICK_RACE, QUICK_WIND_KN, SHORT_COURSE_LEG_M, dailyChallenge, type QuickCourse, type QuickRaceOptions } from '../app/quickRace';
 import { freshLiveWeather } from '../app/liveNow';
 import { allCourses, PRACTICE_KINDS } from '../app/courseLibrary';
-import { loadBests } from '../app/bests';
+import { earlierRulesRace, loadBests } from '../app/bests';
 import { mmss } from '../app/lessons';
 import type { AiLevel } from '../sim/ai/skipper';
 import type { PrepFlag } from '../sim/race/committee';
@@ -54,6 +55,8 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
   const trust = useTrust();
   const bests = loadBests();
   const todayBest = bests.races[challenge.key];
+  // Today's time under earlier rules (before the spinnaker came to the challenge; §3.2): shown apart, not compared.
+  const todayEarlier = earlierRulesRace(bests, challenge.key);
   const practice = o.venue === 'start-bay' && o.course !== 'short' ? PRACTICE_KINDS.find((k) => k.kind === o.course) : undefined;
   const library = allCourses();
 
@@ -90,7 +93,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
       <div className="challenge" data-testid="daily-challenge">
         <div>
           <strong>Today’s challenge</strong> <span className="fine-inline">· {challenge.day}</span>
-          <p className="fine">Three AI boats on the short course in a moderate breeze: the same race for everyone today.{todayBest ? ` Your best today: ${mmss(todayBest.timeS)}.` : ''}</p>
+          <p className="fine">Three AI boats on the short course in a moderate breeze: the same race for everyone today.{todayBest ? ` Your best today: ${mmss(todayBest.timeS)}.` : ''}{todayEarlier ? ` Under earlier rules: ${mmss(todayEarlier.timeS)} (not compared).` : ''}</p>
         </div>
         <button className="primary" onClick={() => start(challenge.options, false)} data-testid="challenge-start">Sail it</button>
       </div>
@@ -112,10 +115,13 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
           <option value="expert">Expert</option>
         </select>
       </label>
-      <label className="toggle" title="Every boat carries a spinnaker; call for yours with O (or Hoist) once the wind is behind the beam.">
-        <input type="checkbox" checked={o.spinnaker !== false} onChange={(e) => set({ spinnaker: e.target.checked })} data-testid="race-spinnaker" />
-        Spinnakers
-      </label>
+      {/* Not offered with the spinnaker switched off in Settings → Advanced (§3.1). */}
+      {featureOn('spinnaker') && (
+        <label className="toggle" title="Every boat carries a spinnaker; call for yours with O (or Hoist) once the wind is behind the beam.">
+          <input type="checkbox" checked={o.spinnaker !== false} onChange={(e) => set({ spinnaker: e.target.checked })} data-testid="race-spinnaker" />
+          Spinnakers
+        </label>
+      )}
       <div className="field venue-field">
         <span id="race-where">Where</span>
         <div className="segmented" role="radiogroup" aria-labelledby="race-where" data-testid="race-venue">

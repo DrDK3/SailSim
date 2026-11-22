@@ -2,6 +2,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
+import { plainWords } from '../app/flags';
 import { useRef, useState } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
 import { spinnakerWords } from '../app/spinnakerWords';
@@ -127,7 +128,23 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
  * Look up at the masthead while held (review #1): the T key's button. Pointer or keyboard (Space, Enter): the view
  * eases up the mast to the burgee or vane, and back on release. A view change only, never a sailing input.
  */
-function LookUp({ ctl }: { ctl: SimController }) {
+function LookUp({ ctl, toggle }: { ctl: SimController; toggle: boolean }) {
+  // The toggle setting (§3.3): a plain button that switches looking up on and off, its state announced (aria-pressed).
+  if (toggle)
+    return (
+      <button
+        className={`hold look-up${ctl.lookingUp ? ' on' : ''}`}
+        title={ctl.lookingUp ? 'Look back down (T)' : 'Look up at the masthead (T): the burgee (or vane) shows the wind you sail by; press again to look back'}
+        aria-pressed={ctl.lookingUp}
+        onClick={() => ctl.lookUpPress(true)}
+        data-testid="look-up"
+      >
+        <span className="hold-face" aria-hidden="true">
+          ⇡ <Key k="T" />
+        </span>
+        <span className="sr-only">Look up at the masthead (T to switch)</span>
+      </button>
+    );
   const on = (e: ReactPointerEvent) => {
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -184,7 +201,7 @@ function SailModule({ ctl, ui, sail }: { ctl: SimController; ui: UiState; sail: 
   // The sail inside the angle its sheet allows: a slack sheet (review #23: easing it moves nothing, and the advice says so).
   const limit = sail === 'main' ? s.mainSheetLimit : s.jibSheetLimit;
   const slack = Math.abs(angle) < limit - SLACK_RAD;
-  const st = sailAdvice(state, keys, { sail, sheet, auto, slack, angle, plain: ui.level === 'learn' });
+  const st = sailAdvice(state, keys, { sail, sheet, auto, slack, angle, plain: plainWords(ui.level) });
   const ok = st.cls === 'good';
   const name = sail === 'main' ? 'Main' : 'Jib';
   // Which way the sheet is going now (review #23, #24): an arrow on the bar while it moves, whoever works it.
@@ -268,7 +285,7 @@ function SpinnakerButtons({ ctl, ui }: { ctl: SimController; ui: UiState }) {
   if (!sp) return null;
   const w = spinnakerWords(sp, ui.level, ui.snapshot.input.autoSpin === false)!;
   const called = (ui.snapshot.input.spin ?? 0) >= 0.5;
-  const plain = ui.level === 'learn';
+  const plain = plainWords(ui.level);
   const name = plain ? 'the big front sail' : 'the spinnaker';
   return (
     <>
@@ -384,7 +401,7 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
         <div className="mod-row">
           <span className="helm-readout" aria-hidden="true">{helmReadout(s.rudder)}</span>
           <button onClick={() => ctl.centreHelm()} title="Centre the helm (Space)">Centre</button>
-          <LookUp ctl={ctl} />
+          <LookUp ctl={ctl} toggle={ui.prefs.lookUpToggle} />
         </div>
       </div>
       <div className="mod boat-mod" role="group" aria-label="Crew and sails">

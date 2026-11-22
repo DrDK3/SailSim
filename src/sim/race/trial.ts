@@ -16,6 +16,8 @@ import { createRace, practiceLineLength, type RaceFeatures } from './setup';
 export interface TrialOptions {
   boats: number;
   level: AiLevel;
+  /** The fleet carries spinnakers (fixes of 21 Nov 2026, §2.3: the AI's spinnaker table is measured this way). */
+  spinnaker?: boolean;
   laps: number;
   kinds: PracticeKind[];
   /** Override the practice area centre (local metres). */
@@ -70,7 +72,7 @@ export function runTrial(seed: number, o: TrialOptions, geo?: DartGeo, features?
     current: { mode: 'none' },
     ...o.conditions,
   };
-  const { session } = createRace({ conditions, geo, features, course, aiCount: o.boats, level: o.level, seed, committee: { startAt: 330, sequence: 'five-minute', finishWindowS: 600, timeLimitS: 3000 } });
+  const { session } = createRace({ conditions, geo, features, course, aiCount: o.boats, level: o.level, seed, spinnaker: o.spinnaker, committee: { startAt: 330, sequence: 'five-minute', finishWindowS: 600, timeLimitS: 3000 } });
   const grounded = new Set<string>();
   while (!session.finished && session.time < 3600) {
     session.step();

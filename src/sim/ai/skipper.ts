@@ -90,6 +90,11 @@ export interface AiWorld {
   readonly course: ResolvedCourse;
   readonly committee: RaceCommittee;
   readonly polar: Polar;
+  /**
+   * The table for the boat without the spinnaker set, when `polar` is the spinnaker table (fixes of 21 Nov 2026, §2.3):
+   * used before the start and in more wind than the AI hoists it in, when the spinnaker is not flown.
+   */
+  readonly plainPolar?: Polar;
   readonly seabed?: Seabed;
   readonly draft: number;
   readonly mooringAreas: MooringArea[];
@@ -208,6 +213,8 @@ export class AiSkipper {
     this.id = boat.id;
     this.cmd = { mode: 'heading', target: boat.sim.state.psi, depower: 0 };
     this.holdPoint = { n: boat.sim.state.n, e: boat.sim.state.e };
+    // Until the first decision, the table for before the start (§2.3).
+    this.P = world.plainPolar ?? world.polar;
     const ends = [...world.course.start, ...world.course.finish];
     this.lineEnds = new Set(world.obstacles.filter((o) => ends.some((p) => hypot2(p.n - o.n, p.e - o.e) < 0.5)).map((o) => o.id));
   }
@@ -369,11 +376,26 @@ export class AiSkipper {
 
   // -------------------------------------------------------------- decision
 
+  /** The target speeds for this decision: see `polarNow`. */
+  private P: Polar;
+
+  /**
+   * The spinnaker table only while the spinnaker can be flown (fixes of 21 Nov 2026, §2.3): racing, in no more wind than
+   * the AI hoists it in. Before the start (it is never hoisted then) and in more wind, the table without it.
+   */
+  private polarNow(windSpeed: number): Polar {
+    const W = this.world;
+    if (!W.plainPolar) return W.polar;
+    const racing = !W.committee.recalling && W.judgeOf(this.id).phase === 'racing';
+    return racing && windSpeed <= SPIN_MAX_TWS ? W.polar : W.plainPolar;
+  }
+
   private decide(sim: Simulation): void {
     const W = this.world;
     const s = sim.state;
     const me = v(s.n, s.e);
     const wind = this.windWater(sim);
+    this.P = this.polarNow(wind.speed);
     // Mean wind direction (vector EMA, ~90 s) for shift detection.
     const wv = dirOf(wind.dir);
     const k = this.meanWind ? 0.2 / 90 : 1;
@@ -400,8 +422,8 @@ export class AiSkipper {
 
     const goal = this.goal(sim);
     this.intent = goal.label;
-    const beat = W.polar.beat(wind.speed);
-    const run = W.polar.run(wind.speed);
+    const beat = this.P.beat(wind.speed);
+    const run = this.P.run(wind.speed);
     const sc = this.makeScorer(sim, me, goal, wind, beat.twa);
     let nav = goal.hold ? this.holdCommand(sim, wind.dir, beat.twa, goal) : this.navigate(sim, me, goal, wind, beat.twa, run.twa, twaNow, sc);
     const yielding = this.letPass(sim, sc, nav, wind.dir, goal);
@@ -596,7 +618,7 @@ export class AiSkipper {
     if (beforeSignal) {
       const tau = cm.recalling ? Infinity : startAt - t;
       const wind0 = this.windWater(sim);
-      const beat0 = W.polar.beat(wind0.speed);
+      const beat0 = this.P.beat(wind0.speed);
       let h0 = wind0.dir - beat0.twa;
       if (dirOf(h0).n * nc.n + dirOf(h0).e * nc.e < 0.35) h0 = Math.atan2(nc.e, nc.n);
       // Keep both the spot and the approach point 25 m below it well inside the line (no barging round the ends).
@@ -611,7 +633,7 @@ export class AiSkipper {
       // timed run to its own spot on the line; spots follow the slots' order along the line.
       const hold = this.holdPoint;
       const wind = this.windWater(sim);
-      const beat = W.polar.beat(wind.speed);
+      const beat = this.P.beat(wind.speed);
       // Final approach close-hauled on starboard from an approach point 25 m below the spot (if starboard
       // close-hauled heads for the course side; otherwise straight at the line).
       let hApp = wind.dir - beat.twa;
@@ -623,7 +645,7 @@ export class AiSkipper {
       const leg1 = beforeAppr ? hypot2(appr.n - me.n, appr.e - me.e) : 0;
       const from = beforeAppr ? appr : me;
       const twa1 = beforeAppr ? Math.abs(wrapPi(wind.dir - bearing(me, appr))) : beat.twa;
-      const v1 = W.polar.speed(wind.speed, Math.max(twa1, beat.twa)) * Math.cos(Math.max(0, beat.twa - twa1)) * 0.85;
+      const v1 = this.P.speed(wind.speed, Math.max(twa1, beat.twa)) * Math.cos(Math.max(0, beat.twa - twa1)) * 0.85;
       const leg2 = hypot2(spot.n - from.n, spot.e - from.e);
       const slow = hypot2(sim.state.u, sim.state.v) < 0.5 * beat.speed;
       const need = leg1 / Math.max(0.5, v1) + leg2 / Math.max(0.5, beat.speed * 0.85) + (slow ? 8 : 2) + this.skill.startLateS;
@@ -720,7 +742,7 @@ export class AiSkipper {
     let h = track;
     for (let i = 0; i < 3; i++) {
       const twa = wrapPi(wind.dir - h);
-      const spd = Math.max(0.5, this.world.polar.speed(wind.speed, twa));
+      const spd = Math.max(0.5, this.P.speed(wind.speed, twa));
       // Point higher by the leeway (the boat slides to leeward) and into the cross-current.
       h = track - Math.asin(clamp(cPerp / spd, -0.9, 0.9)) + Math.sign(twa) * this.leewayAt(twa);
     }
@@ -736,7 +758,7 @@ export class AiSkipper {
   /** Ground velocity sailing at TWA `twa` (signed) in this wind and current, with leeway. */
   private groundVel(wind: { dir: number; speed: number; cur: NE }, twa: number): NE {
     const course = wind.dir - twa - Math.sign(twa) * this.leewayAt(twa);
-    const spd = this.world.polar.speed(wind.speed, twa);
+    const spd = this.P.speed(wind.speed, twa);
     return { n: spd * Math.cos(course) + wind.cur.n, e: spd * Math.sin(course) + wind.cur.e };
   }
 
@@ -820,7 +842,7 @@ export class AiSkipper {
     if (t - this.lastTack > 4 && this.hazardAhead(sim, me, wind, side * angle, goal)) side = side === 1 ? -1 : 1;
     if (nearMark && upwind) side = this.side; // no tacks near marks (see above)
     // Too slow to tack cleanly (it would stall head to wind): build speed first, unless a hazard forces it.
-    if (side !== this.side && upwind && hypot2(sim.state.u, sim.state.v) < 0.6 * this.world.polar.beat(wind.speed).speed && !(t - this.lastTack > 4 && this.hazardAhead(sim, me, wind, this.side * angle, goal))) side = this.side;
+    if (side !== this.side && upwind && hypot2(sim.state.u, sim.state.v) < 0.6 * this.P.beat(wind.speed).speed && !(t - this.lastTack > 4 && this.hazardAhead(sim, me, wind, this.side * angle, goal))) side = this.side;
     // Traffic: do not tack (gybe) into another boat's way; wait until it is clear.
     if (side !== this.side && this.blockedByTraffic(sc, t, wind.dir - side * angle, wind.dir - this.side * angle)) side = this.side;
     if (side !== this.side) {
@@ -1011,7 +1033,7 @@ export class AiSkipper {
     const halfLoa = sim.params.loa / 2;
     // Polar speeds at this wind speed, per degree of TWA (one lookup table per decision).
     const spTab = new Float64Array(182);
-    for (let a = 0; a <= 181; a++) spTab[a] = W.polar.speed(wind.speed, Math.min(180, a) * DEG);
+    for (let a = 0; a <= 181; a++) spTab[a] = this.P.speed(wind.speed, Math.min(180, a) * DEG);
     const polarAt = (twa: number) => {
       const x = Math.abs(twa) / DEG;
       const i = Math.min(180, Math.floor(x));
@@ -1240,7 +1262,7 @@ export class AiSkipper {
     if (dLine < 2.5 && W.committee.startTime - t > 1) return 1;
     if (dLine <= 0) return 0;
     const wind = this.windWater(sim);
-    const beat = W.polar.beat(wind.speed);
+    const beat = this.P.beat(wind.speed);
     const hApp = wind.dir - this.side * beat.twa;
     const vt = Math.max(0.3, beat.speed * Math.max(0.25, Math.cos(hApp) * nc.n + Math.sin(hApp) * nc.e));
     const thr = bodyToWorld(s.u, s.v, s.psi);

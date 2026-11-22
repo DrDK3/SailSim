@@ -26,8 +26,10 @@ describe('the helm view from the helm’s eye (review #15)', () => {
         pose(m, 0.5 * tack, -tack * angle, true);
         const eye = m.helmEye();
         const head = bone(m, 'head').position;
-        // At the head (its centre a few centimetres below and behind the eye), not at a fixed point.
-        expect(eye.distanceTo(head)).toBeLessThan(0.15);
+        // At the head, not at a fixed point: a little above and outboard of it since 21 Nov 2026 (§3.4, so the crew sitting
+        // forward on the same deck takes less of the view ahead).
+        expect(eye.distanceTo(head)).toBeLessThan(0.25);
+        expect(Math.abs(eye.x)).toBeGreaterThanOrEqual(Math.abs(head.x));
         // On the windward side deck, aft of the mast, at a sitting helm's eye height above the water.
         expect(Math.sign(eye.x)).toBe(tack);
         expect(Math.abs(eye.x)).toBeGreaterThan(0.45);

@@ -318,6 +318,9 @@ const staticCache = new Map<string, StaticParts>();
 
 /** The helm's eye keeps this far from the boom's spar (m, E): the helm ducks as it comes over. */
 export const BOOM_CLEAR_M = 0.3;
+/** The helm view's eye above and outboard of the helm figure's head (m; fixes of 21 Nov 2026, §3.4; E). */
+export const HELM_EYE_RAISE_M = 0.1;
+export const HELM_EYE_OUT_M = 0.08;
 
 export class SquibModel {
   readonly group = new THREE.Group();
@@ -1151,6 +1154,8 @@ export class SquibModel {
     crewTo?: number;
     time: number;
     hideHelm?: boolean;
+    /** The crew (not the helm) drawn faded: the helm view with "Crew in helm view: faded" (§3.4). */
+    fadeCrew?: boolean;
     /** Apparent wind in the boat's frame (burgee, telltales): angle (rad, > 0 from starboard), speed (m/s). */
     awa?: number;
     aws?: number;
@@ -1214,6 +1219,7 @@ export class SquibModel {
     const clew = new THREE.Vector3(jp.getX(SquibModel.JIB_U), jp.getY(SquibModel.JIB_U), jp.getZ(SquibModel.JIB_U));
     const lead = new THREE.Vector3(Math.sign(clew.x || 1) * 0.6, sheerAt(0.45) + 0.04, MAST_Z + 0.9);
     this.rudder.rotation.y = params.rudder;
+    this.fadeCrew = !!params.fadeCrew;
     const hands = this.poseCrew(params.crewY, params.crewTo ?? params.crewY, params.rudder, time, params.hideHelm ?? false, lead, jib.angle, main.angle);
 
     const js = this.sheets[0]!.geo.getAttribute('position') as THREE.BufferAttribute;
@@ -1467,6 +1473,7 @@ export class SquibModel {
       // The helm's own view (review #15): her or his hands, forearms, legs and the tiller stay in sight; the head and
       // torso, which the eye is inside, are not drawn.
       if (helm) c.setFirstPerson(hideHelm);
+      else c.setFaded(this.fadeCrew);
     });
     if (out.jib.lengthSq() === 0) out.jib.copy(jibLead);
     return out;
@@ -1477,9 +1484,16 @@ export class SquibModel {
    * side deck), lowered to keep clear of the boom as a helm ducks under it: never nearer the boom's spar than
    * BOOM_CLEAR_M (E), by at most 0.45 m.
    */
+  private fadeCrew = false;
+
   helmEye(out = new THREE.Vector3()): THREE.Vector3 {
     const fig = this.crew[0]!;
     fig.eye(out).applyMatrix4(fig.group.matrix);
+    // A little higher and further outboard than the figure's head (§3.4: on a beat the crew, sitting forward on the same
+    // deck, filled much of the view ahead), within the side deck (E: a presentation choice).
+    out.y += HELM_EYE_RAISE_M;
+    const edge = this.p.beam / 2 - 0.08;
+    out.x = Math.sign(out.x || 1) * Math.min(edge, Math.abs(out.x) + HELM_EYE_OUT_M);
     const len = this.p.main.foot;
     const a = this.boom.position;
     const dir = new THREE.Vector3(0, 0, 1).applyEuler(this.boom.rotation);

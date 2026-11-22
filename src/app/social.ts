@@ -7,7 +7,7 @@
  * to a web server). The weekly targets are read from the site's own static files.
  */
 import { noAssists, noteAssists, type AssistRecord } from './assists';
-import { isLikeForLikeKey, loadLikeForLike, recordAttempt, type LikeForLike, type BestResult } from './bests';
+import { earlierRulesLikeForLike, isLikeForLikeKey, loadLikeForLike, recordAttempt, type LikeForLike, type BestResult } from './bests';
 import { challengePayload, challengeResult, challengeUrl, decodeChallenge, encodeChallenge, splitsFrom, type Challenge, type Split } from './challenge';
 import { loadName, randomName, saveName } from './safeNames';
 import { targetsStatus, trackPoses, type Medal, type TargetsStatus } from './targets';
@@ -49,6 +49,8 @@ export interface SocialUi {
     summary: string;
     terms: WeeklyCourse['terms'];
     best?: LikeForLike;
+    /** This week's best under earlier rules (§3.2): shown apart, never compared. */
+    earlier?: LikeForLike;
     /** The optional long course (review #10): an RDYC course at full length, its own best, no targets. */
     long?: { key: string; name: string; status: string; summary: string; best?: LikeForLike };
   };
@@ -211,6 +213,7 @@ export class SocialHub {
       name: this.name,
       weekly: {
         key, week: w.week.key, name: w.name, status: w.status, summary: w.summary, terms: w.terms, best: typeof localStorage === 'undefined' ? undefined : loadLikeForLike(key),
+        earlier: typeof localStorage === 'undefined' ? undefined : earlierRulesLikeForLike(key),
         long: w.long ? { key: weeklyLongKey(w.week), name: w.long.name, status: w.long.status, summary: w.long.summary, best: typeof localStorage === 'undefined' ? undefined : loadLikeForLike(weeklyLongKey(w.week)) } : undefined,
       },
       targets: this.targets,

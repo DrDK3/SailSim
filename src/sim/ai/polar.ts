@@ -21,9 +21,23 @@ export interface PolarData {
   twaDeg: number[];
   /** stwKn[i][j]: speed at twsKn[i], twaDeg[j]. */
   stwKn: number[][];
+  /**
+   * A table for a boat carrying the spinnaker (fixes of 21 Nov 2026, §2.3): from this true wind angle aft, each point is
+   * the faster of the boat without it and the boat with it set (`computeSpinPolar`). Absent: a boat without one.
+   */
+  spinFromTwaDeg?: number;
+  /** With `spinFromTwaDeg`: spinSet[i][j] is whether the spinnaker set was the faster at that point. */
+  spinSet?: boolean[][];
 }
 
 export const POLAR_TWS_KN = [3, 5, 7, 10, 13, 16, 20, 25];
+/**
+ * The best downwind angle is looked for no nearer dead downwind than this (deg; E): there the boom can go either side,
+ * so a boat's tack, and who has right of way, would flip (package F). The table without a spinnaker has its best angles
+ * at 173° or less, so this changes nothing for it; with the spinnaker the best VMG is flat from 165° to dead downwind
+ * (fixes of 21 Nov 2026, §2.3).
+ */
+export const RUN_TWA_MAX_DEG = 175;
 export const POLAR_TWA_DEG = [25, 30, 34, 38, 42, 46, 50, 55, 60, 70, 80, 90, 105, 120, 135, 145, 155, 165, 172, 180];
 
 /** Fingerprint of every number in the parameter set (order-stable). */
@@ -68,14 +82,15 @@ export const SETTLED = { stwKn: 0.05, heelDeg: 1 };
  * no current. Run for `durationS`, then averaged over 20 s, as a boat on the edge of control may oscillate.
  * MODEL OUTPUT from estimated coefficients, not measured Squib performance.
  */
-export function crewPolicyPoint(params: BoatParams, twsKn: number, twaDeg: number, durationS = 120): SteadyPoint {
+export function crewPolicyPoint(params: BoatParams, twsKn: number, twaDeg: number, durationS = 120, opts: { spin?: boolean } = {}): SteadyPoint {
   const sheets = { ease: 0 };
   const target = (twaDeg === 180 ? 179.5 : twaDeg) * DEG;
   const sim = new Simulation({
     params,
     env: uniformEnvironment({ twsKn, twdDeg: 0 }),
     initial: { headingDeg: -twaDeg, speedKn: 3 },
-    input: { autoMain: true, autoJib: true, autoCrew: true },
+    // With `spin` (a boat carrying one): the spinnaker called for from the start, trimmed by the crew.
+    input: opts.spin ? { autoMain: true, autoJib: true, autoCrew: true, spin: 1, autoSpin: true } : { autoMain: true, autoJib: true, autoCrew: true },
     controller: (s) => ({ helm: autopilotHelm(s, { mode: 'twa', target }), ...aiSheetInput(s, sheets) }),
     logInputs: false,
   });
@@ -138,6 +153,30 @@ export function computePolar(params: BoatParams, twsKn = POLAR_TWS_KN, twaDeg = 
   };
 }
 
+/**
+ * The table for a boat carrying the spinnaker (fixes of 21 Nov 2026, §2.3; `npm run ai:polar -- --spin`): from
+ * `fromTwaDeg` aft, each point is the faster of `base` (the boat without it: with it down she is the same boat, package
+ * B) and the boat sailed with it called for and trimmed by the crew; forward of that, and in more than `maxTwsKn` of
+ * wind (the AI's limit for hoisting it, E), `base`. MODEL OUTPUT (E), as `base` is. `params` must carry the spinnaker
+ * (`withSpinnaker`).
+ */
+export function computeSpinPolar(base: PolarData, params: BoatParams, fromTwaDeg = 90, durationS = 120, maxTwsKn = 20): PolarData {
+  if (!params.spin) throw new Error('computeSpinPolar: the boat parameters carry no spinnaker');
+  const spinSet = base.twsKn.map(() => base.twaDeg.map(() => false));
+  const stwKn = base.twsKn.map((tws, i) =>
+    base.twaDeg.map((twa, j) => {
+      const without = base.stwKn[i]![j]!;
+      // Not forward of fromTwaDeg (it will not fly there), and not in more wind than the AI hoists it in (maxTwsKn).
+      if (twa < fromTwaDeg || tws > maxTwsKn) return without;
+      const withIt = Math.round(crewPolicyPoint(params, tws, twa, durationS, { spin: true }).stwKn * 1000) / 1000;
+      if (withIt <= without) return without;
+      spinSet[i]![j] = true;
+      return withIt;
+    }),
+  );
+  return { paramsHash: paramsFingerprint(params), generated: new Date().toISOString().slice(0, 10), twsKn: base.twsKn, twaDeg: base.twaDeg, stwKn, spinFromTwaDeg: fromTwaDeg, spinSet };
+}
+
 export interface AngleTarget {
   /** True wind angle (rad, positive). */
   twa: number;
@@ -158,10 +197,10 @@ export class Polar {
   }
 
   private best(i: number, dir: 1 | -1): AngleTarget {
-    // Search 0.5° steps along the interpolated row.
+    // Search 0.5° steps along the interpolated row; downwind, not nearer dead downwind than RUN_TWA_MAX_DEG.
     let bestT: AngleTarget = { twa: 0, speed: 0, vmg: -Infinity };
     const lo = dir > 0 ? 25 : 90;
-    const hi = dir > 0 ? 90 : 180;
+    const hi = dir > 0 ? 90 : RUN_TWA_MAX_DEG;
     for (let a = lo; a <= hi; a += 0.5) {
       const s = knToMs(this.rowSpeed(i, a));
       const vmg = dir * s * Math.cos(a * DEG);

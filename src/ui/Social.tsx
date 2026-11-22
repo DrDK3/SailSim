@@ -88,6 +88,12 @@ export function WeeklyCard({ ctl, ui, onStarted }: { ctl: SimController; ui: UiS
             Your bests this week: on your own {best.independent ? clockS(best.independent.timeS) : '—'}, with assists {best.assisted ? clockS(best.assisted.timeS) : '—'}.
           </p>
         )}
+        {/* Times from this week under earlier rules (§3.2): shown apart, never compared with today's. */}
+        {w.earlier && (
+          <p className="fine" data-testid="weekly-earlier">
+            Earlier rules (not compared): on your own {w.earlier.independent ? clockS(w.earlier.independent.timeS) : '—'}, with assists {w.earlier.assisted ? clockS(w.earlier.assisted.timeS) : '—'}.
+          </p>
+        )}
         {best && <ProgressChart history={best.history} />}
         <ClubTableSection ctl={ctl} ui={ui} />
         {w.long && (

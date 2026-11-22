@@ -77,7 +77,10 @@ test('sail status: colour and words agree; plain words at Learn; the crew trimmi
   await expect(page.locator('.panel.instruments')).toContainText('VMG downwind');
   // Learn: plain words in the status and the instruments.
   await page.evaluate(() => window.__squib!.controller.setLevel('learn'));
-  await expect(page.locator('.panel.instruments')).toContainText('Wind from');
+  // The wind in words (fixes of 21 Nov 2026, §2.4): labelled "Wind", the value "from …", the angle small alongside.
+  const twa = page.locator('[data-cell="twa"]');
+  await expect(twa.locator('.cell-label')).toHaveText('Wind');
+  await expect(twa.locator('.cell-value')).toHaveText(/^from /);
   await expect(page.locator('.panel.instruments')).not.toContainText('TWA');
   const plain = (await status.textContent()) ?? '';
   expect(plain).toMatch(/Full|Flapping|Pulled in too far|Let right out|Wind behind the sail/);

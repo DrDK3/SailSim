@@ -14,13 +14,14 @@ import type { MooringArea } from '../course/restrictions';
 import { AiSkipper, aiSkill, type AiLevel, type AiWorld } from '../ai/skipper';
 import { Polar } from '../ai/polar';
 import { AI_POLAR } from '../ai/polarData';
+import { AI_POLAR_SPIN } from '../ai/polarDataSpin';
 import { COMMITTEE_OUTLINE } from './anchored';
 import { CONTACT, Fleet, markRadius, type CircleObstacle, type ContactEvent, type FleetBoat, type MooredBoat } from './fleet';
 import type { PierInput } from './piers';
 import { placeOutline } from './hull';
 import { DEFAULT_COMMITTEE, RaceCommittee, type BoatRaceStatus, type CommitteeOptions, type ResultRow, type Signal } from './committee';
 import { PenaltyTracker, rightOfWay, TackTracker, type Incident, type RulesBoat } from './rules';
-import { MarkRoomTracker, markRoomRuling, type MarkRoomBoat } from './markRoom';
+import { MarkRoomTracker, markRoomAdvisory, markRoomRuling, type MarkRoomBoat } from './markRoom';
 import { hypot2 } from '../math/hypot';
 
 /**
@@ -60,6 +61,25 @@ export interface RaceSessionOptions {
   piers?: readonly PierInput[];
   mooringAreas?: MooringArea[];
   seed?: number;
+  /**
+   * Penalties under the simplified rule 18 (fixes of 21 Nov 2026, §2.2). Off (the default): at a contact while one boat
+   * owes the other mark-room, the incident records it as advisory and the ruling and penalty follow rules 10–13, as
+   * before package F. On: the boat owing mark-room is at fault under rule 18.2. The AI keeps clear the same either way.
+   */
+  markRoomPenalties?: boolean;
+  /**
+   * Whether an AI fleet carrying spinnakers sails by the spinnaker table (§2.3; default true). False: by the table
+   * without one, as before (the weekly targets keep it until the change reaches them at a week's start).
+   */
+  aiSpinPolar?: boolean;
+}
+
+/** One shared lookup per table. */
+const POLAR_PLAIN = new Polar(AI_POLAR);
+const POLAR_SPIN = new Polar(AI_POLAR_SPIN);
+/** The target-speed table for a boat: with the spinnaker table when she carries one (§2.3). */
+export function polarFor(params: BoatParams, spinTable = true): Polar {
+  return params.spin && spinTable ? POLAR_SPIN : POLAR_PLAIN;
 }
 
 export interface LogEntry {
@@ -76,7 +96,15 @@ export class RaceSession implements AiWorld {
   readonly committee: RaceCommittee;
   readonly course: ResolvedCourse;
   readonly courseDef: Course;
-  readonly polar = new Polar(AI_POLAR);
+  /**
+   * The AI fleet's target speeds: the table for a boat carrying the spinnaker when the fleet carries one (fixes of
+   * 21 Nov 2026, §2.3), unless `aiSpinPolar` is false (the weekly targets before the week the change reaches them).
+   */
+  readonly polar: Polar;
+  /** The user's boat's target speeds, for the coach and the laylines: with the spinnaker table if she carries one. */
+  readonly humanPolar: Polar;
+  /** The fleet's table without the spinnaker set (before the start, or in more wind than it is hoisted in; §2.3). */
+  readonly plainPolar: Polar;
   readonly seabed?: Seabed;
   readonly draft: number;
   readonly mooringAreas: MooringArea[];
@@ -101,6 +129,9 @@ export class RaceSession implements AiWorld {
   constructor(readonly opts: RaceSessionOptions) {
     this.course = opts.resolved;
     this.courseDef = opts.course;
+    this.polar = polarFor(opts.params, opts.aiSpinPolar !== false);
+    this.plainPolar = polarFor(opts.params, false);
+    this.humanPolar = polarFor(opts.humanParams ?? opts.params);
     this.seabed = opts.seabed;
     this.draft = opts.params.draft;
     this.mooringAreas = opts.mooringAreas ?? [];
@@ -403,16 +434,19 @@ export class RaceSession implements AiWorld {
       // Near a mark, simplified rule 18: the boat owing mark-room is at fault (the entitled boat is not blamed).
       const room = this.markRoom.entitlement(c.a, c.b);
       const ruling = room ? markRoomRuling(room, (id) => this.fleet.boat(id)!.name) : undefined;
-      const kc = this.fleet.boat(ruling ? ruling.atFault : row.keepClear)!;
-      const rw = this.fleet.boat(ruling ? room!.entitled : row.rightOfWay)!;
+      // Rule 18 decides the ruling only with its penalties switched on; otherwise it is advisory (§2.2).
+      const by18 = ruling && this.opts.markRoomPenalties === true ? ruling : undefined;
+      const kc = this.fleet.boat(by18 ? by18.atFault : row.keepClear)!;
+      const rw = this.fleet.boat(by18 ? room!.entitled : row.rightOfWay)!;
       inc.summary = `Contact between ${A.name} and ${B.name} at ${c.speed.toFixed(1)} m/s`;
       if (racing && !this.outOfRace(c.a) && !this.outOfRace(c.b)) {
         inc.atFault = kc.id;
-        inc.rule = ruling ? ruling.rule : row.rule;
+        inc.rule = by18 ? by18.rule : row.rule;
         inc.penaltyTurns = 2;
         inc.penaltyTaken = false;
-        inc.summary += ruling ? `: ${kc.name} did not give mark-room (rule 18.2, simplified: ${ruling.reason}).` : `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
-        if (ruling) inc.notes.push(...ruling.notes);
+        inc.summary += by18 ? `: ${kc.name} did not give mark-room (rule 18.2, simplified: ${by18.reason}).` : `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
+        if (by18) inc.notes.push(...by18.notes);
+        else if (room) inc.notes.push(markRoomAdvisory(this.fleet.boat(room.giver)!.name));
         inc.notes.push(`Rule 14 also applied to ${rw.name} (avoid contact if reasonably possible); not judged here.`);
         const h = this.rowHistory.get(PAIR(c.a, c.b));
         if (h && t - h.since < 5) inc.notes.push(`Right of way changed ${(t - h.since).toFixed(1)} s before contact: rule 15 (room to keep clear) may apply; not judged here.`);
