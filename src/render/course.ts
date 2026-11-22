@@ -5,7 +5,7 @@ import { makeLabel } from './labels';
 import { robotMark, sponsorsFor } from './robotMark';
 import { samaritanModel } from './samaritan';
 import { flagSwing, trueWindAt, type FlagWind, type WindAt } from './flagMotion';
-import { flagDroop, flagYaw } from './vane';
+import { droopFlag, flagDroop, flagYaw } from './vane';
 import { easeRide, orientBoat, rideWaves, type WaveRide } from './frames';
 import { SAMARITAN } from './samaritan';
 
@@ -119,7 +119,7 @@ export class CourseScene {
       const w = trueWindAt(this.windAt, f.n, f.e, this.wind);
       const { yaw, aws } = flagYaw(w.fromDir, w.speed, this.wind.fromDir, 0);
       f.pivot.rotation.set(0, yaw + flagSwing(aws, time, f.e), 0);
-      f.pivot.children[0]!.rotation.z = -flagDroop(aws);
+      droopFlag(f.pivot.children[0]!, flagDroop(aws));
     }
     this.drawLaylines(waves?.height ?? FLAT);
     // The committee boats float on the drawn sea: heave, pitch and roll from the surface over their waterplane (eased
@@ -138,7 +138,7 @@ export class CourseScene {
       const w = trueWindAt(this.windAt, c.n, c.e, this.wind);
       const { yaw, aws } = flagYaw(w.fromDir, w.speed, c.heading, 0);
       c.flag.rotation.set(0, yaw + flagSwing(aws, time, c.e), 0);
-      c.flag.children[0]!.rotation.z = -flagDroop(aws);
+      droopFlag(c.flag.children[0]!, flagDroop(aws));
     }
   }
 

@@ -5,7 +5,7 @@ import { makeLabel } from './labels';
 import { bakedPerson } from './crew';
 import { Kit, VMAT, cabin, fenderLine, hull, lifebuoy, mast, navLights, outboard, place, rail, type Hull } from './vessels';
 import { updateLights } from './navLights';
-import { flagDroop, flagYaw } from './vane';
+import { droopFlag, flagDroop, flagYaw, yawOnStaff } from './vane';
 import { flagSwing, trueWindAt, type WindAt } from './flagMotion';
 import { Exhaust } from './railway';
 import { longAxisDeg } from './landmarks';
@@ -125,27 +125,39 @@ function ensignMaterial(white = false): THREE.Material {
   return mat;
 }
 
+/** The river boats' ensign staff: 1.3 m up and 0.25 m aft from its foot (raked about 11°). */
+const ENSIGN_STAFF = { up: 1.3, aft: 0.25 };
+export const ENSIGN_STAFF_RAKE = Math.atan2(ENSIGN_STAFF.aft, ENSIGN_STAFF.up);
+
 let ensignGeo: THREE.PlaneGeometry | undefined;
 /**
  * The ensign on a staff at the stern: the flag hangs from a pivot at the staff (named 'ensign'), its fly along
  * the pivot's +x, so turning the pivot flies it with the wind (TrafficView.update); built flying aft.
  */
 function ensign(group: THREE.Group, kit: Kit, x: number, y: number, z: number, white = false): void {
-  kit.rod(V(x, y, z), V(x, y + 1.3, z + 0.25), 0.02, VMAT.paint, C.wood, 6);
+  kit.rod(V(x, y, z), V(x, y + ENSIGN_STAFF.up, z + ENSIGN_STAFF.aft), 0.02, VMAT.paint, C.wood, 6);
   if (!ensignGeo) {
     ensignGeo = new THREE.PlaneGeometry(0.8, 0.4);
     // Hoist (the canton side, u = 0) at the pivot, the fly along +x.
     ensignGeo.translate(0.4, -0.2, 0);
   }
+  // The hoist along the raked staff, down from its head (owner, 22 Nov 2026): the pivot in the staff's frame, turned
+  // about the staff (TrafficView.update, yawOnStaff).
+  const staff = new THREE.Group();
+  staff.name = 'ensign-staff';
+  const head = 1.28 / ENSIGN_STAFF.up;
+  staff.position.set(x, y + ENSIGN_STAFF.up * head, z + ENSIGN_STAFF.aft * head);
+  staff.rotation.x = ENSIGN_STAFF_RAKE;
   const pivot = new THREE.Group();
-  pivot.position.set(x, y + 1.28, z + 0.24);
   pivot.rotation.y = -Math.PI / 2;
   pivot.name = 'ensign';
   const flag = new THREE.Mesh(ensignGeo, ensignMaterial(white));
   flag.name = 'ensign-flag';
   pivot.add(flag);
-  group.add(pivot);
+  staff.add(pivot);
+  group.add(staff);
 }
+
 
 /** A wake: a V of foam behind the stern, scaled by speed. */
 let wakeTex: THREE.Texture | undefined;
@@ -1266,8 +1278,8 @@ export class TrafficView {
         // A flutter that grows and quickens with the wind, none in a calm (flagMotion.ts).
         const flutter = flagSwing(aws, time, s.e);
         for (const f of e.ensigns) {
-          f.rotation.y = yaw + flutter;
-          f.children[0]!.rotation.z = -flagDroop(aws);
+          f.rotation.y = yawOnStaff(yaw + flutter, ENSIGN_STAFF_RAKE);
+          droopFlag(f.children[0]!, flagDroop(aws));
         }
       }
       // Each light inside its arc and range from where you look; none by day (src/render/navLights.ts).

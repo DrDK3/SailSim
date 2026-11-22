@@ -36,6 +36,28 @@ const uniform = (fromDir: number, speed: number) => () => ({ n: -speed * Math.co
  * The compass bearing (rad) a flag's cloth lies from its hoist: from the mesh's origin (the hoist, on the staff) to
  * the centre of its vertices, in the horizontal (scene x = east, -z = north).
  */
+/**
+ * A flag on a raked staff turns about the staff (src/render/vane.ts yawOnStaff), so in light air it droops down the
+ * staff: the angle (degrees) between its fly and the downwind direction, both seen across the staff (projected on the
+ * plane square to it). `staff` is the frame the flag's pivot sits in (its +y up the staff).
+ */
+function offAcrossStaff(mesh: THREE.Object3D, staff: THREE.Object3D, downwindBearing: number): number {
+  mesh.updateWorldMatrix(true, false);
+  const m = mesh as THREE.Mesh;
+  const pos = m.geometry.getAttribute('position');
+  const c = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) c.add(v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld));
+  c.divideScalar(pos.count);
+  const o = staff.getWorldPosition(new THREE.Vector3());
+  const axis = staff.localToWorld(new THREE.Vector3(0, 1, 0)).sub(o).normalize();
+  const fly = c.sub(o);
+  fly.addScaledVector(axis, -fly.dot(axis)).normalize();
+  const dw = new THREE.Vector3(Math.sin(downwindBearing), 0, -Math.cos(downwindBearing));
+  dw.addScaledVector(axis, -dw.dot(axis)).normalize();
+  return (Math.acos(Math.max(-1, Math.min(1, fly.dot(dw)))) * 180) / Math.PI;
+}
+
 function flyBearing(mesh: THREE.Object3D): number {
   mesh.updateWorldMatrix(true, false);
   const m = mesh as THREE.Mesh;
@@ -125,10 +147,12 @@ describe('flags and vanes point with the wind where they are', () => {
   it('Mosaique\'s ensign and her masthead burgee (moored): downwind of the true wind where she lies', () => {
     const view = new ShipBuoysView();
     const ensign = view.yacht.getObjectByName('mosaique-ensign-cloth')!;
+    const staff = view.yacht.getObjectByName('mosaique-ensign-staff')!;
     const burgee = view.yacht.getObjectByName('mosaique-burgee')!.getObjectByName('burgee-flag')!;
     for (const d of DIRS) for (const s of SPEEDS) {
       view.update(DAY, { fromDir: d * DEG, speed: s }, 4.1);
-      expect(off(flyBearing(ensign), downwind(d * DEG)), `ensign ${d}° ${s}`).toBeLessThan(CLOTH);
+      // Turned about its raked staff (owner, 22 Nov 2026): downwind as seen across the staff.
+      expect(offAcrossStaff(ensign, staff, downwind(d * DEG)), `ensign ${d}° ${s}`).toBeLessThan(CLOTH);
       expect(off(flyBearing(burgee), downwind(d * DEG)), `burgee ${d}° ${s}`).toBeLessThan(CLOTH);
     }
   });
@@ -175,7 +199,9 @@ describe('flags and vanes point with the wind where they are', () => {
       for (const e of [-200, 200]) {
         view.update([state({ e, sog: 0, moving: false, heading: 0.7 })], 3.3, cam, false, { fromDir: 0, speed: 1, at });
         const flag = view.group.getObjectByName('ensign')!.getObjectByName('ensign-flag')!;
-        expect(off(flyBearing(flag), downwind((d + (e > 0 ? 40 : 0)) * DEG)), `${d}° ${s} at e ${e}`).toBeLessThan(RIGID);
+        // Turned about its raked staff (owner, 22 Nov 2026): downwind as seen across the staff.
+        const staff = view.group.getObjectByName('ensign-staff')!;
+        expect(offAcrossStaff(flag, staff, downwind((d + (e > 0 ? 40 : 0)) * DEG)), `${d}° ${s} at e ${e}`).toBeLessThan(RIGID);
       }
     }
   });

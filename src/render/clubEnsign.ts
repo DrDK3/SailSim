@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
 import { coloursFlying } from './colours';
-import { flagDroop, flagYaw } from './vane';
+import { droopFlag, flagDroop, flagYaw } from './vane';
 import { flagSwing, type FlagWind } from './flagMotion';
 import { Burgee, BURGEE_FLY, BURGEE_STICK } from './burgee';
 
@@ -218,7 +218,7 @@ export class ClubEnsign {
     const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, 0, 0);
     // Swinging about the downwind line as it flutters: none in a calm (flagMotion.ts).
     this.pivot.rotation.y = yaw + flagSwing(aws, time, 0, 0.1);
-    this.flag.rotation.z = -flagDroop(aws);
+    droopFlag(this.flag, flagDroop(aws));
   }
 
   get flying(): boolean {

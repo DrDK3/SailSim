@@ -74,10 +74,13 @@ describe('Mosaique and the ship buoys', () => {
 
   it('flies the club’s ensign from a staff off her stern and its burgee at her masthead', () => {
     const ensign = view.yacht.getObjectByName('mosaique-ensign')!;
-    // The ensign's staff head is aft of the transom (her frame: aft is +z), on the centre line, low (not aloft).
-    expect(ensign.position.z).toBeGreaterThan(MOSAIQUE.loa / 2 + 0.8);
-    expect(Math.abs(ensign.position.x)).toBeLessThan(0.01);
-    expect(ensign.position.y).toBeLessThan(8);
+    // The ensign's staff head is aft of the transom (her frame: aft is +z), on the centre line, low (not aloft). Its
+    // pivot sits in the raked staff's frame (owner, 22 Nov 2026), so measured in hers.
+    view.yacht.updateMatrixWorld(true);
+    const at = view.yacht.worldToLocal(ensign.getWorldPosition(new THREE.Vector3()));
+    expect(at.z).toBeGreaterThan(MOSAIQUE.loa / 2 + 0.8);
+    expect(Math.abs(at.x)).toBeLessThan(0.01);
+    expect(at.y).toBeLessThan(8);
     expect(MOSAIQUE_DRAWN.ensign.fly / MOSAIQUE_DRAWN.ensign.hoist).toBeCloseTo(2, 6);
     // The burgee at her masthead (owner, 18 Nov 2026: "remove the triangle burgee and flagpole on the superyacht from
     // the lower stern quarter and place the triangle burgee on the mast"): on the centre line, amidships, aloft.
