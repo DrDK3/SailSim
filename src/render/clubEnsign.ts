@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RDYC_ORIGIN } from '../sim/geo/projection';
 import { coloursFlying } from './colours';
-import { flagDroop, flagYaw } from './vane';
+import { droopFlag, flagDroop, flagYaw } from './vane';
 import { flagSwing, type FlagWind } from './flagMotion';
 import { Burgee, BURGEE_FLY, BURGEE_STICK } from './burgee';
 
@@ -184,6 +184,16 @@ export function rdycEnsignTexture(): THREE.Texture | undefined {
 const ensignTexture = rdycEnsignTexture;
 
 /**
+ * A flagstaff's gaff (three.js space: x east, y up m ODN, z south): from its throat on the staff, 70% of the way up,
+ * aft (south) and up to its peak, 2.2 m out and 1 m higher, where the ensign is hoisted (sizes E). The staff's foot is
+ * at `at` (local e, n), `fromM` m ODN, `height` m tall. The RDYC's flagstaff draws its gaff here (src/render/rdyc.ts).
+ */
+export function flagstaffGaff(at: [number, number], fromM: number, height: number): { throat: THREE.Vector3; peak: THREE.Vector3 } {
+  const y = fromM + height * 0.7;
+  return { throat: new THREE.Vector3(at[0], y - 0.1, -at[1]), peak: new THREE.Vector3(at[0], y + 0.9, -(at[1] - 2.2)) };
+}
+
+/**
  * A club's ensign on its flagstaff's gaff, flown at colours (0800 or 0900 to sunset, src/render/colours.ts) and
  * streaming with the wind. Sizes E. Lives in the land-fixed group (positions in m ODN).
  */
@@ -205,8 +215,8 @@ export class ClubEnsign {
     this.flag = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: t ? 0xffffff : 0xc8102e, map: t ?? null, roughness: 0.9, side: THREE.DoubleSide }));
     this.flag.name = 'club-ensign-flag';
     this.pivot.add(this.flag);
-    // The gaff's peak: aft of the mast (south) and above the yard (src/render/landmarks.ts flagstaff).
-    this.pivot.position.set(at[0], fromM + height * 0.7 + 0.9, -(at[1] - 2.2));
+    // Hoisted to the gaff's peak: aft of the mast (south) and above the yard; its hoist hangs below it on the halyard.
+    this.pivot.position.copy(flagstaffGaff(at, fromM, height).peak);
     this.group.add(this.pivot);
   }
 
@@ -218,7 +228,7 @@ export class ClubEnsign {
     const { yaw, aws } = flagYaw(wind.fromDir, wind.speed, 0, 0);
     // Swinging about the downwind line as it flutters: none in a calm (flagMotion.ts).
     this.pivot.rotation.y = yaw + flagSwing(aws, time, 0, 0.1);
-    this.flag.rotation.z = -flagDroop(aws);
+    droopFlag(this.flag, flagDroop(aws));
   }
 
   get flying(): boolean {

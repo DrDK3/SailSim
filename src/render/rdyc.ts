@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { flagstaffGaff } from './clubEnsign';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
@@ -969,6 +970,17 @@ export function buildRdycClub(): RdycClub {
   b.add('trim', new THREE.CylinderGeometry(0.18, 0.24, 0.5, 8), new THREE.Matrix4().makeTranslation(fp.x, G + 0.25, fp.z));
   b.box('trim', fx, fy, fh * 0.66, 0.1, 4.2, 0.1);
   b.add('trim', new THREE.SphereGeometry(0.16, 8, 6), new THREE.Matrix4().makeTranslation(fp.x, G + fh + 0.1, fp.z));
+  // The gaff the club's ensign is hoisted to (owner, 22 Nov 2026: the ensign hung in the air beside the yard, no gaff
+  // drawn): from the staff up and aft to its peak, where src/render/clubEnsign.ts flies the ensign.
+  {
+    const [ge, gn] = rdycToEN(fx, fy);
+    const { throat, peak } = flagstaffGaff([ge, gn], G, fh);
+    const dir = peak.clone().sub(throat);
+    const len = dir.length();
+    const m = new THREE.Matrix4().compose(throat.clone().addScaledVector(dir, 0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()), new THREE.Vector3(1, 1, 1));
+    b.add('trim', new THREE.CylinderGeometry(0.035, 0.05, len, 8), m);
+    b.add('trim', new THREE.SphereGeometry(0.06, 8, 6), new THREE.Matrix4().makeTranslation(peak.x, peak.y + 0.03, peak.z));
+  }
 
   const mats = materials();
   const group = b.build(mats, 'rdyc-club');

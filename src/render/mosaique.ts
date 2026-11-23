@@ -3,7 +3,7 @@ import { Kit, VMAT, cabin, hull, lifebuoy, outboard, place, rail, type Hull, typ
 import { rdycEnsignTexture } from './clubEnsign';
 import { bakedPerson } from './crew';
 import { coloursFlying } from './colours';
-import { flagDroop, flagYaw } from './vane';
+import { flagDroop, flagYaw, yawOnStaff } from './vane';
 import { Burgee, BURGEE_FLY, BURGEE_STICK } from './burgee';
 import { flagFlutter, flagSwing, type FlagWind } from './flagMotion';
 import { buildLights, colregsLights, updateLights } from './navLights';
@@ -212,6 +212,8 @@ function tenderModel(): THREE.Group {
 interface YachtParts {
   group: THREE.Group;
   ensignAt: THREE.Vector3;
+  /** The ensign staff's rake aft (rad from the vertical, about x). */
+  ensignRake: number;
   /** The signal mast's truck (its top), in her frame: the burgee flies above it. */
   truckAt: THREE.Vector3;
   /** Her mooring lines' fairleads in her frame (MOORING_FAIRLEADS, at their heights), and the tender's cleats. */
@@ -519,7 +521,7 @@ function yachtModel(): YachtParts {
     plate.position.set(0, (h.sheer(sternZ) + 2.3) / 2 + 0.05, sternZ + 0.07);
     group.add(plate);
   }
-  return { group, ensignAt: staffTop, truckAt: v(0, truck, mastZ), fairleads, tenderCleats, mastZ };
+  return { group, ensignAt: staffTop, ensignRake: rake, truckAt: v(0, truck, mastZ), fairleads, tenderCleats, mastZ };
 }
 
 /** The buoys, the yacht on them, her tender, her mooring lines and her flags (add `group` to the floating group). */
@@ -527,6 +529,7 @@ export class ShipBuoysView {
   readonly group = new THREE.Group();
   readonly yacht: THREE.Group;
   private readonly ensign: WavingFlag;
+  private readonly ensignRake: number;
   /** The club's burgee at her masthead. */
   readonly burgee: Burgee;
   private readonly lights: THREE.Group;
@@ -569,8 +572,14 @@ export class ShipBuoysView {
     this.burgee.group.position.copy(m.truckAt).add(new THREE.Vector3(0, MOSAIQUE_DRAWN.burgee.above - BURGEE_STICK * bs, 0));
     this.yacht.add(this.burgee.group);
     this.ensign = new WavingFlag('mosaique-ensign', MOSAIQUE_DRAWN.ensign.fly, MOSAIQUE_DRAWN.ensign.hoist, rdycEnsignTexture(), 0xd0101e);
-    this.ensign.pivot.position.copy(m.ensignAt);
-    this.yacht.add(this.ensign.pivot);
+    // Its hoist along the raked staff, down from the truck (owner, 22 Nov 2026): the pivot in the staff's frame.
+    this.ensignRake = m.ensignRake;
+    const staff = new THREE.Group();
+    staff.name = 'mosaique-ensign-staff';
+    staff.position.copy(m.ensignAt);
+    staff.rotation.x = m.ensignRake;
+    staff.add(this.ensign.pivot);
+    this.yacht.add(staff);
     // At anchor (moored) by night: an all-round white light (COLREGs Rule 30).
     this.lights = buildLights(colregsLights('anchored', { length: MOSAIQUE.loa, beam: MOSAIQUE.beam, mastY: MOSAIQUE_DRAWN.masthead - 2.2, mastZ: m.mastZ }));
     this.yacht.add(this.lights);
@@ -597,7 +606,7 @@ export class ShipBuoysView {
     this.ensign.pivot.visible = up;
     this.burgee.group.visible = up;
     if (up) {
-      this.ensign.update(yaw + flagSwing(aws, time, 0, 0.05), aws, time);
+      this.ensign.update(yawOnStaff(yaw + flagSwing(aws, time, 0, 0.05), this.ensignRake), aws, time);
       // The burgee reads the wind in her frame: from ahead is 0, from starboard > 0.
       const awa = Math.atan2(Math.sin(wind.fromDir - this.heading), Math.cos(wind.fromDir - this.heading));
       // It is scaled up from a Squib's: its flutter in its own time (the scale slows it, as a larger flag's is).

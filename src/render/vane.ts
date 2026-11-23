@@ -23,9 +23,34 @@ export function flagYaw(windFromDir: number, tws: number, heading: number, sog: 
   return { yaw: Math.atan2(fwd, stbd), aws: Math.hypot(fwd, stbd) };
 }
 
+/**
+ * A flag on a raked staff (owner, 22 Nov 2026: "All flags should hang at the angle of the pole"): its hoist is lashed
+ * along the staff, so it turns about the staff's axis, not about the vertical. Put its pivot in a frame turned
+ * `rake` rad about x (three.js rotation.x: the staff's foot-to-truck axis leaning towards +z, aft in the boats' model
+ * frames) and turn it by this: the yaw `flagYaw` gives in the upright frame, as the turn about the staff that brings
+ * the fly nearest that heading (the downwind direction projected across the staff).
+ */
+export function yawOnStaff(yaw: number, rake: number): number {
+  return Math.atan2(Math.sin(yaw) * Math.cos(rake), Math.cos(yaw));
+}
+
 /** How far a flag hangs below the horizontal (rad): limp in a calm, nearly straight out from about 6 m/s (E). */
 export function flagDroop(aws: number): number {
   return 1.35 * Math.exp(-aws / 2.2);
+}
+
+/**
+ * Droop a rigid flag (a plane mesh with its hoist along y at x = 0, the fly along +x) by `droop` rad: the fly falls,
+ * the hoist stays on its staff (owner, 22 Nov 2026: "All flags should hang at the angle of the pole"). A shear, as the
+ * cloth flags bend (x → x cos δ, y → y − x sin δ); rotating the whole flag about the hoist's head, as before, swung its
+ * hoist up to 77° off the staff in a calm. The flag's own matrix is set here (it has no other transform).
+ */
+export function droopFlag(flag: THREE.Object3D, droop: number): void {
+  flag.matrixAutoUpdate = false;
+  const c = Math.cos(droop);
+  const s = Math.sin(droop);
+  flag.matrix.set(c, 0, 0, 0, -s, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+  flag.matrixWorldNeedsUpdate = true;
 }
 
 /**
