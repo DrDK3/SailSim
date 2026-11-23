@@ -44,7 +44,17 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
   const next = nextStep(steps);
   const doneCount = steps.filter((s) => s.done).length;
 
+  /** The step is the activity under way now: its button goes back to it rather than starting it again (item 8). */
+  const running = (s: LearnStep) =>
+    (s.action.kind === 'lesson' && ui.tutorial?.lesson.id === s.action.id && !ui.tutorial.result) || (s.action.kind === 'exercise' && ui.exercise?.info.id === s.action.id && ui.exercise.state.stage !== 'result');
+  /** What the button does, in words: back to it (resumes), start again (restarts from the beginning), or start. */
+  const verb = (s: LearnStep) => (running(s) ? 'Back to it' : s.done ? 'Go again' : s.started ? 'Start again' : 'Start');
+
   const start = (s: LearnStep) => {
+    if (running(s)) {
+      onClose();
+      return;
+    }
     setStarted(noteStarted(s.id, started));
     const a = s.action;
     if (a.kind === 'race') {
@@ -89,7 +99,7 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
             {next.minutes ? ` (about ${next.minutes} min)` : ''}. <span className="lesson-summary">{next.summary}</span>
           </p>
           <button className="primary" onClick={() => start(next)} data-testid="learn-next-start">
-            {next.done ? 'Go again' : next.started ? 'Carry on' : 'Start'}: {next.title}
+            {verb(next)}: {next.title}
           </button>
         </div>
         {GROUPS.map(({ group, intro }) => (
@@ -122,15 +132,18 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
                         </>
                       )}
                     </span>
-                    <button onClick={() => start(s)} aria-label={`${s.done ? 'Again' : 'Start'}: ${s.title}`}>
-                      {s.done ? 'Again' : 'Start'}
+                    <button onClick={() => start(s)} aria-label={`${running(s) ? 'Back to it' : s.done ? 'Again' : s.started ? 'Start again' : 'Start'}: ${s.title}`}>
+                      {running(s) ? 'Back to it' : s.done ? 'Again' : s.started ? 'Start again' : 'Start'}
                     </button>
                   </li>
                 ))}
             </ol>
           </section>
         ))}
-        <p className="fine">The lessons and exercises are also in Settings → Lessons; races, today&apos;s challenge and the weekly course in Race. Nothing here replaces them.</p>
+        <p className="fine">
+          “Back to it” returns to the activity under way; “Start again” starts it from the beginning (lessons and exercises do not resume part-way). The
+          lessons and exercises are also in Settings → Lessons; races, today&apos;s challenge and the weekly course in Race. Nothing here replaces them.
+        </p>
       </section>
     </div>
   );

@@ -3,7 +3,7 @@ import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
 import { plainWords } from '../app/flags';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
 import { spinnakerWords } from '../app/spinnakerWords';
 import { TrustNote } from './trust';
@@ -363,7 +363,14 @@ function SpinnakerButtons({ ctl, ui }: { ctl: SimController; ui: UiState }) {
  * Expert (review #25): the flattening controls one by one (each follows Flat until moved, and "Follow Flat" hands it
  * back), the jib lead, and the spinnaker trimmed by hand. Effects are estimates (E, docs/PHYSICS.md §23).
  */
+/**
+ * Expert's sail controls: a non-modal panel beside the console (sailing goes on while it is open). Keyboard behaviour
+ * as the other panels (design handover item 8): focus moves to its heading when it opens; Escape inside it, or Close,
+ * shuts it and returns focus to the "Sails…" button that opened it.
+ */
 function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
   const s = ui.snapshot;
   const c = s.sailControls ?? { kicker: s.input.flatten ?? 0, cunningham: s.input.flatten ?? 0, outhaul: s.input.flatten ?? 0, jibLead: 0 };
   const row = (k: 'kicker' | 'cunningham' | 'outhaul', label: string, hint: string) => (
@@ -375,10 +382,26 @@ function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; o
     </label>
   );
   return (
-    <div className="panel sail-controls" role="dialog" aria-label="Sail controls" data-testid="sail-controls">
+    <div
+      className="panel sail-controls"
+      role="dialog"
+      aria-labelledby="sail-controls-title"
+      data-testid="sail-controls"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        // Close this panel only: the app's Escape (which closes the big panels) does not need to run as well.
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        onClose();
+      }}
+    >
       <div className="sc-head">
-        <strong>Sail controls</strong>
-        <button onClick={onClose} aria-label="Close the sail controls">Close</button>
+        <h3 id="sail-controls-title" ref={heading} tabIndex={-1} className="sc-title">
+          Sail controls
+        </h3>
+        <button onClick={onClose} aria-label="Close the sail controls" data-testid="sail-controls-close">
+          Close
+        </button>
       </div>
       {row('kicker', 'Kicker', 'pulls the boom down: a flatter, straighter leech')}
       {row('cunningham', 'Cunningham', 'tightens the luff: the draft forward, less power')}
@@ -418,6 +441,12 @@ function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; o
 
 export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState; onHide?: () => void }) {
   const [sailControls, setSailControls] = useState(false);
+  const sailsButton = useRef<HTMLButtonElement>(null);
+  /** Close the sail controls and give focus back to the button that opened them (item 8). */
+  const closeSailControls = () => {
+    setSailControls(false);
+    sailsButton.current?.focus();
+  };
   const s = ui.snapshot;
   const tillerMode = ui.steering === 'tiller';
   // At the Learn level the console leaves out the advanced controls (src/app/level.ts); the keys still work.
@@ -488,13 +517,13 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
         <div className="spin-tab" role="group" aria-label="Spinnaker and sail controls">
           <SpinnakerButtons ctl={ctl} ui={ui} />
           {ui.level === 'expert' && (
-            <button aria-expanded={sailControls} onClick={() => setSailControls(!sailControls)} title="Kicker, cunningham, outhaul, jib lead and the spinnaker's sheet, one by one" data-testid="sail-controls-open">
+            <button ref={sailsButton} aria-expanded={sailControls} aria-haspopup="dialog" onClick={() => setSailControls(!sailControls)} title="Kicker, cunningham, outhaul, jib lead and the spinnaker's sheet, one by one" data-testid="sail-controls-open">
               Sails…
             </button>
           )}
         </div>
       )}
-      {sailControls && ui.level === 'expert' && <SailControls ctl={ctl} ui={ui} onClose={() => setSailControls(false)} />}
+      {sailControls && ui.level === 'expert' && <SailControls ctl={ctl} ui={ui} onClose={closeSailControls} />}
       {onHide && (
         <button className="controls-hide" onClick={onHide} title="Put the controls away (the keys still work; Settings → Sailing controls brings them back)" aria-label="Hide sailing controls">
           <span aria-hidden="true">▾</span>

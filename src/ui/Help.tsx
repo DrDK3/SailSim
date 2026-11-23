@@ -67,7 +67,7 @@ export function Help({ onClose, onTutorial, build }: { onClose: () => void; onTu
         </p>
         <h3>Racing</h3>
         <p>
-          In Scenario, choose a course and up to 20 AI boats. Watch the flags: class flag at the warning signal, P (or U,
+          In Conditions, choose a course and up to 20 AI boats (or use Race for a quick race). Watch the flags: class flag at the warning signal, P (or U,
           black) at the preparatory signal, coming down at one minute; the start when the class flag comes down. Flag X:
           someone was over early (return behind the line); First Substitute: general recall. Port tack keeps clear of
           starboard, windward of leeward, clear astern of clear ahead, and a boat tacking keeps clear. If you hit a boat

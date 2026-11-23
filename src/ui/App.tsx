@@ -362,7 +362,7 @@ export function App({ ctl }: { ctl: SimController }) {
       {/* On a phone the strip carries the arrow to the next mark; a second one at the edge would only cover water. */}
       {ui.race && !narrow && <MarkPointer ctl={ctl} />}
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation" data-density={density}>
-        <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
+        <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)} title={`The activity (now ${activity.label}) and the other ways to sail, settings and tools`}>
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
         <div className="tb-items">

@@ -172,7 +172,7 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         <select value={o.conditions} onChange={(e) => set({ conditions: e.target.value as QuickRaceOptions['conditions'] })}>
           <option value="random">Random</option>
           <option value="live" disabled={!live}>Live now (Met Office){live ? '' : ': not available here'}</option>
-          <option value="as-set">As set in Scenario</option>
+          <option value="as-set">As set in Conditions</option>
         </select>
       </label>
       {o.conditions === 'random' && (

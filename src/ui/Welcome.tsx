@@ -50,7 +50,7 @@ function freeText(a: Activity): string {
     case 'replay':
       return 'Stop the replay and sail on from this moment.';
     default:
-      return 'Sail now and explore the River Dart and Start Bay. Change the boat, the place, the wind and the tide in Scenario.';
+      return 'Sail now and explore the River Dart and Start Bay. Change the boat, the place, the wind and the tide in Conditions.';
   }
 }
 
@@ -160,7 +160,7 @@ export function ExperienceHub({
               <p className="hub-now" data-testid="hub-now">
                 Now: <strong>{activity.label}</strong>
                 {activity.detail && <span className="fine-inline"> · {activity.detail}</span>}
-                <button className="link" onClick={onClose}>Carry on</button>
+                <button className="link" onClick={onClose} title="Close this and carry on with it where you are (nothing restarts)">Carry on</button>
               </p>
             )}
             {more && (

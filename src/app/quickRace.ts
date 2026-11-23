@@ -2,7 +2,7 @@
  * The race set-up (review U4: one set-up instead of two): how many AI boats, how good, which course (a short
  * five-minute course, practice courses, the river, an RDYC club course for the wind, or any course in the
  * library, your own included), laps, leg length, the start sequence and preparatory flag, and the conditions
- * (random, live now, or as set in Scenario). Random conditions are drawn from a seed, so a race can be sailed
+ * (random, live now, or as set in Conditions). Random conditions are drawn from a seed, so a race can be sailed
  * again; they are training ranges chosen for this app (E), not a climatology of the Dart. Today's challenge is
  * the same seeded race for everyone on the same day.
  */

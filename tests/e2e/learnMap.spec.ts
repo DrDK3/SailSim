@@ -84,7 +84,8 @@ test('the Learn map: the lessons, exercises and challenges in order, the next st
   // Reopened: the lesson is marked as started (kept in this browser).
   await menu(page, 'Learn map');
   await expect(page.getByTestId('learn-step-lesson:steer')).toContainText('started');
-  await expect(page.getByTestId('learn-next')).toContainText('Carry on');
+  // The lesson is under way: the button goes back to it (it does not restart it; design handover item 8).
+  await expect(page.getByTestId('learn-next-start')).toContainText('Back to it');
   await page.keyboard.press('Escape');
   expect(errors).toEqual([]);
 });

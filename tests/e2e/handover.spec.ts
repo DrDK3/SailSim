@@ -71,3 +71,27 @@ test('item 1: during a lesson the device check waits, and says why', async ({ pa
   expect(await page.evaluate(() => !!window.__squib!.controller.getState().tutorial)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('item 8: the Sails panel takes focus, closes on Escape and gives focus back', async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  await page.evaluate(() => window.__squib!.controller.setLevel('expert'));
+  const open = page.getByTestId('sail-controls-open');
+  await expect(open).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await open.focus();
+  await page.keyboard.press('Enter');
+  const panel = page.getByTestId('sail-controls');
+  await expect(panel).toBeVisible();
+  // Focus moved into the panel, on its heading.
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe('sail-controls-title');
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('sail-controls-open');
+  // The Close button does the same.
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await page.getByTestId('sail-controls-close').click();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('sail-controls-open');
+  expect(errors).toEqual([]);
+});
