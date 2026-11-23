@@ -192,6 +192,13 @@ export interface Incident {
   summary: string;
   /** Things the simplified judge does not decide (rules 14, 15, 16 …). */
   notes: string[];
+  /**
+   * Rules the simplified judge does not apply that could change this finding (design handover item 4): '15' when right
+   * of way had just changed, '16' when the right-of-way boat had just changed course, '18' when mark-room was in play
+   * but rule 18 was advisory. The penalty stands (the game's outcome stays explicit); the finding says it is
+   * provisional, and why.
+   */
+  provisional?: string[];
   /** Penalty the at-fault boat may take (turns), and whether she took it. */
   penaltyTurns?: number;
   penaltyTaken?: boolean;

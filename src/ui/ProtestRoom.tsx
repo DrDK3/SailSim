@@ -179,6 +179,12 @@ export function ProtestRoom({ ctl, ui: _ui, onClose }: { ctl: SimController; ui:
       <p data-testid="protest-summary">
         <strong>{c.incident.summary}</strong>
       </p>
+      {c.incident.provisional?.length ? (
+        <p className="fine" data-testid="protest-provisional">
+          <strong>Provisional finding.</strong> The simplified judge does not apply rule{c.incident.provisional.length > 1 ? 's' : ''} {c.incident.provisional.join(' and ')}, and the
+          boats' positions suggest {c.incident.provisional.length > 1 ? 'they' : 'it'} could have changed who was at fault. The penalty stands in the game.
+        </p>
+      ) : null}
       {note && (
         <>
           <h4>{note.title}</h4>
@@ -197,8 +203,9 @@ export function ProtestRoom({ ctl, ui: _ui, onClose }: { ctl: SimController; ui:
         </ul>
       )}
       <p className="fine">
-        A simplified judge, not a protest hearing: it applies rules 10–13 and 31 only (not mark-room, obstructions, exoneration or redress), and the rules
-        are paraphrased here; the Racing Rules of Sailing 2025–2028 are the authority.
+        A simplified judge, not a protest hearing: it applies rules 10–13 and 31 (and a simplified rule 18.2 when mark-room penalties are switched on),
+        not rules 14–17, obstructions, exoneration (rule 43) or redress. A finding marked provisional is one those rules could change. The rules are
+        paraphrased here; the Racing Rules of Sailing 2025–2028 are the authority.
       </p>
     </section>
   );

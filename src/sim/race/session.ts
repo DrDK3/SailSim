@@ -445,14 +445,36 @@ export class RaceSession implements AiWorld {
         inc.penaltyTurns = 2;
         inc.penaltyTaken = false;
         inc.summary += by18 ? `: ${kc.name} did not give mark-room (rule 18.2, simplified: ${by18.reason}).` : `: ${kc.name} did not keep clear (rule ${row.rule}: ${row.reason}).`;
+        const provisional: string[] = [];
         if (by18) inc.notes.push(...by18.notes);
-        else if (room) inc.notes.push(markRoomAdvisory(this.fleet.boat(room.giver)!.name));
+        else if (room) {
+          inc.notes.push(markRoomAdvisory(this.fleet.boat(room.giver)!.name));
+          // Rule 18 (advisory) points at the other boat: it could change the finding.
+          if (room.giver !== kc.id) provisional.push('18');
+        }
         inc.notes.push(`Rule 14 also applied to ${rw.name} (avoid contact if reasonably possible); not judged here.`);
         const h = this.rowHistory.get(PAIR(c.a, c.b));
-        if (h && t - h.since < 5) inc.notes.push(`Right of way changed ${(t - h.since).toFixed(1)} s before contact: rule 15 (room to keep clear) may apply; not judged here.`);
-        if (this.headingChange(rw.id, 3) > 15 * DEG) inc.notes.push(`${rw.name} changed course in the 3 s before contact: rule 16 may apply; not judged here.`);
+        if (h && t - h.since < 5) {
+          inc.notes.push(`Right of way changed ${(t - h.since).toFixed(1)} s before contact: rule 15 (room to keep clear) may apply; not judged here.`);
+          provisional.push('15');
+        }
+        if (this.headingChange(rw.id, 3) > 15 * DEG) {
+          inc.notes.push(`${rw.name} changed course in the 3 s before contact: rule 16 may apply; not judged here.`);
+          provisional.push('16');
+        }
+        // Design handover item 4: where a rule the judge does not apply could change the finding, the finding says so.
+        // The penalty still stands: no immunity from uncertainty; the outcome stays explicit.
+        if (provisional.length) {
+          inc.provisional = provisional;
+          inc.summary += ` Provisional: rule${provisional.length > 1 ? 's' : ''} ${provisional.join(' and ')}, not judged here, could change this finding.`;
+        }
         this.owePenalty(kc.id, 2, inc);
-      } else inc.summary += racing ? ' (a boat no longer racing).' : ' (before the preparatory signal: Part 2 of the racing rules did not yet apply).';
+      } else
+        // Part 2 applies before the preparatory signal too, between boats intending to race, but a boat not racing is
+        // not penalised under it (except rule 14 with injury or serious damage, and rule 23.1). Design handover item 4.
+        inc.summary += racing
+          ? ' (a boat no longer racing: not penalised under Part 2; injury, serious damage or interference are not judged here).'
+          : ' (before the preparatory signal the boats were not yet racing: Part 2 applied, but a boat not racing is not penalised under it, except for injury or serious damage, which is not judged here).';
     } else if (c.kind === 'mark' || c.kind === 'committee-boat') {
       inc.summary = `${A.name} touched ${c.label}`;
       const j = this.judgeOf(c.a);

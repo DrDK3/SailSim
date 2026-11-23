@@ -62,10 +62,35 @@ All boats share one environment, stepped once per 10 ms tick, and sail with the 
 ### Incidents
 
 - **Contact between two racing boats** after the preparatory signal: the boat that had to keep clear (rules 13, 10, 11, 12, checked in that order) is reported. She owes a **Two-Turns Penalty** (rule 44.1).
+- **Contact before the preparatory signal** (or with a boat no longer racing): no penalty. Part 2 applies then too, between boats intending to race, but a boat not racing is not penalised under it, except under rule 14 when there is injury or serious damage, and rule 23.1 (neither judged here). Until 23 Nov 2026 the text said Part 2 "did not yet apply", which was wrong (design handover item 4).
 - **Notes added, not judged:**
   - rule 14 for the right-of-way boat;
   - rule 15 when right of way changed less than 5 s before contact;
-  - rule 16 when the right-of-way boat turned more than 15° in the 3 s before.
+  - rule 16 when the right-of-way boat turned more than 15° in the 3 s before;
+  - rule 18 (advisory) when one boat owed the other mark-room and its penalties are switched off.
+- **Provisional findings** (design handover item 4, 23 Nov 2026): when the rule 15, rule 16 or advisory rule 18 note
+  applies and could change who was at fault (for rule 18: the boat owing mark-room is not the one found at fault), the
+  incident carries `provisional: ['15' | '16' | '18']`, its summary ends "Provisional: rule N, not judged here, could
+  change this finding.", and the protest room says so. **The penalty stands**: the game's outcome stays explicit, and
+  uncertainty gives no immunity. No scoring changed, so no records or ghosts need a new version.
+
+### What the simplified judge resolves (scope, 23 Nov 2026)
+
+| Situation | Resolved? |
+|---|---|
+| Contact, opposite tacks, neither tacking (rule 10) | Yes |
+| Contact, same tack, overlapped (rule 11) or clear astern (rule 12) | Yes |
+| Contact while one boat is tacking (rule 13) | Yes (2025–2028 wording of the both-tacking case not verified) |
+| Touching a mark of the current leg (rule 31) | Yes |
+| Contact soon after right of way was acquired (rule 15) | Ruled under 10–13, **labelled provisional** |
+| Contact after the right-of-way boat changed course (rule 16) | Ruled under 10–13, **labelled provisional** |
+| Contact at a mark (rule 18) | Simplified 18.2 when switched on; otherwise ruled under 10–13, **provisional** where rule 18 points at the other boat |
+| Avoiding contact (rule 14), obstructions (19, 20), rule 17, exoneration (rule 43, formerly 21), redress, protests | Not resolved |
+| Contact before the preparatory signal, or with a boat no longer racing | No penalty (see above) |
+
+Wording here is paraphrased from secondary sources (World Sailing's rules site was not reachable from the build
+environment). A qualified rules reviewer should check it, and the reviewed cases (right of way acquired, course
+changes, mark-room) before any behavioural or scoring change: see docs/HANDOVER_23NOV_REPORT.md.
 - **Touching a mark of the current leg** (a start mark before starting, a finishing mark) while racing: rule 31, **One-Turn Penalty**.
 - **Hitting a moored boat or a ferry:** recorded as a collision outside the racing-rules subset.
 
@@ -80,8 +105,8 @@ An untaken penalty is shown in the results ("no penalty taken"). There is no pro
 ### Not implemented
 
 - Rules 15 and 16 as adjudication.
-- Rules 17 and 19–24 (obstructions, hailing). **Rule 18 is judged in a simplified form** (package F, below); the AI keeps clear of boats at marks.
-- Exoneration.
+- Rules 17, 19 and 20 and Part 2 Section D (obstructions, hailing). **Rule 18 is judged in a simplified form** (package F, below); the AI keeps clear of boats at marks.
+- Exoneration (rule 43 in the current rules; rule 21 in older editions).
 - The scoring penalty (44.3).
 - Protests, hearings and redress.
 
@@ -265,7 +290,7 @@ RR11; the World Sailing PDF could not be fetched, issue 32). `src/sim/race/markR
   AI keeps clear of a boat it owes mark-room either way.
 - **Not judged**: how much room was needed (the definition of mark-room), 18.2(c) (overlaps after 18.2(a) ends),
   18.2(d) (an inside overlap from clear astern or by tacking that the outside boat could not answer), 18.2(e), 18.3
-  (tacking in the zone), 18.4 (gybing), rule 21 (exoneration), and gate marks beyond taking the nearer mark.
+  (tacking in the zone), 18.4 (gybing), exoneration (rule 43, formerly rule 21), and gate marks beyond taking the nearer mark.
 
 ## The AI in big fleets (package F, 21 Nov 2026)
 
