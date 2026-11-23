@@ -4,6 +4,7 @@ import type { ExerciseId, ExerciseInfo } from '../app/exercises/index';
 import { SUPPORT_TERMS, supportForTask } from '../app/assists';
 import type { AttemptRecord, ReviewChart } from '../app/exercises/engine';
 import { InstructorOnly } from './trust';
+import { KUDOS_SETTINGS } from '../app/exercises/kudos';
 
 /**
  * An exercise's card (training slice §7–§8): the phase and its goal, the help on show with its level in words
@@ -80,6 +81,13 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </ul>
           </>
         )}
+        {ui.prefs.kudos !== 'off' && s.records.some((rec) => rec.kudos) && (
+          <div data-testid="result-kudos">
+            {s.records.filter((rec) => rec.kudos).map((rec) => (
+              <KudosLine key={rec.n} kudos={rec.kudos!} prefix={`Attempt ${rec.n}: `} />
+            ))}
+          </div>
+        )}
         <p data-testid="result-next">
           <strong>Next:</strong> {r.nextAction.replace(/^Next( time)?: /, '')}
         </p>
@@ -124,6 +132,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </li>
           ))}
         </ul>
+        {ui.prefs.kudos === 'practice' && s.records[s.attempt - 1]?.kudos && <KudosLine kudos={s.records[s.attempt - 1]!.kudos!} testId="attempt-kudos" />}
         {s.extras?.chart && <TrackChart chart={s.extras.chart} />}
         <p className="fine" data-testid="attempt-support">{assistLine(s.records[s.attempt - 1], x.info.task)}</p>
         <div className="row left wrap">
@@ -208,9 +217,23 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </button>
           </>
         ) : s.stage === 'intro' ? (
-          <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
-            Start
-          </button>
+          <>
+            <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
+              Start
+            </button>
+            {x.info.id === 'tack-recover' && (
+              <label className="select" title="A quiet acknowledgement when a tack is clean all the way through (entry, turn, recovery, sails), saying what earned it">
+                <span>Acknowledgement</span>
+                <select value={ui.prefs.kudos} onChange={(e) => ctl.setPrefs({ kudos: e.target.value as UiState['prefs']['kudos'] })} data-testid="kudos-setting">
+                  {KUDOS_SETTINGS.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </>
         ) : (
           <>
             <button onClick={() => ctl.exerciseHelp()} disabled={!s.canAskHelp} data-testid="exercise-help-button">
@@ -229,6 +252,17 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
       </div>
       <InstructorOnly>{status}</InstructorOnly>
     </section>
+  );
+}
+
+/** The acknowledgement, and what earned it (so it can be repeated without it: design handover item 11). */
+function KudosLine({ kudos, prefix = '', testId }: { kudos: NonNullable<AttemptRecord['kudos']>; prefix?: string; testId?: string }) {
+  return (
+    <p className="kudos" data-testid={testId}>
+      <span aria-hidden="true">✓ </span>
+      {prefix}
+      {kudos.text} <span className="fine-inline">Earned by: {kudos.basis}.</span>
+    </p>
   );
 }
 

@@ -1,6 +1,7 @@
 import type { SteeringMode } from '../steering';
 import { sailAdvice, type SailState } from '../sailStatus';
 import { CONTENT_STATUS, type TackRecoverThresholds } from './config';
+import { tackKudos } from './kudos';
 import { median, seeded, type AttemptPlan, type AttemptRecord, type ExerciseDef, type ExerciseResult, type ExerciseSample, type HelpLadder, type PhaseDef, type ReviewItem } from './engine';
 
 /**
@@ -310,6 +311,7 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
     plans: tackRecoverPlans(t),
     helpTimes: [t.helpAttentionS, t.helpExplainS, t.helpSuggestS],
     review: (rec) => tackRecoverReview(rec, t),
+    kudos: (rec, earlier) => tackKudos(rec, t, earlier),
     result: (records) => tackRecoverResult(records, t),
   };
 }

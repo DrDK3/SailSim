@@ -1,5 +1,6 @@
 import { clampTabDeg, DEFAULT_TAB_DEG, type IndicatorType } from './windIndicator';
 import { DEFAULT_SPINNAKER_COLOURS, isSpinnakerColour, type SpinnakerColourId } from './spinnakerColours';
+import type { KudosSetting } from './exercises/kudos';
 
 /**
  * The player's own preferences that are not graphics or sound: kept in this browser only (localStorage), never sent
@@ -49,6 +50,11 @@ export interface Prefs {
    * the same deck does not fill the view ahead. A presentation choice: the crew are still aboard and sail the boat.
    */
   helmCrew: 'shown' | 'faded';
+  /**
+   * The exercises' quiet acknowledgement (design handover item 11, a pilot): after each attempt, at the end only (the
+   * default), or off. src/app/exercises/kudos.ts.
+   */
+  kudos: KudosSetting;
 }
 
 /** The helm view's field of view (deg): its range in Settings and the default (as before, E). */
@@ -84,6 +90,7 @@ export const DEFAULT_PREFS: Prefs = {
   instructorView: false,
   lookUpToggle: false,
   helmCrew: 'shown',
+  kudos: 'debrief',
 };
 
 function defaults(): Prefs {
@@ -115,6 +122,7 @@ export function loadPrefs(): Prefs {
       instructorView: typeof p.instructorView === 'boolean' ? p.instructorView : d.instructorView,
       lookUpToggle: typeof p.lookUpToggle === 'boolean' ? p.lookUpToggle : d.lookUpToggle,
       helmCrew: p.helmCrew === 'faded' || p.helmCrew === 'shown' ? p.helmCrew : d.helmCrew,
+      kudos: p.kudos === 'practice' || p.kudos === 'debrief' || p.kudos === 'off' ? p.kudos : d.kudos,
     };
   } catch {
     return defaults();

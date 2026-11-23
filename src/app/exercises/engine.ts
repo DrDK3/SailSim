@@ -116,6 +116,8 @@ export interface AttemptRecord {
   review: ReviewItem[];
   /** The learner's prediction before the attempts, if the exercise asks for one. */
   prediction?: string;
+  /** A quiet acknowledgement the attempt earned (design handover item 11), whatever the setting for showing it. */
+  kudos?: { id: string; text: string; basis: string };
 }
 
 /** A small map for the review: the learner's track and the model demonstrations' (local metres, [n, e]). */
@@ -193,6 +195,8 @@ export interface ExerciseDef {
   extras?: (attempt: number, stage: ExerciseStage) => ExerciseExtras;
   /** An attempt (1-based) is started again: forget what the exercise kept for it. */
   resetAttempt?: (n: number) => void;
+  /** The acknowledgement an attempt earned, if any (design handover item 11); `earlier` are the attempts before it. */
+  kudos?: (rec: AttemptRecord, earlier: readonly AttemptRecord[]) => { id: string; text: string; basis: string } | undefined;
 }
 
 export type ExerciseStage = 'intro' | 'attempt' | 'review' | 'result';
@@ -466,6 +470,8 @@ export class Exercise {
     rec.independent = isIndependent(rec.assists);
     if (this.prediction !== undefined) rec.prediction = this.prediction;
     rec.review = this.def.review(rec);
+    const kudos = this.def.kudos?.(rec, this.records.filter((r) => r !== rec));
+    if (kudos) rec.kudos = kudos;
     for (const item of rec.review) {
       const text = [item.observation, item.cause, item.action].filter(Boolean).join(' ');
       this.log.push({ attempt: rec.n, phase: 'review', level: 4, id: item.id, t: this.last?.t ?? 0, requested: false, text });
