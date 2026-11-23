@@ -80,6 +80,12 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
           <span className="race-pos" data-testid="position">{ordinal(race.position)} of {race.fleetSize}</span>
         )}
       </div>
+      {race.laylineNote && (
+        // What the laylines assume, or why they are hidden here (design handover item 14).
+        <p className="fine" data-testid="layline-note">
+          {race.laylineNote}
+        </p>
+      )}
       {/* The horn in words (GR-6): every sound signal has a caption while it sounds. */}
       <div className="sound-caption" role="status" aria-live="polite" data-testid="sound-caption">
         {caption && (

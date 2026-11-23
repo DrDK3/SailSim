@@ -6,6 +6,12 @@
  * with a memory), a leg is a beat or a run by the coach's rule, and the laylines use the same model polar's best
  * upwind and downwind angles. All of it is model output and rules of thumb (E): no allowance is made for leeway or
  * for the tidal stream, which move a real layline.
+ *
+ * Design handover item 14 (23 Nov 2026): the laylines are offered only in their supported case, and say what they
+ * assume. Supported: still water, the stream under LAYLINE_MAX_STREAM_KN at both the boat and the mark (the stream
+ * varies from place to place, so both ends are checked). Elsewhere they are hidden, with the reason. They are approach
+ * lines to the mark, not the path round it. An estimator that adds the stream to each tack's through-water velocity is
+ * a later step, once the aid's intended use is agreed (docs/HANDOVER_23NOV_REPORT.md).
  */
 
 const DEG = Math.PI / 180;
@@ -112,4 +118,24 @@ export function laylines(
     return { tack, to: { n: mark.n, e: mark.e }, from: { n: mark.n - Math.cos(heading) * len, e: mark.e - Math.sin(heading) * len } };
   };
   return { kind, twaDeg: twa / DEG, lines: [line('starboard'), line('port')] };
+}
+
+/** Above this stream (kn, E) at the boat or the mark, the still-water laylines are hidden: the stream moves them. */
+export const LAYLINE_MAX_STREAM_KN = 0.3;
+
+/** What the laylines assume, in words (shown with them). */
+export const LAYLINE_ASSUMPTIONS = 'Approach lines to the mark at the model’s best angle, in still water: no allowance for the stream or leeway, and not the path round the mark.';
+
+/**
+ * Whether the laylines are offered here (design handover item 14): only in still water. `streamKn` is the larger of
+ * the stream's rates at the boat and at the mark.
+ */
+export function laylineSupport(streamKn: number): { supported: true; note: string } | { supported: false; note: string } {
+  if (Number.isFinite(streamKn) && streamKn < LAYLINE_MAX_STREAM_KN) return { supported: true, note: `Laylines: ${LAYLINE_ASSUMPTIONS}` };
+  return {
+    supported: false,
+    note: Number.isFinite(streamKn)
+      ? `Laylines hidden: a ${streamKn.toFixed(1)} kn stream here moves them, and the aid does not allow for the stream (it is drawn only in still water, under ${LAYLINE_MAX_STREAM_KN} kn).`
+      : 'Laylines hidden: the stream here is not known, and the aid is drawn only in still water.',
+  };
 }

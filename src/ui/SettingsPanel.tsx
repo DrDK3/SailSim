@@ -239,8 +239,9 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
         <p className="fine">{LEVELS.find((l) => l.id === ui.level)?.text} It sets what is shown by default; each part can still be switched on or off.</p>
         <label className="check">
           <input type="checkbox" checked={ui.raceAids} onChange={(e) => ctl.setRaceAids(e.target.checked)} data-testid="pref-race-aids" />
-          Race aids: the laylines to the next mark (on the water and on the minimap) and a lifted or headed readout. Model estimates: no allowance
-          for leeway or the tidal stream. On at Learn and Club, off at Expert. The course on the minimap and the arrow to the next mark are always shown.
+          Race aids: the laylines to the next mark (on the water and on the minimap) and a lifted or headed readout. Model estimates: the laylines
+          are approach lines in still water (no allowance for leeway or the stream), so they are drawn only where the stream is under 0.3 kn. On at
+          Learn and Club, off at Expert. The course on the minimap and the arrow to the next mark are always shown.
         </label>
         <h4 className="settings-group">Help and accessibility</h4>
         <label className="check">

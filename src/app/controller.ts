@@ -12,7 +12,7 @@ import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
 import { FRAME_EVERY_S, IncidentRecorder, type ProtestCase } from './protestRoom';
-import { WindTrend, laylines, shiftCall, type Layline, type ShiftCall } from './raceAids';
+import { WindTrend, laylineSupport, laylines, legKind, shiftCall, type Layline, type ShiftCall } from './raceAids';
 import { finishStory, legMarkName, markPlaces, type BoatPassings, type FinishStory, type MarkPlace } from './raceStory';
 import { FleetTrack } from './fleetTrack';
 import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, type TrackPoint } from './sailLog';
@@ -183,6 +183,8 @@ export interface RaceUi {
   };
   /** Race aids on (laylines, lifted or headed: src/app/raceAids.ts), and the wind's shift now when sailing upwind. */
   aids: boolean;
+  /** What the laylines assume, or why they are hidden here (design handover item 14). */
+  laylineNote?: string;
   shift?: ShiftCall;
   /** Once you have finished: your place with the gaps either side, and your place at the start and at each mark. */
   story?: FinishStory;
@@ -3154,8 +3156,29 @@ export class SimController {
     const judge = r.session.judgeOf('you');
     const leg = r.resolved.legs[judge.legIndex];
     if (judge.phase !== 'racing' || !leg) return undefined;
+    if (!this.laylineSupport()?.supported) return undefined;
     const s = this.currSnap;
     return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.humanPolar);
+  }
+
+  /**
+   * Whether the laylines are offered now (design handover item 14): only in still water, checked at the boat and at
+   * the next mark; with the note that says what they assume, or why they are hidden. Undefined when not racing with the
+   * aids on, or on a reach.
+   */
+  laylineSupport(): ReturnType<typeof laylineSupport> | undefined {
+    const r = this.race;
+    if (!r || !this.raceAidsOn) return undefined;
+    const judge = r.session.judgeOf('you');
+    const leg = r.resolved.legs[judge.legIndex];
+    if (judge.phase !== 'racing' || !leg) return undefined;
+    const s = this.currSnap;
+    if (legKind({ n: s.n, e: s.e }, leg.target, s.twd) === 'reach') return undefined;
+    const rate = (n: number, e: number) => {
+      const c = this.sim.env.current(this.sim.time, n, e);
+      return Math.hypot(c.n, c.e) / 0.514444;
+    };
+    return laylineSupport(Math.max(rate(s.n, s.e), rate(leg.target.n, leg.target.e)));
   }
 
   /**
@@ -3809,6 +3832,7 @@ export class SimController {
       disqualified: dq,
       best: this.raceBest.start || this.raceBest.finish ? { ...this.raceBest } : undefined,
       aids: this.raceAidsOn,
+      laylineNote: this.laylineSupport()?.note,
       shift,
       story: results ? finishStory(results) : undefined,
       rulings: results ? session.log.filter((l) => l.kind === 'incident' || l.kind === 'penalty') : undefined,
