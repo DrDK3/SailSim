@@ -364,6 +364,9 @@ const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
 const MAX_STEPS_PER_FRAME = 12;
 /** Identifies the build in recordings (Vite's mode and the package version; a commit id when CI provides one). */
+/** How long a single activation of a held control acts (s of sailing): design handover item 2. */
+export const TAP_S = 0.25;
+
 export const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
 /** When this build was made (vite.config.ts), shown with the build id so the owner can tell which version runs. */
 const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 'unknown';
@@ -457,6 +460,11 @@ export class SimController {
   private graphicsLost = false;
   private pausedForGraphics = false;
   private held = new Set<string>();
+  /**
+   * Single activations (design handover item 2): an action pressed for a bounded moment by a click that is neither a
+   * pointer press nor a key held on the button (assistive technology, voice control), released at this sim time.
+   */
+  private taps = new Map<string, number>();
   private steeringMode: SteeringMode = loadSteering();
   private listeners = new Set<Listener>();
   private ui!: UiState;
@@ -804,6 +812,13 @@ export class SimController {
       this.publish(true);
     }
     if (this.replay?.ended) return; // hold at the end of the recording until "Take over"
+    // A single activation ends after its moment (in simulated time, so a paused boat keeps it until it sails).
+    for (const [a, until] of this.taps) {
+      if (this.sim.time >= until) {
+        this.taps.delete(a);
+        this.held.delete(a);
+      }
+    }
     if (this.race) this.race.session.step();
     else if (this.soloFleet) this.soloFleet.stepOnce();
     else this.sim.stepOnce();
@@ -1573,6 +1588,7 @@ export class SimController {
     if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined, markRoomPenalties: rec.markRoomPenalties === true, aiSpinPolar: rec.aiSpinPolar === true })) return false;
     this.replay = { rec, inputs: recordingLog(rec), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
     this.held.clear();
+    this.taps.clear();
     this.paused = false;
     this.publish(true);
     return true;
@@ -1642,6 +1658,7 @@ export class SimController {
     this.ghostLoading = undefined;
     this.timeScale = 1;
     this.held.clear();
+    this.taps.clear();
     this.paused = false;
     this.publish(true);
   }
@@ -2454,6 +2471,11 @@ export class SimController {
   private onPageHide = () => this.keepResumePoint();
 
   private onVisibility = () => {
+    // A hidden page gets no key or pointer releases: let go of everything held (design handover item 2).
+    if (document.hidden) {
+      this.held.clear();
+      this.taps.clear();
+    }
     if (document.hidden) this.keepResumePoint();
     this.sound.setHidden(document.hidden);
     this.pace.skipFrames = Math.max(this.pace.skipFrames, 1);
@@ -2938,8 +2960,22 @@ export class SimController {
   /** Held controls (keyboard or on-screen buttons). */
   press(action: string, down: boolean): void {
     if (this.replay && down) return;
+    // A press or release by a pointer or a key takes over from a single activation of the same control.
+    this.taps.delete(action);
     if (down) this.held.add(action);
     else this.held.delete(action);
+  }
+
+  /**
+   * A single, bounded activation of a held control (design handover item 2): what a click with no pointer or key
+   * held behind it does (assistive technology, voice control, a switch). The control acts for `seconds` of sailing,
+   * then lets go: a small, predictable adjustment, never a control left held.
+   */
+  tap(action: string, seconds = TAP_S): void {
+    if (this.replay) return;
+    if (this.held.has(action) && !this.taps.has(action)) return; // already held by a pointer or a key
+    this.held.add(action);
+    this.taps.set(action, this.sim.time + seconds);
   }
 
   /** Test hook: advance the simulation synchronously (held controls still apply). */
@@ -3457,6 +3493,7 @@ export class SimController {
 
   private onBlur = () => {
     this.held.clear();
+    this.taps.clear();
     // A held look-up ends when the window loses the keys (the release would never come); a toggled one stays (§3.3).
     if (!this.prefs.lookUpToggle) this.setLookUp(false);
   };

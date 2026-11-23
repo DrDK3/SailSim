@@ -94,7 +94,18 @@ export function helmReadout(rudder: number): string {
   return `${d}° → ${rudder > 0 ? 'stbd' : 'port'}`;
 }
 
+/**
+ * A control that acts while held (steering, the sheets). Design handover item 2: it works through every input route.
+ * - A pointer (mouse, touch, pen): held from press to release, as before.
+ * - The keyboard on the focused button (W3C button pattern): Space or Enter held acts while held; key repeats do
+ *   nothing more; the click the browser makes from the key is not acted on again.
+ * - A click with no pointer or key behind it (assistive technology, voice control, a switch): one bounded activation
+ *   (SimController.tap).
+ * Losing the focus lets go; so do the window losing the keys and the page being hidden (the controller).
+ */
 function Hold({ ctl, action, children, label, hint, className }: { ctl: SimController; action: string; children: ReactNode; label: string; hint?: boolean; className?: string }) {
+  const keyHeld = useRef(false);
+  const lastKeyAt = useRef(-Infinity);
   const on = (e: ReactPointerEvent) => {
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -104,6 +115,34 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
     ctl.press(action, true);
   };
   const off = () => ctl.press(action, false);
+  const isActivationKey = (e: ReactKeyboardEvent) => e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar';
+  const keyOn = (e: ReactKeyboardEvent) => {
+    if (!isActivationKey(e)) return;
+    e.preventDefault();
+    lastKeyAt.current = performance.now();
+    if (keyHeld.current || e.repeat) return;
+    keyHeld.current = true;
+    ctl.press(action, true);
+  };
+  const keyOff = (e: ReactKeyboardEvent) => {
+    if (!isActivationKey(e)) return;
+    e.preventDefault();
+    lastKeyAt.current = performance.now();
+    if (!keyHeld.current) return;
+    keyHeld.current = false;
+    ctl.press(action, false);
+  };
+  const click = (e: ReactMouseEvent) => {
+    // A pointer's click (detail ≥ 1) was handled by the press and release; a key's by the key handlers.
+    if (e.detail !== 0 || keyHeld.current || performance.now() - lastKeyAt.current < 600) return;
+    ctl.tap(action);
+  };
+  const blur = () => {
+    if (keyHeld.current) {
+      keyHeld.current = false;
+      ctl.press(action, false);
+    }
+  };
   return (
     <button
       className={`hold${hint ? ' suggest' : ''}${className ? ` ${className}` : ''}`}
@@ -112,6 +151,10 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
       onPointerUp={off}
       onPointerCancel={off}
       onPointerLeave={off}
+      onKeyDown={keyOn}
+      onKeyUp={keyOff}
+      onClick={click}
+      onBlur={blur}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* The name is the full label, from the content (WCAG 2.5.3, label in name: axe flagged aria-label "Trim main (W)"
