@@ -2,6 +2,7 @@
   "name": "squib-dart-sim",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "description": "Squib sailing simulator for the River Dart (Royal Dart Yacht Club)",
   "type": "module",
   "scripts": {

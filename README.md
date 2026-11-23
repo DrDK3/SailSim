@@ -249,3 +249,26 @@ python3 -m venv .venv && .venv/bin/pip install -r research/geodata/requirements.
 | Weather (app replay and research) | British Crown copyright, the Met Office, CC BY-SA 4.0 (UKV model and land observations, via AWS Open Data) |
 | Tide (when deployed) | Contains Environment Agency data, Open Government Licence v3; UKHO predictions © Crown copyright (terms to confirm before publishing them: OUTSTANDING_ISSUES 15) |
 | Terrain | © Environment Agency copyright and/or database right 2015. All rights reserved. Open Government Licence v3, via Tilezen terrain tiles |
+
+## Licence
+
+The simulator's code is released under the [MIT licence](LICENSE) (© 2026 The SailSim authors). That covers the
+source code, the tools, the tests, the documentation written for this project and the simulator's own renders
+(`public/media/`, `public/icons/`, the screenshots in `docs/img/`). It comes with no warranty, and the simulator is
+not for navigation.
+
+The MIT licence does **not** cover:
+
+- **Data from other sources,** which keeps its own licence and attribution (the table above). That includes the map
+  files in `public/geo/` (built from OpenStreetMap and Microsoft building footprints: ODbL 1.0, share-alike; with
+  Environment Agency data under the Open Government Licence v3 and Copernicus Sentinel data) and the Met Office
+  replays in `public/live/` and `research/weather/output/` (CC BY-SA 4.0, share-alike). Anyone reusing them must follow
+  those licences.
+- **The Royal Dart Yacht Club's material:** its course and mark data (`data/courses/club/`, `data/marks/`, from the
+  club's Sailing Programme 2026; the marks' lights from the Dart Harbour guide), the transcriptions in
+  `docs/CLUB_DOCUMENTS.md`, the club's name and burgee (used
+  with the club's approval of 20 Nov 2026) and its ensign. None of these is licensed for reuse.
+- **Names and marks of others:** the sponsors' names shown on the racing marks, the National Squib class name and the
+  names of boats, places and organisations. Their use here grants no right to use them elsewhere.
+- **Third-party libraries** (React, three.js and the others in `package.json`), which come under their own licences.
+
