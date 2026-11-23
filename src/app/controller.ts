@@ -60,7 +60,7 @@ import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
 import { courseKey, recordRaceTime, recordStart } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
 import { featureOn, setFeatureFlag, type FeatureFlag } from './flags';
-import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
+import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonResult, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
 import { COACH, RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
@@ -211,6 +211,17 @@ export interface DataSource {
   gaugeUsable?: boolean;
 }
 
+/** A lesson's result card (design handover item 3: complete only when every step with a goal was sailed). */
+export interface LessonResult {
+  lines: string[];
+  complete: boolean;
+  /** The steps skipped, by title, in the lesson's order. */
+  skipped: string[];
+  /** How many steps have a goal. */
+  steps: number;
+  next?: { id: LessonId; title: string };
+}
+
 export interface UiState {
   snapshot: BoatSnapshot;
   paused: boolean;
@@ -288,10 +299,14 @@ export interface UiState {
     finished: boolean;
     lesson: { id: LessonId; number: number; title: string; count: number; group: LessonGroup; inGroup: number };
     /** The result card: what you did, whether it was your best time, and the next lesson. */
-    result?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
+    result?: LessonResult;
   };
   /** The six lessons, with what is done in this browser. */
-  lessons: { id: LessonId; group: LessonGroup; number: number; title: string; summary: string; minutes: number; done: boolean; bestS?: number }[];
+  /**
+   * The lessons and this browser's progress: done (every step sailed in a run, or an older record: `legacy`), and the
+   * steps the last run skipped when it was not complete (design handover item 3).
+   */
+  lessons: { id: LessonId; group: LessonGroup; number: number; title: string; summary: string; minutes: number; done: boolean; legacy?: boolean; skipped?: string[] }[];
   /** The exercise running (src/app/exercises): its state, and how its content and thresholds stand. */
   exercise?: { info: ExerciseInfo; state: ExerciseState; status: ContentStatus; thresholdsChanged: boolean; overlay: boolean; saved?: boolean };
   /** The exercises on offer, with how many runs this browser keeps for each. */
@@ -486,7 +501,7 @@ export class SimController {
   private lesson?: Lesson;
   /** The lesson's buoy (local metres), placed from where the boat started. */
   private lessonTarget?: { n: number; e: number };
-  private lessonResult?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
+  private lessonResult?: LessonResult;
   private lessonProgress: LessonProgress = loadLessonProgress();
   /** The exercise running (src/app/exercises): its engine, how each attempt is set up, and its overlay. */
   private exercise?: { info: ExerciseInfo; engine: Exercise; spec: ExerciseSpec; scenarioKey: string; changed: boolean; overlay: boolean; saved?: boolean; lastKey: string };
@@ -1502,16 +1517,17 @@ export class SimController {
     }
   }
 
-  /** On reaching the lesson's last step: its result card, and the lesson marked done in this browser. */
+  /** On reaching the lesson's last step: its result card, and the lesson recorded in this browser (done if no step was skipped). */
   private checkLessonDone(): void {
     const t = this.tutorial;
     const l = this.lesson;
     if (!t || !l || !t.finished || this.lessonResult) return;
-    const elapsed = this.sim.time;
-    const { progress, best } = saveLessonDone(l.id, elapsed);
+    // Complete only if every step with a goal was sailed; reaching the end by skipping is recorded as such.
+    const { skipped, required } = t.outcome;
+    const { progress, complete } = saveLessonResult(l.id, skipped);
     this.lessonProgress = progress;
     const next = lessonAfter(l.id);
-    this.lessonResult = { lines: l.result(t.record, elapsed), best, next: next && { id: next.id, title: next.title } };
+    this.lessonResult = { lines: l.result(t.record), complete, skipped, steps: required.length, next: next && { id: next.id, title: next.title } };
   }
 
   /** The whole run's state hash: every boat (and so, through determinism, everything else). */
@@ -3545,7 +3561,7 @@ export class SimController {
               result: this.lessonResult,
             }
           : undefined,
-      lessons: LESSONS.map((l) => ({ id: l.id, group: l.group, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id], bestS: this.lessonProgress[l.id]?.bestS })),
+      lessons: LESSONS.map((l) => ({ id: l.id, group: l.group, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id]?.done, legacy: this.lessonProgress[l.id]?.legacy, skipped: this.lessonProgress[l.id]?.done ? undefined : this.lessonProgress[l.id]?.skipped })),
       exercise: this.exercise
         ? { info: this.exercise.info, state: this.exercise.engine.state, status: CONTENT_STATUS, thresholdsChanged: this.exercise.changed, overlay: this.exercise.overlay, saved: this.exercise.saved }
         : undefined,

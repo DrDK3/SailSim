@@ -2,6 +2,7 @@ import type { AppScenario } from './controller';
 import type { ConditionsSettings } from '../sim/env/conditions';
 import type { ControlInput } from '../sim/simulation';
 import { angleDiff, type LessonRecord, type StepMemory, type TutorialSample, type TutorialStep } from './tutorial';
+import { persist } from './storage';
 
 /**
  * Six short lessons (review §8.1 and U9), then three in seamanship (below), each with its own water and wind, a goal per step checked as you sail,
@@ -42,8 +43,8 @@ export interface Lesson {
   overlay: OverlayPart[];
   /** A buoy to sail to: its bearing (°T) and distance (m) from where the boat starts. */
   target?: { bearingDeg: number; distM: number };
-  /** The result card's lines, from what the steps recorded and the time the lesson took. */
-  result: (rec: LessonRecord, elapsedS: number) => string[];
+  /** What the run showed (no lesson time: lessons teach, they are not raced; design handover item 3). */
+  result: (rec: LessonRecord) => string[];
 }
 
 /** Steady open water off the Dart (as the first tutorial was), wind from 225°. */
@@ -206,7 +207,7 @@ const SEAMANSHIP: Lesson[] = [
       },
       explain('result', 'Head to wind', 'Turning into the wind is how you stop a sailing boat. On the river the stream matters as much as the wind: a moored boat lies to whichever is stronger, and you approach the way she lies.'),
     ],
-    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.stopDistM !== undefined ? `You stopped ${rec.stopDistM.toFixed(1)} m from the buoy.` : 'You skipped the pick-up.'],
+    result: (rec) => [rec.stopDistM !== undefined ? `You stopped ${rec.stopDistM.toFixed(1)} m from the buoy.` : 'You skipped the pick-up.'],
   },
   {
     id: 'alongside',
@@ -242,7 +243,7 @@ const SEAMANSHIP: Lesson[] = [
       },
       explain('result', 'Slow is good', 'Alongside, speed is what does damage: no faster than you would walk into a wall. The wind and stream on the river decide which way to approach.'),
     ],
-    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.stopDistM !== undefined ? `You stopped alongside, ${rec.stopDistM.toFixed(1)} m off.` : 'You skipped the approach.'],
+    result: (rec) => [rec.stopDistM !== undefined ? `You stopped alongside, ${rec.stopDistM.toFixed(1)} m off.` : 'You skipped the approach.'],
   },
   {
     id: 'mob',
@@ -294,7 +295,7 @@ const SEAMANSHIP: Lesson[] = [
       },
       explain('result', 'Recovered', 'Getting them back aboard is the hard part on a real boat, and is not simulated. Practise the drill on the water with an instructor.'),
     ],
-    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.recoverS !== undefined ? `Back beside them after ${mmss(rec.recoverS)} of sailing.` : 'You skipped the recovery.'],
+    result: (rec) => [rec.recoverS !== undefined ? `Back beside them after ${mmss(rec.recoverS)} of sailing.` : 'You skipped the recovery.'],
   },
 ];
 
@@ -336,7 +337,7 @@ export const LESSONS: Lesson[] = [
         'The two lines rarely agree exactly: the keel slips a little sideways (leeway), and a stream would carry you as well (lesson 6). Next: the wind.',
       ),
     ],
-    result: (rec, t) => [`Lesson time ${mmss(t)}.`, rec.targetS !== undefined ? `You reached the buoy in ${mmss(rec.targetS)}.` : 'You skipped the buoy.'],
+    result: (rec) => [rec.targetS !== undefined ? `You reached the buoy in ${mmss(rec.targetS)}.` : 'You skipped the buoy.'],
   },
   {
     id: 'wind',
@@ -385,8 +386,7 @@ export const LESSONS: Lesson[] = [
       ),
       explain('result', 'Points of sail', 'Close-hauled, reaching, running: the same true wind feels strongest upwind and lightest downwind. Next: trimming the sails.'),
     ],
-    result: (rec, t) => [
-      `Lesson time ${mmss(t)}.`,
+    result: (rec) => [
       `Apparent wind: ${kn1(rec.awsBeat)} kn close-hauled, ${kn1(rec.awsReach)} kn on a beam reach, ${kn1(rec.awsRun)} kn running, in a true wind of 10 kn.`,
     ],
   },
@@ -436,7 +436,7 @@ export const LESSONS: Lesson[] = [
       },
       explain('result', 'Trimmed', 'When you change course, the sails need trimming again: in as you head up, out as you bear away. Next: tacking and gybing.'),
     ],
-    result: (_rec, t) => [`Lesson time ${mmss(t)}.`],
+    result: () => [],
   },
   {
     id: 'turns',
@@ -471,8 +471,8 @@ export const LESSONS: Lesson[] = [
       },
       explain('result', 'Tacked and gybed', 'Next: the start of a race.'),
     ],
-    result: (rec, t) => {
-      const lines = [`Lesson time ${mmss(t)}.`];
+    result: (rec) => {
+      const lines: string[] = [];
       for (const n of [1, 2]) {
         const s = rec[`tack${n}S`];
         if (s !== undefined) lines.push(`Tack ${n}: ${Number.isFinite(s) ? `${s.toFixed(1)} s, ` : ''}${kn1(rec[`tack${n}InKn`])} → ${kn1(rec[`tack${n}MinKn`])} kn at the slowest.`);
@@ -528,8 +528,8 @@ export const LESSONS: Lesson[] = [
       },
       explain('result', 'Started', 'A good start crosses within a few seconds of the signal, at full speed, with nobody in the way. Practise it in Race: the short course takes about five minutes. Next: the stream.'),
     ],
-    result: (rec, t) => {
-      const lines = [`Lesson time ${mmss(t)}.`];
+    result: (rec) => {
+      const lines: string[] = [];
       if (rec.startDelayS !== undefined) {
         lines.push(`You started ${rec.startDelayS.toFixed(1)} s after the signal, at ${kn1(rec.startKn)} kn.`);
         lines.push(rec.startDelayS <= 5 ? 'A sharp start.' : rec.startDelayS <= 15 ? 'A safe start: try to be closer to the line at the signal.' : 'A late start: be nearer the line, moving, when the signal sounds.');
@@ -586,7 +586,7 @@ export const LESSONS: Lesson[] = [
       },
       explain('result', 'Stream and VMG', 'In a stream, what counts is progress over the ground; to windward, what counts is VMG. Laylines are not drawn yet. Next: race. The short course takes about five minutes.'),
     ],
-    result: (rec, t) => [`Lesson time ${mmss(t)}.`, ...(rec.vmgKn !== undefined ? [`VMG held at ${kn1(rec.vmgKn)} kn.`] : [])],
+    result: (rec) => [...(rec.vmgKn !== undefined ? [`VMG held at ${kn1(rec.vmgKn)} kn.`] : [])],
   },
   ...SEAMANSHIP,
 ];
@@ -599,34 +599,67 @@ export function lessonById(id: LessonId): Lesson {
 
 const KEY = 'squib.lessons.v1';
 
-export type LessonProgress = Partial<Record<LessonId, { done: true; bestS: number; at: string }>>;
+/**
+ * One lesson's progress in this browser (design handover item 3, owner's choice of 23 Nov 2026: a lesson is complete
+ * only when every step with a goal was sailed; skipping still lets you move on, and is recorded as skipped).
+ */
+export interface LessonEntry {
+  /** Complete: every step with a goal was sailed in a run (an older record: see `legacy`). */
+  done: boolean;
+  /** When the lesson was last finished (ISO). */
+  at: string;
+  /** The steps the last run skipped, by title (none when it was complete). */
+  skipped?: string[];
+  /** When it was first completed with every step sailed (ISO). */
+  completedAt?: string;
+  /**
+   * Recorded before 23 Nov 2026, when reaching the end counted as done whether or not steps were skipped: kept as it
+   * was (done, with its time), without guessing what was skipped. A complete run replaces it.
+   */
+  legacy?: true;
+  /** An older record's time (s); no longer a reward. */
+  bestS?: number;
+}
+
+export type LessonProgress = Partial<Record<LessonId, LessonEntry>>;
 
 export function loadLessonProgress(): LessonProgress {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as LessonProgress;
-    return raw && typeof raw === 'object' ? raw : {};
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Record<string, Partial<LessonEntry>>;
+    if (!raw || typeof raw !== 'object') return {};
+    const out: LessonProgress = {};
+    for (const [id, e] of Object.entries(raw)) {
+      if (!e || typeof e !== 'object' || typeof e.at !== 'string') continue;
+      // An older record (done with a best time, nothing on skipped steps): kept as it was, marked as such.
+      const legacy = e.legacy === true || (e.done === true && typeof e.bestS === 'number' && e.completedAt === undefined && e.skipped === undefined);
+      out[id as LessonId] = { done: e.done === true, at: e.at, ...(Array.isArray(e.skipped) ? { skipped: e.skipped.filter((x) => typeof x === 'string') } : {}), ...(typeof e.completedAt === 'string' ? { completedAt: e.completedAt } : {}), ...(legacy ? { legacy: true as const } : {}), ...(typeof e.bestS === 'number' ? { bestS: e.bestS } : {}) };
+    }
+    return out;
   } catch {
     return {};
   }
 }
 
-/** Mark a lesson done with its time; returns the progress and whether the time is a new best. */
-export function saveLessonDone(id: LessonId, timeS: number, now = new Date()): { progress: LessonProgress; best: boolean } {
+/**
+ * Record a lesson reaching its end: complete if no step with a goal was skipped. An earlier completion stands (a later
+ * run with skips does not undo it); an older record stays until a complete run replaces it. No fastest time is kept:
+ * the lessons teach, they are not raced (owner, 23 Nov 2026).
+ */
+export function saveLessonResult(id: LessonId, skipped: readonly string[], now = new Date()): { progress: LessonProgress; complete: boolean } {
   const p = loadLessonProgress();
   const was = p[id];
-  const best = !was || timeS < was.bestS;
-  p[id] = { done: true, bestS: best ? timeS : was!.bestS, at: now.toISOString() };
-  try {
-    localStorage.setItem(KEY, JSON.stringify(p));
-  } catch {
-    // storage unavailable: progress lasts for this visit
-  }
-  return { progress: p, best };
+  const complete = skipped.length === 0;
+  const at = now.toISOString();
+  p[id] = complete
+    ? { done: true, at, completedAt: was?.completedAt ?? at }
+    : { ...(was ?? {}), done: was?.done ?? false, at, skipped: [...skipped] };
+  persist(KEY, JSON.stringify(p), 'lesson progress');
+  return { progress: p, complete };
 }
 
 /** The first lesson not yet done, basics first (the first again when all are). */
 export function nextLessonFor(p: LessonProgress): Lesson {
-  return LESSONS.find((l) => !p[l.id]) ?? LESSONS[0]!;
+  return LESSONS.find((l) => !p[l.id]?.done) ?? LESSONS[0]!;
 }
 
 /** The next lesson in the same group (the basics end at the stream; seamanship at man overboard). */

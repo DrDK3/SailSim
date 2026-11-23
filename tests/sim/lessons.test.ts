@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { LESSONS, lessonById, loadLessonProgress, nextLessonFor, saveLessonDone, type LessonId } from '../../src/app/lessons';
+import { LESSONS, lessonById, loadLessonProgress, nextLessonFor, saveLessonResult, type LessonId } from '../../src/app/lessons';
 import { Tutorial, type TutorialSample } from '../../src/app/tutorial';
 import { SimController } from '../../src/app/controller';
 import { sailAdvice, sailState } from '../../src/app/sailStatus';
@@ -121,9 +121,11 @@ describe('lesson step logic', () => {
 
   it('progress is kept in this browser; the next lesson is the first not done', () => {
     expect(nextLessonFor(loadLessonProgress()).id).toBe('steer');
-    expect(saveLessonDone('steer', 95).best).toBe(true);
-    expect(saveLessonDone('steer', 120).best).toBe(false);
-    expect(loadLessonProgress().steer?.bestS).toBe(95);
+    // Reached the end with a step skipped: not done, so it is still the next lesson (design handover item 3).
+    expect(saveLessonResult('steer', ['Sail to the buoy']).complete).toBe(false);
+    expect(nextLessonFor(loadLessonProgress()).id).toBe('steer');
+    expect(saveLessonResult('steer', []).complete).toBe(true);
+    expect(loadLessonProgress().steer).toMatchObject({ done: true });
     expect(nextLessonFor(loadLessonProgress()).id).toBe('wind');
   });
 
@@ -308,7 +310,7 @@ describe('lessons in the app, sailed by a scripted helmsman with the keys alone 
   });
 
   it('"Learn to sail" starts the next lesson not done', () => {
-    saveLessonDone('steer', 80);
+    saveLessonResult('steer', []);
     const c = new SimController();
     c.startTutorial();
     expect(c.getState().tutorial?.lesson.id).toBe('wind');

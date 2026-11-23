@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
-import { mmss } from '../app/lessons';
 import { ExerciseList } from './ExercisePanel';
 
 /**
@@ -34,7 +33,10 @@ function LessonGroupList({ lessons, next, onStart, testId }: { lessons: UiState[
           <span className="lesson-tick" aria-hidden="true">{l.done ? '✓' : l.number}</span>
           <span className="lesson-text">
             <strong>{l.title}</strong>
-            <span className="fine-inline"> · about {l.minutes} min{l.done ? ` · done${l.bestS !== undefined ? `, best ${mmss(l.bestS)}` : ''}` : ''}</span>
+            <span className="fine-inline">
+              {' '}
+              · about {l.minutes} min{l.done ? (l.legacy ? ' · done (an earlier record)' : ' · done') : l.skipped?.length ? ` · ${l.skipped.length} step${l.skipped.length === 1 ? '' : 's'} skipped last time` : ''}
+            </span>
             <span className="lesson-summary">{l.summary}</span>
           </span>
           <button className={l.id === next ? 'primary' : ''} onClick={() => onStart(l.id)} aria-label={`Start lesson ${l.number}: ${l.title}${l.done ? ' (done)' : l.id === next ? ' (next)' : ''}`}>
@@ -108,13 +110,18 @@ export function TutorialPanel({ ctl, ui, onRace }: { ctl: SimController; ui: UiS
       <section className="panel tutorial result" aria-label="Lesson result" data-testid="tutorial">
         {head}
         <h3 ref={heading} tabIndex={-1} data-testid="tutorial-title">
-          ✓ Lesson {t.lesson.number} complete: {t.lesson.title}
+          {r.complete ? `✓ Lesson ${t.lesson.number} complete: ${t.lesson.title}` : `Lesson ${t.lesson.number}: ${t.lesson.title}, end reached`}
         </h3>
+        {!r.complete && (
+          // Design handover item 3: reaching the end by skipping is not completing; say what was skipped.
+          <p className="lesson-skipped" data-testid="lesson-skipped">
+            Not complete yet: you skipped {r.skipped.length} of the {r.steps} steps to sail ({r.skipped.join('; ')}). Sail every step to complete the lesson.
+          </p>
+        )}
         <ul className="lesson-result" data-testid="lesson-result">
           {r.lines.map((l) => (
             <li key={l}>{l}</li>
           ))}
-          {r.best && <li className="best">Your best time for this lesson (kept in this browser).</li>}
         </ul>
         <p>{t.step.body}</p>
         <div className="row left wrap">
@@ -136,7 +143,7 @@ export function TutorialPanel({ ctl, ui, onRace }: { ctl: SimController; ui: UiS
               </button>
             )
           )}
-          <button onClick={() => ctl.startLesson(t.lesson.id)}>Repeat</button>
+          <button onClick={() => ctl.startLesson(t.lesson.id)} data-testid="lesson-repeat">{r.complete ? 'Repeat' : 'Try again'}</button>
           <button onClick={() => ctl.toggleDebrief(true)} data-testid="lesson-debrief">Your sail</button>
           <button onClick={() => setList(true)}>All lessons</button>
           <button onClick={() => ctl.endTutorial()}>Sail on freely</button>

@@ -103,6 +103,12 @@ export class Tutorial {
   private last?: TutorialSample;
   /** What the steps have recorded (timings, speeds), for the lesson's result card. */
   readonly record: LessonRecord = {};
+  /**
+   * Which steps with a goal were sailed and which were skipped (design handover item 3: reaching the end of a lesson
+   * is not the same as doing what it asks). A step skipped and later done counts as done.
+   */
+  private readonly performed = new Set<string>();
+  private readonly skippedSteps = new Set<string>();
   /** Inputs the controller should apply when a step begins. */
   pendingInput?: Partial<ControlInput>;
 
@@ -149,6 +155,8 @@ export class Tutorial {
       this.heldS += dt;
       if (this.heldS + 1e-9 >= (step.holdS ?? 0)) {
         this.doneAt = s.t;
+        this.performed.add(step.id);
+        this.skippedSteps.delete(step.id);
         step.onDone?.(s, m, this.record);
       }
     } else this.heldS = 0;
@@ -160,8 +168,21 @@ export class Tutorial {
   }
 
   next(): void {
+    // Moving on from a step whose goal was not met skips it (the lesson can still be navigated freely).
+    const step = this.steps[this.index]!;
+    if (step.goal && this.doneAt === undefined && !this.performed.has(step.id)) this.skippedSteps.add(step.id);
     if (this.index < this.steps.length - 1) this.go(this.index + 1);
     else this.doneAt ??= this.last?.t ?? 0;
+  }
+
+  /** The steps with a goal: the ones sailed and the ones skipped (in the lesson's order), by title. */
+  get outcome(): { required: string[]; performed: string[]; skipped: string[] } {
+    const withGoal = this.steps.filter((s) => s.goal);
+    return {
+      required: withGoal.map((s) => s.title),
+      performed: withGoal.filter((s) => this.performed.has(s.id)).map((s) => s.title),
+      skipped: withGoal.filter((s) => this.skippedSteps.has(s.id)).map((s) => s.title),
+    };
   }
 
   /** Start the current step's measuring again (after a Reset: "turn 30° from where you began" means from the new start). */

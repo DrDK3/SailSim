@@ -63,7 +63,10 @@ export function learnSteps(p: LearnInputs): LearnStep[] {
   const steps: LearnStep[] = [];
   for (const l of LESSONS) {
     const id = `lesson:${l.id}`;
-    const done = !!p.lessons[l.id];
+    // Done: every step sailed in a run (or a record from before 23 Nov 2026, kept as it was). Reached the end with steps
+    // skipped: started, not done (design handover item 3).
+    const rec = p.lessons[l.id];
+    const done = !!rec?.done;
     steps.push({
       id,
       group: l.group === 'basics' ? 'Basics' : 'Seamanship',
@@ -71,8 +74,8 @@ export function learnSteps(p: LearnInputs): LearnStep[] {
       summary: l.summary,
       minutes: l.minutes,
       done,
-      started: !done && started.has(id),
-      note: done ? `Best ${mmss(p.lessons[l.id]!.bestS)}` : undefined,
+      started: !done && (started.has(id) || !!rec),
+      note: rec?.legacy ? 'Done (an earlier record)' : !done && rec?.skipped?.length ? `${rec.skipped.length} step${rec.skipped.length === 1 ? '' : 's'} skipped last time` : undefined,
       action: { kind: 'lesson', id: l.id },
     });
   }
