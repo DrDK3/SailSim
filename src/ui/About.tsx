@@ -35,8 +35,32 @@ export function AboutContent() {
         </li>
       </ul>
       <p>
-        It is a simulator of the National Squib, the 5.8 m keelboat raced at the Royal Dart Yacht Club, and it runs in your browser.
+        It is a simulator of the National Squib, the 5.8 m keelboat raced at the Royal Dart Yacht Club, on the River Dart (from the harbour
+        mouth past Dartmouth and Kingswear up to Noss and Dittisham) and in Start Bay. It runs in your browser.
       </p>
+      {/* Design handover items 29 and 30: the free promise, where the source is, what it costs, and what is not claimed. */}
+      <h4>Free, and how it is made</h4>
+      <ul data-testid="about-free">
+        <li>
+          <strong>Free, with no account.</strong> Nothing to install or sign up for. What you sail stays in this browser unless you choose to send it.
+        </li>
+        <li>
+          <strong>The source is public.</strong>{' '}
+          <a href="https://github.com/DrDK3/SailSim" target="_blank" rel="noreferrer" data-testid="about-source">
+            github.com/DrDK3/SailSim
+          </a>
+          : the code (MIT licence), how it is built and tested, and how the site is hosted. The map data, the weather, the tide and the club&apos;s
+          material keep their own terms and credits (README → Data and attribution, Licence).
+        </li>
+        <li>
+          <strong>What it costs to run.</strong> The site is static and its hosting and data are free tiers; a dated ledger keeps running costs,
+          optional services, development tools and contributed time apart (docs/COST_LEDGER.md in the source).
+        </li>
+        <li>
+          <strong>What is not claimed.</strong> The Royal Dart Yacht Club approved the use of its name and burgee; that is the only approval. The
+          simulator is not approved or endorsed by the National Squib class or the RYA, and it is not a training qualification.
+        </li>
+      </ul>
       <h4>How far to trust it</h4>
       <ul>
         <li>

@@ -4,6 +4,10 @@ One page for the owner, the club and anyone deciding what to do next (package G,
 round reports linked from the [README](../README.md); open issues are in [OUTSTANDING_ISSUES.md](OUTSTANDING_ISSUES.md),
 grouped by area.
 
+**Latest round (23 Nov 2026):** the design team's handover, 36 items: [HANDOVER_23NOV_REPORT.md](HANDOVER_23NOV_REPORT.md).
+The current behaviour in one page, checked against the build: [CURRENT_SPEC.md](CURRENT_SPEC.md); which documents are
+current and which historical: [docs/README.md](README.md).
+
 ## What it does
 
 A browser simulator of the National Squib keelboat on the River Dart and in Start Bay, free, with no account and
@@ -17,7 +21,7 @@ https://drdk3.github.io/SailSim/landing.html).
   three Squib types; the spinnaker; at Expert, the sail controls one by one.
 - **Race**: today's challenge, a weekly course with model-sailed targets, a start drill, and races against up to 20
   AI Squibs on practice courses, the RDYC's courses (pending the club's check) or one you build; a race committee, a
-  simplified judge (rules 10–13, 18, 31; not authoritative) with penalties and a protest room.
+  simplified judge (rules 10–13 and 31, rule 18 advisory unless switched on, findings that unjudged rules could change labelled provisional; not authoritative) with penalties and a protest room.
 - **Look back**: a debrief after each sail, replays, ghosts, challenge links; a club table (written, off until the
   owner sets it up).
 - **Teach**: the instructor view (where each figure comes from, the exercises' thresholds and the assist record) and
