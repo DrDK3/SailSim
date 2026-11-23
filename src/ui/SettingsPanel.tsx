@@ -389,16 +389,25 @@ function DeviceCheck({ ctl, ui }: { ctl: SimController; ui: UiState }) {
     <div data-testid="device-check" className="device-check">
       <h5>Check this device</h5>
       <p className="fine">
-        Sails a fixed route for about {DEVICE_CHECK_SECONDS} s (the run you have now comes back afterwards) and measures how smoothly this device draws it,
-        how long it took to load and how quickly the helm shows a key press. The result stays on this device until you copy or save it; it contains no
-        personal details.
+        Sails its own fixed route for about {DEVICE_CHECK_SECONDS} s and measures how smoothly this device draws it, how long it took to load and how
+        quickly the helm shows a key press. It runs between activities: a race, lesson or exercise in progress has to finish first, and free sailing
+        starts again from its starting place afterwards. The result stays on this device until you copy or save it; it contains no personal details.
       </p>
       {ui.deviceCheck ? (
         <p role="status">
           Checking: {Math.round(ui.deviceCheck.progress * 100)}% <button onClick={() => ctl.cancelDeviceCheck()}>Stop the check</button>
         </p>
       ) : (
-        <button onClick={() => ctl.startDeviceCheck()} data-testid="device-check-start">Check this device</button>
+        <>
+          <button onClick={() => ctl.startDeviceCheck()} disabled={!!ui.deviceCheckBlocked} aria-describedby={ui.deviceCheckBlocked ? 'device-check-blocked' : undefined} data-testid="device-check-start">
+            Check this device
+          </button>
+          {ui.deviceCheckBlocked && (
+            <p className="fine" id="device-check-blocked" data-testid="device-check-blocked">
+              Not now: {ui.deviceCheckBlocked}.
+            </p>
+          )}
+        </>
       )}
       {r && (
         <div data-testid="device-check-result" role="status">

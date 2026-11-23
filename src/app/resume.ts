@@ -1,4 +1,5 @@
 import { parseRecording, type Recording } from './replay';
+import { persist } from './storage';
 
 /**
  * "Continue where you left off" (red team, 10 Nov 2026): the run so far is kept in this browser as a replay recording
@@ -25,8 +26,7 @@ export function saveResume(p: ResumePoint): boolean {
     if (typeof localStorage === 'undefined') return false;
     const text = JSON.stringify(p);
     if (text.length > RESUME_MAX_BYTES) return false;
-    localStorage.setItem(KEY, text);
-    return true;
+    return persist(KEY, text, 'where you left off');
   } catch {
     return false;
   }

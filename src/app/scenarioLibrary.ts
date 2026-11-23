@@ -1,6 +1,7 @@
 import { DEFAULT_TIDAL_STREAM } from '../sim/env/current';
 import type { AppScenario, StartLocationId } from './controller';
 import { START_LOCATIONS } from './controller';
+import { persist } from './storage';
 
 /**
  * The scenario library: ready-made sessions shipped with the app, and the user's own, kept in this browser.
@@ -208,8 +209,7 @@ export function saveUserScenario(file: ScenarioFile): boolean {
       .filter((s) => s.title !== file.title)
       .map((s) => scenarioFile(s.title, s.scenario!, s.description || undefined));
     list.push(file);
-    localStorage.setItem(USER_KEY, JSON.stringify(list));
-    return true;
+    return persist(USER_KEY, JSON.stringify(list), 'your saved scenarios');
   } catch {
     return false;
   }
@@ -220,7 +220,7 @@ export function deleteUserScenario(title: string): void {
     const list = userScenarios()
       .filter((s) => s.title !== title)
       .map((s) => scenarioFile(s.title, s.scenario!, s.description || undefined));
-    localStorage.setItem(USER_KEY, JSON.stringify(list));
+    persist(USER_KEY, JSON.stringify(list), 'your saved scenarios');
   } catch {
     // storage unavailable: nothing to delete
   }

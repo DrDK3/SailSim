@@ -1,5 +1,6 @@
 import type { AttemptRecord, HelpEvent } from './engine';
 import type { ContentStatus } from './config';
+import { persist } from '../storage';
 
 /**
  * Learner records for the exercises: kept in this browser only (localStorage, every access wrapped so a blocked or
@@ -43,8 +44,7 @@ export function loadRuns(): StoredRun[] {
 export function saveRun(run: StoredRun): boolean {
   const runs = [...loadRuns(), run].slice(-MAX_RUNS);
   try {
-    localStorage.setItem(KEY, JSON.stringify(runs));
-    return true;
+    return persist(KEY, JSON.stringify(runs), 'your exercise results');
   } catch {
     return false;
   }
@@ -69,11 +69,8 @@ export function importRuns(text: string): { added: number; skipped: number; erro
   const known = new Set(have.map(keyOf));
   const valid = file.runs.filter(isRun) as StoredRun[];
   const fresh = valid.filter((r) => !known.has(keyOf(r)));
-  try {
-    localStorage.setItem(KEY, JSON.stringify([...have, ...fresh].slice(-MAX_RUNS)));
-  } catch {
+  if (!persist(KEY, JSON.stringify([...have, ...fresh].slice(-MAX_RUNS)), 'imported exercise results'))
     return { added: 0, skipped: file.runs.length, error: 'This browser does not allow saving records.' };
-  }
   return { added: fresh.length, skipped: file.runs.length - fresh.length };
 }
 

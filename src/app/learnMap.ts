@@ -2,6 +2,7 @@ import { LESSONS, type LessonId, type LessonProgress } from './lessons';
 import { EXERCISES, type ExerciseId } from './exercises/index';
 import type { StoredRun } from './exercises/records';
 import { earlierRulesRace, type Bests } from './bests';
+import { persist } from './storage';
 
 /**
  * The Learn map (review #13, package D): one ordered path through what the simulator already teaches: the six
@@ -137,10 +138,6 @@ export function loadStarted(): string[] {
 /** Note that a step was started from the map; returns the record (kept for this visit if storage is unavailable). */
 export function noteStarted(id: string, have: readonly string[] = loadStarted()): string[] {
   const started = have.includes(id) ? [...have] : [...have, id].slice(-64);
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ started }));
-  } catch {
-    // storage unavailable: kept for this visit only
-  }
+  persist(KEY, JSON.stringify({ started }), 'what you have started on the Learn map');
   return started;
 }

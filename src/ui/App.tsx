@@ -23,6 +23,7 @@ import { TutorialPanel } from './TutorialPanel';
 import { ExercisePanel } from './ExercisePanel';
 import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
 import { hasStoredLevel } from '../app/level';
+import { storageNotice } from '../app/storage';
 import { Confirm } from './Confirm';
 import { MastheadInset } from './MastheadInset';
 import { activityOf } from './activity';
@@ -84,6 +85,8 @@ export function App({ ctl }: { ctl: SimController }) {
   // The "resolution lowered" notice: said once a visit, until dismissed or for a quarter of a minute (owner, 18 Nov
   // 2026: it stayed up and could not be dismissed). Settings → Graphics shows the resolution in use at any time.
   const [qualityNoteDone, setQualityNoteDone] = useState(false);
+  // The saving notice, dismissed for the failure it reported (a different failure shows it again).
+  const [saveNoteDone, setSaveNoteDone] = useState<string | undefined>(undefined);
   const lowered = ui.dynamicScale !== undefined;
   useEffect(() => {
     if (!lowered || qualityNoteDone) return;
@@ -284,8 +287,19 @@ export function App({ ctl }: { ctl: SimController }) {
   // Notices (paused, running slow, resolution lowered, preparing): at the top right under the toolbar, above any open
   // side panel, and above the console on a phone; never at the top centre, where the masthead and its wind indicator
   // are (review #3, 20 Nov 2026).
+  const save = storageNotice(ui.saveStatus);
+  const saveKey = `${ui.saveStatus.state}:${ui.saveStatus.what ?? ''}`;
   const notices = (
     <>
+      {save && saveNoteDone !== saveKey && (
+        // Design handover item 1: a failed save says so, and what to do, instead of failing silently.
+        <div className="banner save-note" role="alert" data-testid="save-status">
+          <strong>{save.title}</strong> <span className="fine">{save.detail}</span>
+          <button className="pill-close" onClick={() => setSaveNoteDone(saveKey)} aria-label="Dismiss this notice" title="Dismiss" data-testid="save-status-dismiss">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      )}
       {ui.paused && (
         <div className="banner paused-pill" role="status">
           {ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}

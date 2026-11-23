@@ -8,6 +8,7 @@
  * fixed, so times compare. Each keeps the best independent time and the best assisted time apart (the assist record,
  * src/app/assists.ts), and the last attempts for a small chart of progress. Still kept only in this browser.
  */
+import { persist } from './storage';
 
 const KEY = 'squib.bests.v1';
 
@@ -35,11 +36,8 @@ export function loadBests(): Bests {
 }
 
 function save(b: Bests): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(b));
-  } catch {
-    // storage unavailable: kept for this visit only
-  }
+  // Storage unavailable or full: kept for this visit only, and the app says so (src/app/storage.ts).
+  persist(KEY, JSON.stringify(b), 'your best times');
 }
 
 /** The key for a course's best time: its name and laps. */
@@ -148,10 +146,6 @@ export function recordAttempt(key: string, label: string, timeS: number, indepen
   if (best) e[cat] = { timeS, at: now.toISOString() };
   e.history = [...e.history, { at: now.toISOString(), timeS, independent }].slice(-HISTORY_MAX);
   all[key] = e;
-  try {
-    localStorage.setItem(LFL_KEY, JSON.stringify(all));
-  } catch {
-    // storage unavailable: kept for this visit only
-  }
+  persist(LFL_KEY, JSON.stringify(all), 'your challenge times');
   return { best, previousS: was?.timeS };
 }

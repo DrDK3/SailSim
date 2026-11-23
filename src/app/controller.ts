@@ -19,6 +19,7 @@ import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, 
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
 import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
+import { onStorageStatus, storageStatus, type StorageStatus } from './storage';
 import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
@@ -261,6 +262,13 @@ export interface UiState {
   /** The device check: running (its progress 0…1) and its last report. */
   deviceCheck?: { progress: number };
   deviceReport?: DeviceReport;
+  /**
+   * Why the device check cannot start now (design handover item 1): it sails its own route, so it waits until
+   * the race, lesson, exercise, drill or replay in progress is over. Absent when it can start.
+   */
+  deviceCheckBlocked?: string;
+  /** Saving to this browser: ok, or full or blocked and what was not kept (src/app/storage.ts). */
+  saveStatus: StorageStatus;
   /** The player's preferences kept in this browser (src/app/prefs.ts). */
   prefs: Prefs;
   /** The small 3D picture of the masthead is drawing (else the interface shows the 2D one): review #2. */
@@ -553,6 +561,8 @@ export class SimController {
     // Free sailing at Club and Expert carries the spinnaker (package B); at Learn it does not.
     if (this.level !== 'learn') this.scenario.spinnaker = true;
     this.restart();
+    // A failed save says so on screen (design handover item 1).
+    onStorageStatus(() => this.publish(true));
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -2673,8 +2683,7 @@ export class SimController {
    * put back the scenario that was running and show the report. Nothing is sent anywhere.
    */
   startDeviceCheck(seconds?: number): void {
-    if (!this.view || this.deviceCheck) return;
-    if (this.replay) this.takeOver();
+    if (!this.view || this.deviceCheck || this.deviceCheckBlocker()) return;
     if (this.paused) this.togglePause();
     const before = this.scenario;
     this.restart(structuredClone(DEVICE_CHECK_SCENARIO));
@@ -2693,6 +2702,20 @@ export class SimController {
     };
     this.deviceReport = undefined;
     this.publish(true);
+  }
+
+  /**
+   * Why the device check must wait (design handover item 1, owner's choice of 23 Nov 2026: between activities). It
+   * sails its own fixed route, so starting it mid-race or mid-lesson ended that activity, and only the scenario came
+   * back afterwards, started again. Free sailing may be checked: it starts again from its starting place afterwards.
+   */
+  deviceCheckBlocker(): string | undefined {
+    if (this.replay || this.catchUp) return 'a replay is playing: close it first';
+    if (this.race && !this.race.session.outOfRace('you')) return 'a race is under way: finish or leave it first';
+    if (this.tutorial) return 'a lesson is under way: finish or leave it first';
+    if (this.exercise) return 'an exercise is under way: finish or leave it first';
+    if (this.drill) return 'start practice is under way: leave it first';
+    return undefined;
   }
 
   cancelDeviceCheck(): void {
@@ -3530,6 +3553,8 @@ export class SimController {
       dynamicScale: this.view && this.view.dynamicScale < 1 ? this.view.dynamicScale : undefined,
       deviceCheck: this.deviceCheck ? { progress: this.deviceCheck.runner.progress(performance.now()) } : undefined,
       deviceReport: this.deviceReport,
+      deviceCheckBlocked: this.deviceCheck ? undefined : this.deviceCheckBlocker(),
+      saveStatus: storageStatus(),
       prefs: { ...this.prefs },
       hint: this.exercise ? undefined : this.hints.current,
       milestones: { ...this.milestones },
