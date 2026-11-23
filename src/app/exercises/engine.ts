@@ -87,8 +87,14 @@ export interface AttemptPlan {
 export interface ReviewItem {
   id: string;
   observation: string;
+  /**
+   * A specific cause, only when its preconditions were recorded in the attempt (design handover item 5): otherwise
+   * left out, and the action offers a controlled retry instead.
+   */
   cause?: string;
   action?: string;
+  /** The telemetry the message rests on (design handover item 5; records made before 23 Nov 2026 have none). */
+  basis?: string;
 }
 
 export interface AttemptRecord {

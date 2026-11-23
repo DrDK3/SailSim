@@ -15,11 +15,12 @@ describe('debrief notes', () => {
     expect(ok.next).toMatch(/Nothing stood out/);
   });
 
-  it('costly tacks: the observation (measured) apart from its likely cause, and one action', () => {
+  it('costly tacks: the observation (measured) and one action; no cause, as the summary does not record one (design handover item 5)', () => {
     const r = debriefNotes({ ...base, tacks: { count: 4, meanLossS: 8.2, worstLossS: 12.5 } });
     expect(r.notes).toHaveLength(1);
     expect(r.notes[0]).toMatchObject({ id: 'tacks', observation: 'Your 4 tacks cost 8.2 s each on average (worst 12.5 s).' });
-    expect(r.notes[0]!.cause).toMatch(/^Likely cause:/);
+    expect(r.notes[0]!.cause).toBeUndefined();
+    expect(r.notes.every((n) => !n.cause)).toBe(true);
     expect(r.next).toMatch(/Trim, tack and recover/);
   });
 

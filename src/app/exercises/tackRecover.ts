@@ -204,6 +204,17 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
         delete m.v.turnAt;
         delete m.v.minKn;
       } else m.v.minKn = Math.min(m.v.minKn!, s.stwKn);
+      // How the turn went (design handover item 5: a cause is named only from what was measured): the heading turned
+      // in total, and the time it paused (turning under 2°/s with the bow near the wind).
+      if (m.v.turnAt !== undefined && m.v.lastHdg !== undefined) {
+        const d = Math.abs(((((s.headingDeg - m.v.lastHdg) % 360) + 540) % 360) - 180);
+        m.v.turnedDeg = (m.v.turnedDeg ?? 0) + d;
+        if (d < 0.2 && s.twaDeg < 40) m.v.pauseS = (m.v.pauseS ?? 0) + 0.1;
+      } else if (m.v.turnAt === undefined) {
+        delete m.v.turnedDeg;
+        delete m.v.pauseS;
+      }
+      m.v.lastHdg = s.headingDeg;
       // In irons: stopped with the bow near the wind.
       if (s.stwKn < t.ironsKn && s.twaDeg < 30) m.v.ironsS = (m.v.ironsS ?? 0) + 0.1;
       else m.v.ironsS = 0;
@@ -244,6 +255,8 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
       rec.values.tackS = m.v.turnAt === undefined ? NaN : s.t - m.v.turnAt;
       rec.values.tackInKn = m.v.inKn ?? m.v.lastKn ?? s.stwKn;
       rec.values.tackMinKn = m.v.minKn ?? s.stwKn;
+      rec.values.turnPauseS = m.v.pauseS ?? 0;
+      if (m.v.turnedDeg !== undefined && rec.values.tackS > 0) rec.values.turnRateDps = m.v.turnedDeg / rec.values.tackS;
     },
     readout: (s) => `TWA ${f0(s.twaDeg)}° · ${f1(s.stwKn)} kn`,
   };
@@ -260,8 +273,14 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
       for (const sail of ['main', 'jib'] as const) {
         const auto = sail === 'main' ? s.autoMain : s.autoJib === true;
         const st = sail === 'main' ? s.main : s.jib;
-        if (!auto && st && !drawingish(st)) m.v[`${sail}OffS`] = (m.v[`${sail}OffS`] ?? 0) + 0.1;
+        if (!auto && st && !drawingish(st)) {
+          m.v[`${sail}OffS`] = (m.v[`${sail}OffS`] ?? 0) + 0.1;
+          // Not drawing while on the close-hauled course: the sheet, not the steering (item 5's basis for the cause).
+          if (inBand(s)) m.v[`${sail}OffInBandS`] = (m.v[`${sail}OffInBandS`] ?? 0) + 0.1;
+        }
       }
+      // Pointing above close-hauled while the speed is still low (the basis for "pinching" as a cause).
+      if (s.twaDeg < t.closeHauledMinTwaDeg && s.stwKn < t.recoverFrac * (rec.values.tackInKn ?? 0)) m.v.pinchS = (m.v.pinchS ?? 0) + 0.1;
     },
     // The recovery target is a share of the speed going into this attempt's tack (none if the tack was skipped).
     goal: (s, _m, _plan, rec) => inBand(s) && sailsDrawing(s) && s.stwKn >= t.recoverFrac * (rec?.values.tackInKn ?? 0),
@@ -273,6 +292,9 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
       rec.values.maxTwaAfterDeg = m.v.maxTwa ?? s.twaDeg;
       rec.values.mainOffS = m.v.mainOffS ?? 0;
       rec.values.jibOffS = m.v.jibOffS ?? 0;
+      rec.values.mainOffInBandS = m.v.mainOffInBandS ?? 0;
+      rec.values.jibOffInBandS = m.v.jibOffInBandS ?? 0;
+      rec.values.pinchS = m.v.pinchS ?? 0;
       if (rec.values.recoverS > t.slowRecoverS) rec.issues.push('slow-recover');
     },
     readout: (s, _m, rec) => `TWA ${f0(s.twaDeg)}° · ${f1(s.stwKn)} kn${rec?.values.tackInKn !== undefined ? ` (target ${f1(t.recoverFrac * rec.values.tackInKn)} kn)` : ''}`,
@@ -292,32 +314,105 @@ export function tackRecoverExercise(t: TackRecoverThresholds, steering: Steering
   };
 }
 
-/** The post-attempt explanation (help level 4): observation, likely cause and an action, from rules only. */
+/**
+ * The post-attempt explanation (help level 4): an observation, a cause only when its preconditions were recorded, and
+ * an action, from rules only. Design handover item 5 (23 Nov 2026): where no cause was recorded, the action is a
+ * controlled retry (change one thing, compare the same measurement) rather than a guess; each item names its basis.
+ */
 export function tackRecoverReview(rec: AttemptRecord, t: TackRecoverThresholds): ReviewItem[] {
   const v = rec.values;
   const out: ReviewItem[] = [];
-  for (const p of rec.skipped) out.push({ id: `skipped-${p}`, observation: `The ${p.replace('-', ' ')} step was skipped.` });
+  const paused = v.turnPauseS !== undefined && v.turnPauseS >= 1;
+  const pauseText = `The turn paused for ${f1(v.turnPauseS)} s with the bow near the wind (the heading changing by less than 2° a second).`;
+  for (const p of rec.skipped) out.push({ id: `skipped-${p}`, observation: `The ${p.replace('-', ' ')} step was skipped.`, basis: 'the steps skipped in the attempt' });
   if (rec.issues.includes('gybed'))
-    out.push({ id: 'gybed', observation: 'The boat gybed (the stern went through the wind) before the tack.', cause: 'Likely cause: turning away from the wind instead of towards it.', action: 'Next time: turn the bow towards the wind to tack.' });
+    out.push({
+      id: 'gybed',
+      observation: 'The boat gybed (the stern went through the wind) before the tack.',
+      cause: 'The sails crossed with the wind behind the beam (true wind angle over 90°), so the turn went away from the wind.',
+      action: 'Next time: turn the bow towards the wind to tack.',
+      basis: 'the sails changing side with the true wind angle over 90°',
+    });
   if (rec.issues.includes('irons'))
-    out.push({ id: 'irons', observation: `The boat stopped with the bow into the wind for ${t.ironsS} s or more (in irons).`, cause: 'Likely cause: the turn slowed or stopped before the bow crossed the wind.', action: 'Next time: build speed first, then turn steadily through the wind without stopping.' });
+    out.push({
+      id: 'irons',
+      observation: `The boat stopped with the bow into the wind for ${t.ironsS} s or more (in irons).`,
+      cause: paused ? pauseText : undefined,
+      action: paused ? 'Next time: build speed first, then turn steadily through the wind without stopping.' : 'Next attempt: build full close-hauled speed before you start the turn, then compare whether she still stops.',
+      basis: `speed under ${t.ironsKn} kn with the true wind angle under 30° for ${t.ironsS} s${paused ? '; the heading through the turn' : ''}`,
+    });
   const inKn = v.tackInKn;
   const minKn = v.tackMinKn;
-  if (inKn !== undefined && minKn !== undefined && minKn < t.bigLossFrac * inKn)
-    out.push({ id: 'big-loss', observation: `Speed fell from ${f1(inKn)} to ${f1(minKn)} kn in the tack.`, cause: 'Likely cause: a slow turn, or the boat stopped head to wind.', action: 'Next time: one steady turn; on the new tack bear away a little to build speed before heading up.' });
+  if (inKn !== undefined && minKn !== undefined && minKn < t.bigLossFrac * inKn) {
+    const cause = rec.issues.includes('irons')
+      ? 'The boat stopped head to wind (recorded as in irons).'
+      : v.tackS !== undefined && v.tackS > t.slowTackS
+        ? `The turn took ${f1(v.tackS)} s, longer than ${t.slowTackS} s.`
+        : paused
+          ? pauseText
+          : undefined;
+    out.push({
+      id: 'big-loss',
+      observation: `Speed fell from ${f1(inKn)} to ${f1(minKn)} kn in the tack.`,
+      cause,
+      action: cause ? 'Next time: one steady turn; on the new tack bear away a little to build speed before heading up.' : 'Nothing recorded explains it: next attempt, change one thing (turn a little faster, or start at full speed) and compare the slowest speed.',
+      basis: 'boat speed going into the tack and its lowest in the turn; the tack time, the heading and the in-irons check',
+    });
+  }
   if (v.tackS !== undefined && v.tackS > t.slowTackS)
-    out.push({ id: 'slow-tack', observation: `The tack took ${f1(v.tackS)} s. The model's own tack in 10 kn takes about 8.6 s (model output, not checked by sailors).`, cause: 'Likely cause: the helm was not held over long enough.', action: 'Next time: keep the helm over until the sails fill on the new side.' });
+    out.push({
+      id: 'slow-tack',
+      observation: `The tack took ${f1(v.tackS)} s. The model's own tack in 10 kn takes about 8.6 s (model output, not checked by sailors).`,
+      cause: paused ? pauseText : v.turnRateDps !== undefined ? `The turn was steady but slow: about ${f0(v.turnRateDps)}° a second on average.` : undefined,
+      action: 'Next attempt: keep the helm over until the sails fill on the new side, and compare the tack time with this one.',
+      basis: 'the time from starting the turn to sailing on the new tack, and the heading through the turn',
+    });
   if (rec.issues.includes('overshoot'))
-    out.push({ id: 'overshoot', observation: `After the tack you bore away to TWA ${f0(v.maxTwaAfterDeg)}°, beyond ${t.overshootTwaDeg}°.`, cause: 'Likely cause: the turn was not stopped as the sails filled.', action: 'Next time: centre the helm as the sails fill and settle at about 45°.' });
+    out.push({
+      id: 'overshoot',
+      observation: `After the tack you bore away to TWA ${f0(v.maxTwaAfterDeg)}°, beyond ${t.overshootTwaDeg}°.`,
+      action: 'Next time: centre the helm as the sails fill and settle at about 45°.',
+      basis: 'the highest true wind angle after the tack',
+    });
   for (const sail of ['main', 'jib'] as const) {
     const off = v[`${sail}OffS`];
-    if (off !== undefined && off > 4)
-      out.push({ id: `trim-${sail}`, observation: `The ${sail} was not drawing for ${f0(off)} s after the tack.`, cause: 'Likely cause: its sheet was not trimmed for the new course.', action: `Next time: watch the ${sail}'s status as you settle, and trim until it says Drawing.` });
+    const onCourse = v[`${sail}OffInBandS`];
+    if (off !== undefined && off > 4) {
+      const cause =
+        onCourse !== undefined && onCourse >= 0.6 * off
+          ? `The boat was close-hauled (TWA ${t.closeHauledMinTwaDeg}–${t.closeHauledMaxTwaDeg}°) for ${f0(onCourse)} s of that, so the sheet, not the course, kept it from drawing.`
+          : onCourse !== undefined && rec.issues.includes('overshoot')
+            ? `Most of that time the boat was off the close-hauled course (she bore away to ${f0(v.maxTwaAfterDeg)}°): the steering, more than the sheet.`
+            : undefined;
+      out.push({
+        id: `trim-${sail}`,
+        observation: `The ${sail} was not drawing for ${f0(off)} s after the tack.`,
+        cause,
+        action: `Next time: watch the ${sail}'s status as you settle, and trim until it says Drawing.`,
+        basis: `the ${sail}'s status (luffing or stalled) after the tack, with the true wind angle at the time`,
+      });
+    }
   }
-  if (rec.issues.includes('slow-recover'))
-    out.push({ id: 'slow-recover', observation: `Course and speed came back after ${f0(v.recoverS)} s (aim: within ${t.slowRecoverS} s).`, cause: 'Likely cause: pointing high before the speed came back, or sheets not trimmed.', action: 'Next time: bear away a little to build speed, then head up to close-hauled.' });
+  if (rec.issues.includes('slow-recover')) {
+    const trimOff = Math.max(v.mainOffS ?? 0, v.jibOffS ?? 0);
+    const cause =
+      v.pinchS !== undefined && v.pinchS >= 3
+        ? `For ${f0(v.pinchS)} s you sailed above close-hauled (TWA under ${t.closeHauledMinTwaDeg}°) while the speed was still low.`
+        : v.pinchS !== undefined && trimOff > 4
+          ? `A sail was not drawing for ${f0(trimOff)} s of it.`
+          : v.pinchS !== undefined && rec.issues.includes('overshoot')
+            ? `You bore away to ${f0(v.maxTwaAfterDeg)}° first, and had to come back up.`
+            : undefined;
+    out.push({
+      id: 'slow-recover',
+      observation: `Course and speed came back after ${f0(v.recoverS)} s (aim: within ${t.slowRecoverS} s).`,
+      cause,
+      action: cause ? 'Next time: bear away a little to build speed, then head up to close-hauled.' : 'Nothing recorded explains it: next attempt, bear away about 5° for the first 10 s after the tack, then head up, and compare the recovery time.',
+      basis: 'the time to get back to the close-hauled band and the target speed; the true wind angle, speed and sail status meanwhile',
+    });
+  }
   if (!out.length && rec.outcome !== 'incomplete')
-    out.push({ id: 'clean', observation: `Clean tack: ${f1(v.tackS)} s, slowest ${f1(minKn)} kn of ${f1(inKn)} kn; course and speed back in ${f0(v.recoverS)} s.` });
+    out.push({ id: 'clean', observation: `Clean tack: ${f1(v.tackS)} s, slowest ${f1(minKn)} kn of ${f1(inKn)} kn; course and speed back in ${f0(v.recoverS)} s.`, basis: 'the tack time, the speeds and the recovery time' });
   return out;
 }
 

@@ -201,26 +201,26 @@ export function debriefNotes(s: SailSummary): { notes: DebriefNote[]; next: stri
   const notes: DebriefNote[] = [];
   const f1 = (v: number) => v.toFixed(1);
   if (s.start?.ocs)
-    notes.push({ id: 'ocs', observation: 'Over the line at the gun (an individual recall).', cause: 'Likely cause: too close to the line with too much speed in the last seconds.', action: 'Next time: hold back a boat length in the last 20 s and time your run; the start drill practises it.' });
+    notes.push({ id: 'ocs', observation: 'Over the line at the gun (an individual recall).', action: 'Next time: hold back a boat length in the last 20 s and time your run; the start drill practises it.' });
   else if (s.start?.lateS !== undefined && s.start.lateS > DEBRIEF_LIMITS.lateStartS)
     notes.push({
       id: 'late-start',
       observation: `You crossed the line ${f1(s.start.lateS)} s after the gun${s.start.distToLineAtGunM !== undefined ? ` (${Math.round(s.start.distToLineAtGunM)} m from it at the gun)` : ''}.`,
-      cause: 'Likely cause: too far from the line, or too slow, at the gun.',
+      // No separate cause (design handover item 5): what was measured, the distance at the gun, is in the observation.
       action: 'Next time: be on the line at full speed at the gun; the start drill practises it.',
     });
   if (s.tacks.meanLossS !== undefined && s.tacks.meanLossS > DEBRIEF_LIMITS.tackLossS)
     notes.push({
       id: 'tacks',
       observation: `Your ${s.tacks.count} tack${s.tacks.count === 1 ? '' : 's'} cost ${f1(s.tacks.meanLossS)} s each on average (worst ${f1(s.tacks.worstLossS ?? s.tacks.meanLossS)} s).`,
-      cause: 'Likely cause: speed lost in the turn (too slow a turn, or turning too far past close-hauled).',
-      action: 'Next time: one steady turn, then build speed before heading up; the exercise "Trim, tack and recover" practises it.',
+      // No cause: the summary records the time each tack cost, not why (design handover item 5).
+      action: 'Next time: try one steady turn, then build speed before heading up, and compare the cost; the exercise "Trim, tack and recover" measures each part of the tack.',
     });
   if (s.gybes.meanLossS !== undefined && s.gybes.meanLossS > DEBRIEF_LIMITS.gybeLossS)
     notes.push({
       id: 'gybes',
       observation: `Your ${s.gybes.count} gybe${s.gybes.count === 1 ? '' : 's'} cost ${f1(s.gybes.meanLossS)} s each on average.`,
-      cause: 'Likely cause: a sharp turn with the main far out, or a slow recovery after it.',
+      // No cause: the summary records the time each gybe cost, not why (design handover item 5).
       action: 'Next time: turn gently through the gybe and settle on the new course before trimming.',
     });
   const shown = notes.slice(0, 3);

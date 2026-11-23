@@ -93,6 +93,10 @@ describe('the debrief', () => {
     const text = (area: string) => d.items.filter((i) => i.area === area);
     expect(text('Start').some((i) => i.verdict === 'work' && /40 m behind the line at 2.0 kn/.test(i.text))).toBe(true);
     expect(text('Start').some((i) => /pin end was favoured/.test(i.text))).toBe(true);
+    // Design handover item 5: the favoured end is an observation of the line's geometry, not a verdict on the start.
+    const favoured = text('Start').find((i) => /pin end was favoured/.test(i.text))!;
+    expect(favoured.verdict).toBe('ok');
+    expect(favoured.text).toMatch(/geometry only/);
     expect(text('Upwind')[0]!.verdict).toBe('work');
     expect(text('Boat handling')[0]!.text).toMatch(/1 tack/);
     expect(text('Heavy air')[0]!.text).toMatch(/s heeled past 30°, mostly with the sails not flattened/);

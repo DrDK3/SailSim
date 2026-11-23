@@ -249,7 +249,7 @@ export class RaceCoach {
         this.manoeuvres.push(m);
         this.open = undefined;
         if (r.phase === 'racing' && m.before > 1 && 1 - m.min / m.before > COACH.slowTackLoss) {
-          this.say(s.t, 'slow-tack', `That ${m.kind} lost ${(100 * (1 - m.min / m.before)).toFixed(0)}% of your speed: turn more smoothly, and ${m.kind === 'tack' ? 'bear off a little after it to build speed before pointing' : 'keep the boat flat and centre the main through it'}.`, 'warn');
+          this.say(s.t, 'slow-tack', `That ${m.kind} lost ${(100 * (1 - m.min / m.before)).toFixed(0)}% of your speed. Try the next one ${m.kind === 'tack' ? 'with a steadier turn, bearing off a little after it to build speed before pointing' : 'with a gentler turn, the boat flat and the main centred through it'}, and compare.`, 'warn');
         }
       }
     }
@@ -362,18 +362,28 @@ export class RaceCoach {
       else items.push({ area: 'Start', verdict: 'good', text: `A good start: on the line (${st.behindM.toFixed(0)} m) at ${kn.toFixed(1)} kn at the gun.` });
       if (bias.favoured !== 'square' && Math.abs(bias.metres) > 6) {
         const atFavoured = bias.favoured === 'b' ? st.along > 0.6 : st.along < 0.4;
+        // Design handover item 5: the line's geometry is an observation, not a verdict. Whether the favoured end paid also
+        // depends on clear air, other boats and the first shift, which the coach does not judge.
+        const caveat = 'by the line’s angle to the wind (geometry only: clear air, other boats and the first shift decide whether it pays)';
         items.push(atFavoured
-          ? { area: 'Start', verdict: 'good', text: `You started at the favoured ${endLabel(this.input, bias.favoured)} end (worth about ${Math.abs(bias.metres).toFixed(0)} m).` }
-          : { area: 'Start', verdict: 'work', text: `The ${endLabel(this.input, bias.favoured)} end was favoured by about ${Math.abs(bias.metres).toFixed(0)} m; you started ${st.along < 0.4 ? `near the ${endLabel(this.input, 'a')}` : st.along > 0.6 ? `near the ${endLabel(this.input, 'b')}` : 'mid-line'}.` });
+          ? { area: 'Start', verdict: 'ok', text: `You started near the ${endLabel(this.input, bias.favoured)} end, which was favoured by about ${Math.abs(bias.metres).toFixed(0)} m ${caveat}.` }
+          : { area: 'Start', verdict: 'ok', text: `The ${endLabel(this.input, bias.favoured)} end was favoured by about ${Math.abs(bias.metres).toFixed(0)} m ${caveat}; you started ${st.along < 0.4 ? `near the ${endLabel(this.input, 'a')}` : st.along > 0.6 ? `near the ${endLabel(this.input, 'b')}` : 'mid-line'}.` });
       }
     } else items.push({ area: 'Start', verdict: 'work', text: 'The coach did not see you at the line at the gun.' });
 
     const t = this.tot;
     if (t.beatN > 30) {
       const eff = t.beatEff / t.beatN;
-      items.push({ area: 'Upwind', verdict: eff > 0.9 ? 'good' : eff > 0.75 ? 'ok' : 'work', text: `Upwind you made ${(100 * eff).toFixed(0)}% of the target VMG (model polar, E). ${eff > 0.9 ? 'Well sailed.' : 'Keep the boat flat, sail the target angle and avoid pinching.'}` });
+      // A reason only when one was measured on the beats (design handover item 5); otherwise a comparison to try.
+      const why =
+        t.over > 0.25 * t.beat
+          ? `The boat was heeled past ${Math.round(COACH.overpoweredHeel / DEG)}° for ${t.over.toFixed(0)} s: ease or flatten sooner to keep her flat.`
+          : t.poorTrim > 0.25 * t.beat
+            ? `The main was luffing or stalled for ${t.poorTrim.toFixed(0)} s: trim to the edge of the luff.`
+            : 'The coach did not record why: on the next beat, compare your angle and speed with the target (the overlay shows VMG).';
+      items.push({ area: 'Upwind', verdict: eff > 0.9 ? 'good' : eff > 0.75 ? 'ok' : 'work', text: `Upwind you made ${(100 * eff).toFixed(0)}% of the target VMG (model polar, E). ${eff > 0.9 ? 'Well sailed.' : why}` });
       const headedPct = (100 * t.headed) / Math.max(1, t.beat);
-      if (headedPct > 25) items.push({ area: 'Upwind', verdict: 'work', text: `You sailed ${headedPct.toFixed(0)}% of the beats on a header of ${COACH.headerDeg}° or more: tack on the headers and sail the lifts.` });
+      if (headedPct > 25) items.push({ area: 'Upwind', verdict: 'work', text: `You sailed ${headedPct.toFixed(0)}% of the beats on a header of ${COACH.headerDeg}° or more. In shifting wind, tacking on the headers and sailing the lifts usually pays; it depends on the shifts and the course.` });
       // Praise for playing the shifts only when there were shifts to play (a tenth of the beats or more).
       else if (t.shifted > 0.1 * t.beat) items.push({ area: 'Upwind', verdict: 'good', text: `Only ${headedPct.toFixed(0)}% of the beats on a big header: you played the shifts well.` });
     }
