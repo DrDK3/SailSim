@@ -25,8 +25,10 @@ beforeEach(() => {
 });
 
 describe('the switches and their defaults', () => {
-  it('five switches; defaults: spinnaker, river, Learn map on; plain words on at Learn; mark-room penalties off', () => {
-    expect(FLAG_ORDER).toEqual(['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap', 'markRoomPenalties']);
+  it('six switches; defaults: spinnaker, river, Learn map, race retry on; plain words on at Learn; mark-room penalties off', () => {
+    // raceRetry: the design handover's prototype (23 Nov 2026, item 10), on by default so it can be compared off.
+    expect(FLAG_ORDER).toEqual(['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap', 'markRoomPenalties', 'raceRetry']);
+    expect(featureOn('raceRetry')).toBe(true);
     expect(featureOn('spinnaker')).toBe(true);
     expect(featureOn('riverHotSwap')).toBe(true);
     expect(featureOn('learnMap')).toBe(true);
