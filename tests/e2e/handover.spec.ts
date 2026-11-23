@@ -21,7 +21,7 @@ const heldNow = (page: Page) =>
     return { held: [...c.held].sort(), taps: [...c.taps.keys()].sort() };
   });
 
-test('item 2: a focused steering button works from the keyboard and from a plain click, and lets go', async ({ page }) => {
+test('item 2: a focused steering button works from the keyboard and from a plain click, and lets go', { tag: '@critical' }, async ({ page }) => {
   test.setTimeout(150_000 * CI_SLOW);
   const errors = await ready(page);
   await page.evaluate(() => {
@@ -93,5 +93,34 @@ test('item 8: the Sails panel takes focus, closes on Escape and gives focus back
   await page.getByTestId('sail-controls-close').click();
   await expect(panel).toHaveCount(0);
   expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('sail-controls-open');
+  expect(errors).toEqual([]);
+});
+
+test('item 1: a save that fails says so, and progress already kept stays readable', { tag: '@critical' }, async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  // A save that works: a lesson's progress is kept.
+  await page.evaluate(() => localStorage.setItem('squib.lessons.v1', JSON.stringify({ steer: { done: true, at: '2026-11-23T10:00:00Z', completedAt: '2026-11-23T10:00:00Z' } })));
+  await expect(page.getByTestId('save-status')).toHaveCount(0);
+  // The browser's storage fills up: the next save fails, and the app says so (it used to fail silently).
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw Object.assign(new Error('The quota has been exceeded.'), { name: 'QuotaExceededError', code: 22 });
+    };
+  });
+  await page.evaluate(() => window.__squib!.controller.startLesson('steer'));
+  await page.evaluate(() => {
+    const c = window.__squib!.controller;
+    for (let i = 0; i < 4; i++) c.tutorialNext();
+    c.advance(0.2);
+  });
+  const notice = page.getByTestId('save-status');
+  await expect(notice).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await expect(notice).toContainText('full');
+  await expect(notice).toContainText('lesson progress');
+  // What was kept before is still there.
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('squib.lessons.v1') ?? '{}').steer?.done)).toBe(true);
+  await page.getByTestId('save-status-dismiss').click();
+  await expect(notice).toHaveCount(0);
   expect(errors).toEqual([]);
 });

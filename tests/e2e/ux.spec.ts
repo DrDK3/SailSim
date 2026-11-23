@@ -70,7 +70,7 @@ test.describe('first visit', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a lesson ends on a result card that offers the next lesson; skipping its steps reaches the end but does not complete it', async ({ page }) => {
+  test('a lesson ends on a result card that offers the next lesson; skipping its steps reaches the end but does not complete it', { tag: '@critical' }, async ({ page }) => {
     test.setTimeout(180_000 * CI_SLOW);
     await ready(page);
     await page.keyboard.press('Escape');

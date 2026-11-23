@@ -1,5 +1,11 @@
 # Build the site and publish it to the gh-pages branch (GitHub Pages: Settings > Pages > Deploy from a branch,
 # gh-pages, / (root)). Live-data files already on the branch are kept. See docs/DEPLOYMENT.md.
+#
+# Two jobs (design handover item 9, 23 Nov 2026): `verify` builds this commit, runs the unit tests and the critical
+# browser checks (playwright.critical.config.ts: a sailable state, input, a lesson, a race, saving) on that very
+# build, and keeps it as an artifact; `publish` runs only if all of that passed, and publishes the same artifact
+# without building again. A failing critical check therefore stops this commit from being published. The full
+# browser suite runs in CI on every pull request; the post-deploy check (post-deploy-check.yml) still runs after.
 name: Deploy
 on:
   push:
@@ -7,13 +13,15 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# One deploy of main at a time; a newer push waits rather than racing an older one to gh-pages.
 concurrency:
-  group: gh-pages   # shared with the live-data jobs, so pushes to gh-pages never race
+  group: deploy-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Software WebGL on the runners is slow: the critical set takes some minutes.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -27,5 +35,41 @@ jobs:
           # Names the build in saved replays (not a secret).
           VITE_BUILD_ID: ${{ github.sha }}
       - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - name: Critical browser checks, on the build to be published
+        run: npx playwright test -c playwright.critical.config.ts
+        env:
+          CI: 'true'
+      - name: Record what was checked (build, environment, results)
+        if: always()
+        run: node tools/ci/critical-summary.mjs out/critical-checks.json >> "$GITHUB_STEP_SUMMARY"
+        env:
+          BUILD_ID: ${{ github.sha }}
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: critical-checks
+          path: out/critical-checks.json
+          retention-days: 30
+      - name: Keep the checked build for publishing
+        uses: actions/upload-artifact@v6
+        with:
+          name: site-dist
+          path: dist/
+          retention-days: 7
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: gh-pages   # shared with the live-data jobs, so pushes to gh-pages never race
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: The build that passed the checks
+        uses: actions/download-artifact@v7
+        with:
+          name: site-dist
+          path: dist
       - name: Publish to gh-pages
         run: bash tools/ci/publish-pages.sh dist

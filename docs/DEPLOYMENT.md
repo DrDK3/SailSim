@@ -55,10 +55,24 @@ The simulator is a **static site**: HTML, JavaScript and data files. There is no
 | Workflow | When | What |
 |---|---|---|
 | `ci.yml` | Every pull request and every push to `main` (a branch is tested through its pull request, or by hand: Actions → CI → Run workflow) | Job **checks**: lint; build (typecheck, Vite, **secret check**); unit tests; ingest tests (Python). Job **browser**, in four parallel shards: browser tests on the production build, at the root and under `/squib-dart-sim/` |
-| `deploy.yml` | Push to `main`, or by hand | Build and test, then `tools/ci/publish-pages.sh`: replace the site on `gh-pages`, keep the live-data files, rebuild `live/index.json` |
+| `deploy.yml` | Push to `main`, or by hand | Job **verify**: build (typecheck, Vite, secret check), unit tests, then the **critical browser checks** (`playwright.critical.config.ts`) on that same build; the build is kept as the `site-dist` artifact and the results as `critical-checks` (with the build and environment in the run's summary). Job **publish**, only if verify passed: `tools/ci/publish-pages.sh` on that artifact (no second build): replace the site on `gh-pages`, keep the live-data files, rebuild `live/index.json` |
 | `live-data.yml` | :07 and :37 past each hour, 06–20 UTC; hourly 21–05 UTC | Runs `tools/ingest/weather.py`, `tide.py` and `index.py`, then `tools/ci/push-live-data.sh` |
 | `tide-harmonics.yml` | Mondays 03:23 UTC, or by hand | `tools/ingest/harmonics.py`: derive the constants, validate them, write a year of HW/LW events |
 | `post-deploy-check.yml` | After each successful deploy, every Monday at 06:00 London time, or by hand | `tools/post-deploy-check.mjs` in Playwright against the live site: it reaches a sailable state, the social card and the manifest return 200, `landing.html` loads; on Mondays `weekly/` holds this week's targets. Reads only (below) |
+
+**The release gate (design handover item 9, 23 Nov 2026):** a commit reaches `gh-pages` only if, for that exact
+commit, the build, the unit tests and the critical browser checks passed, and what is published is the build that was
+checked (an artifact handed from **verify** to **publish**). The critical set is the tests tagged `{ tag: '@critical' }`:
+the app reaching a sailable state, keyboard helm and sheets, an on-screen steering button from the keyboard, a lesson to
+its result card, a race against AI boats to its results, and a failed save giving its notice. `tests/sim/releaseGate.test.ts`
+holds the order of the steps and the coverage. To add a flow to the set, tag its test; keep the set small (each test
+takes one to three minutes on a runner without a GPU). The full suite still runs in CI on every pull request, and the
+post-deploy check still runs after each deploy. Run the set locally with `npm run build && npx playwright test -c
+playwright.critical.config.ts`.
+
+Tests that encode a superseded product policy are updated with the policy, not kept: in this round, the lesson result
+test (skipping no longer completes a lesson), the Learn map test ("Back to it" for the activity under way) and the
+debrief-notes test (no cause without a recorded basis).
 
 **Why the browser tests run in five shards:**
 - **No GPU:** GitHub's hosted runners have no GPU, so Chromium draws the 3D scene in software.
