@@ -10,6 +10,8 @@ import { decodeJson, encodeJson } from './shareLink';
 import { parseRecording, type Recording } from './replay';
 import { isSafeName } from './safeNames';
 import type { RaceEvent } from '../sim/course/judge';
+import { DEFAULT_SQUIB_TYPE, SQUIB_TYPES } from '../sim/boat/squib';
+import { RULESET } from './bests';
 
 export const CHALLENGE_PREFIX = 'c1.';
 export const CHALLENGE_PARAM = 'challenge';
@@ -115,3 +117,33 @@ export function challengeResult(mine: { finishS: number; splits: readonly Split[
 /** "the windward mark" for a course's generic labels; a named mark keeps its name ("Castle Ledge"). */
 const legName = (label: string) =>
   label === 'Finish' ? 'the finish' : /^(Windward|Leeward|Wing|Gate|Mark|Offset|Reaching|Spreader)\b/.test(label) ? `the ${label.charAt(0).toLowerCase()}${label.slice(1)}` : label;
+
+/**
+ * What the recipient sees before racing (design handover item 24): how long it takes, how it was set up, the support
+ * category, and whether this version can re-sail it faithfully. The ghost is re-sailed from the recorded inputs in
+ * this version's physics: in the same build it follows their exact path; in another build it may drift from it.
+ */
+export function challengePreview(c: Challenge, buildId: string): { duration: string; setup: string[]; support: string; compatibility: { ok: boolean; text: string }[] } {
+  const sc = c.rec.scenario;
+  const boat = SQUIB_TYPES.find((t) => t.id === (sc.boat ?? DEFAULT_SQUIB_TYPE))?.label ?? 'Squib';
+  const fleet = sc.fleet?.aiCount ? `${sc.fleet.aiCount} AI boat${sc.fleet.aiCount === 1 ? '' : 's'} as well` : 'no AI boats';
+  const setup = [c.course, `a ${boat}`, sc.spinnaker ? 'with a spinnaker' : 'no spinnaker', fleet, c.rec.markRoomPenalties ? 'rule 18 penalties on' : 'rule 18 advisory'];
+  const mins = Math.max(1, Math.round(c.finishS / 60));
+  const keyRules = /:r(\d+)$/.exec(c.key)?.[0]?.slice(1);
+  const compatibility = [
+    c.rec.build === buildId
+      ? { ok: true, text: 'Recorded in this version of SailSim: the ghost follows their exact path.' }
+      : { ok: false, text: `Recorded in another version (${c.rec.build}): the ghost is re-sailed from their inputs in this version, so if the boat's physics changed since, it may drift from their path and finish at a different time.` },
+  ];
+  if (keyRules && keyRules !== RULESET) compatibility.push({ ok: false, text: 'Sailed under earlier race rules: your time is kept apart from times under the current ones.' });
+  return {
+    duration: `about ${mins} minute${mins === 1 ? '' : 's'} of sailing (their time ${Math.floor(c.finishS / 60)}:${String(Math.round(c.finishS % 60)).padStart(2, '0')})`,
+    setup,
+    support: c.independent ? 'independent (no auto-trim, overlay or live help)' : 'assisted (auto-trim, the overlay or live help was on at some point)',
+    compatibility,
+  };
+}
+
+/** What to do when a challenge link cannot be read (design handover item 24): the replay file always works. */
+export const CHALLENGE_RECOVERY =
+  'Long links are sometimes cut short by messaging apps. Ask your friend to send the replay file instead (Results or Scenarios and replays → Save replay); open it in Scenarios and replays and choose Race this run as a ghost.';

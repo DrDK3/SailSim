@@ -8,7 +8,7 @@
  */
 import { noAssists, noteAssists, type AssistRecord } from './assists';
 import { earlierRulesLikeForLike, isLikeForLikeKey, loadLikeForLike, recordAttempt, type LikeForLike, type BestResult } from './bests';
-import { challengePayload, challengeResult, challengeUrl, decodeChallenge, encodeChallenge, splitsFrom, type Challenge, type Split } from './challenge';
+import { challengePayload, challengePreview, challengeResult, challengeUrl, decodeChallenge, encodeChallenge, splitsFrom, type Challenge, type Split } from './challenge';
 import { loadName, randomName, saveName } from './safeNames';
 import { targetsStatus, trackPoses, type Medal, type TargetsStatus } from './targets';
 import { weeklyCourse, weeklyKey, weeklyLongKey, type WeeklyCourse } from './weekly';
@@ -58,7 +58,7 @@ export interface SocialUi {
   /** The last finish of a like-for-like course in this session (for "Challenge a friend"). */
   finish?: FinishInfo;
   /** A challenge link opened and waiting for the player's answer. */
-  invite?: { name: string; course: string; finishS: number; independent: boolean };
+  invite?: { name: string; course: string; finishS: number; independent: boolean; preview: ReturnType<typeof challengePreview> };
   /** The challenge being raced, and its result after the finish. */
   racing?: { name: string; finishS: number };
   result?: ReturnType<typeof challengeResult>;
@@ -77,6 +77,9 @@ export class SocialHub {
   private racing?: Challenge;
   private result?: SocialUi['result'];
   private error?: string;
+
+  /** This build's id (src/app/controller.ts BUILD_ID), to say whether a challenge's ghost re-sails faithfully. */
+  buildId = 'local';
 
   constructor(private readonly host: SocialHost, private readonly base = 'weekly/') {}
 
@@ -218,7 +221,7 @@ export class SocialHub {
       },
       targets: this.targets,
       finish: this.finish,
-      invite: this.invite ? { name: this.invite.name, course: this.invite.course, finishS: this.invite.finishS, independent: this.invite.independent } : undefined,
+      invite: this.invite ? { name: this.invite.name, course: this.invite.course, finishS: this.invite.finishS, independent: this.invite.independent, preview: challengePreview(this.invite, this.buildId) } : undefined,
       racing: this.racing ? { name: this.racing.name, finishS: this.racing.finishS } : undefined,
       result: this.result,
       error: this.error,

@@ -595,6 +595,7 @@ export class SimController {
     this.restart();
     // A failed save says so on screen (design handover item 1).
     onStorageStatus(() => this.publish(true));
+    this.social.buildId = BUILD_ID;
   }
 
   // ------------------------------------------------------------ lifecycle

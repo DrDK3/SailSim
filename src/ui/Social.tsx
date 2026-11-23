@@ -5,6 +5,7 @@ import { ADJECTIVES, CREATURES, nameFrom, nameParts } from '../app/safeNames';
 import { MEDALS_BEST_FIRST, TARGET_SPREAD, targetsLine, type Medal } from '../app/targets';
 import { useModal } from './useModal';
 import { SHARE_MAX_CHARS } from '../app/shareLink';
+import { CHALLENGE_RECOVERY } from '../app/challenge';
 import { ClubTableSection, ClubSubmit } from './ClubTable';
 
 /** m:ss.s */
@@ -227,6 +228,17 @@ function ChallengeDialog({ ctl, ui }: { ctl: SimController; ui: UiState }) {
             <p>
               <strong>{s.invite.course}</strong>: their time {clockS(s.invite.finishS)} ({s.invite.independent ? 'independent' : 'assisted'}).
             </p>
+            {/* What it is before racing it (design handover item 24): time, setup, support, compatibility. */}
+            <ul className="fine challenge-preview" data-testid="challenge-preview">
+              <li>Takes {s.invite.preview.duration}.</li>
+              <li>Set-up: {s.invite.preview.setup.join(' · ')}.</li>
+              <li>Their support: {s.invite.preview.support}.</li>
+              {s.invite.preview.compatibility.map((c) => (
+                <li key={c.text} className={c.ok ? undefined : 'warn-text'} data-testid="challenge-compat">
+                  {c.text}
+                </li>
+              ))}
+            </ul>
             <p className="fine">
               You will sail the same course in the same wind, with their boat as a ghost: a recording of how they sailed, which does not react to you
               and cannot touch you. Nothing is sent anywhere.
@@ -240,6 +252,7 @@ function ChallengeDialog({ ctl, ui }: { ctl: SimController; ui: UiState }) {
           <>
             <h3>This challenge link cannot be opened</h3>
             <p>{s.error}</p>
+            <p className="fine" data-testid="challenge-recovery">{CHALLENGE_RECOVERY}</p>
             <button onClick={() => ctl.social.declineChallenge()}>Close</button>
           </>
         )}
