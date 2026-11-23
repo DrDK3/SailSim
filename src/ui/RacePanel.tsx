@@ -152,7 +152,7 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
         <div className="race-best" data-testid="race-best" role="status">
           {race.best.start && (
             <div>
-              Start: {race.best.start.delayS.toFixed(1)} s after the signal
+              Start: {race.best.start.delayS.toFixed(1)} s after the signal{race.best.start.kn !== undefined ? ` at ${race.best.start.kn.toFixed(1)} kn` : ''}
               {race.best.start.best ? (race.best.start.previousS !== undefined ? ` · your best start (was ${race.best.start.previousS.toFixed(1)} s)` : ' · your first start recorded') : ` · best ${race.best.start.previousS?.toFixed(1)} s`}
             </div>
           )}
@@ -163,6 +163,12 @@ export function RacePanel({ race, ctl, caption }: { race: RaceUi; ctl: SimContro
                   ? `New personal best for ${race.best.finish.label} (was ${clock(race.best.finish.previousS)})`
                   : `Your first time on ${race.best.finish.label}`
                 : `Your best on ${race.best.finish.label}: ${clock(race.best.finish.previousS ?? 0)}`}
+              {race.best.finish.other && (
+                // Design handover item 6: a time in other conditions is shown, never compared.
+                <div className="fine" data-testid="race-best-other">
+                  On this course in other conditions: {clock(race.best.finish.other.timeS)} ({race.best.finish.other.label}; not compared).
+                </div>
+              )}
             </div>
           )}
         </div>

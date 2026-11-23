@@ -57,7 +57,7 @@ import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
 import { CONTENT_STATUS, loadThresholds, mergeThresholds, resetThresholds, saveThresholds, thresholdsChanged, type ContentStatus } from './exercises/config';
 import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
-import { courseKey, recordRaceTime, recordStart } from './bests';
+import { courseGeometry, loadBests, otherConditionsBest, raceIdentityKey, raceIdentityLabel, recordRaceTime, recordStart, RULESET, windBand, type RaceIdentity } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
 import { featureOn, setFeatureFlag, type FeatureFlag } from './flags';
 import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonResult, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
@@ -173,7 +173,14 @@ export interface RaceUi {
   /** A start drill: this start scored once made, and the starts before it this session. */
   drill?: { attempt: number; last?: DrillStart & { verdict: string }; history: DrillStart[]; bestLateS?: number };
   /** Your start and finish against your bests in this browser (src/app/bests.ts). */
-  best?: { start?: { delayS: number; best: boolean; previousS?: number }; finish?: { timeS: number; best: boolean; previousS?: number; label: string } };
+  /**
+   * Your bests for this race. An ordinary race's finish is compared only with times of the same identity (design
+   * handover item 6): `label` names it; `other` is the best on the same course in other conditions, not compared.
+   */
+  best?: {
+    start?: { delayS: number; best: boolean; previousS?: number; kn?: number };
+    finish?: { timeS: number; best: boolean; previousS?: number; label: string; other?: { timeS: number; label: string } };
+  };
   /** Race aids on (laylines, lifted or headed: src/app/raceAids.ts), and the wind's shift now when sailing upwind. */
   aids: boolean;
   shift?: ShiftCall;
@@ -1084,6 +1091,34 @@ export class SimController {
     else this.publish(true);
   }
 
+  /**
+   * What makes this race's time comparable (design handover item 6): the course and its shape, laps, the wind band at
+   * the line when the race began, the fleet, the boat, the spinnaker, the rules and whether any assist was used.
+   */
+  raceIdentity(): RaceIdentity {
+    const r = this.race!;
+    const [a, b] = r.resolved.start;
+    const mid = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    const legs: number[] = [];
+    let from = mid;
+    for (const leg of r.resolved.legs) {
+      legs.push(Math.hypot(leg.target.n - from.n, leg.target.e - from.e));
+      from = leg.target;
+    }
+    const w = this.built ? windFrom(this.built.env.wind(0, mid.n, mid.e)) : undefined;
+    return {
+      course: r.course.name,
+      laps: r.course.laps,
+      geometry: courseGeometry(legs, Math.hypot(b.n - a.n, b.e - a.e)),
+      windBand: windBand(w ? w.speed / 0.514444 : 0),
+      fleet: r.session.fleet.boats.length,
+      boat: isSquibType(this.scenario?.boat) ? this.scenario!.boat! : DEFAULT_SQUIB_TYPE,
+      spinnaker: this.scenario?.spinnaker === true,
+      rules: `${RULESET}${this.runMarkRoomPenalties ? '+rule18' : ''}`,
+      assistance: this.social.ui().assist.independent ? 'independent' : 'assisted',
+    };
+  }
+
   /** A clean start and a finish are compared with your bests in this browser, once each per race. */
   private checkRaceBests(): void {
     const r = this.race!;
@@ -1092,14 +1127,24 @@ export class SimController {
     const st = r.session.judgeOf('you').state(t);
     if (!this.raceBest.start && st.startTime !== undefined) {
       const delayS = Math.max(0, st.startTime - cm.startTime);
-      this.raceBest.start = { delayS, ...recordStart(delayS) };
+      const kn = this.sim.snapshot(false).stw / 0.514444;
+      this.raceBest.start = { delayS, kn: Math.round(kn * 10) / 10, ...recordStart(delayS, new Date(), kn) };
       this.publish(true);
     }
     if (!this.raceBest.finish && st.phase === 'finished' && st.finishTime !== undefined && st.startTime !== undefined) {
       const timeS = st.finishTime - cm.startTime;
       const key = this.raceTag?.key;
-      const label = key?.endsWith(':long') ? `This week's long course (${key.slice(7, -5)})` : key?.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : key ? `Today's challenge (${key.slice(10)})` : courseKey(r.course.name, r.course.laps);
-      this.raceBest.finish = { timeS, label, ...recordRaceTime(key ?? courseKey(r.course.name, r.course.laps), label, timeS) };
+      if (key) {
+        const label = key.endsWith(':long') ? `This week's long course (${key.slice(7, -5)})` : key.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : `Today's challenge (${key.slice(10)})`;
+        this.raceBest.finish = { timeS, label, ...recordRaceTime(key, label, timeS) };
+      } else {
+        // An ordinary race: compared only with the same identity; other conditions shown apart (item 6).
+        const id = this.raceIdentity();
+        const label = raceIdentityLabel(id);
+        const other = otherConditionsBest(loadBests(), id);
+        this.raceBest.finish = { timeS, label, ...recordRaceTime(raceIdentityKey(id), label, timeS), ...(other ? { other: { timeS: other.timeS, label: other.label } } : {}) };
+      }
+      const label = this.raceBest.finish.label;
       if (!this.replay) this.social.onFinish(key, label, timeS, st.events, cm.startTime);
       this.publish(true);
     }

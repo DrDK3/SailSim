@@ -1,8 +1,10 @@
 /**
  * Personal bests, kept in this browser (review UI benchmark G4 and G8: visible progress): the best elapsed time
  * on each course (and on each day's challenge), and the best start (the shortest time from the start signal to
- * crossing the line, after a clean start). Conditions differ from race to race, so a best is a record of what
- * you did, not a like-for-like ranking. Nothing is sent anywhere: shared tables would need a service.
+ * crossing the line, after a clean start). From 23 Nov 2026 (design handover item 6) an ordinary race's best is kept
+ * per identity (course and its shape, laps, wind band, fleet size, boat, spinnaker, rules, assistance), so a changed
+ * condition cannot earn a personal best; earlier times are kept and shown as "other conditions". Nothing is sent
+ * anywhere: shared tables would need a service.
  *
  * Like-for-like bests (juniors round §6.2): for the weekly course and the daily challenge only, whose conditions are
  * fixed, so times compare. Each keeps the best independent time and the best assisted time apart (the assist record,
@@ -13,10 +15,13 @@ import { persist } from './storage';
 const KEY = 'squib.bests.v1';
 
 export interface Bests {
-  /** By course key (course name and laps, or a challenge key). */
+  /**
+   * By key: the identity of an ordinary race (`race:…`, from 23 Nov 2026: raceIdentityKey), a challenge or weekly key,
+   * or an older time by course name and laps only (courseKey), kept and shown as "other conditions".
+   */
   races: Record<string, { timeS: number; at: string; label: string }>;
-  /** Seconds from the start signal to a clean start. */
-  start?: { delayS: number; at: string };
+  /** Seconds from the start signal to a clean start, and the speed when crossing (kn; from 23 Nov 2026). */
+  start?: { delayS: number; at: string; kn?: number };
 }
 
 export interface BestResult {
@@ -40,9 +45,75 @@ function save(b: Bests): void {
   persist(KEY, JSON.stringify(b), 'your best times');
 }
 
-/** The key for a course's best time: its name and laps. */
+/**
+ * The key ordinary race bests used until 23 Nov 2026: the course's name and laps only, whatever the conditions. Kept to
+ * find those older times, which are shown as "other conditions" and never compared (design handover item 6).
+ */
 export function courseKey(name: string, laps: number): string {
   return `${name} · ${laps} lap${laps === 1 ? '' : 's'}`;
+}
+
+// ------------------------------------------------------------ like-with-like ordinary race bests (23 Nov 2026)
+
+/**
+ * What makes two ordinary race times comparable (design handover item 6; the owner's choice, 23 Nov 2026: like with
+ * like). A personal best is claimed only against times with the same identity; anything else on the same course is
+ * shown apart as "other conditions".
+ */
+export interface RaceIdentity {
+  course: string;
+  laps: number;
+  /** The course's shape, independent of where it is laid: leg lengths (10 m) and the start line (5 m), hashed. */
+  geometry: string;
+  /** The true wind band at the line when the race began. */
+  windBand: string;
+  /** Boats in the race, you included. */
+  fleet: number;
+  /** The user's boat type. */
+  boat: string;
+  spinnaker: boolean;
+  /** The rules version (RULESET) and whether the simplified rule 18 gave penalties. */
+  rules: string;
+  /** No assists at any time (src/app/assists.ts), or assisted. */
+  assistance: 'independent' | 'assisted';
+}
+
+/** Wind bands (kn): times in different bands are not compared. */
+export const WIND_BANDS = [6, 10, 14, 18] as const;
+export function windBand(twsKn: number): string {
+  const i = WIND_BANDS.findIndex((b) => twsKn < b);
+  if (i === 0) return `under ${WIND_BANDS[0]} kn`;
+  if (i < 0) return `${WIND_BANDS.at(-1)} kn and over`;
+  return `${WIND_BANDS[i - 1]}–${WIND_BANDS[i]} kn`;
+}
+
+/** A short, stable hash of a course's shape (FNV-1a over the rounded leg lengths and line length). */
+export function courseGeometry(legLengthsM: readonly number[], lineM: number): string {
+  const text = `${legLengthsM.map((d) => Math.round(d / 10) * 10).join(',')}/${Math.round(lineM / 5) * 5}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return h.toString(36);
+}
+
+export function raceIdentityKey(id: RaceIdentity): string {
+  return `race:${id.course}|${id.laps}|${id.geometry}|${id.windBand}|${id.fleet}|${id.boat}|${id.spinnaker ? 'spin' : 'nospin'}|${id.rules}|${id.assistance}`;
+}
+
+/** The identity in words: "Short course · 1 lap · 10–14 kn · 4 boats · spinnaker · independent". */
+export function raceIdentityLabel(id: RaceIdentity): string {
+  return `${courseKey(id.course, id.laps)} · ${id.windBand} · ${id.fleet === 1 ? 'alone' : `${id.fleet} boats`} · ${id.spinnaker ? 'spinnaker' : 'no spinnaker'} · ${id.assistance}`;
+}
+
+/**
+ * The best time on the same course and laps in other conditions: other identities, and the times kept before
+ * 23 Nov 2026 by name and laps only. Shown apart, never compared.
+ */
+export function otherConditionsBest(b: Bests, id: RaceIdentity): { timeS: number; at: string; label: string } | undefined {
+  const own = raceIdentityKey(id);
+  const prefix = `race:${id.course}|${id.laps}|`;
+  const old = courseKey(id.course, id.laps);
+  const others = Object.entries(b.races).filter(([k]) => k !== own && (k === old || k.startsWith(prefix) || keyBase(k) === old));
+  return others.length ? others.map(([, v]) => v).sort((x, y) => x.timeS - y.timeS)[0] : undefined;
 }
 
 export function recordRaceTime(key: string, label: string, timeS: number, now = new Date()): BestResult {
@@ -56,12 +127,16 @@ export function recordRaceTime(key: string, label: string, timeS: number, now = 
   return { best, previousS: was?.timeS };
 }
 
-export function recordStart(delayS: number, now = new Date()): BestResult {
+/**
+ * A clean start: the best is the shortest delay after the signal; the speed when crossing is kept with it, so a start
+ * is judged on its speed as well as its timing (design handover item 6).
+ */
+export function recordStart(delayS: number, now = new Date(), kn?: number): BestResult {
   const b = loadBests();
   const was = b.start;
   const best = !was || delayS < was.delayS;
   if (best) {
-    b.start = { delayS, at: now.toISOString() };
+    b.start = { delayS, at: now.toISOString(), ...(kn !== undefined ? { kn: Math.round(kn * 10) / 10 } : {}) };
     save(b);
   }
   return { best, previousS: was?.delayS };

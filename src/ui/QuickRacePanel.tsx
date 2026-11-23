@@ -268,15 +268,21 @@ export function QuickRacePanel({ ctl, ui, onClose }: { ctl: SimController; ui: U
         <details className="bests" data-testid="bests">
           <summary>Your bests (kept in this browser)</summary>
           <ul>
-            {bests.start && <li>Best start: {bests.start.delayS.toFixed(1)} s after the signal</li>}
+            {bests.start && <li>Best start: {bests.start.delayS.toFixed(1)} s after the signal{bests.start.kn !== undefined ? ` at ${bests.start.kn.toFixed(1)} kn` : ''}</li>}
             {Object.entries(bests.races)
               .sort((a, b) => b[1].at.localeCompare(a[1].at))
               .slice(0, 8)
               .map(([k, r]) => (
-                <li key={k}>{r.label}: {mmss(r.timeS)}</li>
+                <li key={k}>
+                  {r.label}: {mmss(r.timeS)}
+                  {/^(race|challenge|weekly):/.test(k) ? '' : ' (an earlier record: its conditions were not kept)'}
+                </li>
               ))}
           </ul>
-          <p className="fine">Conditions differ from race to race. Nothing is sent anywhere: a shared table would need a server.</p>
+          <p className="fine" data-testid="bests-note">
+            A race’s best is kept for its course, wind band, fleet size, boat, spinnaker, rules and assistance, so a time is compared only with times
+            sailed the same way. Nothing is sent anywhere: a shared table would need a server.
+          </p>
         </details>
       )}
       <p className="fine">
