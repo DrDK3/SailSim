@@ -1072,6 +1072,8 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 
 /* The finish: your place, large, with the gaps; your place at the start and at each mark. */
 .finish-story { display: flex; align-items: center; gap: 16px; margin: 6px 0 10px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--good) 10%, transparent)); border: 1px solid var(--border); }
+.results-next { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-control); }
+.results-next p { margin: 0 0 8px; }
 .finish-place { display: flex; align-items: baseline; gap: 8px; flex: none; }
 .finish-place-n { font-size: clamp(44px, 9vw, 68px); font-weight: 800; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .finish-place-of { font-size: 15px; color: var(--muted); }

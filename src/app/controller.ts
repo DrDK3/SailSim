@@ -1064,6 +1064,19 @@ export class SimController {
    * Free sailing from whatever is running: a replay hands over where it is, the tutorial ends where the boat is,
    * and a course with its fleet is left (the place, conditions and boat stay); then the boat sails.
    */
+  /**
+   * Race the same race again (design handover item 10): the same scenario (course, wind, tide, fleet, start sequence,
+   * random seed), the same rules setting and the same tag (today's challenge, the weekly course), so the new time is
+   * compared like with like (item 6). Only once you are out of the race: nothing is thrown away.
+   */
+  raceAgain(): boolean {
+    if (!this.race || this.raceAtStake() || this.replay) return false;
+    this.showResults = false;
+    const ok = this.restart(this.scenario, { markRoomPenalties: this.runMarkRoomPenalties, aiSpinPolar: this.runAiSpinPolar });
+    if (ok) this.resume();
+    return ok;
+  }
+
   freeSail(): void {
     if (this.replay) this.takeOver();
     if (this.tutorial) this.endLesson();

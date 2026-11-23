@@ -2,7 +2,7 @@ import { presetLabel } from '../render/graphics';
 import { featureOn } from '../app/flags';
 import { ChallengeCard, SocialResult } from './Social';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { SimController } from '../app/controller';
+import type { SimController, UiState } from '../app/controller';
 import { Instruments } from './Instruments';
 import { DamageBanner, DamageCard } from './DamageCard';
 import { Controls } from './Controls';
@@ -541,7 +541,7 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} race={ui.race} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} race={ui.race} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} next={featureOn('raceRetry') && !ui.replay ? { observation: raceObservation(ui), onAgain: () => void ctl.raceAgain(), onOther: () => { ctl.toggleResults(false); openHub(); }, onFree: () => { ctl.toggleResults(false); ctl.freeSail(); } } : undefined} />}</Suspense>
       {ui.race?.results && ui.showResults && <SocialResult ctl={ctl} ui={ui} />}
       <ChallengeCard ctl={ctl} ui={ui} />
       <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
@@ -606,4 +606,15 @@ async function copyShareLink(ctl: SimController): Promise<string | undefined> {
     return `Copy this link: ${r.url}`;
   }
   return `Link copied: whoever opens it races you as a ghost.${r.long ? ' It is long: if a messaging app cuts it short, save the replay file (Scenarios and replays) and send that.' : ''}`;
+}
+
+/**
+ * The one observation offered after a race (design handover item 10): the coach's first thing to work on, else its
+ * first thing done well, from the debrief (whose messages name what they were measured from: item 5).
+ */
+function raceObservation(ui: UiState): string | undefined {
+  const d = ui.coach?.debrief;
+  if (!d) return undefined;
+  const item = d.items.find((i) => i.verdict === 'work') ?? d.items.find((i) => i.verdict === 'good');
+  return item ? `${item.area}: ${item.text}` : undefined;
 }
