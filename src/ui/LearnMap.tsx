@@ -5,8 +5,9 @@ import { useTrust } from './trust';
 import { loadLessonProgress } from '../app/lessons';
 import { loadRuns } from '../app/exercises/records';
 import { loadBests } from '../app/bests';
+import { SUPPORT_TERMS } from '../app/assists';
 import { DEFAULT_QUICK_RACE, dailyChallenge } from '../app/quickRace';
-import { learnSteps, loadStarted, nextStep, noteStarted, type LearnGroup, type LearnStep } from '../app/learnMap';
+import { learnSteps, loadStarted, nextStep, noteStarted, type LearnGroup, type LearnStep, TICK_MEANING, TICKS_ARE } from '../app/learnMap';
 
 /**
  * The Learn map (review #13, package D): the lessons, the two exercises and the challenges in one order, each marked
@@ -67,7 +68,7 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
     if (!attempts.length) return undefined;
     const own = attempts.filter((a) => a.independent).length;
     const changed = runs.some((r) => r.exercise === id && r.thresholdsChanged);
-    return `Assist record: ${own} of ${attempts.length} on their own, ${attempts.length - own} assisted${changed ? '; thresholds changed for this browser' : '; shipped thresholds (provisional, E)'}.`;
+    return `Assist record: ${own} of ${attempts.length} ${SUPPORT_TERMS.independent}, ${attempts.length - own} ${SUPPORT_TERMS.assisted}${changed ? '; thresholds changed for this browser' : '; shipped thresholds (provisional, E)'}.`;
   };
 
   return (
@@ -80,7 +81,7 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
           </button>
         </div>
         <p className="fine" data-testid="learn-map-progress">
-          {doneCount} of {steps.length} done. Kept in this browser only.
+          {doneCount} of {steps.length} done. Kept in this browser only. {TICKS_ARE}
         </p>
         <div className="learn-next" data-testid="learn-next">
           <p>
@@ -96,7 +97,9 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
             <h3 id={`learn-${group}`} className="learn-group">
               {group}
             </h3>
-            <p className="fine">{intro}</p>
+            <p className="fine">
+              {intro} <span data-testid={`learn-tick-${group}`}>{TICK_MEANING[group]}</span>
+            </p>
             <ol className="lesson-list">
               {steps
                 .filter((s) => s.group === group)

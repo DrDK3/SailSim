@@ -45,3 +45,31 @@ export function assistsFromInputs(rows: readonly InputRow[], endStep = Infinity)
 }
 
 export const assistLabel = (r: AssistRecord): string => (r.independent ? 'independent' : 'assisted');
+
+/**
+ * The two words used everywhere for an attempt's support (design handover item 7: the checklist, results and exports
+ * agree), and what they mean. Input adaptations are not assists: they never make an attempt assisted.
+ */
+export const SUPPORT_TERMS = {
+  independent: 'independent',
+  assisted: 'assisted',
+  definition:
+    'Independent: no auto-trim on either sail, no teaching overlay and no live help at any time in the attempt. Assisted: any of those was on. Auto-crew (hiking) is not counted. Input adaptations (tiller or car steering, keyboard, touch, switch or gamepad controls, reduced motion, captions) are not assists and never make an attempt assisted.',
+} as const;
+
+const ASSIST_WORDS: Record<keyof Assists, string> = { autoMain: 'auto-trim on the main', autoJib: 'auto-trim on the jib', autoCrew: 'auto-crew', overlay: 'the teaching overlay', liveHelp: 'live help' };
+
+/**
+ * Support described against the task (design handover item 7): which assists were on, which of them bear on what the
+ * activity demonstrates, and which do not (an AI trimmer in a decision exercise). Does not change `independent`.
+ */
+export function supportForTask(a: Assists, task: { focus: string; outside: readonly (keyof Assists)[] }): { onTask: string[]; offTask: string[]; text: string } {
+  const on = (Object.keys(ASSIST_WORDS) as (keyof Assists)[]).filter((k) => a[k] && k !== 'autoCrew');
+  const onTask = on.filter((k) => !task.outside.includes(k)).map((k) => ASSIST_WORDS[k]);
+  const offTask = on.filter((k) => task.outside.includes(k)).map((k) => ASSIST_WORDS[k]);
+  const text = !on.length
+    ? `Independent. The task: ${task.focus}.`
+    : `Assisted: ${[...onTask, ...offTask].join(', ')}. The task: ${task.focus}.${offTask.length ? ` ${cap(offTask.join(' and '))} did not bear on it${onTask.length ? '; the rest did' : ''}.` : ''}`;
+  return { onTask, offTask, text };
+}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

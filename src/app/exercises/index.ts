@@ -17,6 +17,12 @@ export interface ExerciseInfo {
   minutes: number;
   /** "Beginner" or "Tactics". */
   level: string;
+  /**
+   * What the exercise demonstrates, and which assists bear on it (design handover item 7): support is described
+   * against the task. Assists outside the task (auto-trim in a decision exercise) are still recorded, and an attempt
+   * with any assist is still "assisted" (the record is not regraded), but the review says they did not bear on the task.
+   */
+  task: { focus: string; outside: (keyof import('./engine').Assists)[] };
 }
 
 export interface ExerciseSpec {
@@ -50,8 +56,23 @@ function openWater(twsKn: number, twdDeg: number, seed: number, headingDeg: numb
 const inputFor = (start: AttemptPlan['start']): ControlInput => ({ helm: 0, mainSheet: 0.35, jibSheet: 0.35, autoMain: start.autoMain, autoJib: start.autoJib, crewHike: 0.6, autoCrew: start.autoCrew, flatten: 0 });
 
 export const EXERCISES: ExerciseInfo[] = [
-  { id: TACK_RECOVER_ID, title: 'Trim, tack and recover', summary: 'Find close-hauled, feel the edge of the wind, tack and get going again: four attempts, with less help each time.', minutes: 8, level: 'Beginner' },
-  { id: WIND_SHIFT_ID, title: 'Wind shift on a beat', summary: 'A short beat with one scripted shift: spot the header, decide, and see your decision and your sailing judged apart.', minutes: 12, level: 'Tactics' },
+  {
+    id: TACK_RECOVER_ID,
+    title: 'Trim, tack and recover',
+    summary: 'Find close-hauled, feel the edge of the wind, tack and get going again: four attempts, with less help each time.',
+    minutes: 8,
+    level: 'Beginner',
+    task: { focus: 'steering through the tack and trimming both sails for the new course', outside: [] },
+  },
+  {
+    id: WIND_SHIFT_ID,
+    title: 'Wind shift on a beat',
+    summary: 'A short beat with one scripted shift: spot the header, decide, and see your decision and your sailing judged apart.',
+    minutes: 12,
+    level: 'Tactics',
+    // The decision is the task: an AI trimmer looking after the sheets does not make the decision for you.
+    task: { focus: 'spotting the shift and deciding whether to tack', outside: ['autoMain', 'autoJib'] },
+  },
 ];
 
 export function isExerciseId(x: unknown): x is ExerciseId {

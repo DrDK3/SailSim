@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
-import type { ExerciseId } from '../app/exercises/index';
+import type { ExerciseId, ExerciseInfo } from '../app/exercises/index';
+import { SUPPORT_TERMS, supportForTask } from '../app/assists';
 import type { AttemptRecord, ReviewChart } from '../app/exercises/engine';
 import { InstructorOnly } from './trust';
 
@@ -63,6 +64,9 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </div>
           ))}
         </div>
+        <p className="fine" data-testid="support-definition">
+          {SUPPORT_TERMS.definition} In this exercise the task is {x.info.task.focus}.
+        </p>
         {r.observations.length > 0 && (
           <>
             <h4>What we saw</h4>
@@ -121,7 +125,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
           ))}
         </ul>
         {s.extras?.chart && <TrackChart chart={s.extras.chart} />}
-        <p className="fine">{assistLine(s.records[s.attempt - 1])}</p>
+        <p className="fine" data-testid="attempt-support">{assistLine(s.records[s.attempt - 1], x.info.task)}</p>
         <div className="row left wrap">
           <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
             {s.attempt < s.attempts ? `Attempt ${s.attempt + 1}` : 'See the result'}
@@ -188,7 +192,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
       </div>}
       {s.stage === 'attempt' && (
         <p className="fine" data-testid="exercise-assists">
-          {s.independentSoFar ? 'On your own so far (no auto-trim, overlay or help).' : `Assisted: ${assistWords(s.assists).join(', ')}.`}
+          {s.independentSoFar ? 'Independent so far (no auto-trim, overlay or help).' : `Assisted so far: ${assistWords(s.assists).join(', ')}.`}
         </p>
       )}
       <div className="row left wrap">
@@ -237,8 +241,10 @@ function assistWords(a: AttemptRecord['assists']): string[] {
   return out.length ? out : ['none'];
 }
 
-function assistLine(r: AttemptRecord | undefined): string {
+function assistLine(r: AttemptRecord | undefined, task?: ExerciseInfo['task']): string {
   if (!r) return '';
+  // Design handover item 7: support described against the task the exercise demonstrates.
+  if (task) return `This attempt: ${supportForTask(r.assists, task).text}`;
   return r.independent ? 'This attempt was independent: no auto-trim, overlay or live help.' : `This attempt was assisted: ${assistWords(r.assists).join(', ')}.`;
 }
 

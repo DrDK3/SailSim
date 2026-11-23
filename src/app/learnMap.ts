@@ -43,6 +43,20 @@ export interface LearnStep {
   action: LearnAction;
 }
 
+/**
+ * What a tick establishes, group by group (design handover item 7): an activity done in this browser, not a
+ * certificate or a measure of competence. The wording matches the lesson result card and the exercise result.
+ */
+export const TICK_MEANING: Record<LearnGroup, string> = {
+  Basics: 'A tick means you sailed every step of the lesson in one run in this browser (or it was done before 23 Nov 2026, when reaching the end counted).',
+  Seamanship: 'A tick means you sailed every step of the lesson in one run in this browser (or it was done before 23 Nov 2026, when reaching the end counted).',
+  Exercises: 'A tick means at least one attempt was completed, independent or assisted (both count; the result card and the instructor view say which).',
+  Challenges: 'A tick means a time was recorded: today’s challenge today, the weekly course this week, a start drill or a race at any time.',
+};
+
+/** Said once above the map. */
+export const TICKS_ARE = 'A tick records an activity done in this browser. It shows what you have sailed, not a certificate or a measure of skill.';
+
 /** What the map reads: the stores the app already keeps, and its own. */
 export interface LearnInputs {
   lessons: LessonProgress;

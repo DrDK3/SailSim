@@ -38,7 +38,7 @@ export function ProgressChart({ history }: { history: readonly Attempt[] }) {
           ),
         )}
       </svg>
-      <figcaption className="fine">Your last {history.length} times (higher on the chart is faster): ● on your own, □ with assists.</figcaption>
+      <figcaption className="fine">Your last {history.length} times (higher on the chart is faster): ● independent, □ assisted.</figcaption>
     </figure>
   );
 }
@@ -85,13 +85,13 @@ export function WeeklyCard({ ctl, ui, onStarted }: { ctl: SimController; ui: UiS
         )}
         {best && (
           <p className="fine" data-testid="weekly-best">
-            Your bests this week: on your own {best.independent ? clockS(best.independent.timeS) : '—'}, with assists {best.assisted ? clockS(best.assisted.timeS) : '—'}.
+            Your bests this week: independent {best.independent ? clockS(best.independent.timeS) : '—'}, assisted {best.assisted ? clockS(best.assisted.timeS) : '—'}.
           </p>
         )}
         {/* Times from this week under earlier rules (§3.2): shown apart, never compared with today's. */}
         {w.earlier && (
           <p className="fine" data-testid="weekly-earlier">
-            Earlier rules (not compared): on your own {w.earlier.independent ? clockS(w.earlier.independent.timeS) : '—'}, with assists {w.earlier.assisted ? clockS(w.earlier.assisted.timeS) : '—'}.
+            Earlier rules (not compared): independent {w.earlier.independent ? clockS(w.earlier.independent.timeS) : '—'}, assisted {w.earlier.assisted ? clockS(w.earlier.assisted.timeS) : '—'}.
           </p>
         )}
         {best && <ProgressChart history={best.history} />}
@@ -100,7 +100,7 @@ export function WeeklyCard({ ctl, ui, onStarted }: { ctl: SimController; ui: UiS
           <div className="weekly-long" data-testid="weekly-long">
             <p className="fine">
               <strong>Long course (optional):</strong> {w.long.name} ({w.long.status}): {w.long.summary}.
-              {w.long.best ? ` Your best: on your own ${w.long.best.independent ? clockS(w.long.best.independent.timeS) : '—'}, with assists ${w.long.best.assisted ? clockS(w.long.best.assisted.timeS) : '—'}.` : ''}
+              {w.long.best ? ` Your best: independent ${w.long.best.independent ? clockS(w.long.best.independent.timeS) : '—'}, assisted ${w.long.best.assisted ? clockS(w.long.best.assisted.timeS) : '—'}.` : ''}
             </p>
             <button onClick={() => ctl.leaveTo('Sailing this week’s long course', () => ctl.social.sailLong() && onStarted())} data-testid="weekly-long-start">
               Sail the long course
@@ -171,7 +171,7 @@ export function SocialResult({ ctl, ui }: { ctl: SimController; ui: UiState }) {
       {f && (
         <>
           <p>
-            {f.label}: <strong>{clockS(f.timeS)}</strong> ({f.assist.independent ? 'on your own' : `with assists: ${assistList(f.assist.assists)}`})
+            {f.label}: <strong>{clockS(f.timeS)}</strong> ({f.assist.independent ? 'independent' : `assisted: ${assistList(f.assist.assists)}`})
             {f.best?.best ? ' · a new best!' : f.best?.previousS !== undefined ? ` · your best ${clockS(f.best.previousS)}` : ''}
           </p>
           <NameChooser ctl={ctl} name={s.name} />
@@ -225,7 +225,7 @@ function ChallengeDialog({ ctl, ui }: { ctl: SimController; ui: UiState }) {
           <>
             <h3>{s.invite.name} challenges you</h3>
             <p>
-              <strong>{s.invite.course}</strong>: their time {clockS(s.invite.finishS)} ({s.invite.independent ? 'on their own' : 'with assists'}).
+              <strong>{s.invite.course}</strong>: their time {clockS(s.invite.finishS)} ({s.invite.independent ? 'independent' : 'assisted'}).
             </p>
             <p className="fine">
               You will sail the same course in the same wind, with their boat as a ghost: a recording of how they sailed, which does not react to you
