@@ -11,6 +11,7 @@ import { LIGHTING_PRESETS } from '../app/lighting';
 import type { AudioSettings } from '../render/audio';
 import { DEVICE_CHECK_SECONDS, reportText } from '../app/deviceCheck';
 import { FEATURE_FLAGS, FLAG_ORDER, flagSetting } from '../app/flags';
+import { exportProgress, restoreProgress } from '../app/progressBackup';
 
 const PRESET_INFO: Record<GraphicsPreset, { label: string; note: string }> = {
   performance: { label: 'Smooth', note: 'For school laptops, tablets and older computers: every sailing cue (gusts on the water, sails, telltales, wake) at a lower resolution, with simpler water, shadows and scenery.' },
@@ -312,6 +313,8 @@ export function SettingsPanel({ ctl, ui, onClose }: { ctl: SimController; ui: Ui
           {ui.recordedSounds.length ? `Recordings in use: ${ui.recordedSounds.join(', ')}.` : 'No recordings are included; any added to the audio folder are used in place of the synthesised sound (docs/SOUND.md).'} The
           countdown uses only voices on this device; nothing is sent anywhere.
         </p>
+        <h4 className="settings-group">Your progress</h4>
+        <ProgressBackupControls ctl={ctl} ui={ui} />
         <h4 className="settings-group">Advanced</h4>
         <p className="fine">
           Feature switches, kept in this browser: each turns a feature off without changing the simulator. Off, it behaves as it did before that feature
@@ -437,6 +440,57 @@ function DeviceCheck({ ctl, ui }: { ctl: SimController; ui: UiState }) {
             </a>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Back up and restore the progress kept in this browser (design handover item 25): one file, no account. Restoring
+ * merges and never loses what is here; a file that is not a backup, newer or damaged changes nothing.
+ */
+function ProgressBackupControls({ ctl, ui }: { ctl: SimController; ui: UiState }) {
+  const [message, setMessage] = useState<{ ok: boolean; text: string }>();
+  const file = useRef<HTMLInputElement>(null);
+  const save = () => {
+    const blob = new Blob([exportProgress(ui.build.id)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sailsim-progress-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setMessage({ ok: true, text: 'Backup saved as a file. Keep it somewhere safe, or open it in another browser with Restore.' });
+  };
+  const restore = async (f: File | undefined) => {
+    if (!f) return;
+    const r = restoreProgress(await f.text());
+    ctl.reloadProgress();
+    setMessage(
+      r.ok
+        ? { ok: true, text: r.changes.length ? `Restored and merged: ${r.changes.join('; ')}. Nothing that was here was lost.` : 'Everything in that backup was already here: nothing changed.' }
+        : { ok: false, text: r.error ?? 'Nothing was restored.' },
+    );
+    if (file.current) file.current.value = '';
+  };
+  return (
+    <div data-testid="progress-backup">
+      <p className="fine">
+        Your lessons done, exercise records, best and challenge times and the Learn map, in one file: to keep them safe or move them to another
+        browser, with no account. Not a replay (one run) or a scenario (a set-up). Restoring merges with what is here and never loses it.
+      </p>
+      <div className="row left wrap">
+        <button onClick={save} data-testid="progress-backup-save">
+          Back up progress (file)
+        </button>
+        <label className="file-btn">
+          Restore from a backup…
+          <input ref={file} type="file" accept=".json,application/json" aria-label="Restore progress from a backup file" onChange={(e) => void restore(e.target.files?.[0])} data-testid="progress-backup-file" />
+        </label>
+      </div>
+      {message && (
+        <p className={`fine${message.ok ? '' : ' warn-text'}`} role="status" data-testid="progress-backup-message">
+          {message.text}
+        </p>
       )}
     </div>
   );

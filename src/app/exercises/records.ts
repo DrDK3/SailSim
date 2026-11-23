@@ -74,7 +74,7 @@ export function importRuns(text: string): { added: number; skipped: number; erro
   return { added: fresh.length, skipped: file.runs.length - fresh.length };
 }
 
-function isRun(x: unknown): boolean {
+export function isRun(x: unknown): boolean {
   if (!x || typeof x !== 'object') return false;
   const r = x as Partial<StoredRun>;
   return typeof r.exercise === 'string' && typeof r.at === 'string' && typeof r.build === 'string' && Array.isArray(r.attempts) && Array.isArray(r.help);

@@ -61,7 +61,7 @@ describe('a link cut short', () => {
     const cut = payload.slice(0, Math.floor(payload.length * 0.6));
     await expect(decodeChallenge(cut)).rejects.toThrow(/damaged or incomplete \(was it cut short\?\)/);
     expect(CHALLENGE_RECOVERY).toMatch(/replay file/);
-    expect(CHALLENGE_RECOVERY).toMatch(/Race this run as a ghost/);
+    expect(CHALLENGE_RECOVERY).toMatch(/Race a ghost from a replay file/);
   });
 
   it('the social hub shows the preview with an invite, and the error with a broken one', async () => {

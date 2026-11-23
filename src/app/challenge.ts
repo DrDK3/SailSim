@@ -146,4 +146,4 @@ export function challengePreview(c: Challenge, buildId: string): { duration: str
 
 /** What to do when a challenge link cannot be read (design handover item 24): the replay file always works. */
 export const CHALLENGE_RECOVERY =
-  'Long links are sometimes cut short by messaging apps. Ask your friend to send the replay file instead (Results or Scenarios and replays → Save replay); open it in Scenarios and replays and choose Race this run as a ghost.';
+  'Long links are sometimes cut short by messaging apps. Ask your friend to send the replay file instead (Scenarios and replays → Save replay of this run, after their race); then, in Scenarios and replays, choose Race a ghost from a replay file.';

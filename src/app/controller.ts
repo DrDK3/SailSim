@@ -1067,6 +1067,12 @@ export class SimController {
    * Free sailing from whatever is running: a replay hands over where it is, the tutorial ends where the boat is,
    * and a course with its fleet is left (the place, conditions and boat stay); then the boat sails.
    */
+  /** Read the progress kept in this browser again (after a backup is restored: design handover item 25). */
+  reloadProgress(): void {
+    this.lessonProgress = loadLessonProgress();
+    this.publish(true);
+  }
+
   /**
    * Race the same race again (design handover item 10): the same scenario (course, wind, tide, fleet, start sequence,
    * random seed), the same rules setting and the same tag (today's challenge, the weekly course), so the new time is
