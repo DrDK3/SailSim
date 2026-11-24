@@ -135,6 +135,11 @@ const UNDER_BOOM_FWD = 0.45;
 const GOOSENECK_Y = 1.3;
 const HOUNDS_Y = 6.3;
 const SPREADER_Y = 3.6;
+/** The shrouds' radius (m, 7 mm wire). */
+const SHROUD_R = 0.0035;
+/** The boom's half-width across (m, its drawn section) and the gap the drawn cloth keeps from a shroud (m). */
+const BOOM_HALF = 0.034;
+const CLOTH_GAP = 0.015;
 /** Cockpit opening (z from … to) and half-width; the same estimate as the physics' cockpit (calibration). */
 const COCKPIT_FROM = -0.2;
 const COCKPIT_TO = 2.3;
@@ -274,6 +279,81 @@ function rod(a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material,
   return m;
 }
 
+/** Where a wire crosses height y (boat frame), or undefined. */
+function wireAt(a: THREE.Vector3, b: THREE.Vector3, y: number): { x: number; z: number } | undefined {
+  if (y < Math.min(a.y, b.y) || y > Math.max(a.y, b.y) || a.y === b.y) return undefined;
+  const t = (y - a.y) / (b.y - a.y);
+  return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+}
+
+/**
+ * The largest angle the boom can be drawn at before it touches a shroud (rad): the angle from the gooseneck to each
+ * wire where it crosses the boom's height, less the boom's and the wire's thickness (and a little more, since the wire
+ * leans). The physics puts the boom "against the shrouds" at 85° (an estimate); the drawn rig stops it a few degrees
+ * sooner, so the drawing follows its own wires (owner, 24 Nov 2026).
+ */
+export function boomStopAngle(wires: readonly [THREE.Vector3, THREE.Vector3][]): number {
+  let stop = Math.PI / 2;
+  for (const [a, b] of wires) {
+    const w = wireAt(a, b, GOOSENECK_Y);
+    if (!w) continue;
+    const dx = Math.abs(w.x);
+    const dz = w.z - MAST_Z;
+    const r = Math.hypot(dx, dz);
+    stop = Math.min(stop, Math.atan2(dx, dz) - Math.asin(Math.min(1, (1.25 * (BOOM_HALF + SHROUD_R)) / r)));
+  }
+  return stop;
+}
+
+/**
+ * Lay one row of a sail (its points at one height, luff first) against the shrouds instead of through them (owner,
+ * 24 Nov 2026: "the sail passes through the support stays"). Aloft the sail twists further out than the boom, and its
+ * belly carries the cloth further still, past the angle at which a shroud stands from the mast. A real sail lies
+ * against the shroud and bends round it. For each wire at this height, on the side it stands: if the cloth passes the
+ * wire's distance from the luff at a wider angle than the wire, the row is turned about the luff until it passes just
+ * inside the wire, fully up to that distance and less and less beyond it, so that the leech stays where the physics
+ * has it.
+ */
+export function drapeRow(xs: Float64Array, zs: Float64Array, lx: number, lz: number, y: number, wires: readonly [THREE.Vector3, THREE.Vector3][]): void {
+  const n = xs.length;
+  for (const [a, b] of wires) {
+    const w = wireAt(a, b, y);
+    if (!w) continue;
+    const sgn = Math.sign(w.x);
+    if (sgn === 0) continue;
+    const rS = Math.hypot(w.x - lx, w.z - lz);
+    if (rS < 0.05) continue;
+    const limit = Math.atan2(sgn * (w.x - lx), w.z - lz) - Math.asin(Math.min(1, (CLOTH_GAP + SHROUD_R) / rS));
+    // The cloth's angle where it passes the wire's distance from the luff.
+    let at: number | undefined;
+    let rMax = 0;
+    let prevR = 0;
+    let prevA = 0;
+    for (let u = 0; u < n; u++) {
+      const dx = xs[u]! - lx;
+      const dz = zs[u]! - lz;
+      const r = Math.hypot(dx, dz);
+      const ang = Math.atan2(sgn * dx, dz);
+      rMax = Math.max(rMax, r);
+      if (at === undefined && u > 0 && r >= rS && prevR < rS) at = prevA + ((ang - prevA) * (rS - prevR)) / Math.max(1e-9, r - prevR);
+      prevR = r;
+      prevA = ang;
+    }
+    if (at === undefined || at <= limit) continue;
+    const turn = at - limit;
+    for (let u = 0; u < n; u++) {
+      const dx = xs[u]! - lx;
+      const dz = zs[u]! - lz;
+      const r = Math.hypot(dx, dz);
+      const k = r <= rS ? 1 : rMax > rS ? 1 - smoothstep(rS, rMax, r) : 0;
+      if (k <= 0) continue;
+      const ang = Math.atan2(sgn * dx, dz) - turn * k;
+      xs[u] = lx + sgn * r * Math.sin(ang);
+      zs[u] = lz + r * Math.cos(ang);
+    }
+  }
+}
+
 /** NACA four-digit symmetric thickness at chord fraction x (thickness ratio t). */
 function nacaHalf(x: number, t: number): number {
   return 5 * t * (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
@@ -350,6 +430,13 @@ export class SquibModel {
   private readonly water: THREE.Mesh;
   private readonly p: BoatParams;
   private readonly mastTopY: number;
+  /**
+   * The shrouds as drawn, in the boat's frame, both sides: each chainplate to the hounds, to its spreader's tip, and
+   * the tip to the masthead. The mainsail and the boom are kept to their side of them (owner, 24 Nov 2026).
+   */
+  readonly shroudWires: readonly [THREE.Vector3, THREE.Vector3][];
+  /** The largest angle the boom is drawn at (rad): where it meets the lower shroud (the physics allows 85°). */
+  private readonly boomStop: number;
   private readonly sternZ: number;
   private readonly soleY: number;
   /** The last frame's time, and the sheets' angles and how fast they come in. */
@@ -392,6 +479,8 @@ export class SquibModel {
     if (!parts) staticCache.set(key, (parts = this.buildStatic(opts.transom ?? 'RDYC', opts.paint)));
     this.group.add(parts.group.clone());
     this.mastTopY = parts.mastTopY;
+    this.shroudWires = this.shrouds(this.mastTopY).wires;
+    this.boomStop = boomStopAngle(this.shroudWires);
 
     this.buildRudder();
     this.group.add(this.rudder);
@@ -889,6 +978,21 @@ export class SquibModel {
     return [first.p, first.p.clone().lerp(b, 0.5)];
   }
 
+  /**
+   * The shrouds' geometry (estimates): spreaders swept back, the chainplates on the side deck just aft of the mast, and
+   * three wires a side (chainplate to hounds, chainplate to spreader tip, tip to masthead).
+   */
+  private shrouds(mastTopY: number): { tips: THREE.Vector3[]; hounds: THREE.Vector3; plates: THREE.Vector3[]; wires: [THREE.Vector3, THREE.Vector3][] } {
+    const sweep = 0.12;
+    const tips = [-1, 1].map((s) => new THREE.Vector3(s * 0.4, SPREADER_Y, MAST_Z + sweep));
+    const hounds = new THREE.Vector3(0, HOUNDS_Y, MAST_Z);
+    const cap = new THREE.Vector3(0, mastTopY - 0.15, MAST_Z);
+    const plates = [-1, 1].map((s) => new THREE.Vector3(s * (this.hullStation(0.42).b - 0.04), sheerAt(0.42) + 0.02, MAST_Z + 0.15));
+    const wires: [THREE.Vector3, THREE.Vector3][] = [];
+    for (const i of [0, 1]) wires.push([plates[i]!, hounds], [plates[i]!, tips[i]!], [tips[i]!, cap]);
+    return { tips, hounds, plates, wires };
+  }
+
   /** Spars, standing rigging and the burgee stick's base (static). */
   private buildRig(mastTopY: number): THREE.Object3D[] {
     const out: THREE.Object3D[] = [];
@@ -909,18 +1013,12 @@ export class SquibModel {
     collar.name = 'mast-collar';
     out.push(mast, track, crane, collar);
     // Spreaders, swept back (estimate), and the standing rigging as wires with bottlescrews at the chainplates.
-    const sweep = 0.12;
-    const tips = [-1, 1].map((s) => new THREE.Vector3(s * 0.4, SPREADER_Y, MAST_Z + sweep));
+    const { tips, hounds, plates, wires } = this.shrouds(mastTopY);
     for (const tipP of tips) out.push(rod(new THREE.Vector3(0, SPREADER_Y, MAST_Z), tipP, 0.011, MAT.spar, 6));
-    const hounds = new THREE.Vector3(0, HOUNDS_Y, MAST_Z);
-    const cap = new THREE.Vector3(0, mastTopY - 0.15, MAST_Z);
     const stem = new THREE.Vector3(0, sheerAt(0) + 0.03, BOW_Z + 0.1);
     out.push(rod(stem, hounds, 0.004, MAT.wire, 5));
-    for (const s of [-1, 1]) {
-      const plate = new THREE.Vector3(s * (this.hullStation(0.42).b - 0.04), sheerAt(0.42) + 0.02, MAST_Z + 0.15);
-      out.push(rod(plate, hounds, 0.0035, MAT.wire, 5));
-      out.push(rod(plate, tips[(s + 1) / 2]!, 0.0035, MAT.wire, 5));
-      out.push(rod(tips[(s + 1) / 2]!, cap, 0.0035, MAT.wire, 5));
+    for (const [a, b] of wires) out.push(rod(a, b, SHROUD_R, MAT.wire, 5));
+    for (const plate of plates) {
       const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.12, 6), MAT.steel);
       screw.position.copy(plate).add(hounds.clone().sub(plate).normalize().multiplyScalar(0.07));
       screw.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hounds.clone().sub(plate).normalize());
@@ -1014,8 +1112,11 @@ export class SquibModel {
     ce: THREE.Vector3,
     flatFoot: number,
     trim: SailTrim = DEFAULT_TRIM,
+    wires?: readonly [THREE.Vector3, THREE.Vector3][],
   ): void {
     const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+    const rowX = new Float64Array(nu + 1);
+    const rowZ = new Float64Array(nu + 1);
     const flog = 1 - s.luff;
     // Starting to luff: the bubble behind the luff (none drawing fully, gone again once the whole sail flogs).
     const bubble = smoothstep(0.97, 0.6, s.luff) * smoothstep(0.15, 0.45, s.luff);
@@ -1053,9 +1154,15 @@ export class SquibModel {
         // fully flogging sail flat and still, edge-on from astern (issue 225). Driven by the luff value alone.
         const wave =
           flog * chord * trim.flutterAmp * burst * (Math.sin(fu * 9 - time * trim.flutterW + fv * 5) + 0.45 * Math.sin(fu * 17 - time * trim.flutterW * 1.9 + fv * 9 + 1.1)) * (0.2 + 1.15 * fu * fu);
-        const x = luff.x + cx * chord * fu + nx * depth - cz * wave;
+        rowX[u] = luff.x + cx * chord * fu + nx * depth - cz * wave;
+        rowZ[u] = luff.z + cz * chord * fu + nz * depth + cx * wave;
+      }
+      // Against the shrouds, not through them (the mainsail).
+      if (wires) drapeRow(rowX, rowZ, luff.x, luff.z, luff.y, wires);
+      for (let u = 0; u <= nu; u++) {
+        const x = rowX[u]!;
         const y = luff.y;
-        const z = luff.z + cz * chord * fu + nz * depth + cx * wave;
+        const z = rowZ[u]!;
         pos.setXYZ(k++, x, y, z);
         if (u === Math.round(nu * 0.4)) {
           const w = chord;
@@ -1230,19 +1337,23 @@ export class SquibModel {
     const footMain = this.p.main.foot;
     const headMainY = this.mastTopY - 0.1;
     const flat = this.type === 'new-sails' ? 0.35 : 0;
-    this.boom.rotation.y = -main.angle;
+    // The boom stops where it meets the lower shroud (the physics' 85° is a few degrees past the drawn wire); the sail
+    // is drawn at the same angle, so its foot stays along the boom.
+    const mainDrawn = Math.abs(main.angle) > this.boomStop ? { ...main, angle: Math.sign(main.angle) * this.boomStop } : main;
+    this.boom.rotation.y = -mainDrawn.angle;
     this.shapeSail(
       this.mainGeo,
       SquibModel.MAIN_U,
       SquibModel.MAIN_V,
       (v) => new THREE.Vector3(0, GOOSENECK_Y + 0.05 + v * (headMainY - GOOSENECK_Y - 0.05), MAST_Z + 0.05),
       (v) => Math.max(0.12, footMain * (1 - v) + 0.12 * v + 0.35 * Math.sin(Math.PI * v) * (1 - v)),
-      main,
+      mainDrawn,
       9,
       time,
       this.anchors.mainCE,
       flat,
       sailTrim(params.flatten ?? 0, params.mainEase ?? 0.3, aws),
+      this.shroudWires,
     );
 
     // Jib: luff along the forestay from tack to hounds.
