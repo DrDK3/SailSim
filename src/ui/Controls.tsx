@@ -3,7 +3,7 @@ import type { SimController, UiState } from '../app/controller';
 import { deg, pct } from './format';
 import { SLACK_RAD, sailAdvice, sailState } from '../app/sailStatus';
 import { plainWords } from '../app/flags';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { helmAction, type SteeringMode } from '../app/steering';
 import { spinnakerWords } from '../app/spinnakerWords';
 import { TrustNote } from './trust';
@@ -94,7 +94,17 @@ export function helmReadout(rudder: number): string {
   return `${d}° → ${rudder > 0 ? 'stbd' : 'port'}`;
 }
 
+/**
+ * A control that acts while held (steering, the sheets). Design handover item 2: it works through every input route.
+ * - A pointer (mouse, touch, pen): held from press to release, as before.
+ * - The keyboard on the focused button (W3C button pattern): Space or Enter held acts while held; key repeats do
+ *   nothing more. Both key handlers cancel the key's default action, so the browser makes no click from the key.
+ * - A click with no pointer or key behind it (assistive technology, voice control, a switch): one bounded activation
+ *   (SimController.tap).
+ * Losing the focus lets go; so do the window losing the keys and the page being hidden (the controller).
+ */
 function Hold({ ctl, action, children, label, hint, className }: { ctl: SimController; action: string; children: ReactNode; label: string; hint?: boolean; className?: string }) {
+  const keyHeld = useRef(false);
   const on = (e: ReactPointerEvent) => {
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -104,6 +114,34 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
     ctl.press(action, true);
   };
   const off = () => ctl.press(action, false);
+  const isActivationKey = (e: ReactKeyboardEvent) => e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar';
+  const keyOn = (e: ReactKeyboardEvent) => {
+    if (!isActivationKey(e)) return;
+    // Cancelling the keydown stops Enter's click; cancelling the keyup below stops Space's.
+    e.preventDefault();
+    if (keyHeld.current || e.repeat) return;
+    keyHeld.current = true;
+    ctl.press(action, true);
+  };
+  const keyOff = (e: ReactKeyboardEvent) => {
+    if (!isActivationKey(e)) return;
+    e.preventDefault();
+    if (!keyHeld.current) return;
+    keyHeld.current = false;
+    ctl.press(action, false);
+  };
+  const click = (e: ReactMouseEvent) => {
+    // A pointer's click (detail ≥ 1) was handled by the press and release; a held key by the key handlers. No time
+    // window after a key: it swallowed real clicks that came soon after one (CI, 24 Nov 2026).
+    if (e.detail !== 0 || keyHeld.current) return;
+    ctl.tap(action);
+  };
+  const blur = () => {
+    if (keyHeld.current) {
+      keyHeld.current = false;
+      ctl.press(action, false);
+    }
+  };
   return (
     <button
       className={`hold${hint ? ' suggest' : ''}${className ? ` ${className}` : ''}`}
@@ -112,6 +150,10 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
       onPointerUp={off}
       onPointerCancel={off}
       onPointerLeave={off}
+      onKeyDown={keyOn}
+      onKeyUp={keyOff}
+      onClick={click}
+      onBlur={blur}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* The name is the full label, from the content (WCAG 2.5.3, label in name: axe flagged aria-label "Trim main (W)"
@@ -320,7 +362,14 @@ function SpinnakerButtons({ ctl, ui }: { ctl: SimController; ui: UiState }) {
  * Expert (review #25): the flattening controls one by one (each follows Flat until moved, and "Follow Flat" hands it
  * back), the jib lead, and the spinnaker trimmed by hand. Effects are estimates (E, docs/PHYSICS.md §23).
  */
+/**
+ * Expert's sail controls: a non-modal panel beside the console (sailing goes on while it is open). Keyboard behaviour
+ * as the other panels (design handover item 8): focus moves to its heading when it opens; Escape inside it, or Close,
+ * shuts it and returns focus to the "Sails…" button that opened it.
+ */
 function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; onClose: () => void }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
   const s = ui.snapshot;
   const c = s.sailControls ?? { kicker: s.input.flatten ?? 0, cunningham: s.input.flatten ?? 0, outhaul: s.input.flatten ?? 0, jibLead: 0 };
   const row = (k: 'kicker' | 'cunningham' | 'outhaul', label: string, hint: string) => (
@@ -332,10 +381,26 @@ function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; o
     </label>
   );
   return (
-    <div className="panel sail-controls" role="dialog" aria-label="Sail controls" data-testid="sail-controls">
+    <div
+      className="panel sail-controls"
+      role="dialog"
+      aria-labelledby="sail-controls-title"
+      data-testid="sail-controls"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        // Close this panel only: the app's Escape (which closes the big panels) does not need to run as well.
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        onClose();
+      }}
+    >
       <div className="sc-head">
-        <strong>Sail controls</strong>
-        <button onClick={onClose} aria-label="Close the sail controls">Close</button>
+        <h3 id="sail-controls-title" ref={heading} tabIndex={-1} className="sc-title">
+          Sail controls
+        </h3>
+        <button onClick={onClose} aria-label="Close the sail controls" data-testid="sail-controls-close">
+          Close
+        </button>
       </div>
       {row('kicker', 'Kicker', 'pulls the boom down: a flatter, straighter leech')}
       {row('cunningham', 'Cunningham', 'tightens the luff: the draft forward, less power')}
@@ -375,6 +440,12 @@ function SailControls({ ctl, ui, onClose }: { ctl: SimController; ui: UiState; o
 
 export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState; onHide?: () => void }) {
   const [sailControls, setSailControls] = useState(false);
+  const sailsButton = useRef<HTMLButtonElement>(null);
+  /** Close the sail controls and give focus back to the button that opened them (item 8). */
+  const closeSailControls = () => {
+    setSailControls(false);
+    sailsButton.current?.focus();
+  };
   const s = ui.snapshot;
   const tillerMode = ui.steering === 'tiller';
   // At the Learn level the console leaves out the advanced controls (src/app/level.ts); the keys still work.
@@ -445,13 +516,13 @@ export function Controls({ ctl, ui, onHide }: { ctl: SimController; ui: UiState;
         <div className="spin-tab" role="group" aria-label="Spinnaker and sail controls">
           <SpinnakerButtons ctl={ctl} ui={ui} />
           {ui.level === 'expert' && (
-            <button aria-expanded={sailControls} onClick={() => setSailControls(!sailControls)} title="Kicker, cunningham, outhaul, jib lead and the spinnaker's sheet, one by one" data-testid="sail-controls-open">
+            <button ref={sailsButton} aria-expanded={sailControls} aria-haspopup="dialog" onClick={() => setSailControls(!sailControls)} title="Kicker, cunningham, outhaul, jib lead and the spinnaker's sheet, one by one" data-testid="sail-controls-open">
               Sails…
             </button>
           )}
         </div>
       )}
-      {sailControls && ui.level === 'expert' && <SailControls ctl={ctl} ui={ui} onClose={() => setSailControls(false)} />}
+      {sailControls && ui.level === 'expert' && <SailControls ctl={ctl} ui={ui} onClose={closeSailControls} />}
       {onHide && (
         <button className="controls-hide" onClick={onHide} title="Put the controls away (the keys still work; Settings → Sailing controls brings them back)" aria-label="Hide sailing controls">
           <span aria-hidden="true">▾</span>

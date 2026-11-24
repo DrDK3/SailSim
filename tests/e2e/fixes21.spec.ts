@@ -105,15 +105,16 @@ test('§2.4: at Learn the wind is in words, the angle small alongside; at Club t
   expect(errors).toEqual([]);
 });
 
-test('§3.1: Settings → Advanced, five switches (axe-clean); plain words off gives Learn the Club words', async ({ page }) => {
+test('§3.1: Settings → Advanced, the switches (axe-clean); plain words off gives Learn the Club words', async ({ page }) => {
   test.setTimeout(180_000 * CI_SLOW);
   const errors = await ready(page);
   await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
   await expect(page.getByTestId('settings-panel')).toBeVisible({ timeout: 30_000 * CI_SLOW });
   const flags = page.getByTestId('feature-flags');
   await flags.scrollIntoViewIfNeeded();
-  await expect(flags.getByRole('checkbox')).toHaveCount(5);
-  for (const f of ['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap']) await expect(page.getByTestId(`flag-${f}`)).toBeChecked();
+  // Six since the design handover of 23 Nov 2026 (raceRetry, its item 10's prototype, on).
+  await expect(flags.getByRole('checkbox')).toHaveCount(6);
+  for (const f of ['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap', 'raceRetry']) await expect(page.getByTestId(`flag-${f}`)).toBeChecked();
   await expect(page.getByTestId('flag-markRoomPenalties')).not.toBeChecked();
   const axe = await new AxeBuilder({ page }).include('[data-testid="feature-flags"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);

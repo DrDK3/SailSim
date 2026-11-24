@@ -162,7 +162,9 @@ describe('a learner who holds on', () => {
     expect(s.records[0]!.values.lateTackS).toBeUndefined();
     const decision = s.review!.find((i) => i.id === 'decision')!;
     expect(decision.observation).toContain(`you held starboard for ${T.decisionWindowS} s or more`);
-    expect(decision.action).toMatch(/consider tacking onto the lifted tack/);
+    expect(decision.action).toMatch(/try tacking soon after your heading drops/);
+    // A comparison to try in this exercise, not a universal rule (design handover item 5).
+    expect(decision.action).toMatch(/in this model/);
     expect(s.review!.some((i) => i.id === 'prediction')).toBe(false);
   }, 60_000);
 

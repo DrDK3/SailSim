@@ -1,4 +1,5 @@
 import file from '../../../data/exercises/thresholds.json' with { type: 'json' };
+import { persist } from '../storage';
 
 /**
  * The exercises' thresholds (data/exercises/thresholds.json): every value is the simulator's provisional choice (E),
@@ -59,8 +60,7 @@ export function mergeThresholds(raw: unknown): Thresholds {
 /** Keep an instructor's thresholds in this browser; returns false when storage is unavailable. */
 export function saveThresholds(t: Partial<Record<keyof Thresholds, Record<string, number>>>): boolean {
   try {
-    localStorage.setItem(KEY, JSON.stringify(t));
-    return true;
+    return persist(KEY, JSON.stringify(t), 'the instructor’s thresholds');
   } catch {
     return false;
   }

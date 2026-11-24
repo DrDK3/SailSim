@@ -25,7 +25,7 @@ async function open(page: Page): Promise<string[]> {
   return errors;
 }
 
-test('loads, renders a canvas, and the simulation runs without errors', async ({ page }) => {
+test('loads, renders a canvas, and the simulation runs without errors', { tag: '@critical' }, async ({ page }) => {
   const errors = await open(page);
   await expect(page.locator('[data-testid="viewport"] canvas')).toBeVisible();
   const t0 = (await snap(page)).t;
@@ -34,7 +34,7 @@ test('loads, renders a canvas, and the simulation runs without errors', async ({
   expect(errors).toEqual([]);
 });
 
-test('keyboard helm and sheet controls change the boat', async ({ page }) => {
+test('keyboard helm and sheet controls change the boat', { tag: '@critical' }, async ({ page }) => {
   await open(page);
   const before = await snap(page);
   await page.keyboard.down('KeyD');
@@ -367,7 +367,7 @@ test('Phase 4: course editor: add a mark, live check, import, export', async ({ 
   expect(errors).toEqual([]);
 });
 
-test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, results', async ({ page }) => {
+test('Phase 5: a race against AI boats: flags, the fleet in 3D and on the map, results', { tag: '@critical' }, async ({ page }) => {
   test.setTimeout(240_000 * CI_SLOW);
   const errors = await open(page);
   await page.getByRole('button', { name: 'Race', exact: true }).click();

@@ -20,10 +20,21 @@ describe('the Learn map', () => {
     expect(nextStep(steps).id).toBe('lesson:steer');
   });
 
-  it('a finished lesson is done with its best; the next step is the first not done', () => {
-    const steps = learnSteps({ ...NONE, lessons: { steer: { done: true, bestS: 95, at: '2026-11-20T10:00:00Z' } } });
-    expect(steps[0]).toMatchObject({ done: true, note: 'Best 1:35' });
+  it('a lesson sailed in full is done; the next step is the first not done', () => {
+    const steps = learnSteps({ ...NONE, lessons: { steer: { done: true, at: '2026-11-23T10:00:00Z', completedAt: '2026-11-23T10:00:00Z' } } });
+    expect(steps[0]).toMatchObject({ done: true, note: undefined });
     expect(nextStep(steps).id).toBe('lesson:wind');
+  });
+
+  it('a lesson whose end was reached with steps skipped is started, not done, and says so (design handover item 3)', () => {
+    const steps = learnSteps({ ...NONE, lessons: { steer: { done: false, at: '2026-11-23T10:00:00Z', skipped: ['Turn the boat', 'Sail to the buoy'] } } });
+    expect(steps[0]).toMatchObject({ done: false, started: true, note: '2 steps skipped last time' });
+    expect(nextStep(steps).id).toBe('lesson:steer');
+  });
+
+  it('a record from before 23 Nov 2026 stays done, marked as an earlier record', () => {
+    const steps = learnSteps({ ...NONE, lessons: { steer: { done: true, bestS: 95, at: '2026-11-20T10:00:00Z', legacy: true } } });
+    expect(steps[0]).toMatchObject({ done: true, note: 'Done (an earlier record)' });
   });
 
   it('an exercise is done only when an attempt was completed; tried but not completed is "started"', () => {
@@ -57,7 +68,7 @@ describe('the Learn map', () => {
   it('a step started from the map is marked started until it is done', () => {
     const steps = learnSteps({ ...NONE, started: ['lesson:wind', 'lesson:steer'] });
     expect(steps.find((s) => s.id === 'lesson:wind')!.started).toBe(true);
-    const doneToo = learnSteps({ ...NONE, started: ['lesson:steer'], lessons: { steer: { done: true, bestS: 60, at: '' } } });
+    const doneToo = learnSteps({ ...NONE, started: ['lesson:steer'], lessons: { steer: { done: true, at: '' } } });
     expect(doneToo[0]).toMatchObject({ done: true, started: false });
   });
 

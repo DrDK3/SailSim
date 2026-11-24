@@ -5,8 +5,9 @@ import { useTrust } from './trust';
 import { loadLessonProgress } from '../app/lessons';
 import { loadRuns } from '../app/exercises/records';
 import { loadBests } from '../app/bests';
+import { SUPPORT_TERMS } from '../app/assists';
 import { DEFAULT_QUICK_RACE, dailyChallenge } from '../app/quickRace';
-import { learnSteps, loadStarted, nextStep, noteStarted, type LearnGroup, type LearnStep } from '../app/learnMap';
+import { learnSteps, loadStarted, nextStep, noteStarted, type LearnGroup, type LearnStep, TICK_MEANING, TICKS_ARE } from '../app/learnMap';
 
 /**
  * The Learn map (review #13, package D): the lessons, the two exercises and the challenges in one order, each marked
@@ -43,7 +44,17 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
   const next = nextStep(steps);
   const doneCount = steps.filter((s) => s.done).length;
 
+  /** The step is the activity under way now: its button goes back to it rather than starting it again (item 8). */
+  const running = (s: LearnStep) =>
+    (s.action.kind === 'lesson' && ui.tutorial?.lesson.id === s.action.id && !ui.tutorial.result) || (s.action.kind === 'exercise' && ui.exercise?.info.id === s.action.id && ui.exercise.state.stage !== 'result');
+  /** What the button does, in words: back to it (resumes), start again (restarts from the beginning), or start. */
+  const verb = (s: LearnStep) => (running(s) ? 'Back to it' : s.done ? 'Go again' : s.started ? 'Start again' : 'Start');
+
   const start = (s: LearnStep) => {
+    if (running(s)) {
+      onClose();
+      return;
+    }
     setStarted(noteStarted(s.id, started));
     const a = s.action;
     if (a.kind === 'race') {
@@ -67,7 +78,7 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
     if (!attempts.length) return undefined;
     const own = attempts.filter((a) => a.independent).length;
     const changed = runs.some((r) => r.exercise === id && r.thresholdsChanged);
-    return `Assist record: ${own} of ${attempts.length} on their own, ${attempts.length - own} assisted${changed ? '; thresholds changed for this browser' : '; shipped thresholds (provisional, E)'}.`;
+    return `Assist record: ${own} of ${attempts.length} ${SUPPORT_TERMS.independent}, ${attempts.length - own} ${SUPPORT_TERMS.assisted}${changed ? '; thresholds changed for this browser' : '; shipped thresholds (provisional, E)'}.`;
   };
 
   return (
@@ -80,7 +91,7 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
           </button>
         </div>
         <p className="fine" data-testid="learn-map-progress">
-          {doneCount} of {steps.length} done. Kept in this browser only.
+          {doneCount} of {steps.length} done. Kept in this browser only. {TICKS_ARE}
         </p>
         <div className="learn-next" data-testid="learn-next">
           <p>
@@ -88,7 +99,7 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
             {next.minutes ? ` (about ${next.minutes} min)` : ''}. <span className="lesson-summary">{next.summary}</span>
           </p>
           <button className="primary" onClick={() => start(next)} data-testid="learn-next-start">
-            {next.done ? 'Go again' : next.started ? 'Carry on' : 'Start'}: {next.title}
+            {verb(next)}: {next.title}
           </button>
         </div>
         {GROUPS.map(({ group, intro }) => (
@@ -96,7 +107,9 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
             <h3 id={`learn-${group}`} className="learn-group">
               {group}
             </h3>
-            <p className="fine">{intro}</p>
+            <p className="fine">
+              {intro} <span data-testid={`learn-tick-${group}`}>{TICK_MEANING[group]}</span>
+            </p>
             <ol className="lesson-list">
               {steps
                 .filter((s) => s.group === group)
@@ -119,15 +132,18 @@ export function LearnMapDialog({ ctl, ui, onClose, onOpenRace }: { ctl: SimContr
                         </>
                       )}
                     </span>
-                    <button onClick={() => start(s)} aria-label={`${s.done ? 'Again' : 'Start'}: ${s.title}`}>
-                      {s.done ? 'Again' : 'Start'}
+                    <button onClick={() => start(s)} aria-label={`${running(s) ? 'Back to it' : s.done ? 'Again' : s.started ? 'Start again' : 'Start'}: ${s.title}`}>
+                      {running(s) ? 'Back to it' : s.done ? 'Again' : s.started ? 'Start again' : 'Start'}
                     </button>
                   </li>
                 ))}
             </ol>
           </section>
         ))}
-        <p className="fine">The lessons and exercises are also in Settings → Lessons; races, today&apos;s challenge and the weekly course in Race. Nothing here replaces them.</p>
+        <p className="fine">
+          “Back to it” returns to the activity under way; “Start again” starts it from the beginning (lessons and exercises do not resume part-way). The
+          lessons and exercises are also in Settings → Lessons; races, today&apos;s challenge and the weekly course in Race. Nothing here replaces them.
+        </p>
       </section>
     </div>
   );

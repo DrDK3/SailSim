@@ -5,7 +5,7 @@ import type { InterfaceLevel } from './level';
  * kept in this browser. With a switch off, the simulator behaves as `main` did before the package that added the
  * feature. Storage can be unavailable (a private window): then every switch has its default.
  */
-export type FeatureFlag = 'spinnaker' | 'riverHotSwap' | 'plainLanguage' | 'learnMap' | 'markRoomPenalties';
+export type FeatureFlag = 'spinnaker' | 'riverHotSwap' | 'plainLanguage' | 'learnMap' | 'markRoomPenalties' | 'raceRetry';
 
 export interface FlagSpec {
   label: string;
@@ -41,9 +41,14 @@ export const FEATURE_FLAGS: Record<FeatureFlag, FlagSpec> = {
     off: 'Rule 18 is advisory: the judge notes who should have given mark-room but rules and penalises as before package F. On: the boat owing mark-room takes the penalty. Off until the club has reviewed the rule.',
     defaultOn: false,
   },
+  raceRetry: {
+    label: 'After a race: one observation and Race it again (prototype)',
+    off: 'The results show the table, the story and the buttons only, as before the design handover of 23 Nov 2026.',
+    defaultOn: true,
+  },
 };
 
-export const FLAG_ORDER: FeatureFlag[] = ['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap', 'markRoomPenalties'];
+export const FLAG_ORDER: FeatureFlag[] = ['spinnaker', 'riverHotSwap', 'plainLanguage', 'learnMap', 'markRoomPenalties', 'raceRetry'];
 
 const KEY = (f: FeatureFlag) => `squib.flag.${f}`;
 

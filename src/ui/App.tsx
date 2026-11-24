@@ -2,7 +2,7 @@ import { presetLabel } from '../render/graphics';
 import { featureOn } from '../app/flags';
 import { ChallengeCard, SocialResult } from './Social';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { SimController } from '../app/controller';
+import type { SimController, UiState } from '../app/controller';
 import { Instruments } from './Instruments';
 import { DamageBanner, DamageCard } from './DamageCard';
 import { Controls } from './Controls';
@@ -23,6 +23,7 @@ import { TutorialPanel } from './TutorialPanel';
 import { ExercisePanel } from './ExercisePanel';
 import { ExperienceHub, markWelcomed, shouldWelcome } from './Welcome';
 import { hasStoredLevel } from '../app/level';
+import { storageNotice } from '../app/storage';
 import { Confirm } from './Confirm';
 import { MastheadInset } from './MastheadInset';
 import { activityOf } from './activity';
@@ -84,6 +85,8 @@ export function App({ ctl }: { ctl: SimController }) {
   // The "resolution lowered" notice: said once a visit, until dismissed or for a quarter of a minute (owner, 18 Nov
   // 2026: it stayed up and could not be dismissed). Settings → Graphics shows the resolution in use at any time.
   const [qualityNoteDone, setQualityNoteDone] = useState(false);
+  // The saving notice, dismissed for the failure it reported (a different failure shows it again).
+  const [saveNoteDone, setSaveNoteDone] = useState<string | undefined>(undefined);
   const lowered = ui.dynamicScale !== undefined;
   useEffect(() => {
     if (!lowered || qualityNoteDone) return;
@@ -284,8 +287,19 @@ export function App({ ctl }: { ctl: SimController }) {
   // Notices (paused, running slow, resolution lowered, preparing): at the top right under the toolbar, above any open
   // side panel, and above the console on a phone; never at the top centre, where the masthead and its wind indicator
   // are (review #3, 20 Nov 2026).
+  const save = storageNotice(ui.saveStatus);
+  const saveKey = `${ui.saveStatus.state}:${ui.saveStatus.what ?? ''}`;
   const notices = (
     <>
+      {save && saveNoteDone !== saveKey && (
+        // Design handover item 1: a failed save says so, and what to do, instead of failing silently.
+        <div className="banner save-note" role="alert" data-testid="save-status">
+          <strong>{save.title}</strong> <span className="fine">{save.detail}</span>
+          <button className="pill-close" onClick={() => setSaveNoteDone(saveKey)} aria-label="Dismiss this notice" title="Dismiss" data-testid="save-status-dismiss">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      )}
       {ui.paused && (
         <div className="banner paused-pill" role="status">
           {ui.replay?.finished ? 'End of the replay: “Take over” to sail on' : 'Paused (P to resume)'}
@@ -348,7 +362,7 @@ export function App({ ctl }: { ctl: SimController }) {
       {/* On a phone the strip carries the arrow to the next mark; a second one at the edge would only cover water. */}
       {ui.race && !narrow && <MarkPointer ctl={ctl} />}
       <nav ref={toolbar} className={`panel toolbar ${toolsOpen ? 'open' : ''}`} aria-label="Simulation" data-density={density}>
-        <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>
+        <button className="tb-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)} title={`The activity (now ${activity.label}) and the other ways to sail, settings and tools`}>
           {toolsOpen ? 'Close menu' : 'Menu'}
         </button>
         <div className="tb-items">
@@ -527,7 +541,7 @@ export function App({ ctl }: { ctl: SimController }) {
       )}
       <Suspense fallback={null}>{ui.showLayers && <LayersPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleLayers(false)} />}</Suspense>
       <Suspense fallback={null}>{ui.showSettings && <SettingsPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleSettings(false)} />}</Suspense>
-      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} race={ui.race} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} />}</Suspense>
+      <Suspense fallback={null}>{ui.race?.results && ui.showResults && <ResultsPanel rows={ui.race.results} final={ui.race.raceOver} race={ui.race} onClose={() => ctl.toggleResults(false)} onDebrief={() => ctl.toggleDebrief(true)} onProtest={ui.protest.count ? () => ctl.toggleProtestRoom(true) : undefined} onShare={ui.social.finish ? undefined : () => copyShareLink(ctl)} next={featureOn('raceRetry') && !ui.replay ? { observation: raceObservation(ui), onAgain: () => void ctl.raceAgain(), onOther: () => { ctl.toggleResults(false); openHub(); }, onFree: () => { ctl.toggleResults(false); ctl.freeSail(); } } : undefined} />}</Suspense>
       {ui.race?.results && ui.showResults && <SocialResult ctl={ctl} ui={ui} />}
       <ChallengeCard ctl={ctl} ui={ui} />
       <Suspense fallback={null}>{ui.showDebrief && <DebriefPanel ctl={ctl} ui={ui} onClose={() => ctl.toggleDebrief(false)} />}</Suspense>
@@ -592,4 +606,15 @@ async function copyShareLink(ctl: SimController): Promise<string | undefined> {
     return `Copy this link: ${r.url}`;
   }
   return `Link copied: whoever opens it races you as a ghost.${r.long ? ' It is long: if a messaging app cuts it short, save the replay file (Scenarios and replays) and send that.' : ''}`;
+}
+
+/**
+ * The one observation offered after a race (design handover item 10): the coach's first thing to work on, else its
+ * first thing done well, from the debrief (whose messages name what they were measured from: item 5).
+ */
+function raceObservation(ui: UiState): string | undefined {
+  const d = ui.coach?.debrief;
+  if (!d) return undefined;
+  const item = d.items.find((i) => i.verdict === 'work') ?? d.items.find((i) => i.verdict === 'good');
+  return item ? `${item.area}: ${item.text}` : undefined;
 }

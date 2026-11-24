@@ -2,6 +2,7 @@
 import { parseCourse } from '../sim/course/course';
 import { practiceCourse, PRACTICE_KINDS, type PracticeKind } from '../sim/course/practice';
 import type { Course } from '../sim/course/types';
+import { persist } from './storage';
 
 /**
  * Where courses come from:
@@ -55,8 +56,7 @@ export function saveUserCourse(course: Course): boolean {
   try {
     const list = userCourses().filter((c) => c.id !== course.id).map((c) => c.course);
     list.push(course);
-    localStorage.setItem(USER_KEY, JSON.stringify(list));
-    return true;
+    return persist(USER_KEY, JSON.stringify(list), 'your saved courses');
   } catch {
     return false;
   }
@@ -64,7 +64,7 @@ export function saveUserCourse(course: Course): boolean {
 
 export function deleteUserCourse(id: string): void {
   try {
-    localStorage.setItem(USER_KEY, JSON.stringify(userCourses().filter((c) => c.id !== id).map((c) => c.course)));
+    persist(USER_KEY, JSON.stringify(userCourses().filter((c) => c.id !== id).map((c) => c.course)), 'your saved courses');
   } catch {
     // storage unavailable: nothing to delete
   }

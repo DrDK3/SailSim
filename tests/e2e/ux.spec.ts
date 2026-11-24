@@ -70,20 +70,25 @@ test.describe('first visit', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a lesson ends on a result card that offers the next lesson; the list of lessons shows what is done', async ({ page }) => {
+  test('a lesson ends on a result card that offers the next lesson; skipping its steps reaches the end but does not complete it', { tag: '@critical' }, async ({ page }) => {
     test.setTimeout(180_000 * CI_SLOW);
     await ready(page);
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.__squib!.controller.startLesson('steer'));
     const card = page.getByTestId('tutorial');
     for (let i = 0; i < 3; i++) await card.getByRole('button', { name: /^(Next|Skip step)$/ }).click();
-    await expect(page.getByTestId('tutorial-title')).toHaveText('✓ Lesson 1 complete: Steering');
+    // Design handover item 3: the end reached by skipping, said plainly; not marked complete; no time to beat.
+    await expect(page.getByTestId('tutorial-title')).toHaveText('Lesson 1: Steering, end reached');
+    await expect(page.getByTestId('lesson-skipped')).toContainText('you skipped 2 of the 2 steps to sail');
     await expect(page.getByTestId('lesson-result')).toContainText('You skipped the buoy');
+    await expect(page.getByTestId('lesson-result')).not.toContainText('Lesson time');
+    await expect(page.getByTestId('lesson-repeat')).toHaveText('Try again');
     await expect(page.getByTestId('lesson-next')).toHaveText('Next: The wind');
     await card.getByRole('button', { name: 'All lessons' }).click();
     const list = page.getByTestId('lesson-list');
     await expect(list.locator('li')).toHaveCount(6);
-    await expect(list.locator('li').first()).toHaveClass(/done/);
+    await expect(list.locator('li').first()).not.toHaveClass(/done/);
+    await expect(list.locator('li').first()).toContainText('2 steps skipped last time');
     await card.getByRole('button', { name: 'Back to the lesson' }).click();
     await page.getByTestId('lesson-next').click();
     await expect(card).toContainText('Lesson 2 of 6 · The wind');

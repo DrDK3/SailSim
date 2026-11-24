@@ -235,7 +235,7 @@ export function windShiftExercise(t: WindShiftThresholds, steering: SteeringMode
     const out: ReviewItem[] = [];
     const decided = decisionOf(rec);
     if (decided === 'skipped') {
-      out.push({ id: 'decision', observation: 'The beat was skipped before the wind shifted: there is no decision to judge.' });
+      out.push({ id: 'decision', observation: 'The beat was skipped before the wind shifted: there is no decision to judge.', basis: 'the steps skipped in the attempt' });
     } else {
       const decisionText =
         decided === 'tack'
@@ -253,24 +253,26 @@ export function windShiftExercise(t: WindShiftThresholds, steering: SteeringMode
             ? undefined
             : matched
               ? 'That matched the faster choice in this model.'
-              : c.better === 'tack-on-header'
-                ? 'Next time: when your heading drops and stays down, consider tacking onto the lifted tack sooner.'
-                : 'Next time: in this model holding on was faster here; tack at the layline.';
-      out.push({ id: 'decision', observation: decisionText, cause: modelLine(c), action });
+              : // Design handover item 5: a comparison to try in this exercise, not a universal tactical rule.
+                c.better === 'tack-on-header'
+                ? 'Next attempt: try tacking soon after your heading drops and stays down, and compare your time. With this shift, in this model, that was faster; on the water it depends on the shift and the course.'
+                : 'Next attempt: try holding on to the layline, and compare your time. With this shift, in this model, that was faster; on the water it depends on the shift and the course.';
+      out.push({ id: 'decision', observation: decisionText, cause: modelLine(c), action, basis: 'when you tacked after the shift began (from the boat’s track), and the times of the two model demonstrations from the same start' });
       if (rec.prediction && rec.prediction !== 'unsure')
         out.push({
           id: 'prediction',
           observation: `You predicted: ${PREDICTIONS[rec.prediction as Prediction]?.toLowerCase() ?? rec.prediction}. You ${decided === 'tack' ? 'tacked' : decided === 'late' ? 'tacked, later' : decided === 'hold' ? 'held on' : 'were on port'}.`,
+          basis: 'your prediction before the beat, and the decision recorded',
         });
     }
-    if (rec.skipped.includes('beat')) out.push({ id: 'outcome', observation: 'Outcome: the beat was skipped before the mark.' });
+    if (rec.skipped.includes('beat')) out.push({ id: 'outcome', observation: 'Outcome: the beat was skipped before the mark.', basis: 'the steps skipped in the attempt' });
     else if (v.markS !== undefined) {
       // The demonstration of the same decision, where there is one (a late tack lies between the two).
       const demoOfYours = decided === 'tack' ? c.tack.timeS : decided === 'hold' ? c.hold.timeS : undefined;
       const diff = demoOfYours !== undefined ? v.markS - demoOfYours : undefined;
       const cause =
         diff !== undefined
-          ? `The model demonstration of the same decision took ${f0(demoOfYours)} s: the ${Math.abs(diff) < 1 ? 'same' : `${f0(Math.abs(diff))} s ${diff > 0 ? 'slower' : 'faster'}`} came from sailing the boat (speed, pointing, tacks, laylines), not from the decision.`
+          ? `The model demonstration of the same decision took ${f0(demoOfYours)} s${Math.abs(diff) < 1 ? ', the same as you' : `: you were ${f0(Math.abs(diff))} s ${diff > 0 ? 'slower' : 'faster'}`}. The decision was the same, so ${Math.abs(diff) < 1 ? 'the beat was sailed about as well' : 'the difference is in how the beat was sailed'}: the chart shows both tracks (speed, pointing, the number of tacks and overstanding the layline all count; this compares one attempt with one model run).`
           : decided === 'late' && c.tack.timeS !== undefined && c.hold.timeS !== undefined
             ? `There is no demonstration of a tack this late: in this model tacking 8 s after the shift took ${f0(c.tack.timeS)} s and holding on ${f0(c.hold.timeS)} s.`
             : undefined;
@@ -279,8 +281,9 @@ export function windShiftExercise(t: WindShiftThresholds, steering: SteeringMode
         observation: `Outcome: you reached the mark in ${f0(v.markS)} s, with ${f0(v.tacks)} tack${v.tacks === 1 ? '' : 's'}.`,
         cause,
         action: diff !== undefined && diff > 30 ? 'Next time: tack only when you mean to, and sail close-hauled at full speed between tacks; the beginner exercise practises both.' : undefined,
+        basis: 'the time to the mark and the tacks counted from the boat’s track, against the model demonstration of the same decision',
       });
-    } else out.push({ id: 'timeout', observation: `Outcome: the mark was not reached within ${t.timeLimitS} s.` });
+    } else out.push({ id: 'timeout', observation: `Outcome: the mark was not reached within ${t.timeLimitS} s.`, basis: 'the time limit' });
     const tr = trace(rec.n);
     charts.set(rec.n, {
       mark: [setup.mark.n, setup.mark.e],

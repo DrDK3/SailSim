@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SimController, UiState } from '../app/controller';
-import type { ExerciseId } from '../app/exercises/index';
+import type { ExerciseId, ExerciseInfo } from '../app/exercises/index';
+import { SUPPORT_TERMS, supportForTask } from '../app/assists';
 import type { AttemptRecord, ReviewChart } from '../app/exercises/engine';
 import { InstructorOnly } from './trust';
+import { KUDOS_SETTINGS } from '../app/exercises/kudos';
 
 /**
  * An exercise's card (training slice §7–§8): the phase and its goal, the help on show with its level in words
@@ -63,6 +65,9 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </div>
           ))}
         </div>
+        <p className="fine" data-testid="support-definition">
+          {SUPPORT_TERMS.definition} In this exercise the task is {x.info.task.focus}.
+        </p>
         {r.observations.length > 0 && (
           <>
             <h4>What we saw</h4>
@@ -75,6 +80,13 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
               ))}
             </ul>
           </>
+        )}
+        {ui.prefs.kudos !== 'off' && s.records.some((rec) => rec.kudos) && (
+          <div data-testid="result-kudos">
+            {s.records.filter((rec) => rec.kudos).map((rec) => (
+              <KudosLine key={rec.n} kudos={rec.kudos!} prefix={`Attempt ${rec.n}: `} />
+            ))}
+          </div>
         )}
         <p data-testid="result-next">
           <strong>Next:</strong> {r.nextAction.replace(/^Next( time)?: /, '')}
@@ -120,8 +132,9 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </li>
           ))}
         </ul>
+        {ui.prefs.kudos === 'practice' && s.records[s.attempt - 1]?.kudos && <KudosLine kudos={s.records[s.attempt - 1]!.kudos!} testId="attempt-kudos" />}
         {s.extras?.chart && <TrackChart chart={s.extras.chart} />}
-        <p className="fine">{assistLine(s.records[s.attempt - 1])}</p>
+        <p className="fine" data-testid="attempt-support">{assistLine(s.records[s.attempt - 1], x.info.task)}</p>
         <div className="row left wrap">
           <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
             {s.attempt < s.attempts ? `Attempt ${s.attempt + 1}` : 'See the result'}
@@ -188,7 +201,7 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
       </div>}
       {s.stage === 'attempt' && (
         <p className="fine" data-testid="exercise-assists">
-          {s.independentSoFar ? 'On your own so far (no auto-trim, overlay or help).' : `Assisted: ${assistWords(s.assists).join(', ')}.`}
+          {s.independentSoFar ? 'Independent so far (no auto-trim, overlay or help).' : `Assisted so far: ${assistWords(s.assists).join(', ')}.`}
         </p>
       )}
       <div className="row left wrap">
@@ -204,9 +217,23 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
             </button>
           </>
         ) : s.stage === 'intro' ? (
-          <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
-            Start
-          </button>
+          <>
+            <button className="primary" onClick={() => ctl.exerciseNext()} data-testid="exercise-next">
+              Start
+            </button>
+            {x.info.id === 'tack-recover' && (
+              <label className="select" title="A quiet acknowledgement when a tack is clean all the way through (entry, turn, recovery, sails), saying what earned it">
+                <span>Acknowledgement</span>
+                <select value={ui.prefs.kudos} onChange={(e) => ctl.setPrefs({ kudos: e.target.value as UiState['prefs']['kudos'] })} data-testid="kudos-setting">
+                  {KUDOS_SETTINGS.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </>
         ) : (
           <>
             <button onClick={() => ctl.exerciseHelp()} disabled={!s.canAskHelp} data-testid="exercise-help-button">
@@ -228,6 +255,17 @@ export function ExercisePanel({ ctl, ui }: { ctl: SimController; ui: UiState }) 
   );
 }
 
+/** The acknowledgement, and what earned it (so it can be repeated without it: design handover item 11). */
+function KudosLine({ kudos, prefix = '', testId }: { kudos: NonNullable<AttemptRecord['kudos']>; prefix?: string; testId?: string }) {
+  return (
+    <p className="kudos" data-testid={testId}>
+      <span aria-hidden="true">✓ </span>
+      {prefix}
+      {kudos.text} <span className="fine-inline">Earned by: {kudos.basis}.</span>
+    </p>
+  );
+}
+
 function assistWords(a: AttemptRecord['assists']): string[] {
   const out: string[] = [];
   if (a.autoMain) out.push('auto main');
@@ -237,8 +275,10 @@ function assistWords(a: AttemptRecord['assists']): string[] {
   return out.length ? out : ['none'];
 }
 
-function assistLine(r: AttemptRecord | undefined): string {
+function assistLine(r: AttemptRecord | undefined, task?: ExerciseInfo['task']): string {
   if (!r) return '';
+  // Design handover item 7: support described against the task the exercise demonstrates.
+  if (task) return `This attempt: ${supportForTask(r.assists, task).text}`;
   return r.independent ? 'This attempt was independent: no auto-trim, overlay or live help.' : `This attempt was assisted: ${assistWords(r.assists).join(', ')}.`;
 }
 

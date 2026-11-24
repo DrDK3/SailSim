@@ -40,6 +40,7 @@ export function ResultsPanel({
   onDebrief,
   onProtest,
   onShare,
+  next,
 }: {
   rows: FleetRow[];
   final: boolean;
@@ -48,6 +49,11 @@ export function ResultsPanel({
   onDebrief?: () => void;
   onProtest?: () => void;
   onShare?: () => Promise<string | undefined>;
+  /**
+   * What next (design handover item 10, a prototype): one observation from the coach, and Race it again as the main
+   * action, with choosing another activity and sailing freely just as plain.
+   */
+  next?: { observation?: string; onAgain: () => void; onOther: () => void; onFree: () => void };
 }) {
   const [shared, setShared] = useState<string>();
   const story = race?.story;
@@ -106,6 +112,27 @@ export function ResultsPanel({
             </div>
           </div>
         )
+      )}
+      {next && (story || (you && you.code !== undefined)) && (
+        <div className="results-next" data-testid="results-next">
+          {next.observation && (
+            <p data-testid="results-observation">
+              <strong>One thing from the coach:</strong> {next.observation}
+            </p>
+          )}
+          <div className="row left wrap">
+            <button className="primary" onClick={next.onAgain} data-testid="results-again" title="The same course, wind, tide, fleet and settings, so your new time compares with this one">
+              Race it again
+            </button>
+            <button onClick={next.onOther} data-testid="results-other">
+              Choose another activity
+            </button>
+            <button onClick={next.onFree} data-testid="results-free">
+              Sail freely
+            </button>
+          </div>
+          <p className="fine">Race it again: the same course, wind, fleet and settings; your time is compared only with times sailed the same way.</p>
+        </div>
       )}
       {places.length > 0 && (
         <ol className="mark-places" aria-label="Your place at the start and at each mark" data-testid="mark-places">

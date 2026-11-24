@@ -32,7 +32,7 @@ export function ClubTableSection({ ui }: { ctl: SimController; ui: UiState }) {
   return (
     <div className="club-table" data-testid="club-table">
       <p className="fine">
-        <strong>Beat the club:</strong> {best ? `${clockS(best.timeS)} by ${best.name} (${best.category === 'independent' ? 'on their own' : 'with assists'})` : 'no verified times yet this week'}
+        <strong>Beat the club:</strong> {best ? `${clockS(best.timeS)} by ${best.name} (${best.category === 'independent' ? 'independent' : 'assisted'})` : 'no verified times yet this week'}
         {' '}· the model-sailed targets are stepping stones · updated {age} minute{age === 1 ? '' : 's'} ago
       </p>
       {table.entries.length > 0 && (
@@ -46,7 +46,7 @@ export function ClubTableSection({ ui }: { ctl: SimController; ui: UiState }) {
                 <td>{i + 1}</td>
                 <td>{e.name}</td>
                 <td>{clockS(e.timeS)}</td>
-                <td>{e.category === 'independent' ? 'on their own' : 'with assists'}</td>
+                <td>{e.category === 'independent' ? 'independent' : 'assisted'}</td>
               </tr>
             ))}
           </tbody>

@@ -1,0 +1,131 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Design handover of 23 Nov 2026 (docs/HANDOVER_23NOV_REPORT.md), in the browser.
+ */
+const CI_SLOW = process.env.CI ? 2 : 1;
+
+async function ready(page: Page, url = '/?nowelcome&conditions=set&quality=low') {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(url);
+  await expect(page.getByTestId('stw')).toBeVisible({ timeout: 90_000 * CI_SLOW });
+  await page.waitForFunction(() => window.__squib!.controller.getState().dart.status !== 'loading', null, { timeout: 120_000 * CI_SLOW });
+  return errors;
+}
+
+/** The controls held now and the single activations under way (controller internals, for the test). */
+const heldNow = (page: Page) =>
+  page.evaluate(() => {
+    const c = window.__squib!.controller as unknown as { held: Set<string>; taps: Map<string, number> };
+    return { held: [...c.held].sort(), taps: [...c.taps.keys()].sort() };
+  });
+
+test('item 2: a focused steering button works from the keyboard and from a plain click, and lets go', { tag: '@critical' }, async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  await page.evaluate(() => {
+    const c = window.__squib!.controller;
+    if (!c.getState().paused) c.togglePause();
+  });
+  const btn = page.getByRole('button', { name: /^Steer to port/ });
+  await btn.focus();
+  // Space held on the focused button: the control is held; released: let go (W3C button pattern).
+  await page.keyboard.down('Space');
+  expect((await heldNow(page)).held).toEqual(['helmLeft']);
+  await page.keyboard.up('Space');
+  expect(await heldNow(page)).toEqual({ held: [], taps: [] });
+  // Enter the same, and the click the browser makes from it does not act a second time.
+  await page.keyboard.down('Enter');
+  expect((await heldNow(page)).held).toEqual(['helmLeft']);
+  await page.keyboard.up('Enter');
+  await page.waitForTimeout(100);
+  expect(await heldNow(page)).toEqual({ held: [], taps: [] });
+  // A click with no pointer or key behind it (assistive technology): one bounded activation, which lets go as the
+  // boat sails on. Even straight after a key press and release (the keys' own handlers cancel the browser's click from
+  // the key, so there is none to swallow; CI, 24 Nov 2026: a time window here swallowed real clicks on a fast runner).
+  await btn.evaluate((b) => {
+    b.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    b.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, cancelable: true }));
+    (b as HTMLButtonElement).click();
+  });
+  expect(await heldNow(page)).toEqual({ held: ['helmLeft'], taps: ['helmLeft'] });
+  await page.evaluate(() => window.__squib!.controller.advance(0.5));
+  expect(await heldNow(page)).toEqual({ held: [], taps: [] });
+  // Losing the focus while the key is down lets go.
+  await btn.focus();
+  await page.keyboard.down('Space');
+  expect((await heldNow(page)).held).toEqual(['helmLeft']);
+  await btn.evaluate((b) => (b as HTMLButtonElement).blur());
+  expect((await heldNow(page)).held).toEqual([]);
+  await page.keyboard.up('Space');
+  expect(errors).toEqual([]);
+});
+
+test('item 1: during a lesson the device check waits, and says why', async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  await page.evaluate(() => window.__squib!.controller.startLesson('steer'));
+  await page.evaluate(() => window.__squib!.controller.toggleSettings(true));
+  await expect(page.getByTestId('settings-panel')).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  const start = page.getByTestId('device-check-start');
+  await start.scrollIntoViewIfNeeded();
+  await expect(start).toBeDisabled();
+  await expect(page.getByTestId('device-check-blocked')).toContainText('a lesson is under way');
+  // The lesson is still there.
+  expect(await page.evaluate(() => !!window.__squib!.controller.getState().tutorial)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('item 8: the Sails panel takes focus, closes on Escape and gives focus back', async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  await page.evaluate(() => window.__squib!.controller.setLevel('expert'));
+  const open = page.getByTestId('sail-controls-open');
+  await expect(open).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await open.focus();
+  await page.keyboard.press('Enter');
+  const panel = page.getByTestId('sail-controls');
+  await expect(panel).toBeVisible();
+  // Focus moved into the panel, on its heading.
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe('sail-controls-title');
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('sail-controls-open');
+  // The Close button does the same.
+  await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();
+  await page.getByTestId('sail-controls-close').click();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('sail-controls-open');
+  expect(errors).toEqual([]);
+});
+
+test('item 1: a save that fails says so, and progress already kept stays readable', { tag: '@critical' }, async ({ page }) => {
+  test.setTimeout(150_000 * CI_SLOW);
+  const errors = await ready(page);
+  // A save that works: a lesson's progress is kept.
+  await page.evaluate(() => localStorage.setItem('squib.lessons.v1', JSON.stringify({ steer: { done: true, at: '2026-11-23T10:00:00Z', completedAt: '2026-11-23T10:00:00Z' } })));
+  await expect(page.getByTestId('save-status')).toHaveCount(0);
+  // The browser's storage fills up: the next save fails, and the app says so (it used to fail silently).
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw Object.assign(new Error('The quota has been exceeded.'), { name: 'QuotaExceededError', code: 22 });
+    };
+  });
+  await page.evaluate(() => window.__squib!.controller.startLesson('steer'));
+  await page.evaluate(() => {
+    const c = window.__squib!.controller;
+    for (let i = 0; i < 4; i++) c.tutorialNext();
+    c.advance(0.2);
+  });
+  const notice = page.getByTestId('save-status');
+  await expect(notice).toBeVisible({ timeout: 30_000 * CI_SLOW });
+  await expect(notice).toContainText('full');
+  await expect(notice).toContainText('lesson progress');
+  // What was kept before is still there.
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('squib.lessons.v1') ?? '{}').steer?.done)).toBe(true);
+  await page.getByTestId('save-status-dismiss').click();
+  await expect(notice).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

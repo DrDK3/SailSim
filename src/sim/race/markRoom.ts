@@ -22,7 +22,7 @@ import type { Vec } from './hull';
  *
  * Not modelled: 18.2(c) (overlaps after 18.2(a) ends), 18.2(d) (an inside overlap from clear astern or by tacking
  * when the outside boat cannot give room), 18.2(e) (reasonable doubt), 18.3 (tacking in the zone), 18.4 (gybing),
- * rule 21 (exoneration within mark-room: the entitled boat is simply not blamed), and what "mark-room" is in each
+ * exoneration (rule 43 in the current rules, formerly rule 21: here the entitled boat is simply not blamed), and what "mark-room" is in each
  * case (the boat owing it is held at fault for any contact while the entitlement lasts).
  */
 
@@ -164,7 +164,7 @@ export function markRoomRuling(e: Entitlement, names: (id: string) => string): {
         ? `${names(e.giver)} was outside when the first of them reached the zone and did not give ${names(e.entitled)} mark-room`
         : `${names(e.entitled)} reached the zone first, clear ahead, and ${names(e.giver)} did not give her mark-room`,
     notes: [
-      'Rule 18 here is simplified, not authoritative: the zone (three hull lengths) and who must give mark-room are judged; what mark-room was needed, 18.2(c)–(e), 18.3, 18.4 and rule 21 are not.',
+      'Rule 18 here is simplified, not authoritative: the zone (three hull lengths) and who must give mark-room are judged; what mark-room was needed, 18.2(c)–(e), 18.3, 18.4 and exoneration (rule 43) are not.',
     ],
   };
 }

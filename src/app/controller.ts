@@ -12,13 +12,14 @@ import { autopilotHelm } from '../sim/control/autopilot';
 import type { ReportDetail } from './visualReport';
 import { SignalScheduler, blastsInWords } from './soundSignals';
 import { FRAME_EVERY_S, IncidentRecorder, type ProtestCase } from './protestRoom';
-import { WindTrend, laylines, shiftCall, type Layline, type ShiftCall } from './raceAids';
+import { WindTrend, laylineSupport, laylines, legKind, shiftCall, type Layline, type ShiftCall } from './raceAids';
 import { finishStory, legMarkName, markPlaces, type BoatPassings, type FinishStory, type MarkPlace } from './raceStory';
 import { FleetTrack } from './fleetTrack';
 import { SailTrack, TRACK_EVERY_S, summarise, type SailSummary, type StartInfo, type TrackPoint } from './sailLog';
 import { GHOST_EVERY, ghostPoseAt, poseOf } from './ghost';
 import { DAYLIGHT_VIEW_BELOW_DEG, REAL_TIME_WITHIN_MS, SUNSET_DEG, ukClock, viewSun } from './daylightView';
 import { RESUME_MIN_S, clearResume, loadResume, resumeSummary, saveResume } from './resume';
+import { onStorageStatus, storageStatus, type StorageStatus } from './storage';
 import type { PierInput } from '../sim/race/piers';
 import { RDYC_FRONTAGE } from '../render/rdyc';
 import { buildRiverTraffic, type RiverTraffic } from '../sim/env/traffic';
@@ -56,10 +57,10 @@ import { Exercise, type ExerciseState } from './exercises/engine';
 import { EXERCISES, buildExercise, isExerciseId, type ExerciseId, type ExerciseInfo, type ExerciseSpec } from './exercises/index';
 import { CONTENT_STATUS, loadThresholds, mergeThresholds, resetThresholds, saveThresholds, thresholdsChanged, type ContentStatus } from './exercises/config';
 import { exportRuns, importRuns, loadRuns, saveRun } from './exercises/records';
-import { courseKey, recordRaceTime, recordStart } from './bests';
+import { courseGeometry, loadBests, otherConditionsBest, raceIdentityKey, raceIdentityLabel, recordRaceTime, recordStart, RULESET, windBand, type RaceIdentity } from './bests';
 import { levelDefaults, loadLevel, saveLevel, type InterfaceLevel } from './level';
 import { featureOn, setFeatureFlag, type FeatureFlag } from './flags';
-import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonDone, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
+import { LESSONS, lessonAfter, lessonById, lessonsIn, loadLessonProgress, nextLessonFor, saveLessonResult, type Lesson, type LessonGroup, type LessonId, type LessonProgress, type OverlayPart } from './lessons';
 import { sailState } from './sailStatus';
 import { COACH, RaceCoach, type Debrief, type Tip } from './coach';
 import { quickRaceScenario, type QuickRaceOptions } from './quickRace';
@@ -172,9 +173,18 @@ export interface RaceUi {
   /** A start drill: this start scored once made, and the starts before it this session. */
   drill?: { attempt: number; last?: DrillStart & { verdict: string }; history: DrillStart[]; bestLateS?: number };
   /** Your start and finish against your bests in this browser (src/app/bests.ts). */
-  best?: { start?: { delayS: number; best: boolean; previousS?: number }; finish?: { timeS: number; best: boolean; previousS?: number; label: string } };
+  /**
+   * Your bests for this race. An ordinary race's finish is compared only with times of the same identity (design
+   * handover item 6): `label` names it; `other` is the best on the same course in other conditions, not compared.
+   */
+  best?: {
+    start?: { delayS: number; best: boolean; previousS?: number; kn?: number };
+    finish?: { timeS: number; best: boolean; previousS?: number; label: string; other?: { timeS: number; label: string } };
+  };
   /** Race aids on (laylines, lifted or headed: src/app/raceAids.ts), and the wind's shift now when sailing upwind. */
   aids: boolean;
+  /** What the laylines assume, or why they are hidden here (design handover item 14). */
+  laylineNote?: string;
   shift?: ShiftCall;
   /** Once you have finished: your place with the gaps either side, and your place at the start and at each mark. */
   story?: FinishStory;
@@ -208,6 +218,17 @@ export interface DataSource {
   freshness?: Freshness;
   /** Tide only: whether the gauge reading is recent enough to apply the measured surge. */
   gaugeUsable?: boolean;
+}
+
+/** A lesson's result card (design handover item 3: complete only when every step with a goal was sailed). */
+export interface LessonResult {
+  lines: string[];
+  complete: boolean;
+  /** The steps skipped, by title, in the lesson's order. */
+  skipped: string[];
+  /** How many steps have a goal. */
+  steps: number;
+  next?: { id: LessonId; title: string };
 }
 
 export interface UiState {
@@ -261,6 +282,13 @@ export interface UiState {
   /** The device check: running (its progress 0…1) and its last report. */
   deviceCheck?: { progress: number };
   deviceReport?: DeviceReport;
+  /**
+   * Why the device check cannot start now (design handover item 1): it sails its own route, so it waits until
+   * the race, lesson, exercise, drill or replay in progress is over. Absent when it can start.
+   */
+  deviceCheckBlocked?: string;
+  /** Saving to this browser: ok, or full or blocked and what was not kept (src/app/storage.ts). */
+  saveStatus: StorageStatus;
   /** The player's preferences kept in this browser (src/app/prefs.ts). */
   prefs: Prefs;
   /** The small 3D picture of the masthead is drawing (else the interface shows the 2D one): review #2. */
@@ -280,10 +308,14 @@ export interface UiState {
     finished: boolean;
     lesson: { id: LessonId; number: number; title: string; count: number; group: LessonGroup; inGroup: number };
     /** The result card: what you did, whether it was your best time, and the next lesson. */
-    result?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
+    result?: LessonResult;
   };
   /** The six lessons, with what is done in this browser. */
-  lessons: { id: LessonId; group: LessonGroup; number: number; title: string; summary: string; minutes: number; done: boolean; bestS?: number }[];
+  /**
+   * The lessons and this browser's progress: done (every step sailed in a run, or an older record: `legacy`), and the
+   * steps the last run skipped when it was not complete (design handover item 3).
+   */
+  lessons: { id: LessonId; group: LessonGroup; number: number; title: string; summary: string; minutes: number; done: boolean; legacy?: boolean; skipped?: string[] }[];
   /** The exercise running (src/app/exercises): its state, and how its content and thresholds stand. */
   exercise?: { info: ExerciseInfo; state: ExerciseState; status: ContentStatus; thresholdsChanged: boolean; overlay: boolean; saved?: boolean };
   /** The exercises on offer, with how many runs this browser keeps for each. */
@@ -356,6 +388,9 @@ const HELM_RETURN = 1.8;
 const SHEET_RATE = 0.35;
 const MAX_STEPS_PER_FRAME = 12;
 /** Identifies the build in recordings (Vite's mode and the package version; a commit id when CI provides one). */
+/** How long a single activation of a held control acts (s of sailing): design handover item 2. */
+export const TAP_S = 0.25;
+
 export const BUILD_ID = `${import.meta.env.MODE}-${import.meta.env.VITE_BUILD_ID ?? 'local'}`;
 /** When this build was made (vite.config.ts), shown with the build id so the owner can tell which version runs. */
 const BUILD_TIME = typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : 'unknown';
@@ -449,6 +484,11 @@ export class SimController {
   private graphicsLost = false;
   private pausedForGraphics = false;
   private held = new Set<string>();
+  /**
+   * Single activations (design handover item 2): an action pressed for a bounded moment by a click that is neither a
+   * pointer press nor a key held on the button (assistive technology, voice control), released at this sim time.
+   */
+  private taps = new Map<string, number>();
   private steeringMode: SteeringMode = loadSteering();
   private listeners = new Set<Listener>();
   private ui!: UiState;
@@ -470,7 +510,7 @@ export class SimController {
   private lesson?: Lesson;
   /** The lesson's buoy (local metres), placed from where the boat started. */
   private lessonTarget?: { n: number; e: number };
-  private lessonResult?: { lines: string[]; best: boolean; next?: { id: LessonId; title: string } };
+  private lessonResult?: LessonResult;
   private lessonProgress: LessonProgress = loadLessonProgress();
   /** The exercise running (src/app/exercises): its engine, how each attempt is set up, and its overlay. */
   private exercise?: { info: ExerciseInfo; engine: Exercise; spec: ExerciseSpec; scenarioKey: string; changed: boolean; overlay: boolean; saved?: boolean; lastKey: string };
@@ -553,6 +593,9 @@ export class SimController {
     // Free sailing at Club and Expert carries the spinnaker (package B); at Learn it does not.
     if (this.level !== 'learn') this.scenario.spinnaker = true;
     this.restart();
+    // A failed save says so on screen (design handover item 1).
+    onStorageStatus(() => this.publish(true));
+    this.social.buildId = BUILD_ID;
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -794,6 +837,13 @@ export class SimController {
       this.publish(true);
     }
     if (this.replay?.ended) return; // hold at the end of the recording until "Take over"
+    // A single activation ends after its moment (in simulated time, so a paused boat keeps it until it sails).
+    for (const [a, until] of this.taps) {
+      if (this.sim.time >= until) {
+        this.taps.delete(a);
+        this.held.delete(a);
+      }
+    }
     if (this.race) this.race.session.step();
     else if (this.soloFleet) this.soloFleet.stepOnce();
     else this.sim.stepOnce();
@@ -1017,6 +1067,25 @@ export class SimController {
    * Free sailing from whatever is running: a replay hands over where it is, the tutorial ends where the boat is,
    * and a course with its fleet is left (the place, conditions and boat stay); then the boat sails.
    */
+  /** Read the progress kept in this browser again (after a backup is restored: design handover item 25). */
+  reloadProgress(): void {
+    this.lessonProgress = loadLessonProgress();
+    this.publish(true);
+  }
+
+  /**
+   * Race the same race again (design handover item 10): the same scenario (course, wind, tide, fleet, start sequence,
+   * random seed), the same rules setting and the same tag (today's challenge, the weekly course), so the new time is
+   * compared like with like (item 6). Only once you are out of the race: nothing is thrown away.
+   */
+  raceAgain(): boolean {
+    if (!this.race || this.raceAtStake() || this.replay) return false;
+    this.showResults = false;
+    const ok = this.restart(this.scenario, { markRoomPenalties: this.runMarkRoomPenalties, aiSpinPolar: this.runAiSpinPolar });
+    if (ok) this.resume();
+    return ok;
+  }
+
   freeSail(): void {
     if (this.replay) this.takeOver();
     if (this.tutorial) this.endLesson();
@@ -1044,6 +1113,34 @@ export class SimController {
     else this.publish(true);
   }
 
+  /**
+   * What makes this race's time comparable (design handover item 6): the course and its shape, laps, the wind band at
+   * the line when the race began, the fleet, the boat, the spinnaker, the rules and whether any assist was used.
+   */
+  raceIdentity(): RaceIdentity {
+    const r = this.race!;
+    const [a, b] = r.resolved.start;
+    const mid = { n: (a.n + b.n) / 2, e: (a.e + b.e) / 2 };
+    const legs: number[] = [];
+    let from = mid;
+    for (const leg of r.resolved.legs) {
+      legs.push(Math.hypot(leg.target.n - from.n, leg.target.e - from.e));
+      from = leg.target;
+    }
+    const w = this.built ? windFrom(this.built.env.wind(0, mid.n, mid.e)) : undefined;
+    return {
+      course: r.course.name,
+      laps: r.course.laps,
+      geometry: courseGeometry(legs, Math.hypot(b.n - a.n, b.e - a.e)),
+      windBand: windBand(w ? w.speed / 0.514444 : 0),
+      fleet: r.session.fleet.boats.length,
+      boat: isSquibType(this.scenario?.boat) ? this.scenario!.boat! : DEFAULT_SQUIB_TYPE,
+      spinnaker: this.scenario?.spinnaker === true,
+      rules: `${RULESET}${this.runMarkRoomPenalties ? '+rule18' : ''}`,
+      assistance: this.social.ui().assist.independent ? 'independent' : 'assisted',
+    };
+  }
+
   /** A clean start and a finish are compared with your bests in this browser, once each per race. */
   private checkRaceBests(): void {
     const r = this.race!;
@@ -1052,14 +1149,24 @@ export class SimController {
     const st = r.session.judgeOf('you').state(t);
     if (!this.raceBest.start && st.startTime !== undefined) {
       const delayS = Math.max(0, st.startTime - cm.startTime);
-      this.raceBest.start = { delayS, ...recordStart(delayS) };
+      const kn = this.sim.snapshot(false).stw / 0.514444;
+      this.raceBest.start = { delayS, kn: Math.round(kn * 10) / 10, ...recordStart(delayS, new Date(), kn) };
       this.publish(true);
     }
     if (!this.raceBest.finish && st.phase === 'finished' && st.finishTime !== undefined && st.startTime !== undefined) {
       const timeS = st.finishTime - cm.startTime;
       const key = this.raceTag?.key;
-      const label = key?.endsWith(':long') ? `This week's long course (${key.slice(7, -5)})` : key?.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : key ? `Today's challenge (${key.slice(10)})` : courseKey(r.course.name, r.course.laps);
-      this.raceBest.finish = { timeS, label, ...recordRaceTime(key ?? courseKey(r.course.name, r.course.laps), label, timeS) };
+      if (key) {
+        const label = key.endsWith(':long') ? `This week's long course (${key.slice(7, -5)})` : key.startsWith('weekly:') ? `This week's course (${key.slice(7)})` : `Today's challenge (${key.slice(10)})`;
+        this.raceBest.finish = { timeS, label, ...recordRaceTime(key, label, timeS) };
+      } else {
+        // An ordinary race: compared only with the same identity; other conditions shown apart (item 6).
+        const id = this.raceIdentity();
+        const label = raceIdentityLabel(id);
+        const other = otherConditionsBest(loadBests(), id);
+        this.raceBest.finish = { timeS, label, ...recordRaceTime(raceIdentityKey(id), label, timeS), ...(other ? { other: { timeS: other.timeS, label: other.label } } : {}) };
+      }
+      const label = this.raceBest.finish.label;
       if (!this.replay) this.social.onFinish(key, label, timeS, st.events, cm.startTime);
       this.publish(true);
     }
@@ -1477,16 +1584,17 @@ export class SimController {
     }
   }
 
-  /** On reaching the lesson's last step: its result card, and the lesson marked done in this browser. */
+  /** On reaching the lesson's last step: its result card, and the lesson recorded in this browser (done if no step was skipped). */
   private checkLessonDone(): void {
     const t = this.tutorial;
     const l = this.lesson;
     if (!t || !l || !t.finished || this.lessonResult) return;
-    const elapsed = this.sim.time;
-    const { progress, best } = saveLessonDone(l.id, elapsed);
+    // Complete only if every step with a goal was sailed; reaching the end by skipping is recorded as such.
+    const { skipped, required } = t.outcome;
+    const { progress, complete } = saveLessonResult(l.id, skipped);
     this.lessonProgress = progress;
     const next = lessonAfter(l.id);
-    this.lessonResult = { lines: l.result(t.record, elapsed), best, next: next && { id: next.id, title: next.title } };
+    this.lessonResult = { lines: l.result(t.record), complete, skipped, steps: required.length, next: next && { id: next.id, title: next.title } };
   }
 
   /** The whole run's state hash: every boat (and so, through determinism, everything else). */
@@ -1563,6 +1671,7 @@ export class SimController {
     if (!this.restart(rec.scenario, { initialInput: rec.initialInput, keepReplay: true, openWater: rec.dartFromStep !== undefined, markRoomPenalties: rec.markRoomPenalties === true, aiSpinPolar: rec.aiSpinPolar === true })) return false;
     this.replay = { rec, inputs: recordingLog(rec), next: 0, matched: 0, total: rec.checkpoints.length, verifiedTo: 0, ended: false, notes };
     this.held.clear();
+    this.taps.clear();
     this.paused = false;
     this.publish(true);
     return true;
@@ -1632,6 +1741,7 @@ export class SimController {
     this.ghostLoading = undefined;
     this.timeScale = 1;
     this.held.clear();
+    this.taps.clear();
     this.paused = false;
     this.publish(true);
   }
@@ -2444,6 +2554,11 @@ export class SimController {
   private onPageHide = () => this.keepResumePoint();
 
   private onVisibility = () => {
+    // A hidden page gets no key or pointer releases: let go of everything held (design handover item 2).
+    if (document.hidden) {
+      this.held.clear();
+      this.taps.clear();
+    }
     if (document.hidden) this.keepResumePoint();
     this.sound.setHidden(document.hidden);
     this.pace.skipFrames = Math.max(this.pace.skipFrames, 1);
@@ -2673,8 +2788,7 @@ export class SimController {
    * put back the scenario that was running and show the report. Nothing is sent anywhere.
    */
   startDeviceCheck(seconds?: number): void {
-    if (!this.view || this.deviceCheck) return;
-    if (this.replay) this.takeOver();
+    if (!this.view || this.deviceCheck || this.deviceCheckBlocker()) return;
     if (this.paused) this.togglePause();
     const before = this.scenario;
     this.restart(structuredClone(DEVICE_CHECK_SCENARIO));
@@ -2693,6 +2807,20 @@ export class SimController {
     };
     this.deviceReport = undefined;
     this.publish(true);
+  }
+
+  /**
+   * Why the device check must wait (design handover item 1, owner's choice of 23 Nov 2026: between activities). It
+   * sails its own fixed route, so starting it mid-race or mid-lesson ended that activity, and only the scenario came
+   * back afterwards, started again. Free sailing may be checked: it starts again from its starting place afterwards.
+   */
+  deviceCheckBlocker(): string | undefined {
+    if (this.replay || this.catchUp) return 'a replay is playing: close it first';
+    if (this.race && !this.race.session.outOfRace('you')) return 'a race is under way: finish or leave it first';
+    if (this.tutorial) return 'a lesson is under way: finish or leave it first';
+    if (this.exercise) return 'an exercise is under way: finish or leave it first';
+    if (this.drill) return 'start practice is under way: leave it first';
+    return undefined;
   }
 
   cancelDeviceCheck(): void {
@@ -2915,8 +3043,22 @@ export class SimController {
   /** Held controls (keyboard or on-screen buttons). */
   press(action: string, down: boolean): void {
     if (this.replay && down) return;
+    // A press or release by a pointer or a key takes over from a single activation of the same control.
+    this.taps.delete(action);
     if (down) this.held.add(action);
     else this.held.delete(action);
+  }
+
+  /**
+   * A single, bounded activation of a held control (design handover item 2): what a click with no pointer or key
+   * held behind it does (assistive technology, voice control, a switch). The control acts for `seconds` of sailing,
+   * then lets go: a small, predictable adjustment, never a control left held.
+   */
+  tap(action: string, seconds = TAP_S): void {
+    if (this.replay) return;
+    if (this.held.has(action) && !this.taps.has(action)) return; // already held by a pointer or a key
+    this.held.add(action);
+    this.taps.set(action, this.sim.time + seconds);
   }
 
   /** Test hook: advance the simulation synchronously (held controls still apply). */
@@ -3021,8 +3163,29 @@ export class SimController {
     const judge = r.session.judgeOf('you');
     const leg = r.resolved.legs[judge.legIndex];
     if (judge.phase !== 'racing' || !leg) return undefined;
+    if (!this.laylineSupport()?.supported) return undefined;
     const s = this.currSnap;
     return laylines(leg.target, { n: s.n, e: s.e }, s.twd, s.tws, r.session.humanPolar);
+  }
+
+  /**
+   * Whether the laylines are offered now (design handover item 14): only in still water, checked at the boat and at
+   * the next mark; with the note that says what they assume, or why they are hidden. Undefined when not racing with the
+   * aids on, or on a reach.
+   */
+  laylineSupport(): ReturnType<typeof laylineSupport> | undefined {
+    const r = this.race;
+    if (!r || !this.raceAidsOn) return undefined;
+    const judge = r.session.judgeOf('you');
+    const leg = r.resolved.legs[judge.legIndex];
+    if (judge.phase !== 'racing' || !leg) return undefined;
+    const s = this.currSnap;
+    if (legKind({ n: s.n, e: s.e }, leg.target, s.twd) === 'reach') return undefined;
+    const rate = (n: number, e: number) => {
+      const c = this.sim.env.current(this.sim.time, n, e);
+      return Math.hypot(c.n, c.e) / 0.514444;
+    };
+    return laylineSupport(Math.max(rate(s.n, s.e), rate(leg.target.n, leg.target.e)));
   }
 
   /**
@@ -3434,6 +3597,7 @@ export class SimController {
 
   private onBlur = () => {
     this.held.clear();
+    this.taps.clear();
     // A held look-up ends when the window loses the keys (the release would never come); a toggled one stays (§3.3).
     if (!this.prefs.lookUpToggle) this.setLookUp(false);
   };
@@ -3485,7 +3649,7 @@ export class SimController {
               result: this.lessonResult,
             }
           : undefined,
-      lessons: LESSONS.map((l) => ({ id: l.id, group: l.group, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id], bestS: this.lessonProgress[l.id]?.bestS })),
+      lessons: LESSONS.map((l) => ({ id: l.id, group: l.group, number: l.number, title: l.title, summary: l.summary, minutes: l.minutes, done: !!this.lessonProgress[l.id]?.done, legacy: this.lessonProgress[l.id]?.legacy, skipped: this.lessonProgress[l.id]?.done ? undefined : this.lessonProgress[l.id]?.skipped })),
       exercise: this.exercise
         ? { info: this.exercise.info, state: this.exercise.engine.state, status: CONTENT_STATUS, thresholdsChanged: this.exercise.changed, overlay: this.exercise.overlay, saved: this.exercise.saved }
         : undefined,
@@ -3530,6 +3694,8 @@ export class SimController {
       dynamicScale: this.view && this.view.dynamicScale < 1 ? this.view.dynamicScale : undefined,
       deviceCheck: this.deviceCheck ? { progress: this.deviceCheck.runner.progress(performance.now()) } : undefined,
       deviceReport: this.deviceReport,
+      deviceCheckBlocked: this.deviceCheck ? undefined : this.deviceCheckBlocker(),
+      saveStatus: storageStatus(),
       prefs: { ...this.prefs },
       hint: this.exercise ? undefined : this.hints.current,
       milestones: { ...this.milestones },
@@ -3673,6 +3839,7 @@ export class SimController {
       disqualified: dq,
       best: this.raceBest.start || this.raceBest.finish ? { ...this.raceBest } : undefined,
       aids: this.raceAidsOn,
+      laylineNote: this.laylineSupport()?.note,
       shift,
       story: results ? finishStory(results) : undefined,
       rulings: results ? session.log.filter((l) => l.kind === 'incident' || l.kind === 'penalty') : undefined,

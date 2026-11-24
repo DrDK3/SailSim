@@ -204,7 +204,7 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 .cond-row { display: grid; grid-template-columns: 86px 1fr; align-items: baseline; gap: 6px; font-size: 12.5px; }
 .cond-value { font-variant-numeric: tabular-nums; }
 .fine-inline { color: var(--muted); font-size: 12px; }
-.fine.warn-text { color: var(--warn); }
+.fine.warn-text, .challenge-preview .warn-text { color: var(--warn); }
 .live-issues { padding-left: 16px; }
 .chip { display: inline-block; align-self: flex-start; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; margin-top: 3px; }
 .chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
@@ -714,7 +714,7 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
 /* Review Package 2 (UX-5): reserved regions. The toolbar keeps clear of the left column (its width is measured
    into --hud-w by App.tsx), and the column itself stops above the dock (a measured max-height) and scrolls. */
 /* Owner review, 4 Nov 2026: the toolbar is one row sized to its content (it wrapped to two rows with blank space).
-   App.tsx picks the fullest form that fits beside the left column: full; compact (the activity as its icon, Reset
+   App.tsx picks the fullest form that fits beside the left column: full; compact (the activity's name shortened, Reset
    without its label, a narrower camera menu); minimal (tighter spacing); or menu (everything behind the Menu
    button, as on a phone). Race, Library and Scenario stay on the bar in every form but the menu. */
 @media (min-width: 701px) {
@@ -722,7 +722,10 @@ a:focus-visible, summary:focus-visible, [tabindex]:not([tabindex='-1']):focus-vi
   .toolbar .tb-group { flex-wrap: nowrap; }
   .toolbar:is([data-density='compact'], [data-density='minimal']) .tb-label { display: none; }
   .toolbar:is([data-density='compact'], [data-density='minimal']) .select select { max-width: 118px; }
-  .toolbar:is([data-density='compact'], [data-density='minimal']) .activity-chip .chip-label { display: none; }
+  /* Design handover item 8: the activity keeps its name in the compact form (shortened), so the way to the other
+     activities stays findable; only the minimal form shows the icon alone (it is chosen only when compact does not fit). */
+  .toolbar[data-density='compact'] .activity-chip .chip-label { max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolbar[data-density='minimal'] .activity-chip .chip-label { display: none; }
   .toolbar[data-density='minimal'] { gap: 4px; padding: 4px; }
   .toolbar[data-density='minimal'] .tb-group { gap: 4px; }
   .toolbar[data-density='minimal'] .tb-group + .tb-group { padding-left: 4px; }
@@ -1069,6 +1072,9 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 
 /* The finish: your place, large, with the gaps; your place at the start and at each mark. */
 .finish-story { display: flex; align-items: center; gap: 16px; margin: 6px 0 10px; padding: 12px 14px; border-radius: 10px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--good) 10%, transparent)); border: 1px solid var(--border); }
+.results-next { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-control); }
+.results-next p { margin: 0 0 8px; }
+.kudos { margin: 6px 0; padding: 6px 10px; border-left: 3px solid var(--good); background: color-mix(in srgb, var(--good) 8%, transparent); border-radius: 6px; }
 .finish-place { display: flex; align-items: baseline; gap: 8px; flex: none; }
 .finish-place-n { font-size: clamp(44px, 9vw, 68px); font-weight: 800; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .finish-place-of { font-size: 15px; color: var(--muted); }
@@ -1267,6 +1273,15 @@ input[type='range'] { min-height: 24px; accent-color: var(--accent); }
 .panel.dock.console .spin-call.is-bad { box-shadow: inset 0 -3px 0 var(--bad); }
 .sail-controls { position: absolute; z-index: 4; right: 12px; bottom: calc(var(--console-h, 120px) + var(--console-bottom, 12px) + 10px); width: min(420px, calc(100vw - 24px)); padding: 10px 12px; display: grid; gap: 6px; font-size: 13px; }
 .sail-controls .sc-head { display: flex; justify-content: space-between; align-items: center; }
+.sail-controls .sc-title { margin: 0; font-size: inherit; }
 .sail-controls .sc-row { display: grid; grid-template-columns: 92px 1fr 44px auto; align-items: center; gap: 8px; min-height: 32px; }
 .sail-controls .sc-val { font-variant-numeric: tabular-nums; text-align: right; }
 .sail-controls input[type='range'] { width: 100%; min-height: 24px; }
+
+/* Design handover item 1: saving failed (storage full or blocked). Readable, wraps, dismissable. */
+.banner.save-note { white-space: normal; max-width: min(460px, calc(100vw - 24px)); text-align: left; background: rgba(120, 30, 20, 0.92); color: #fff; padding: 8px 34px 8px 12px; position: relative; font-size: 13px; line-height: 1.35; }
+.banner.save-note .fine { display: block; margin-top: 3px; font-size: 12.5px; color: #ffe9e4; }
+.banner.save-note .pill-close { position: absolute; top: 4px; right: 4px; }
+/* The notice stack lets clicks through; this notice has a button, so it takes them (design handover item 1). */
+.notice-stack .banner.save-note { pointer-events: auto; }
+

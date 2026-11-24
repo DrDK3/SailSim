@@ -2,6 +2,7 @@ import { LESSONS, type LessonId, type LessonProgress } from './lessons';
 import { EXERCISES, type ExerciseId } from './exercises/index';
 import type { StoredRun } from './exercises/records';
 import { earlierRulesRace, type Bests } from './bests';
+import { persist } from './storage';
 
 /**
  * The Learn map (review #13, package D): one ordered path through what the simulator already teaches: the six
@@ -42,6 +43,20 @@ export interface LearnStep {
   action: LearnAction;
 }
 
+/**
+ * What a tick establishes, group by group (design handover item 7): an activity done in this browser, not a
+ * certificate or a measure of competence. The wording matches the lesson result card and the exercise result.
+ */
+export const TICK_MEANING: Record<LearnGroup, string> = {
+  Basics: 'A tick means you sailed every step of the lesson in one run in this browser (or it was done before 23 Nov 2026, when reaching the end counted).',
+  Seamanship: 'A tick means you sailed every step of the lesson in one run in this browser (or it was done before 23 Nov 2026, when reaching the end counted).',
+  Exercises: 'A tick means at least one attempt was completed, independent or assisted (both count; the result card and the instructor view say which).',
+  Challenges: 'A tick means a time was recorded: today’s challenge today, the weekly course this week, a start drill or a race at any time.',
+};
+
+/** Said once above the map. */
+export const TICKS_ARE = 'A tick records an activity done in this browser. It shows what you have sailed, not a certificate or a measure of skill.';
+
 /** What the map reads: the stores the app already keeps, and its own. */
 export interface LearnInputs {
   lessons: LessonProgress;
@@ -62,7 +77,10 @@ export function learnSteps(p: LearnInputs): LearnStep[] {
   const steps: LearnStep[] = [];
   for (const l of LESSONS) {
     const id = `lesson:${l.id}`;
-    const done = !!p.lessons[l.id];
+    // Done: every step sailed in a run (or a record from before 23 Nov 2026, kept as it was). Reached the end with steps
+    // skipped: started, not done (design handover item 3).
+    const rec = p.lessons[l.id];
+    const done = !!rec?.done;
     steps.push({
       id,
       group: l.group === 'basics' ? 'Basics' : 'Seamanship',
@@ -70,8 +88,8 @@ export function learnSteps(p: LearnInputs): LearnStep[] {
       summary: l.summary,
       minutes: l.minutes,
       done,
-      started: !done && started.has(id),
-      note: done ? `Best ${mmss(p.lessons[l.id]!.bestS)}` : undefined,
+      started: !done && (started.has(id) || !!rec),
+      note: rec?.legacy ? 'Done (an earlier record)' : !done && rec?.skipped?.length ? `${rec.skipped.length} step${rec.skipped.length === 1 ? '' : 's'} skipped last time` : undefined,
       action: { kind: 'lesson', id: l.id },
     });
   }
@@ -137,10 +155,6 @@ export function loadStarted(): string[] {
 /** Note that a step was started from the map; returns the record (kept for this visit if storage is unavailable). */
 export function noteStarted(id: string, have: readonly string[] = loadStarted()): string[] {
   const started = have.includes(id) ? [...have] : [...have, id].slice(-64);
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ started }));
-  } catch {
-    // storage unavailable: kept for this visit only
-  }
+  persist(KEY, JSON.stringify({ started }), 'what you have started on the Learn map');
   return started;
 }
