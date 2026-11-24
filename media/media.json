@@ -1,0 +1,153 @@
+{
+  "made": [
+    "2026-11-21T07:43:46.148Z",
+    "2026-11-21T07:46:00.807Z",
+    "2026-11-21T08:22:51.312Z",
+    "2026-11-21T21:26:11.433Z"
+  ],
+  "caption": "Squib sailing simulator · simulator output, not a photograph",
+  "renderer": "Chromium software renderer (SwiftShader)",
+  "tool": "npm run media (tools/media.mjs), three runs: the four river stills, the Start Bay card, the trailer; fixes of 21 Nov 2026 (§3.6): the hero and the social card re-rendered (an AI fleet under spinnaker, the Balanced preset, drawn at 2× and scaled down), the poster taken from the trailer (--poster-from)",
+  "shots": [
+    {
+      "file": "media/hero.jpg",
+      "width": 1600,
+      "height": 900,
+      "preset": "Balanced, drawn at 2× and scaled down",
+      "scene": {
+        "name": "fleet",
+        "kind": "fleet",
+        "time": "2026-07-15T12:00:00Z",
+        "tws": 11,
+        "twd": 225,
+        "boats": 7,
+        "seed": 21,
+        "flying": 4,
+        "settle": 12,
+        "back": 34,
+        "side": 16,
+        "up": 6,
+        "ahead": 10,
+        "raceS": 377,
+        "underSpinnaker": 3
+      }
+    },
+    {
+      "file": "media/social-river.jpg",
+      "width": 1200,
+      "height": 630,
+      "scene": {
+        "name": "river",
+        "loc": "off-rdyc",
+        "time": "2026-07-15T11:00:00Z",
+        "tws": 12,
+        "twd": 225,
+        "secs": 25,
+        "camera": "chase"
+      },
+      "note": "Was social-card.jpg until the fixes of 21 Nov 2026 (§3.6); kept"
+    },
+    {
+      "file": "media/social-card.jpg",
+      "width": 1200,
+      "height": 630,
+      "preset": "Balanced, drawn at 2× and scaled down",
+      "scene": {
+        "name": "fleet",
+        "kind": "fleet",
+        "time": "2026-07-15T12:00:00Z",
+        "tws": 11,
+        "twd": 225,
+        "boats": 7,
+        "seed": 21,
+        "flying": 4,
+        "settle": 12,
+        "back": 34,
+        "side": 16,
+        "up": 6,
+        "ahead": 10,
+        "raceS": 377,
+        "underSpinnaker": 3
+      }
+    },
+    {
+      "file": "media/social-evening.jpg",
+      "width": 1200,
+      "height": 630,
+      "scene": {
+        "name": "evening",
+        "loc": "off-rdyc",
+        "time": "2026-07-15T18:30:00Z",
+        "tws": 10,
+        "twd": 250,
+        "secs": 30,
+        "camera": "chase"
+      }
+    },
+    {
+      "file": "media/social-harbour.jpg",
+      "width": 1200,
+      "height": 630,
+      "scene": {
+        "name": "harbour",
+        "loc": "off-rdyc",
+        "time": "2026-07-15T11:00:00Z",
+        "tws": 12,
+        "twd": 225,
+        "secs": 25,
+        "camera": "drone"
+      }
+    },
+    {
+      "file": "media/social-race.jpg",
+      "width": 1200,
+      "height": 630,
+      "scene": {
+        "name": "race",
+        "loc": "start-bay-practice",
+        "time": "2026-07-15T13:00:00Z",
+        "tws": 12,
+        "twd": 225,
+        "secs": 70,
+        "camera": "chase",
+        "race": true
+      }
+    },
+    {
+      "file": "media/social-bay.jpg",
+      "width": 1200,
+      "height": 630,
+      "preset": "high (quality=high)",
+      "scene": {
+        "name": "bay",
+        "loc": "start-bay-practice",
+        "time": "2026-07-15T13:00:00Z",
+        "tws": 14,
+        "twd": 225,
+        "secs": 40,
+        "camera": "chase"
+      }
+    },
+    {
+      "file": "media/poster.jpg",
+      "width": 960,
+      "height": 540,
+      "preset": "the trailer’s frame at 2 s (lowest preset, as the trailer)",
+      "scene": {
+        "name": "trailer poster"
+      }
+    }
+  ],
+  "trailer": {
+    "file": "media/trailer.mp4",
+    "seconds": 24,
+    "fps": 24,
+    "size": "960x540",
+    "preset": "lowest (quality=low)",
+    "codec": "H.264 (libx264, -preset veryfast, CRF 24)",
+    "audio": "none"
+  },
+  "alsoCopied": {
+    "social-card.jpg": "media/social-card.jpg (the card the sharing tags point at, served at the site root)"
+  }
+}
