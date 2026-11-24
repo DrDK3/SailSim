@@ -98,14 +98,13 @@ export function helmReadout(rudder: number): string {
  * A control that acts while held (steering, the sheets). Design handover item 2: it works through every input route.
  * - A pointer (mouse, touch, pen): held from press to release, as before.
  * - The keyboard on the focused button (W3C button pattern): Space or Enter held acts while held; key repeats do
- *   nothing more; the click the browser makes from the key is not acted on again.
+ *   nothing more. Both key handlers cancel the key's default action, so the browser makes no click from the key.
  * - A click with no pointer or key behind it (assistive technology, voice control, a switch): one bounded activation
  *   (SimController.tap).
  * Losing the focus lets go; so do the window losing the keys and the page being hidden (the controller).
  */
 function Hold({ ctl, action, children, label, hint, className }: { ctl: SimController; action: string; children: ReactNode; label: string; hint?: boolean; className?: string }) {
   const keyHeld = useRef(false);
-  const lastKeyAt = useRef(-Infinity);
   const on = (e: ReactPointerEvent) => {
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -118,8 +117,8 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
   const isActivationKey = (e: ReactKeyboardEvent) => e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar';
   const keyOn = (e: ReactKeyboardEvent) => {
     if (!isActivationKey(e)) return;
+    // Cancelling the keydown stops Enter's click; cancelling the keyup below stops Space's.
     e.preventDefault();
-    lastKeyAt.current = performance.now();
     if (keyHeld.current || e.repeat) return;
     keyHeld.current = true;
     ctl.press(action, true);
@@ -127,14 +126,14 @@ function Hold({ ctl, action, children, label, hint, className }: { ctl: SimContr
   const keyOff = (e: ReactKeyboardEvent) => {
     if (!isActivationKey(e)) return;
     e.preventDefault();
-    lastKeyAt.current = performance.now();
     if (!keyHeld.current) return;
     keyHeld.current = false;
     ctl.press(action, false);
   };
   const click = (e: ReactMouseEvent) => {
-    // A pointer's click (detail ≥ 1) was handled by the press and release; a key's by the key handlers.
-    if (e.detail !== 0 || keyHeld.current || performance.now() - lastKeyAt.current < 600) return;
+    // A pointer's click (detail ≥ 1) was handled by the press and release; a held key by the key handlers. No time
+    // window after a key: it swallowed real clicks that came soon after one (CI, 24 Nov 2026).
+    if (e.detail !== 0 || keyHeld.current) return;
     ctl.tap(action);
   };
   const blur = () => {

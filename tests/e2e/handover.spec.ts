@@ -42,8 +42,13 @@ test('item 2: a focused steering button works from the keyboard and from a plain
   await page.waitForTimeout(100);
   expect(await heldNow(page)).toEqual({ held: [], taps: [] });
   // A click with no pointer or key behind it (assistive technology): one bounded activation, which lets go as the
-  // boat sails on.
-  await btn.evaluate((b) => (b as HTMLButtonElement).click());
+  // boat sails on. Even straight after a key press and release (the keys' own handlers cancel the browser's click from
+  // the key, so there is none to swallow; CI, 24 Nov 2026: a time window here swallowed real clicks on a fast runner).
+  await btn.evaluate((b) => {
+    b.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    b.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, cancelable: true }));
+    (b as HTMLButtonElement).click();
+  });
   expect(await heldNow(page)).toEqual({ held: ['helmLeft'], taps: ['helmLeft'] });
   await page.evaluate(() => window.__squib!.controller.advance(0.5));
   expect(await heldNow(page)).toEqual({ held: [], taps: [] });
